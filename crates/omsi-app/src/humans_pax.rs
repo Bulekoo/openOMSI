@@ -933,8 +933,6 @@ impl Humans {
         bus_ix: &HashMap<BusId, usize>,
         at_stops: &HashMap<BusId, BusAtStops>,
         player_bus: Option<&VehicleInstance>,
-        renderer: &Renderer,
-        scene: &mut Scene,
         taken_ticket: &mut bool,
         remove: &mut Vec<usize>,
     ) {
@@ -951,7 +949,7 @@ impl Humans {
             if self.pax(i).is_none() || remove.contains(&i) {
                 continue;
             }
-            self.pax_tick(i, dt, world, buses, bus_ix, at_stops, player_bus, renderer, scene, taken_ticket, remove);
+            self.pax_tick(i, dt, world, buses, bus_ix, at_stops, player_bus, taken_ticket, remove);
         }
         // (where every passenger stands: in a bus's frame, or the world's - and the people
         // walking the pavement, among them a rider who has just stepped off, still on the
@@ -1048,8 +1046,6 @@ impl Humans {
         bus_ix: &HashMap<BusId, usize>,
         at_stops: &HashMap<BusId, BusAtStops>,
         player_bus: Option<&VehicleInstance>,
-        renderer: &Renderer,
-        scene: &mut Scene,
         taken_ticket: &mut bool,
         remove: &mut Vec<usize>,
     ) {
@@ -1089,7 +1085,7 @@ impl Humans {
             }
         }
         self.pax_move(i, dt, dt_ms, world, buses, bus_ix);
-        self.pax_task(i, dt, world, buses, bus_ix, at_stops, player_bus, renderer, scene, taken_ticket, remove);
+        self.pax_task(i, dt, world, buses, bus_ix, at_stops, player_bus, taken_ticket, remove);
         // (got off: a pedestrian now)
         let Some(p) = self.pax(i).cloned() else { return };
         // (0x62d75b) the stop they boarded at is forgotten once the bus has left it
@@ -1711,8 +1707,6 @@ impl Humans {
         bus_ix: &HashMap<BusId, usize>,
         at_stops: &HashMap<BusId, BusAtStops>,
         player_bus: Option<&VehicleInstance>,
-        renderer: &Renderer,
-        scene: &mut Scene,
         taken_ticket: &mut bool,
         remove: &mut Vec<usize>,
     ) {
@@ -1776,7 +1770,7 @@ impl Humans {
                 }
             }
             Task::WalkingToBus => self.task_to_bus(i, buses, bus_ix, world),
-            Task::InBusToPlace => self.task_to_place(i, dt, buses, bus_ix, world, player_bus, renderer, scene, taken_ticket),
+            Task::InBusToPlace => self.task_to_place(i, dt, buses, bus_ix, world, player_bus, taken_ticket),
             Task::InBusToExit => self.task_to_exit(i, buses, bus_ix, at_stops, world, remove),
             Task::WalkingToBusstop => {
                 if p.st == 3 {
@@ -1935,8 +1929,6 @@ impl Humans {
         bus_ix: &HashMap<BusId, usize>,
         world: &World,
         player_bus: Option<&VehicleInstance>,
-        renderer: &Renderer,
-        scene: &mut Scene,
         taken_ticket: &mut bool,
     ) {
         let p = self.pax(i).unwrap().clone();
@@ -1989,7 +1981,7 @@ impl Humans {
                 pp.sub = 0;
             }
         } else if p.ticket == TICKET_BUY {
-            self.desk_sale(i, dt, bn, player_bus, world, renderer, scene, taken_ticket);
+            self.desk_sale(i, dt, bn, player_bus, taken_ticket);
         }
     }
 
@@ -2241,9 +2233,6 @@ impl Humans {
         dt: f32,
         bn: &BusNow,
         player_bus: Option<&VehicleInstance>,
-        world: &World,
-        renderer: &Renderer,
-        scene: &mut Scene,
         taken_ticket: &mut bool,
     ) {
         let _ = dt;
@@ -2316,7 +2305,8 @@ impl Humans {
                 let coins = if self.exact_fare || auto { m.exact_coins_for(value) } else { m.omsi_coins_for(value) };
                 paid = m.value_of(&coins);
                 if let Some((pos, var, parent)) = point {
-                    m.place(world, renderer, scene, &coins, pos, var, false, parent.as_deref());
+                    // (put there when the view catches up: `show_bodies`)
+                    self.bodies.ops.push(BodyOp::Coins { coins, point: pos, var, change: false, parent });
                 }
             }
             self.paid = Some((paid, value));

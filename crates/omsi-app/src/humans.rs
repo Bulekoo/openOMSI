@@ -57,6 +57,8 @@ use std::sync::Arc;
 #[path = "humans_pax.rs"]
 mod pax;
 use pax::*;
+mod view;
+use view::*;
 
 /// The map's traffic keeps left (its stops are on the left): see the doors of `Cabin`.
 pub(crate) static LEFT_HAND: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -1520,17 +1522,8 @@ pub struct Humans {
     /// The first populate put people at the stops; later stops fill on foot when in sight.
     started: bool,
     ped: Option<PedNet>,
-    hidden: Vec<usize>,
-    /// GPU side of the human types, shared by everyone of a type: textures by file and the
-    /// materials of every (type, mesh) - each person used to upload its own copies - and
-    /// the meshes and instances of the people who have gone, taken over by the next person
-    /// of the same type (the skinned vertices are rewritten anyway). Without that every
-    /// passenger who ever appeared kept a mesh, its textures and materials on the GPU.
-    gpu_textures: HashMap<PathBuf, Option<omsi_render::TextureId>>,
-    /// Per (type, clothing variant, mesh): its materials, and the meshes and instances of
-    /// people who have gone, kept for the next person dressed alike.
-    gpu_materials: HashMap<(usize, usize, usize), Vec<MaterialId>>,
-    spare: HashMap<(usize, usize, usize), Vec<(MeshId, usize)>>,
+    /// The renderer's side: meshes, GPU materials, posing (see `view`).
+    bodies: Bodies,
     /// Stop the player's bus is serving (standing at it).
     served_stop: Option<i64>,
     /// Timetable buses at a stop: id → (stop, time the visit began).
@@ -1577,7 +1570,6 @@ pub struct Humans {
     /// `PAX_Entry<i>_Busy` / `PAX_Exit<i>_Busy`: somebody stands in that doorway.
     pub entry_busy: Vec<bool>,
     pub exit_busy: Vec<bool>,
-    sync_frame: u32,
     /// Feet put down since the app last collected them (see [`Humans::take_footfalls`]).
     footfalls: Vec<ambience::Footfall>,
     /// `[trafficdensity_passenger]` factor for the current hour (set by the app).
@@ -1670,13 +1662,6 @@ pub struct Humans {
     bus_motion: HashMap<BusId, (f64, f64, DVec2)>,
     /// `types` has been cut down to the map's `humans.txt`.
     map_humans_done: bool,
-    /// Simulation time of the last `sync`.
-    last_sync: f64,
-    /// Frames synced, people posed and skinned, the time that took and the part of it spent
-    /// uploading (ms), in total.
-    pose_stats: (u32, usize, f64, f64),
-    /// `OMSI_TRACE_PAX=<csv>`: every person near the eye, every frame (see `sync`).
-    trace: Option<std::io::BufWriter<std::fs::File>>,
     /// `World::tiles_generation` the stops were last checked against.
     tiles_seen: u64,
     /// LAN play: this game draws the host's people instead of its own (`lan_world`).
@@ -1836,10 +1821,7 @@ impl Humans {
             pardon_max: 0,
             started: false,
             ped: None,
-            hidden: Vec::new(),
-            gpu_textures: HashMap::new(),
-            gpu_materials: HashMap::new(),
-            spare: HashMap::new(),
+            bodies: Bodies::new(),
             served_stop: None,
             ai_visits: HashMap::new(),
             last_door_open: HashMap::new(),
@@ -1865,7 +1847,6 @@ impl Humans {
             exit_req: Vec::new(),
             entry_busy: Vec::new(),
             exit_busy: Vec::new(),
-            sync_frame: 0,
             footfalls: Vec::new(),
             density: 1.0,
             time_of_day: 12.0 * 3600.0,
@@ -1902,14 +1883,6 @@ impl Humans {
             tick_stages: Vec::new(),
             bus_motion: HashMap::new(),
             map_humans_done: false,
-            last_sync: 0.0,
-            pose_stats: (0, 0, 0.0, 0.0),
-            trace: omsi_cfg::env::var("OMSI_TRACE_PAX").ok().and_then(|f| std::fs::File::create(f).ok()).map(|f| {
-                use std::io::Write;
-                let mut w = std::io::BufWriter::new(f);
-                let _ = writeln!(w, "t,id,state,ground,posed,x,y,z,heading,lx,ly,lz,rx,ry,rz,vx,vy");
-                w
-            }),
             tiles_seen: 0,
             mirror: false,
             lan_centers: Vec::new(),
@@ -2107,7 +2080,7 @@ impl Humans {
     /// dropped once it grows past a crowd's worth of steps.
     /// `OMSI_TRACE_PAX` is writing a trace.
     pub fn tracing(&self) -> bool {
-        self.trace.is_some()
+        self.bodies.trace.is_some()
     }
 
     pub fn take_footfalls(&mut self) -> Vec<ambience::Footfall> {
@@ -2218,8 +2191,6 @@ impl Humans {
     fn spawn(
         &mut self,
         world: &World,
-        renderer: &Renderer,
-        scene: &mut Scene,
         position: DVec3,
         heading: f64,
         state: State,
@@ -2230,15 +2201,13 @@ impl Humans {
         if !self.pool_room() {
             return None;
         }
-        self.spawn_as(world, renderer, scene, position, heading, state, None)
+        self.spawn_as(world, position, heading, state, None)
     }
 
     #[allow(clippy::too_many_arguments)]
     fn spawn_as(
         &mut self,
         world: &World,
-        renderer: &Renderer,
-        scene: &mut Scene,
         position: DVec3,
         heading: f64,
         state: State,
@@ -2290,70 +2259,14 @@ impl Humans {
         }
         let (idx, variant) = choice.unwrap_or((0, 0));
         let ty = self.types[idx].clone();
-        let tkey = Arc::as_ptr(&ty) as usize;
-        let mut meshes = Vec::new();
-        for (mi, hm) in ty.meshes.iter().enumerate() {
-            let key = (tkey, variant, mi);
-            // somebody of this type has gone: their mesh and instance
-            if let Some((id, inst)) = self.spare.get_mut(&key).and_then(|v| v.pop()) {
-                self.hidden.retain(|h| *h != inst);
-                renderer.set_transform(scene, inst, position, Mat4::IDENTITY);
-                renderer.set_params(scene, inst, &[], true, &[]);
-                meshes.push((id, inst));
-                continue;
-            }
-            if !self.gpu_materials.contains_key(&key) {
-                let dirs = ty.texture_dirs(&world.root);
-                let mut mats = Vec::new();
-                for (k, m) in hm.materials.iter().enumerate() {
-                    // the variant's texture from its own folder first, else the default
-                    let (name, first) = ty.variant_texture(&m.texture, variant);
-                    let mut look: Vec<&Path> = first.into_iter().collect();
-                    look.extend(dirs.iter().map(|p| p.as_path()));
-                    let found = omsi_texture::find_texture(name, &look)
-                        .or_else(|| omsi_texture::find_texture(&m.texture, &look));
-                    if found.is_none() && !m.texture.trim().is_empty() {
-                        log::warn!(
-                            "human {}: texture {} not found",
-                            ty.def.path.display(),
-                            m.texture
-                        );
-                    }
-                    let tex = match found {
-                        Some(path) => match self.gpu_textures.get(&path) {
-                            Some(t) => *t,
-                            None => {
-                                let t = world
-                                    .textures
-                                    .get_gpu_fast(&path)
-                                    .map(|(img, _)| renderer.add_texture_data(scene, &img));
-                                world.textures.release(&path);
-                                self.gpu_textures.insert(path, t);
-                                t
-                            }
-                        },
-                        None => None,
-                    };
-                    let alpha = match hm.alpha.get(k).copied().unwrap_or(0) {
-                        1 => AlphaMode::Test,
-                        2 => AlphaMode::Blend,
-                        _ => AlphaMode::Opaque,
-                    };
-                    mats.push(renderer.add_material(scene, tex, alpha, [1.0; 4], false));
-                }
-                self.gpu_materials.insert(key, mats);
-            }
-            let mats = self.gpu_materials[&key].clone();
-            let id = renderer.add_mesh(scene, &hm.data);
-            let inst = renderer.add_instance(scene, id, position, Mat4::IDENTITY, mats);
-            meshes.push((id, inst));
-        }
         // walking pace 1.1 m/s +- 0.2, as Omsi.exe draws it for everybody (0x625758:
         // sub_7f08b0(0.2, 1.1)); `[walk_param]` holds the stride, not a speed
         let pace = 1.1 + (self.rand_f() * 2.0 - 1.0) * 0.2;
         let age = ty.def.age.map(|a| a as f32).unwrap_or(40.0);
         let id = self.next_id;
         self.next_id += 1;
+        // (the meshes and instances come when the view catches up: `show_bodies`)
+        self.bodies.ops.push(BodyOp::Spawn { id, ty: ty.clone(), variant, position });
         if debug_pax() {
             log::info!(
                 "pax #{id} ({}) appears at ({:.1}, {:.1}, {:.1}): {}{}",
@@ -2373,7 +2286,7 @@ impl Humans {
             id,
             ty,
             variant,
-            meshes,
+            meshes: Vec::new(),
             position,
             heading,
             lheading: 0.0,
@@ -2406,15 +2319,6 @@ impl Humans {
             remote: false,
         });
         Some(self.people.len() - 1)
-    }
-
-    /// Someone has gone: hidden, and their meshes kept for the next person of the type.
-    fn retire(&mut self, p: &Person) {
-        let tkey = Arc::as_ptr(&p.ty) as usize;
-        for (mi, m) in p.meshes.iter().enumerate() {
-            self.hidden.push(m.1);
-            self.spare.entry((tkey, p.variant, mi)).or_default().push(*m);
-        }
     }
 
 
@@ -2484,15 +2388,14 @@ impl Humans {
                 }
             }
         }
-        self.populate_with(world, None, renderer, scene, center);
+        self.populate_with(world, None, center);
+        self.show_bodies(world, renderer, scene);
     }
 
     fn populate_with(
         &mut self,
         world: &World,
         net: Option<&Network>,
-        _renderer: &Renderer,
-        _scene: &mut Scene,
         center: DVec3,
     ) {
         self.center = center;
@@ -2613,7 +2516,7 @@ impl Humans {
     /// it has fewer than it should - its pass_enter mean times its own random factor
     /// times the passenger density, at most one per waiting place. A stop going out of
     /// range loses the people waiting there.
-    fn stops_tick(&mut self, dt: f32, world: &World, renderer: &Renderer, scene: &mut Scene) {
+    fn stops_tick(&mut self, dt: f32, world: &World) {
         if self.mirror || self.avatar_only {
             return;
         }
@@ -2693,7 +2596,7 @@ impl Humans {
             }
             let mut count = count;
             while count < want {
-                if self.spawn_waiting(world, renderer, scene, id).is_none() {
+                if self.spawn_waiting(world, id).is_none() {
                     break;
                 }
                 count += 1;
@@ -2744,7 +2647,7 @@ impl Humans {
 
     /// A person put at a free waiting place of stop `id` (sub_626044) with a destination
     /// drawn from the stop's (sub_61baa8); they settle there as task 6 does.
-    fn spawn_waiting(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, id: i64) -> Option<usize> {
+    fn spawn_waiting(&mut self, world: &World, id: i64) -> Option<usize> {
         if self.stops.get(&id)?.taken.iter().all(|t| *t) || !self.pool_room() {
             return None;
         }
@@ -2760,7 +2663,7 @@ impl Humans {
         pax.dest = dest;
         pax.line = line;
         pax.st = 0;
-        let Some(i) = self.spawn(world, renderer, scene, sp.pos, sp.face, State::Pax(Box::new(pax))) else {
+        let Some(i) = self.spawn(world, sp.pos, sp.face, State::Pax(Box::new(pax))) else {
             self.free_spot(id, k);
             return None;
         };
@@ -2779,12 +2682,10 @@ impl Humans {
         &mut self,
         world: &World,
         net: &Network,
-        renderer: &Renderer,
-        scene: &mut Scene,
         dt: f32,
     ) {
         let Some(ped) = self.ped.take() else { return };
-        self.populate_on_foot_with(&ped, world, net, renderer, scene, dt);
+        self.populate_on_foot_with(&ped, world, net, dt);
         self.ped = Some(ped);
     }
 
@@ -2793,8 +2694,6 @@ impl Humans {
         ped: &PedNet,
         world: &World,
         net: &Network,
-        renderer: &Renderer,
-        scene: &mut Scene,
         _dt: f32,
     ) {
         let center = self.center;
@@ -2846,9 +2745,7 @@ impl Humans {
                 let heading = if fwd { h as f64 } else { h as f64 + 180.0 };
                 if let Some(i) = self.spawn(
                     world,
-                    renderer,
-                    scene,
-                    p,
+                                        p,
                     heading,
                     State::Strolling(PedWalk::new(vec![leg], true, side)),
                 ) {
@@ -2919,7 +2816,7 @@ impl Humans {
                     // marked so that the knob spawns them once
                     walk.side = -0.4;
                     if let Some(i) =
-                        self.spawn(world, renderer, scene, p, h, State::Strolling(walk))
+                        self.spawn(world, p, h, State::Strolling(walk))
                     {
                         self.people[i].activity = Activity::Walk;
                     }
@@ -3728,7 +3625,7 @@ impl Humans {
             pax.ride_km = r * 19.0 + 1.0;
             pax.task = Task::InBusToPlace;
             let at = train_point(bus.position, &rot, &trailers, cabin.seats[k].pos);
-            let Some(i) = self.spawn(world, renderer, scene, at, bus.heading, State::Pax(Box::new(pax))) else {
+            let Some(i) = self.spawn(world, at, bus.heading, State::Pax(Box::new(pax))) else {
                 self.free_seat(BusId::Player, k);
                 break;
             };
@@ -3748,6 +3645,7 @@ impl Humans {
             }
             self.people[i].place = Place::Bus(BusId::Player, s.pos);
         }
+        self.show_bodies(world, renderer, scene);
     }
 
     /// Give back what a person holds (a waiting place, a seat) before they change plans.
@@ -3914,7 +3812,7 @@ impl Humans {
                 total / n as f64
             ));
         }
-        let (frames, posed, ms, up) = self.pose_stats;
+        let (frames, posed, ms, up) = self.bodies.pose_stats;
         if frames > 0 {
             out.push_str(&format!(
                 "; posing {:.2} ms a frame ({:.1} people, {:.2} ms of it uploading and placing)",
@@ -3940,7 +3838,11 @@ impl Humans {
     ) -> bool {
         let started = std::time::Instant::now();
         self.tick_stages.clear();
-        let took = self.tick_inner(dt, world, bus, traffic, renderer, scene);
+        let took = self.tick_inner(dt, world, bus, traffic);
+        // what the step did, drawn (people who came and went, coins on the desk)
+        let mark = std::time::Instant::now();
+        self.show_bodies(world, renderer, scene);
+        self.tick_stages.push(("bodies", mark.elapsed().as_secs_f64() * 1000.0));
         let ms = started.elapsed().as_secs_f64() * 1000.0;
         if (debug_pax() || omsi_cfg::env::var_os("OMSI_PROFILE").is_some()) && ms > 30.0 {
             log::info!(
@@ -3986,8 +3888,6 @@ impl Humans {
         world: &World,
         bus: Option<&VehicleInstance>,
         traffic: Option<&Traffic>,
-        renderer: &Renderer,
-        scene: &mut Scene,
     ) -> bool {
         let mut mark = std::time::Instant::now();
         macro_rules! stage {
@@ -4040,10 +3940,10 @@ impl Humans {
             if self.stroll_timer <= 0.0 {
                 self.stroll_timer = 1.0;
                 let c = self.center;
-                self.populate_with(world, Some(n), renderer, scene, c);
+                self.populate_with(world, Some(n), c);
                 if !self.mirror {
-                    self.populate_on_foot(world, n, renderer, scene, 1.0);
-                    self.populate_lan_centers(world, n, renderer, scene);
+                    self.populate_on_foot(world, n, 1.0);
+                    self.populate_lan_centers(world, n);
                 }
             }
         }
@@ -4079,13 +3979,13 @@ impl Humans {
         self.claim_waiting();
         self.ride_comfort(dt, bus, &buses, &bus_ix, world);
         if !self.avatar_only {
-            self.stops_tick(dt, world, renderer, scene);
+            self.stops_tick(dt, world);
         }
         stage!("stops");
         // the passengers (sub_6ffc7c)
         let mut taken_ticket = false;
         let mut remove: Vec<usize> = Vec::new();
-        self.pax_frame(dt, world, &buses, &bus_ix, &at_stops, bus, renderer, scene, &mut taken_ticket, &mut remove);
+        self.pax_frame(dt, world, &buses, &bus_ix, &at_stops, bus, &mut taken_ticket, &mut remove);
         stage!("passengers");
         // the pedestrians: a crowd on the pavements
         let mut cars: Vec<(DVec2, DVec2, f64)> = Vec::new();
@@ -4827,17 +4727,18 @@ impl Humans {
     /// are posed every frame, far ones every few frames and people out of view rarely; the
     /// posing and skinning run in parallel.
     pub fn sync(&mut self, renderer: &Renderer, scene: &mut Scene, camera: DVec3) {
-        for inst in self.hidden.drain(..) {
+        self.catch_up_bodies(renderer, scene);
+        for inst in self.bodies.hidden.drain(..) {
             renderer.set_params(scene, inst, &[], false, &[]);
         }
         let started = std::time::Instant::now();
-        self.sync_frame = self.sync_frame.wrapping_add(1);
+        self.bodies.sync_frame = self.bodies.sync_frame.wrapping_add(1);
         let eye = self.eye;
         let from = eye.map(|e| e.pos).unwrap_or(camera);
         // synced only now and then (offscreen snapshots): everybody is posed afresh
-        let all = self.time - self.last_sync > 0.12;
-        let sdt = (self.time - self.last_sync).clamp(0.0, 0.5) as f32;
-        self.last_sync = self.time;
+        let all = self.time - self.bodies.last_sync > 0.12;
+        let sdt = (self.time - self.bodies.last_sync).clamp(0.0, 0.5) as f32;
+        self.bodies.last_sync = self.time;
         let mut due: Vec<bool> = Vec::with_capacity(self.people.len());
         for (k, p) in self.people.iter_mut().enumerate() {
             p.since_posed = p.since_posed.saturating_add(1);
@@ -4866,7 +4767,7 @@ impl Humans {
             };
             let every = if p.vel.length_squared() < 1e-4 && dist > 20.0 { every * 2 } else { every };
             // spread the far ones over the frames
-            let turn = (self.sync_frame + k as u32) % every == 0;
+            let turn = (self.bodies.sync_frame + k as u32) % every == 0;
             due.push(
                 !p.skinned
                     || all
@@ -4939,7 +4840,7 @@ impl Humans {
                 renderer.set_transform(scene, *inst, at, xf);
                 renderer.set_interior(scene, *inst, p.lit * 0.5);
             }
-            if self.avatar_hidden.contains_key(&p.id) && omsi_cfg::env::var_os("OMSI_DEBUG_FOOT").is_some() && self.sync_frame % 30 == 0 {
+            if self.avatar_hidden.contains_key(&p.id) && omsi_cfg::env::var_os("OMSI_DEBUG_FOOT").is_some() && self.bodies.sync_frame % 30 == 0 {
                 log::info!("avatar drawn at ({:.2}, {:.2}, {:.2}) heading {:.0} place {:?} go {}", at.x, at.y, at.z, heading, matches!(p.place, Place::Ground), go);
             }
             if let Some(hide) = self.avatar_hidden.get_mut(&p.id) {
@@ -4949,7 +4850,7 @@ impl Humans {
                     renderer.set_params(scene, *inst, &[], !*hide, &[]);
                 }
             }
-            if let Some(t) = self.trace.as_mut() {
+            if let Some(t) = self.bodies.trace.as_mut() {
                 // OMSI_TRACE_PAX: where the mesh is drawn and where its ankles are, per frame
                 if (at - from).length() < 40.0 {
                     use std::io::Write;
@@ -4997,10 +4898,10 @@ impl Humans {
                 }
             }
         }
-        self.pose_stats.0 += 1;
-        self.pose_stats.1 += n_due;
-        self.pose_stats.2 += started.elapsed().as_secs_f64() * 1000.0;
-        self.pose_stats.3 += upload.elapsed().as_secs_f64() * 1000.0;
+        self.bodies.pose_stats.0 += 1;
+        self.bodies.pose_stats.1 += n_due;
+        self.bodies.pose_stats.2 += started.elapsed().as_secs_f64() * 1000.0;
+        self.bodies.pose_stats.3 += upload.elapsed().as_secs_f64() * 1000.0;
     }
 
 
@@ -5060,7 +4961,7 @@ impl Humans {
         if known.is_none() {
             let state = State::Idle;
             let n = self.types.len().max(1) as u64;
-            let Some(i) = self.spawn_as(world, renderer, scene, cmd.pos, cmd.heading, state, Some((kind % n) as usize)) else { return };
+            let Some(i) = self.spawn_as(world, cmd.pos, cmd.heading, state, Some((kind % n) as usize)) else { return };
             self.people[i].puppet = Some(Puppet { mode: PuppetMode::Avatar });
             self.avatars.insert(key, self.people[i].id);
         }
@@ -5077,6 +4978,7 @@ impl Humans {
             }
         }
         self.avatar_cmds.insert(key, cmd);
+        self.show_bodies(world, renderer, scene);
     }
 
     /// Take avatar `key` away.
@@ -5476,8 +5378,6 @@ impl Humans {
         &mut self,
         world: &World,
         net: &Network,
-        renderer: &Renderer,
-        scene: &mut Scene,
     ) {
         if self.lan_centers.is_empty() {
             return;
@@ -5487,8 +5387,8 @@ impl Humans {
             if (c - mine).length() < 150.0 {
                 continue;
             }
-            self.populate_with(world, Some(net), renderer, scene, c);
-            self.populate_on_foot(world, net, renderer, scene, 1.0);
+            self.populate_with(world, Some(net), c);
+            self.populate_on_foot(world, net, 1.0);
         }
         self.center = mine;
     }
@@ -5634,16 +5534,18 @@ impl Humans {
         }
         let state = State::Idle;
         let Some(i) =
-            self.spawn_as(world, renderer, scene, pose.pos, pose.heading, state, Some(ty))
+            self.spawn_as(world, pose.pos, pose.heading, state, Some(ty))
         else {
             return false;
         };
         self.next_id -= 1;
         let p = &mut self.people[i];
+        self.bodies.renamed(p.id, id);
         p.id = id;
         p.anim = OmsiAnim::default();
         p.remote = true;
         self.mirror_set(id, pose);
+        self.show_bodies(world, renderer, scene);
         true
     }
 
