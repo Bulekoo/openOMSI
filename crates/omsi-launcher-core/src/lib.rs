@@ -100,7 +100,7 @@ fn find_root(configured: &str) -> Option<PathBuf> {
     if !configured.trim().is_empty() {
         first.push(PathBuf::from(configured.trim()));
     }
-    if let Some(p) = std::env::var_os("OMSI_ROOT") {
+    if let Some(p) = omsi_cfg::flags::OMSI_ROOT.live_os() {
         first.push(PathBuf::from(p));
     }
     if let Ok(t) = std::fs::read_to_string(home().join(".openomsi-root")) {
@@ -257,7 +257,7 @@ fn root() -> Result<PathBuf> {
 pub fn content_dir() -> Option<PathBuf> {
     // the same rules as the game: $OMSI_CONTENT, else the folder of the game binary (beside
     // the bundle when the binary sits inside a macOS .app)
-    let dir = match std::env::var_os("OMSI_CONTENT") {
+    let dir = match omsi_cfg::flags::OMSI_CONTENT.live_os() {
         Some(d) => PathBuf::from(d),
         None => {
             let c = load_config_raw();
@@ -3260,7 +3260,7 @@ mod tests {
     /// "5 & 5N" off and brings "130 & N30"; without a date it is the game's default day.
     #[test]
     fn lines_follow_the_chrono_date() {
-        let root = std::env::var_os("OMSI_ROOT").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("../../../OMSI 2 Original"));
+        let root = omsi_cfg::flags::OMSI_ROOT.live_os().map(PathBuf::from).unwrap_or_else(|| PathBuf::from("../../../OMSI 2 Original"));
         let map = root.join("maps/Berlin-Spandau");
         if !map.join("TTData").is_dir() {
             eprintln!("skipped: no {}", map.display());

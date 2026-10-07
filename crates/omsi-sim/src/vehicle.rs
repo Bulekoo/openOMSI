@@ -1832,7 +1832,7 @@ impl VehicleInstance {
                 // a brush that takes less than a kilojoule is no accident (a broken post is), and
                 // a car still inside the bus from the frame before is the same accident
                 let o = &obstacles[hit.obstacle];
-                if hit.speed >= crate::rigid::CRASH_SPEED && omsi_cfg::env::var_os("OMSI_DEBUG_PHYSICS").is_some() {
+                if hit.speed >= crate::rigid::CRASH_SPEED && omsi_cfg::flags::OMSI_DEBUG_PHYSICS.is_set() {
                     log::info!("  hit obstacle {} at ({:.1}, {:.1}) z {:.2}..{:.2} half {:.2}x{:.2} heading {:.0}, {:.1} km/h", o.id, o.center.x, o.center.y, o.z0, o.z1, o.half.x, o.half.y, o.heading.to_degrees(), hit.speed * 3.6);
                 }
                 if hit.speed < crate::rigid::CRASH_SPEED
@@ -1849,7 +1849,7 @@ impl VehicleInstance {
             self.touching = touching;
         }
         if let Some(hit) = worst {
-            if omsi_cfg::env::var_os("OMSI_DEBUG_PHYSICS").is_some() {
+            if omsi_cfg::flags::OMSI_DEBUG_PHYSICS.is_set() {
                 log::info!(
                     "impact at {:.1} km/h, {:.1} kJ, body point ({:.2}, {:.2}, {:.2}){}",
                     hit.speed * 3.6,
@@ -2573,7 +2573,7 @@ impl VehicleInstance {
             let comp = rb.wheels[k].compression.clamp(-crate::rigid::DROOP, crate::rigid::BUMP);
             let drawn = self.mesh_transforms[i].transform_point3(pivot).z;
             let dz = pivot.z + comp - drawn;
-            if omsi_cfg::env::var_os("OMSI_DEBUG_SEAT").is_some() {
+            if omsi_cfg::flags::OMSI_DEBUG_SEAT.is_set() {
                 log::info!("seat mesh {i} wheel {k}: comp {:.4} drawn {:.4} pivot {:.4} dz {:.4}", comp, drawn, pivot.z, dz);
             }
             // (every frame, however small: a dead band of 3 mm had the correction switch on
@@ -2627,8 +2627,7 @@ impl VehicleInstance {
         }
         crate::anim::apply_parents(&self.animators, &mut self.mesh_transforms);
         self.seat_wheels();
-        static DEBUG_ANIM: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
-        if let Some(want) = DEBUG_ANIM.get_or_init(|| omsi_cfg::env::var("OMSI_DEBUG_ANIM").ok()) {
+        if let Some(want) = omsi_cfg::flags::OMSI_DEBUG_ANIM.var() {
             for (i, m) in self.ty.meshes.iter().enumerate() {
                 let file = &self.ty.model.meshes[m.def_index].file;
                 if file
@@ -3995,7 +3994,7 @@ impl TrailerPart {
             self.mesh_transforms[i] = a.update(dt, &main.state.vars);
         }
         crate::anim::apply_parents(&self.animators, &mut self.mesh_transforms);
-        if omsi_cfg::env::var_os("OMSI_DEBUG_TRAILER").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_TRAILER.is_set() {
             log::info!(
                 "trailer: rest {:?} sag {:?} lift {lift:.3} ground {ground_z:?} z {:.3}",
                 self.rest,
@@ -5009,7 +5008,7 @@ mod tests {
     /// path when the handbrake guard only produced the button sound.
     #[test]
     fn volvo_wright_rear_close_fallback_moves_a_partly_open_door() {
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
+        let root = omsi_cfg::flags::OMSI_ROOT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
         let bus = root.join("Vehicles/Volvo_Wright_Family/AVBWS1.bus");
@@ -5038,7 +5037,7 @@ mod tests {
 
     #[test]
     fn volvo_wright_rear_toggle_falls_back_to_external_close() {
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
+        let root = omsi_cfg::flags::OMSI_ROOT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
         let bus = root.join("Vehicles/Volvo_Wright_Family/AVBWS1.bus");
@@ -5068,7 +5067,7 @@ mod tests {
 
     #[test]
     fn volvo_wright_rear_toggle_closes_open_leaves_even_with_zero_target() {
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
+        let root = omsi_cfg::flags::OMSI_ROOT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
         let bus = root.join("Vehicles/Volvo_Wright_Family/AVBWS1.bus");
@@ -5097,7 +5096,7 @@ mod tests {
 
     #[test]
     fn volvo_wright_rear_toggle_reopens_during_forced_close() {
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
+        let root = omsi_cfg::flags::OMSI_ROOT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
         let bus = root.join("Vehicles/Volvo_Wright_Family/AVBWS1.bus");
@@ -5128,7 +5127,7 @@ mod tests {
 
     #[test]
     fn volvo_wright_rear_toggle_keeps_close_target_through_frames() {
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
+        let root = omsi_cfg::flags::OMSI_ROOT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
         let bus = root.join("Vehicles/Volvo_Wright_Family/AVBWS1.bus");
@@ -5167,7 +5166,7 @@ mod tests {
 
     #[test]
     fn volvo_wright_family_rear_toggle_closes_every_bus_variant() {
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
+        let root = omsi_cfg::flags::OMSI_ROOT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
         let dir = root.join("Vehicles/Volvo_Wright_Family");
@@ -5242,7 +5241,7 @@ mod tests {
     /// with its variables set to changing values, and after an engine variable joins.
     #[test]
     fn props_plan_matches_compute_mesh_props() {
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
+        let root = omsi_cfg::flags::OMSI_ROOT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
         let bus = root.join("Vehicles/MAN_NL_NG/MAN_EN92_main.bus");
@@ -5297,7 +5296,7 @@ mod tests {
     /// index -1, 0x7fe4e7); one on a variable at 0.3 is off.
     #[test]
     fn a_lightmap_on_an_unknown_variable_is_on() {
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
+        let root = omsi_cfg::flags::OMSI_ROOT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
         let bus = root.join("Vehicles/MAN_NL_NG/MAN_EN92_main.bus");
@@ -5346,7 +5345,7 @@ mod tests {
     /// hangs on - turns with it onto the rear section's line.
     #[test]
     fn articulation_alpha_turns_the_joint_onto_the_rear_section() {
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
+        let root = omsi_cfg::flags::OMSI_ROOT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
         let bus = root.join("Vehicles/MAN_NL_NG/MAN_GN92_main.bus");
@@ -5470,7 +5469,7 @@ mod tests {
     /// 1980, 60000 km a year, +-20 %), not at 0 km; reversing takes the counter back.
     #[test]
     fn odometer_starts_at_the_default_service_life() {
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
+        let root = omsi_cfg::flags::OMSI_ROOT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
         let bus = root.join("Vehicles/MAN_SD200/MAN_SD77.bus");
@@ -5496,7 +5495,7 @@ mod tests {
     /// section swinging round 90 degrees drags the rear section's axle with it.
     #[test]
     fn articulation_stops_at_the_coupling_max_alpha() {
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
+        let root = omsi_cfg::flags::OMSI_ROOT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
         let bus = root.join("Vehicles/MAN_NL_NG/MAN_GN92_main.bus");
@@ -5565,7 +5564,7 @@ mod tests {
     /// axle; one set ahead of the axle (a steered rear axle, #322) is where it turns.
     #[test]
     fn rear_section_turns_about_its_rot_pnt_long() {
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
+        let root = omsi_cfg::flags::OMSI_ROOT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
         let bus = root.join("Vehicles/MAN_NL_NG/MAN_GN92_main.bus");
@@ -5589,7 +5588,7 @@ mod tests {
     #[test]
     fn rear_section_stays_on_a_viaduct_deck() {
         use std::sync::atomic::{AtomicU8, Ordering};
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
+        let root = omsi_cfg::flags::OMSI_ROOT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
         let bus = root.join("Vehicles/MAN_NL_NG/MAN_GN92_main.bus");
@@ -5638,7 +5637,7 @@ mod tests {
     /// its left wheel pushes that wheel up into its arch and leaves the right one.
     #[test]
     fn rear_section_wheels_spring_on_their_own() {
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
+        let root = omsi_cfg::flags::OMSI_ROOT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
         let bus = root.join("Vehicles/MAN_NL_NG/MAN_GN92_main.bus");
@@ -5672,7 +5671,7 @@ mod tests {
     /// its bellows frozen in the rest pose through every corner.
     #[test]
     fn ai_loaded_bellows_keep_their_skin_and_still_bend() {
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
+        let root = omsi_cfg::flags::OMSI_ROOT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
         let bus = root.join("Vehicles/MAN_NL_NG/MAN_GN92_main.bus");
@@ -5739,7 +5738,7 @@ mod tests {
     /// loaded as an AI copy - the fix is generic over `[setbone]` names, not tied to MAN's.
     #[test]
     fn o530g_mod_bellows_bend_and_survive_an_ai_load() {
-        let content = omsi_cfg::env::var_os("OMSI_CONTENT")
+        let content = omsi_cfg::flags::OMSI_CONTENT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| {
                 std::path::PathBuf::from(
@@ -5803,7 +5802,7 @@ mod tests {
     /// loading, exactly as it reports those of a fully loaded one.
     #[test]
     fn wheel_pivot_report_reads_dropped_meshes() {
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
+        let root = omsi_cfg::flags::OMSI_ROOT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
         let bus = root.join("Vehicles/MAN_F90/AI_MAN_F90_Wechselbruecke.bus");
@@ -5939,7 +5938,7 @@ mod grip_tests {
     fn unbound_bones_keep_their_share_of_a_vertex() {
         use super::*;
         use std::sync::Arc;
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
+        let root = omsi_cfg::flags::OMSI_ROOT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
         let bus = root.join("Vehicles/AA-FR_BusBundle/2002_Agora_S_2d.bus");
@@ -5988,7 +5987,7 @@ mod grip_tests {
     fn articulation_beta_tilts_the_joint_towards_the_rear_section() {
         use super::*;
         use std::sync::Arc;
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
+        let root = omsi_cfg::flags::OMSI_ROOT.os()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
         let bus = root.join("Vehicles/AA-FR_BusBundle/2002_Agora_L_3d_main.bus");
