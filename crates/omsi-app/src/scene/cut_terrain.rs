@@ -48,9 +48,9 @@ impl World {
         if check_roads {
             where_.sort_by(|a, b| b.2.total_cmp(&a.2));
             log::info!("ground-cut check: {holes} of {cells} covered ground points would be cut away with nothing under them ({:.2} %)", holes as f32 / cells.max(1) as f32 * 100.0);
-            let over = OVER_ROAD.load(std::sync::atomic::Ordering::Relaxed);
+            let over = self.over_road.load(std::sync::atomic::Ordering::Relaxed);
             log::info!("ground-over-road check: {over} of {cells} road points lie under the ground (3 cm to 1.5 m)");
-            if let Ok(mut w) = OVER_ROAD_AT.lock() {
+            if let Ok(mut w) = self.over_road_at.lock() {
                 w.sort_by(|a, b| b.2.total_cmp(&a.2));
                 let by = |lo: f32, hi: f32| w.iter().filter(|p| p.2 >= lo && p.2 < hi).count();
                 log::info!("   by depth: 3-10 cm {}, 10-30 cm {}, 30-60 cm {}, 60 cm-1.5 m {}", by(0.0, 0.1), by(0.1, 0.3), by(0.3, 0.6), by(0.6, 9.0));
@@ -90,7 +90,7 @@ impl World {
         // How much of the ground the old cut rule ("anything below the terrain takes
         // it away") would have removed with nothing to put in its place: a hole in
         // the world you can see the sky through.
-        let check = ground_cut_check(&ts, check_roads, tile_terrain.as_ref(), x0, y0);
+        let check = ground_cut_check(&ts, check_roads, tile_terrain.as_ref(), x0, y0, (&self.over_road, &self.over_road_at));
         let terrain_at = move |x: f32, y: f32| {
             tile_terrain.as_ref().map(|t| t.sample(x, y)).unwrap_or(0.0)
         };
@@ -353,8 +353,15 @@ impl World {
 }
 
 /// OMSI_CHECK_ROADS on one tile (see [`Check`]); the ground over its roads goes to
-/// `OVER_ROAD`.
-fn ground_cut_check(ts: &TileSurface, check_roads: bool, tile_terrain: Option<&Arc<Terrain>>, x0: f64, y0: f64) -> Check {
+/// `over_road`.
+fn ground_cut_check(
+    ts: &TileSurface,
+    check_roads: bool,
+    tile_terrain: Option<&Arc<Terrain>>,
+    x0: f64,
+    y0: f64,
+    (over_road, over_road_at): (&std::sync::atomic::AtomicUsize, &std::sync::Mutex<Vec<(f64, f64, f32, f32)>>),
+) -> Check {
     let mut check: Check = (0, 0, Vec::new());
     if let (true, Some(t)) = (check_roads, tile_terrain.as_ref()) {
         let n = ts.size;
@@ -369,8 +376,8 @@ fn ground_cut_check(ts: &TileSurface, check_roads: bool, tile_terrain: Option<&A
                 let th = t.sample((i as f32 + 0.5) * cell, (j as f32 + 0.5) * cell);
                 // the ground over a road: shows through it (Omsi.exe cuts nothing)
                 if ts.road_covered(k) && th > ts.road_height(k) + 0.03 && th < ts.road_height(k) + 1.5 && !ts.cut_at((i as f32 + 0.5) * cell, (j as f32 + 0.5) * cell, th, surface_flush()) {
-                    OVER_ROAD.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    if let Ok(mut w) = OVER_ROAD_AT.lock() {
+                    over_road.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if let Ok(mut w) = over_road_at.lock() {
                         w.push((x0 + ((i as f32 + 0.5) * cell) as f64, y0 + ((j as f32 + 0.5) * cell) as f64, th - ts.road_height(k), th));
                     }
                 }

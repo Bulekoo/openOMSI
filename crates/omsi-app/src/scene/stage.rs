@@ -1208,4 +1208,5 @@ impl World {
 }
 
 /// OMSI_CHECK_SPLINES: every spline's two ends, its neighbours in the chain and its file.
+/// (Global: `offscreen` reads it to report chained ends that differ in height.)
 pub(crate) static SPLINE_ENDS: std::sync::LazyLock<Mutex<HashMap<i64, (DVec3, DVec3, i64, i64, String)>>> = std::sync::LazyLock::new(Default::default);

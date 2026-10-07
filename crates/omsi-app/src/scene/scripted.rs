@@ -305,6 +305,7 @@ impl World {
             return;
         }
         let scripted = self.scripted.lock();
+        // (an environment switch read once per process)
         static DEBUG: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
         if *DEBUG.get_or_init(|| omsi_cfg::env::var_os("OMSI_DEBUG_PARTICLES").is_some()) {
             let mut near: Vec<(f64, &ParticleObject)> = objs.values().flatten().map(|po| ((po.pos - center).length(), po)).collect();

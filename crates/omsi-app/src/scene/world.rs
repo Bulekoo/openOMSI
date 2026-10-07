@@ -90,6 +90,10 @@ pub struct World {
     pub(super) help_arrows: Mutex<HashMap<(i32, i32), Vec<usize>>>,
     /// Whether they are drawn now.
     pub(super) help_arrows_shown: std::sync::atomic::AtomicBool,
+    /// `OMSI_CHECK_ROADS`: road points under the ground, and where (over every tile this
+    /// world has cut, see [`World::cut_terrain`]).
+    pub(super) over_road: std::sync::atomic::AtomicUsize,
+    pub(super) over_road_at: std::sync::Mutex<Vec<(f64, f64, f32, f32)>>,
     /// Parked cars that drove off in this run: their space stays empty when the tile comes
     /// back.
     pub(super) departed: Mutex<std::collections::HashSet<i64>>,

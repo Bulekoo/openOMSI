@@ -107,6 +107,8 @@ impl World {
             parked_objects: Mutex::new(HashMap::new()),
             help_arrows: Mutex::new(HashMap::new()),
             help_arrows_shown: std::sync::atomic::AtomicBool::new(false),
+            over_road: std::sync::atomic::AtomicUsize::new(0),
+            over_road_at: std::sync::Mutex::new(Vec::new()),
             departed: Mutex::new(std::collections::HashSet::new()),
             departed_objects: Mutex::new(std::collections::HashMap::new()),
             edit_objects: Mutex::new(HashMap::new()),

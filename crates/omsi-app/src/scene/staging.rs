@@ -196,6 +196,8 @@ pub(super) fn is_white_lightmap(rgba: &[u8]) -> bool {
 /// [`is_white_lightmap`] of the light map `name` (found in `dirs`, read once per file);
 /// `None` when the file is not there.
 pub(super) fn lightmap_is_white(name: &str, dirs: &[&Path]) -> Option<bool> {
+    // (global, not a field of `World`: a memo of what the file holds, the same whatever map
+    // is open, so a new `World` reads nothing twice)
     static WHITE: std::sync::OnceLock<Mutex<HashMap<PathBuf, bool>>> = std::sync::OnceLock::new();
     let path = omsi_texture::find_texture(name, dirs)?;
     let cache = WHITE.get_or_init(|| Mutex::new(HashMap::new()));

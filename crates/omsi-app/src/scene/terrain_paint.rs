@@ -267,16 +267,15 @@ pub(super) fn tree_quad_mesh() -> MeshData {
 /// under it. Anything higher is a bridge or an embankment, where cutting would open a hole.
 /// `OMSI_HEIGHTPROFILE_GROUND=1`: the wheels stand on the splines' `[heightprofile]`s as
 /// they did before, instead of on the drawn splines as Omsi.exe stands them (A/B runs).
-/// `OMSI_CHECK_ROADS`: road points under the ground, and where.
-pub(super) static OVER_ROAD: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-pub(super) static OVER_ROAD_AT: std::sync::Mutex<Vec<(f64, f64, f32, f32)>> = std::sync::Mutex::new(Vec::new());
-
 pub(super) fn heightprofile_ground() -> bool {
+    // (global: an environment switch read once per process, asked by the staging threads)
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| omsi_cfg::env::var_os("OMSI_HEIGHTPROFILE_GROUND").is_some())
 }
 
 pub(super) fn surface_flush() -> f32 {
+    // (global: an environment setting read once per process; also asked by `drawn_ground`
+    // and the drive probe, which run without a `World`)
     static V: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
     *V.get_or_init(|| {
         omsi_cfg::env::var("OMSI_SURFACE_FLUSH")
@@ -288,6 +287,7 @@ pub(super) fn surface_flush() -> f32 {
 
 /// Whether this session's weather lies as snow (`[snow]` in the `.owt`), set by the app
 /// when it reads the weather and asked while the vehicles go onto the GPU.
+/// (Global: `weather_setup` and `input_script` set it, before and apart from any `World`.)
 pub static SNOW_WEATHER: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 pub(super) fn snowing() -> bool {
@@ -327,6 +327,8 @@ pub fn texture_dirs(root: &Path, content_dir: &Path) -> Vec<PathBuf> {
 ///
 /// [`HeightMap`]: omsi_geometry::HeightMap
 pub fn surf_map(texture: &str, dirs: &[&Path]) -> Option<Arc<omsi_geometry::HeightMap>> {
+    // (global, not a field of `World`: a memo of what the file holds, the same whatever map
+    // is open, so a new `World` reads nothing twice; the tests ask without a `World`)
     static MEMO: std::sync::OnceLock<Mutex<HashMap<PathBuf, Option<Arc<omsi_geometry::HeightMap>>>>> = std::sync::OnceLock::new();
     // OMSI_NO_SURF: every road as smooth as before (A/B)
     if omsi_cfg::env::var_os("OMSI_NO_SURF").is_some() {

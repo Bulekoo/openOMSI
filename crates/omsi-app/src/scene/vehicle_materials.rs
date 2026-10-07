@@ -798,6 +798,7 @@ pub(super) fn helper_text_image(tt: &omsi_model::TextTexture, atlas: Option<&oms
     if text.trim().is_empty() || text.chars().all(drawable) {
         return None;
     }
+    // (global: the interface fonts are the same for every map; built once, on first use)
     static FONTS: std::sync::OnceLock<omsi_ui::Fonts> = std::sync::OnceLock::new();
     let fonts = FONTS.get_or_init(omsi_ui::Fonts::new);
     let (w, h) = (tt.width.max(1) as u32, tt.height.max(1) as u32);
@@ -914,6 +915,8 @@ pub(super) const ALPHA_MASK: usize = 256;
 /// 4096 squared, and every blended slot of a bus asks). None for a file that cannot be
 /// read or has no alpha.
 pub(super) fn alpha_mask(path: &Path) -> Option<Arc<Vec<u8>>> {
+    // (global, not a field of `World`: a memo of what the file holds, the same whatever map
+    // is open, so a new `World` reads nothing twice)
     static MASKS: std::sync::OnceLock<Mutex<HashMap<PathBuf, Option<Arc<Vec<u8>>>>>> = std::sync::OnceLock::new();
     let masks = MASKS.get_or_init(Default::default);
     if let Some(m) = masks.lock().get(path) {
