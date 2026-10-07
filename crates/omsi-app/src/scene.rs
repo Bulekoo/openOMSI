@@ -6406,6 +6406,10 @@ impl World {
                 let mut extra = material_extra(&slot_ov, env_mask, bump, specular);
                 extra.ambient = Some(ambient);
                 extra.no_map_lights = ot.sco.no_map_lighting;
+                // a route arrow ([helparrow]) is a guide over the world, not a light in it:
+                // left out of the Enhanced picture's glow as the bus's own screens are (its
+                // self-lit yellow bloomed like a lamp at night, #1615)
+                extra.screen |= ot.sco.is_help_arrow;
                 // windy trees: a plant's leaves (its cut-out or blended slots) bend in the wind
                 if alpha != AlphaMode::Opaque {
                     if let Some(give) = vegetation_give_of(&ot.sco) {
@@ -7436,6 +7440,19 @@ impl World {
                                 xf,
                                 mats.clone()
                             ));
+                            // What stands on a surface object casts its shadow: a `[shadow]`
+                            // mesh, or (casters "all") one rising more than 1.5 m over the
+                            // object's foot. Drawn as a ground layer it cast none - the
+                            // Spandau depot's buildings, made one object with its yard,
+                            // threw no shadow at all (#1503).
+                            if surface && !ot.mesh_shadow.get(mi).copied().unwrap_or(false) {
+                                let tagged = ot.mesh_casts.get(mi).copied().unwrap_or(false);
+                                let tall = ot.meshes.get(mi).is_some_and(|(m, _, _)| m.positions.iter().any(|p| p.z > 1.5));
+                                if tagged || tall {
+                                    renderer.set_casts_shadow(scene, i, true);
+                                    renderer.set_omsi_caster(scene, i, tagged);
+                                }
+                            }
                             i
                         } else {
                             let i = instance!(renderer.add_instance(scene, *mesh_id, pos, xf, mats.clone()));
