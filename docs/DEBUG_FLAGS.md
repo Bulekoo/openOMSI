@@ -330,7 +330,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_OFFICIAL_KEY` | text | - | use | app | File of the official server's signing key. |
 | `OMSI_PLUGIN_HOST32` | text | beside the game | use | plugin | Path of omsi-plugin-host32.exe. |
 | `OMSI_PRESENCE_URL` | text | built-in | use | app | Base URL of the presence ("playing now") service. |
-| `OMSI_ROOT` | text | found | use | app, launcher-core, map, o3d, sim | The OMSI 2 installation folder (also the content root for tests that need real content). |
+| `OMSI_ROOT` | text | found | use | app, launcher-core, o3d, sim | The OMSI 2 installation folder (also the content root for tests that need real content). |
 | `OMSI_SAFE_GPU` | num | 0 | use | app | Restarts after a lost graphics device: lighter on the card each time. Set at runtime on Android and by the restart. |
 | `OMSI_UPDATE_URL` | text | built-in | use | app | Another release description (URL or file:///...json) for the update check. |
 | `OMSI_WINE` | text | PATH | use | plugin | The Wine binary for Windows plugins. |

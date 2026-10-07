@@ -39,6 +39,7 @@ mod props;
 mod lightmaps;
 mod scripted;
 mod vehicle_materials;
+mod vehicle_types;
 mod vehicles;
 mod lanes;
 
@@ -50,6 +51,7 @@ pub(crate) use open::*;
 pub(crate) use props::*;
 pub(crate) use scripted::*;
 pub(crate) use vehicle_materials::*;
+pub(crate) use vehicle_types::*;
 pub(crate) use vehicles::*;
 use lanes::*;
 use lightmaps::*;
