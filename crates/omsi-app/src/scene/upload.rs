@@ -535,6 +535,23 @@ impl World {
                 },
             ));
         }
+        self.type_gpu_lods(renderer, scene, gpu, ot, &mut t, (&dirs, images), ground_mat);
+        gpu.types.insert(key, t);
+        key
+    }
+
+    /// The lower levels of detail of an object type on the GPU (plain materials).
+    #[allow(clippy::too_many_arguments)]
+    fn type_gpu_lods(
+        &self,
+        renderer: &Renderer,
+        scene: &mut Scene,
+        gpu: &mut GpuCache,
+        ot: &Arc<ObjectType>,
+        t: &mut TypeGpu,
+        (dirs, images): (&[PathBuf], &HashMap<PathBuf, Arc<TextureData>>),
+        ground_mat: MaterialId,
+    ) {
         // lower LODs (plain materials). OMSI picks a level the way the model lists them
         // (Omsi.exe 0x5ef860): the first whose least size the object's screen size reaches,
         // else the last one whatever its own. A level is so drawn from its least size (the
@@ -603,8 +620,6 @@ impl World {
             }
             t.lods.push((lo, upper, l));
         }
-        gpu.types.insert(key, t);
-        key
     }
 
     /// Put a prepared tile on the GPU in one go.
