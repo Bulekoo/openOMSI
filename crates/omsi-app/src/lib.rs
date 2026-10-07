@@ -89,6 +89,7 @@ mod cli;
 mod diagnostics;
 mod duty_start;
 mod input_script;
+mod app_impl;
 mod launcher_link;
 mod lan_mods;
 mod memory;
