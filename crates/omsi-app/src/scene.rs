@@ -1861,7 +1861,9 @@ fn terrain_ground(src: &MeshData, slots: &[usize], pos: DVec3, xf: Mat4, origin:
 /// name - and if so how much it gives to the wind. Not a `[tree]` (its cards have their
 /// own) and not a backdrop (a forest painted on one wide card).
 fn vegetation_give_of(sco: &omsi_scenery::sco::SceneryObject) -> Option<f32> {
-    const GROUP_WORDS: [&str; 18] = ["tree", "baum", "bäume", "baeume", "deciduous", "conifer", "shrub", "bush", "busch", "strauch", "hecke", "hedge", "plant", "pflanz", "arbor", "vegetation", "forest", "wald"];
+    // (not "wald": a whole DLC's objects are grouped as "Thüringer Wald", and its houses'
+    // cut-out windows and railings swayed in the wind, #1775)
+    const GROUP_WORDS: [&str; 17] = ["tree", "baum", "bäume", "baeume", "deciduous", "conifer", "shrub", "bush", "busch", "strauch", "hecke", "hedge", "plant", "pflanz", "arbor", "vegetation", "forest"];
     const NAME_WORDS: [&str; 15] = ["tree", "trees", "baum", "shrub", "shrubbery", "bush", "busch", "strauch", "hecke", "hedge", "arbor", "chestnut", "kastanie", "palm", "plant"];
     if sco.tree.is_some() {
         return None;
@@ -11395,11 +11397,14 @@ impl Look {
             let mut extra = l.extra;
             extra.display = text_is_display(l.lightmap.is_some(), l.night.is_some());
             extra.screen = true;
+            // (the slot's own emissive stays: a text field made self-lit in its .x - the
+            // emissive colour 1, 1, 1 - shines as OMSI shows it, the New Lion's City's
+            // number plate and setvar screen; it was taken away, #1384)
             return Look {
                 diffuse: Some(t),
                 alpha: AlphaMode::Blend,
                 color: [1.0; 4],
-                emissive: [0.0; 3],
+                emissive: l.emissive,
                 unlit: false,
                 transmap: None,
                 envmap: None,
@@ -13824,6 +13829,16 @@ mod tests {
             assert!((at(0, x, 1) - expect(x)).abs() <= 1.0, "row {x}");
         }
         assert!((0..n * n).all(|i| own.rgba[i * 4 + 2] == 0));
+    }
+
+    /// A DLC's buildings grouped as "Thüringer Wald" are no plants; trees and hedges are
+    /// (#1775).
+    #[test]
+    fn a_forest_named_map_is_no_plant() {
+        let sco = |text: &str| SceneryObject::parse(&omsi_cfg::CfgFile::from_str("haus.sco", text));
+        assert!(vegetation_give_of(&sco("[groups]\n2\nThüringer Wald\nGebäude\n[mesh]\nhaus.o3d\n")).is_none());
+        assert!(vegetation_give_of(&sco("[groups]\n2\nThüringer Wald\nBäume\n[mesh]\nbaum.o3d\n")).is_some());
+        assert!(vegetation_give_of(&sco("[groups]\n1\nHedges\n[mesh]\nh.o3d\n")).is_some());
     }
 
     /// A bus bay's lines made as a plain object (NCCR's `Parkbox(bus).sco`: a flat mesh 5 mm
