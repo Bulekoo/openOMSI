@@ -318,56 +318,13 @@ impl World {
                     }
                 }
             }
-            if let Some((tex, min_h, max_h, min_r, max_r)) = &ot.sco.tree {
-                // Trees are billboards: the map stores texture, height and the ratio of the
-                // width to the height chosen by the editor; a row of trees along a spline
-                // takes the middle of the type's ranges. OMSI scales its tree by (height x
-                // ratio, height, height x ratio) (Omsi.exe 0x77e6b0 fills the record,
-                // 0x774444 builds the matrix): the ratio multiplies. Divided by it, as here
-                // before, a slim tree (0.4 on Spandau) came out six times too wide and its
-                // crown stood metres away from its trunk's place.
-                let texture = o
-                    .extra
-                    .first()
-                    .cloned()
-                    .filter(|t| !t.trim().is_empty())
-                    .unwrap_or_else(|| tex.clone());
-                let mid_h = ((min_h + max_h) * 0.5) as f64;
-                let mid_r = ((min_r + max_r) * 0.5) as f64;
-                let height = o
-                    .extra
-                    .get(1)
-                    .map(|s| omsi_cfg::parse_f64(s))
-                    .filter(|h| *h > 0.0)
-                    .unwrap_or(if mid_h > 0.0 { mid_h } else { 10.0 });
-                let ratio = o
-                    .extra
-                    .get(2)
-                    .map(|s| omsi_cfg::parse_f64(s))
-                    .filter(|r| *r > 0.0)
-                    .unwrap_or(if mid_r > 0.0 { mid_r } else { 1.0 });
-                trees.push((ot.clone(), texture, pos, height, height * ratio, heading));
+            if let Some(tree) = tree_of(&ot, o, pos, heading) {
+                trees.push(tree);
                 continue;
             }
             // Stock junctions carry a light program even where the map places no signals.
             // Use the map-wide index so lamps on an unloaded neighbouring tile still count.
-            let controller = if !traffic_light_program_enabled(&ot.sco, index.traffic_light_parents.contains(&o.id)) {
-                None
-            } else {
-                let known = self.controller_of_object.lock().get(&o.id).copied();
-                Some(known.unwrap_or_else(|| {
-                    let program = ot.sco.traffic_lights.iter().map(|l| (l.phases.iter().map(|p| (p.state, p.duration)).collect(), l.approach_dist)).collect();
-                    let c = TrafficLightController::from_program(program, ot.sco.traffic_lights_group, &ot.sco.traffic_light_stop, &ot.sco.traffic_light_jump);
-                    let mut list = self.traffic_lights.lock();
-                    list.push(c);
-                    let idx = list.len() - 1;
-                    self.controller_of_object.lock().insert(o.id, idx);
-                    if omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some() {
-                        log::info!("traffic light program {idx}: object {} {} at ({:.1}, {:.1}) cycle {:?} lights {}", o.id, ot.sco.path.display(), pos.x, pos.y, ot.sco.traffic_lights_group, ot.sco.traffic_lights.len());
-                    }
-                    idx
-                }))
-            };
+            let controller = self.object_controller(&ot, o, pos, &index);
             // (a `[helparrow]` object goes on: it is put up hidden, and drawn while the route
             // arrows are on - see `World::show_help_arrows`)
             if ot.sco.only_editor || ot.meshes.is_empty() {
@@ -427,152 +384,9 @@ impl World {
                 }
             }
             if first_load {
-                let mut own = object_lanes(
-                    &ot.sco,
-                    pos,
-                    [heading, 0.0, 0.0],
-                    controller,
-                    key,
-                    o.id,
-                    &o.rules,
-                );
-                // An object tilted on a slope (the map's pitch and bank) tilts its paths with
-                // it, as the whole object matrix places them in Omsi.exe: laid out by the
-                // heading alone, a junction on a hill had flat lanes through a sloping plate
-                // and its traffic drove into the road on one side and over it on the other.
-                let yaw = omsi_geometry::object_rotation([heading, 0.0, 0.0]);
-                let tilt = xf * yaw.inverse();
-                if !tilt.abs_diff_eq(Mat4::IDENTITY, 1e-5) {
-                    for l in own.iter_mut() {
-                        for q in l.points.iter_mut() {
-                            *q = pos + tilt.transform_point3((*q - pos).as_vec3()).as_dvec3();
-                        }
-                        l.refresh();
-                    }
-                }
-                // Paths sample the field independently of the visual mesh: a coarse
-                // mesh can have no covered vertices while lane points lie inside it.
-                if let Some(field) = ot.deform.as_ref() {
-                    let inv = xf.inverse();
-                    for l in own.iter_mut() {
-                        for q in l.points.iter_mut() {
-                            let local = inv.transform_point3((*q - pos).as_vec3());
-                            if let Some(d) = field_height(field, local.x, local.y) {
-                                q.z += d as f64;
-                            }
-                        }
-                    }
-                }
-                lanes.extend(own);
+                lanes.extend(placed_object_lanes(&ot, o, pos, xf, heading, controller, key));
             }
-            // What vehicles hit, as OMSI gives it to ODE: the `[collision_mesh]` as a
-            // triangle mesh when there is one (it wins over a `[boundingbox]`), else the
-            // `[boundingbox]` as a box. A visual mesh without either declaration is not a
-            // collision shape, and neither are the extents of a collision mesh: one box
-            // around a housing estate's mesh or the Heerstraße bridge stood as an invisible
-            // wall across the roads through and under it.
-            // Only a `[fixed]` object (or a `[crashmode_pole]`) is solid for the vehicles, as
-            // Omsi.exe sets it up (0x7af0a4: the shape is made for those only; any other is a
-            // loose body the bus is not stopped by). We made every object with a shape solid:
-            // the line plates and name signs hanging off bus stop poles, and any bridge or
-            // gantry of a mod map not marked `[fixed]` - an invisible wall under it.
-            // (a parked car is a vehicle: it is hit as the traffic is)
-            let solid = ot.sco.fixed || ot.sco.crash_mode_pole.is_some() || o.parked;
-            // (Not a `[surface]` object, although Omsi.exe makes it `[fixed]` and puts its
-            // collision mesh into the tile's static ODE space like any other (0x7af0a4, the
-            // vehicle collides with that space in 0x6ff5b8): the Spandau depot's
-            // `Betr_S_Bauten` has fence rails 1.9 m up across its yard's drive paths, which
-            // the original's buses pass through - something drops those contacts that is not
-            // found yet, and made solid here they walled in the whole yard.)
-            let mesh_shape = ot
-                .collision
-                .as_ref()
-                .filter(|_| solid && !ot.sco.no_collision && !is_surface && !ot.meshes.is_empty());
-            if let Some(c) = mesh_shape {
-                let tris = |m: &dyn Fn(glam::Vec3) -> glam::DVec3| -> Vec<[glam::DVec3; 3]> {
-                    c.indices
-                        .chunks_exact(3)
-                        .map(|t| [m(c.positions[t[0] as usize]), m(c.positions[t[1] as usize]), m(c.positions[t[2] as usize])])
-                        .collect()
-                };
-                // the shape is the type's, in its own frame; an object tilted on a slope
-                // (rare) gets one of its own, turned by all but its heading
-                let yaw = omsi_geometry::object_rotation([heading, 0.0, 0.0]);
-                let tilt = yaw.inverse() * xf;
-                let upright = (tilt.x_axis.truncate() - glam::Vec3::X).length() < 1e-3
-                    && (tilt.y_axis.truncate() - glam::Vec3::Y).length() < 1e-3;
-                let shape = if upright {
-                    ot.collision_shape
-                        .get_or_init(|| {
-                            Arc::new(omsi_sim::collision::MeshShape::from_triangles(
-                                tris(&|p| p.as_dvec3()).into_iter(),
-                                LOW_OBJECT as f64,
-                            ))
-                        })
-                        .clone()
-                } else {
-                    Arc::new(omsi_sim::collision::MeshShape::from_triangles(
-                        tris(&|p| tilt.transform_vector3(p).as_dvec3()).into_iter(),
-                        LOW_OBJECT as f64,
-                    ))
-                };
-                if !shape.parts.is_empty() {
-                    if omsi_cfg::env::var_os("OMSI_DEBUG_COLLISION").is_some() {
-                        log::info!("obstacle {} key {} at ({:.1}, {:.1}) z {:.1} rot {:.0}: collision mesh of {} triangles as {} parts{}", ot.sco.path.display(), o.key, pos.x, pos.y, pos.z, heading, c.indices.len() / 3, shape.parts.len(), if upright { "" } else { " (tilted)" });
-                    }
-                    state
-                        .mesh_obstacles
-                        .push(omsi_sim::collision::MeshObstacle::new(shape, pos, heading, o.key));
-                }
-            } else if solid && !ot.sco.no_collision && !is_surface && !ot.meshes.is_empty() {
-                if let Some(bb) = ot.sco.bounding_box {
-                    // Ignore flat decals and oversized helpers - and anything whose top stays
-                    // under a bus floor: a manhole cover's half-metre box centred on the road
-                    // (ViewApp's Kanaldeckel) stands 25 cm proud of the asphalt, and a
-                    // pitching bus ran into it as into a wall.
-                    let top = bb[5] + bb[2] * 0.5;
-                    // a road that runs through the box (under a bridge, a gantry, an arch,
-                    // a station hall) says it is no wall there: a mod map's big objects give
-                    // their whole extent as the `[boundingbox]`, and the bus met an invisible
-                    // wall across the street (Grand Paris Moulon, Saint Servant)
-                    let probe = omsi_sim::collision::Obb::from_box(bb, pos, heading);
-                    let road_through = !o.parked && (bb[0] > 3.0 || bb[1] > 3.0) && {
-                        let [r, f] = probe.axes();
-                        // a street lane through its footprint, at a height a vehicle on it
-                        // would be inside the box (not a road on its roof or far below)
-                        st.street_points.iter().any(|w| {
-                            let d = w.truncate() - probe.center;
-                            d.dot(r).abs() <= probe.half.x && d.dot(f).abs() <= probe.half.y && w.z >= probe.z0 - 1.0 && w.z <= probe.z1 - 0.5
-                        })
-                    };
-                    if road_through && omsi_cfg::env::var_os("OMSI_DEBUG_COLLISION").is_some() {
-                        log::info!("no wall: {} key {} - a road runs through its [boundingbox]", ot.sco.path.display(), o.key);
-                    }
-                    if bb[2] > 0.4
-                        && top > LOW_OBJECT
-                        && bb[0] < 400.0
-                        && bb[1] < 400.0
-                        && bb[0] > 0.05
-                        && bb[1] > 0.05
-                        && !road_through
-                    {
-                        let mut obb = omsi_sim::collision::Obb::from_box(bb, pos, heading);
-                        obb.pole = ot.sco.crash_mode_pole;
-                        obb.id = o.key;
-                        // (a car that has driven off leaves its space free)
-                        let gone = o.parked && self.departed.lock().contains(&o.key);
-                        if !gone {
-                            state.obstacles.push(obb);
-                        }
-                        if o.parked && !gone {
-                            state.parked_boxes.push(obb);
-                        }
-                        if omsi_cfg::env::var_os("OMSI_DEBUG_COLLISION").is_some() {
-                            log::info!("obstacle {} key {} at ({:.1}, {:.1}) z {:.1}..{:.1} size {:.1}x{:.1}x{:.1} centre offset ({:.1}, {:.1}) rot {:.0}{}{}", ot.sco.path.display(), o.key, pos.x, pos.y, obb.z0, obb.z1, bb[0], bb[1], bb[2], bb[3], bb[4], heading, if obb.pole.is_some() { " pole" } else { "" }, " [boundingbox]");
-                        }
-                    }
-                }
-            }
+            self.object_collision(&mut state, &st, &ot, o, (pos, xf, heading), is_surface);
             if !ot.model.smokes.is_empty() || !ot.model.particle_emitters.is_empty() {
                 let set = omsi_sim::particles::ParticleSet::new(ot.model.particle_systems(), (o.id as u64) ^ 0x51ed_2701);
                 self.particle_objects.lock().entry(key).or_default().push(ParticleObject { map_id: o.id, pos, rot: xf, set });
@@ -598,73 +412,9 @@ impl World {
                     radius: shape.radius(),
                 });
             }
-            // (OMSI hands `TrafficLightPhase` to any child of a crossing whose first string
-            // names one of its lights, `[trafficlight]` or not - see `names_traffic_light`;
-            // a mod lamp without the keyword sat at its "off" picture, blinking yellow.
-            // Objects with textures of their own to choose stay ordinary objects.)
-            let child_lamp = o.lamp_parent.is_some_and(|p| index.traffic_light_parents.contains(&p))
-                && crate::tiles::names_traffic_light(&o.extra)
-                && ot.dynamic_textures.is_empty()
-                && !ot.meshes.iter().any(|(_, _, ov)| ov.iter().any(|m| !m.item && m.freetex.is_some()));
-            let lamp = if ot.sco.is_traffic_light || child_lamp {
-                let named = o.extra.first().map(|s| s.trim()).filter(|s| !s.is_empty());
-                let index = named.map(|s| omsi_cfg::parse_f64(s) as usize).unwrap_or(0);
-                if omsi_cfg::env::var_os("OMSI_DEBUG_LAMPS").is_some() {
-                    match o.lamp_parent {
-                        None => log::info!("traffic light {} (id {}) names no crossing ([varparent]); extra {:?}", ot.sco.path.display(), o.id, o.extra),
-                        Some(p) => log::info!("traffic light {} (id {}) at ({:.0}, {:.0}): crossing {p}, light {:?}", ot.sco.path.display(), o.id, pos.x, pos.y, o.extra),
-                    }
-                }
-                // (a signal that names no crossing - Korean maps fix pedestrian heads to a
-                // road spline without a [varparent] - is a lamp all the same: its lenses
-                // follow [visible]/[alphascale] on the dummy phase every unlinked object
-                // reads, see `UNLINKED_PHASE`; drawn as plain scenery, the red and the green
-                // man were both lit all the time, #988)
-                Some((o.lamp_parent.unwrap_or(NO_CROSSING), index, named.is_none()))
-            } else {
-                None
-            };
+            let lamp = object_lamp(&ot, o, pos, &index);
             // lights of the placed object
-            {
-                let switches: Mutex<Vec<LightSwitch>> = Mutex::new(Vec::new());
-                // (a light gives several sprites: each takes its own light's switch)
-                let coronas = model_lights_owned(&ot.model, &|_| xf, pos, &|var| {
-                    switches.lock().push(LightSwitch::parse(var));
-                    1.0
-                }, &[]);
-                let switches = switches.into_inner();
-                for (c, sw) in coronas.into_iter().filter_map(|(c, k)| switches.get(k).cloned().map(|sw| (c, sw))) {
-                    // a traffic lamp's red, yellow and green glow with its state
-                    // (`LightObject::coronas`), not all at once by night
-                    if lamp.is_some() && matches!(sw, LightSwitch::Variable(_)) {
-                        continue;
-                    }
-                    state.coronas.push(StaticCorona {
-                        corona: c,
-                        switch: sw,
-                    });
-                }
-                for (k, ml) in ot.sco.map_lights.iter().enumerate() {
-                    if ot.sco.map_lights[..k].iter().any(|o| o.pos == ml.pos && o.color == ml.color && o.radius == ml.radius) {
-                        continue;
-                    }
-                    let p = xf.transform_point3(glam::Vec3::from(ml.pos)).as_dvec3() + pos;
-                    // `[maplight] … radius` is the core the light fills at full colour; it
-                    // fades inverse-square beyond and is cut off at six times that. The
-                    // colour is the brightness, so the intensity stays at one: an Esso sign
-                    // declared as 0.1 red is a glow by its pumps, not a red wash over the
-                    // whole street.
-                    state.lights.push(omsi_render::PointLight {
-                        position: p,
-                        radius: ml.radius.max(0.5) * 6.0,
-                        color: ml.color,
-                        intensity: 1.0,
-                        core: ml.radius.max(0.5),
-                        housed: true,
-                        ..Default::default()
-                    });
-                }
-            }
+            object_lights(&mut state, &ot, pos, xf, lamp);
             if debug_objects {
                 let kind = match (&o.place, o.map_object) {
                     (Placement::Attached { .. }, _) => "attachObj",
@@ -705,25 +455,181 @@ impl World {
             self.parked_cars.lock().extend(parked_cars);
             self.lane_tiles.lock().push(key);
         }
-        {
-            let mut s = stats.lock();
-            s.failed_objects += st.counts.failed_objects;
-            s.empty_spaces += st.counts.empty_spaces;
-            s.rows += st.counts.rows;
-            s.attached += st.counts.attached;
-            s.unattached += res.unattached;
-            s.objects_placed += objects.len();
-            s.ground_aligned += res.aligned_points;
-            s.ground_aligned_tiles += (res.aligned_points > 0) as usize;
-            s.ground_deformed_tiles += res.deformed as usize;
-            s.crossings_warped += res.warped.len();
-            if let Some(b) = res.biggest {
-                if s.ground_moved_most.map(|m| b.0 > m.0).unwrap_or(true) {
-                    s.ground_moved_most = Some(b);
+        note_place_stats(stats, &st, &res, objects.len());
+        self.tile_state.lock().insert(key, state);
+        let light_map = self.tile_light_map(key, &st, layout, staged);
+        let (splines, ground_splines) = self.tile_splines(&st);
+        Some(Prepared {
+            tx,
+            ty,
+            terrain: Some(build_terrain_mesh(terrain)),
+            hole_walls: MeshData::default(),
+            paint_masks: self.load_ground_paint(&st.path),
+            paint: Vec::new(),
+            wall_paint: Vec::new(),
+            water: st.water,
+            splines,
+            ground_splines,
+            objects,
+            trees,
+            origin: st.origin,
+            light_map: light_map.map(|i| tile_texture(i, false)),
+            cut: None,
+            images: Arc::new(HashMap::new()),
+        })
+    }
+
+    /// The light program of a crossing object (its index in `traffic_lights`), made the
+    /// first time the object comes up.
+    fn object_controller(&self, ot: &Arc<ObjectType>, o: &StagedObject, pos: DVec3, index: &MapIndex) -> Option<usize> {
+        if !traffic_light_program_enabled(&ot.sco, index.traffic_light_parents.contains(&o.id)) {
+            None
+        } else {
+            let known = self.controller_of_object.lock().get(&o.id).copied();
+            Some(known.unwrap_or_else(|| {
+                let program = ot.sco.traffic_lights.iter().map(|l| (l.phases.iter().map(|p| (p.state, p.duration)).collect(), l.approach_dist)).collect();
+                let c = TrafficLightController::from_program(program, ot.sco.traffic_lights_group, &ot.sco.traffic_light_stop, &ot.sco.traffic_light_jump);
+                let mut list = self.traffic_lights.lock();
+                list.push(c);
+                let idx = list.len() - 1;
+                self.controller_of_object.lock().insert(o.id, idx);
+                if omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some() {
+                    log::info!("traffic light program {idx}: object {} {} at ({:.1}, {:.1}) cycle {:?} lights {}", o.id, ot.sco.path.display(), pos.x, pos.y, ot.sco.traffic_lights_group, ot.sco.traffic_lights.len());
+                }
+                idx
+            }))
+        }
+    }
+
+    /// What vehicles hit of a placed object: its collision mesh or its bounding box.
+    fn object_collision(
+        &self,
+        state: &mut TileState,
+        st: &StagedTile,
+        ot: &Arc<ObjectType>,
+        o: &StagedObject,
+        (pos, xf, heading): (DVec3, Mat4, f64),
+        is_surface: bool,
+    ) {
+        // What vehicles hit, as OMSI gives it to ODE: the `[collision_mesh]` as a
+        // triangle mesh when there is one (it wins over a `[boundingbox]`), else the
+        // `[boundingbox]` as a box. A visual mesh without either declaration is not a
+        // collision shape, and neither are the extents of a collision mesh: one box
+        // around a housing estate's mesh or the Heerstraße bridge stood as an invisible
+        // wall across the roads through and under it.
+        // Only a `[fixed]` object (or a `[crashmode_pole]`) is solid for the vehicles, as
+        // Omsi.exe sets it up (0x7af0a4: the shape is made for those only; any other is a
+        // loose body the bus is not stopped by). We made every object with a shape solid:
+        // the line plates and name signs hanging off bus stop poles, and any bridge or
+        // gantry of a mod map not marked `[fixed]` - an invisible wall under it.
+        // (a parked car is a vehicle: it is hit as the traffic is)
+        let solid = ot.sco.fixed || ot.sco.crash_mode_pole.is_some() || o.parked;
+        // (Not a `[surface]` object, although Omsi.exe makes it `[fixed]` and puts its
+        // collision mesh into the tile's static ODE space like any other (0x7af0a4, the
+        // vehicle collides with that space in 0x6ff5b8): the Spandau depot's
+        // `Betr_S_Bauten` has fence rails 1.9 m up across its yard's drive paths, which
+        // the original's buses pass through - something drops those contacts that is not
+        // found yet, and made solid here they walled in the whole yard.)
+        let mesh_shape = ot
+            .collision
+            .as_ref()
+            .filter(|_| solid && !ot.sco.no_collision && !is_surface && !ot.meshes.is_empty());
+        if let Some(c) = mesh_shape {
+            let tris = |m: &dyn Fn(glam::Vec3) -> glam::DVec3| -> Vec<[glam::DVec3; 3]> {
+                c.indices
+                    .chunks_exact(3)
+                    .map(|t| [m(c.positions[t[0] as usize]), m(c.positions[t[1] as usize]), m(c.positions[t[2] as usize])])
+                    .collect()
+            };
+            // the shape is the type's, in its own frame; an object tilted on a slope
+            // (rare) gets one of its own, turned by all but its heading
+            let yaw = omsi_geometry::object_rotation([heading, 0.0, 0.0]);
+            let tilt = yaw.inverse() * xf;
+            let upright = (tilt.x_axis.truncate() - glam::Vec3::X).length() < 1e-3
+                && (tilt.y_axis.truncate() - glam::Vec3::Y).length() < 1e-3;
+            let shape = if upright {
+                ot.collision_shape
+                    .get_or_init(|| {
+                        Arc::new(omsi_sim::collision::MeshShape::from_triangles(
+                            tris(&|p| p.as_dvec3()).into_iter(),
+                            LOW_OBJECT as f64,
+                        ))
+                    })
+                    .clone()
+            } else {
+                Arc::new(omsi_sim::collision::MeshShape::from_triangles(
+                    tris(&|p| tilt.transform_vector3(p).as_dvec3()).into_iter(),
+                    LOW_OBJECT as f64,
+                ))
+            };
+            if !shape.parts.is_empty() {
+                if omsi_cfg::env::var_os("OMSI_DEBUG_COLLISION").is_some() {
+                    log::info!("obstacle {} key {} at ({:.1}, {:.1}) z {:.1} rot {:.0}: collision mesh of {} triangles as {} parts{}", ot.sco.path.display(), o.key, pos.x, pos.y, pos.z, heading, c.indices.len() / 3, shape.parts.len(), if upright { "" } else { " (tilted)" });
+                }
+                state
+                    .mesh_obstacles
+                    .push(omsi_sim::collision::MeshObstacle::new(shape, pos, heading, o.key));
+            }
+        } else if solid && !ot.sco.no_collision && !is_surface && !ot.meshes.is_empty() {
+            if let Some(bb) = ot.sco.bounding_box {
+                // Ignore flat decals and oversized helpers - and anything whose top stays
+                // under a bus floor: a manhole cover's half-metre box centred on the road
+                // (ViewApp's Kanaldeckel) stands 25 cm proud of the asphalt, and a
+                // pitching bus ran into it as into a wall.
+                let top = bb[5] + bb[2] * 0.5;
+                // a road that runs through the box (under a bridge, a gantry, an arch,
+                // a station hall) says it is no wall there: a mod map's big objects give
+                // their whole extent as the `[boundingbox]`, and the bus met an invisible
+                // wall across the street (Grand Paris Moulon, Saint Servant)
+                let probe = omsi_sim::collision::Obb::from_box(bb, pos, heading);
+                let road_through = !o.parked && (bb[0] > 3.0 || bb[1] > 3.0) && {
+                    let [r, f] = probe.axes();
+                    // a street lane through its footprint, at a height a vehicle on it
+                    // would be inside the box (not a road on its roof or far below)
+                    st.street_points.iter().any(|w| {
+                        let d = w.truncate() - probe.center;
+                        d.dot(r).abs() <= probe.half.x && d.dot(f).abs() <= probe.half.y && w.z >= probe.z0 - 1.0 && w.z <= probe.z1 - 0.5
+                    })
+                };
+                if road_through && omsi_cfg::env::var_os("OMSI_DEBUG_COLLISION").is_some() {
+                    log::info!("no wall: {} key {} - a road runs through its [boundingbox]", ot.sco.path.display(), o.key);
+                }
+                if bb[2] > 0.4
+                    && top > LOW_OBJECT
+                    && bb[0] < 400.0
+                    && bb[1] < 400.0
+                    && bb[0] > 0.05
+                    && bb[1] > 0.05
+                    && !road_through
+                {
+                    let mut obb = omsi_sim::collision::Obb::from_box(bb, pos, heading);
+                    obb.pole = ot.sco.crash_mode_pole;
+                    obb.id = o.key;
+                    // (a car that has driven off leaves its space free)
+                    let gone = o.parked && self.departed.lock().contains(&o.key);
+                    if !gone {
+                        state.obstacles.push(obb);
+                    }
+                    if o.parked && !gone {
+                        state.parked_boxes.push(obb);
+                    }
+                    if omsi_cfg::env::var_os("OMSI_DEBUG_COLLISION").is_some() {
+                        log::info!("obstacle {} key {} at ({:.1}, {:.1}) z {:.1}..{:.1} size {:.1}x{:.1}x{:.1} centre offset ({:.1}, {:.1}) rot {:.0}{}{}", ot.sco.path.display(), o.key, pos.x, pos.y, obb.z0, obb.z1, bb[0], bb[1], bb[2], bb[3], bb[4], heading, if obb.pole.is_some() { " pole" } else { "" }, " [boundingbox]");
+                    }
                 }
             }
         }
-        self.tile_state.lock().insert(key, state);
+    }
+
+    /// The tile's night light map: baked from the lamps round it, or read from the map.
+    fn tile_light_map(
+        &self,
+        key: (i32, i32),
+        st: &StagedTile,
+        layout: &TileLayout,
+        staged: &HashMap<(i32, i32), Arc<StagedTile>>,
+    ) -> Option<omsi_texture::Image> {
+        let (tx, ty) = key;
         // the tile's night light map (lamp light pools on the ground). Omsi.exe bakes a
         // `[variable_terrainlightmap]` tile's own from the lamps of the tiles round it once
         // those are loaded (0x780694, unless `[no_generateTerrLightMaps]`) and writes it over
@@ -765,6 +671,13 @@ impl World {
                 tint_lights_from_light_map(&mut state.lights, img, st.origin);
             }
         }
+        light_map
+    }
+
+    /// The tile's spline meshes for the GPU: their `[terrainmapping]` faces pooled apart,
+    /// the rest batched.
+    #[allow(clippy::type_complexity)]
+    fn tile_splines(&self, st: &StagedTile) -> (Vec<(Arc<MeshData>, Arc<SplineType>, bool, DVec3)>, Vec<Arc<MeshData>>) {
         // the whole spline meshes go to the GPU from here (a later load reads the tile again)
         let meshes = st.meshes.lock().take().unwrap_or_default();
         let splines: Vec<_> = meshes
@@ -800,26 +713,184 @@ impl World {
             (rest, batch_ground_splines(ground))
         };
         let splines = batch_static_splines(splines);
-        Some(Prepared {
-            tx,
-            ty,
-            terrain: Some(build_terrain_mesh(terrain)),
-            hole_walls: MeshData::default(),
-            paint_masks: self.load_ground_paint(&st.path),
-            paint: Vec::new(),
-            wall_paint: Vec::new(),
-            water: st.water,
-            splines,
-            ground_splines,
-            objects,
-            trees,
-            origin: st.origin,
-            light_map: light_map.map(|i| tile_texture(i, false)),
-            cut: None,
-            images: Arc::new(HashMap::new()),
-        })
+        (splines, ground_splines)
     }
 }
+
+/// A tree billboard of a placed object: (type, texture, position, height, width, heading).
+fn tree_of(ot: &Arc<ObjectType>, o: &StagedObject, pos: DVec3, heading: f64) -> Option<(Arc<ObjectType>, String, DVec3, f64, f64, f64)> {
+    let (tex, min_h, max_h, min_r, max_r) = ot.sco.tree.as_ref()?;
+    // Trees are billboards: the map stores texture, height and the ratio of the
+    // width to the height chosen by the editor; a row of trees along a spline
+    // takes the middle of the type's ranges. OMSI scales its tree by (height x
+    // ratio, height, height x ratio) (Omsi.exe 0x77e6b0 fills the record,
+    // 0x774444 builds the matrix): the ratio multiplies. Divided by it, as here
+    // before, a slim tree (0.4 on Spandau) came out six times too wide and its
+    // crown stood metres away from its trunk's place.
+    let texture = o
+        .extra
+        .first()
+        .cloned()
+        .filter(|t| !t.trim().is_empty())
+        .unwrap_or_else(|| tex.clone());
+    let mid_h = ((min_h + max_h) * 0.5) as f64;
+    let mid_r = ((min_r + max_r) * 0.5) as f64;
+    let height = o
+        .extra
+        .get(1)
+        .map(|s| omsi_cfg::parse_f64(s))
+        .filter(|h| *h > 0.0)
+        .unwrap_or(if mid_h > 0.0 { mid_h } else { 10.0 });
+    let ratio = o
+        .extra
+        .get(2)
+        .map(|s| omsi_cfg::parse_f64(s))
+        .filter(|r| *r > 0.0)
+        .unwrap_or(if mid_r > 0.0 { mid_r } else { 1.0 });
+    Some((ot.clone(), texture, pos, height, height * ratio, heading))
+}
+
+/// The paths of a placed object, tilted and deformed with it.
+fn placed_object_lanes(
+    ot: &ObjectType,
+    o: &StagedObject,
+    pos: DVec3,
+    xf: Mat4,
+    heading: f64,
+    controller: Option<usize>,
+    key: (i32, i32),
+) -> Vec<Lane> {
+    let mut own = object_lanes(
+        &ot.sco,
+        pos,
+        [heading, 0.0, 0.0],
+        controller,
+        key,
+        o.id,
+        &o.rules,
+    );
+    // An object tilted on a slope (the map's pitch and bank) tilts its paths with
+    // it, as the whole object matrix places them in Omsi.exe: laid out by the
+    // heading alone, a junction on a hill had flat lanes through a sloping plate
+    // and its traffic drove into the road on one side and over it on the other.
+    let yaw = omsi_geometry::object_rotation([heading, 0.0, 0.0]);
+    let tilt = xf * yaw.inverse();
+    if !tilt.abs_diff_eq(Mat4::IDENTITY, 1e-5) {
+        for l in own.iter_mut() {
+            for q in l.points.iter_mut() {
+                *q = pos + tilt.transform_point3((*q - pos).as_vec3()).as_dvec3();
+            }
+            l.refresh();
+        }
+    }
+    // Paths sample the field independently of the visual mesh: a coarse
+    // mesh can have no covered vertices while lane points lie inside it.
+    if let Some(field) = ot.deform.as_ref() {
+        let inv = xf.inverse();
+        for l in own.iter_mut() {
+            for q in l.points.iter_mut() {
+                let local = inv.transform_point3((*q - pos).as_vec3());
+                if let Some(d) = field_height(field, local.x, local.y) {
+                    q.z += d as f64;
+                }
+            }
+        }
+    }
+    own
+}
+
+/// Whether a placed object is a traffic lamp: (crossing, light index, lit by any light).
+fn object_lamp(ot: &ObjectType, o: &StagedObject, pos: DVec3, index: &MapIndex) -> Option<(i64, usize, bool)> {
+    // (OMSI hands `TrafficLightPhase` to any child of a crossing whose first string
+    // names one of its lights, `[trafficlight]` or not - see `names_traffic_light`;
+    // a mod lamp without the keyword sat at its "off" picture, blinking yellow.
+    // Objects with textures of their own to choose stay ordinary objects.)
+    let child_lamp = o.lamp_parent.is_some_and(|p| index.traffic_light_parents.contains(&p))
+        && crate::tiles::names_traffic_light(&o.extra)
+        && ot.dynamic_textures.is_empty()
+        && !ot.meshes.iter().any(|(_, _, ov)| ov.iter().any(|m| !m.item && m.freetex.is_some()));
+    if ot.sco.is_traffic_light || child_lamp {
+        let named = o.extra.first().map(|s| s.trim()).filter(|s| !s.is_empty());
+        let index = named.map(|s| omsi_cfg::parse_f64(s) as usize).unwrap_or(0);
+        if omsi_cfg::env::var_os("OMSI_DEBUG_LAMPS").is_some() {
+            match o.lamp_parent {
+                None => log::info!("traffic light {} (id {}) names no crossing ([varparent]); extra {:?}", ot.sco.path.display(), o.id, o.extra),
+                Some(p) => log::info!("traffic light {} (id {}) at ({:.0}, {:.0}): crossing {p}, light {:?}", ot.sco.path.display(), o.id, pos.x, pos.y, o.extra),
+            }
+        }
+        // (a signal that names no crossing - Korean maps fix pedestrian heads to a
+        // road spline without a [varparent] - is a lamp all the same: its lenses
+        // follow [visible]/[alphascale] on the dummy phase every unlinked object
+        // reads, see `UNLINKED_PHASE`; drawn as plain scenery, the red and the green
+        // man were both lit all the time, #988)
+        Some((o.lamp_parent.unwrap_or(NO_CROSSING), index, named.is_none()))
+    } else {
+        None
+    }
+}
+
+/// The sprites and `[maplight]`s of a placed object.
+fn object_lights(state: &mut TileState, ot: &ObjectType, pos: DVec3, xf: Mat4, lamp: Option<(i64, usize, bool)>) {
+    let switches: Mutex<Vec<LightSwitch>> = Mutex::new(Vec::new());
+    // (a light gives several sprites: each takes its own light's switch)
+    let coronas = model_lights_owned(&ot.model, &|_| xf, pos, &|var| {
+        switches.lock().push(LightSwitch::parse(var));
+        1.0
+    }, &[]);
+    let switches = switches.into_inner();
+    for (c, sw) in coronas.into_iter().filter_map(|(c, k)| switches.get(k).cloned().map(|sw| (c, sw))) {
+        // a traffic lamp's red, yellow and green glow with its state
+        // (`LightObject::coronas`), not all at once by night
+        if lamp.is_some() && matches!(sw, LightSwitch::Variable(_)) {
+            continue;
+        }
+        state.coronas.push(StaticCorona {
+            corona: c,
+            switch: sw,
+        });
+    }
+    for (k, ml) in ot.sco.map_lights.iter().enumerate() {
+        if ot.sco.map_lights[..k].iter().any(|o| o.pos == ml.pos && o.color == ml.color && o.radius == ml.radius) {
+            continue;
+        }
+        let p = xf.transform_point3(glam::Vec3::from(ml.pos)).as_dvec3() + pos;
+        // `[maplight] … radius` is the core the light fills at full colour; it
+        // fades inverse-square beyond and is cut off at six times that. The
+        // colour is the brightness, so the intensity stays at one: an Esso sign
+        // declared as 0.1 red is a glow by its pumps, not a red wash over the
+        // whole street.
+        state.lights.push(omsi_render::PointLight {
+            position: p,
+            radius: ml.radius.max(0.5) * 6.0,
+            color: ml.color,
+            intensity: 1.0,
+            core: ml.radius.max(0.5),
+            housed: true,
+            ..Default::default()
+        });
+    }
+}
+
+/// Add what placing a tile counted to the load statistics.
+fn note_place_stats(stats: &Mutex<LoadStats>, st: &StagedTile, res: &Resolved, placed: usize) {
+    let mut s = stats.lock();
+    s.failed_objects += st.counts.failed_objects;
+    s.empty_spaces += st.counts.empty_spaces;
+    s.rows += st.counts.rows;
+    s.attached += st.counts.attached;
+    s.unattached += res.unattached;
+    s.objects_placed += placed;
+    s.ground_aligned += res.aligned_points;
+    s.ground_aligned_tiles += (res.aligned_points > 0) as usize;
+    s.ground_deformed_tiles += res.deformed as usize;
+    s.crossings_warped += res.warped.len();
+    if let Some(b) = res.biggest {
+        if s.ground_moved_most.map(|m| b.0 > m.0).unwrap_or(true) {
+            s.ground_moved_most = Some(b);
+        }
+    }
+}
+
 
 /// The height of a `[crossing_heightdeformation]` field at (x, y) of its object's frame.
 pub(super) fn field_height(m: &MeshData, x: f32, y: f32) -> Option<f32> {
