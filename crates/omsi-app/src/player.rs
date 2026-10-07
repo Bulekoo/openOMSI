@@ -2099,6 +2099,7 @@ fn repair_roller_blind(vehicle: &mut omsi_sim::VehicleInstance, event: &str) {
 
 #[cfg(test)]
 mod roller_blind_tests {
+    include!("../../../tools/test-support/original_root.rs");
     use super::{auto_drag_click, repair_roller_blind};
     use crate::schedule::tests::script_test_vehicle;
 
@@ -2218,11 +2219,9 @@ mod roller_blind_tests {
     }
 
     #[test]
+    #[ignore = "needs the original OMSI 2 install (OMSI_ROOT)"]
     fn original_blinds_keep_small_upward_adjustments_after_release() {
-        let Some(root) = omsi_cfg::env::var_os("OMSI_ROOT").map(std::path::PathBuf::from) else {
-            eprintln!("skipped: OMSI_ROOT is not set");
-            return;
-        };
+        let root = original_root();
         let buses: [(&str, &[(&str, &str, &str)]); 3] = [
             (
                 "Vehicles/Urbino_II/SU_18_V.bus",

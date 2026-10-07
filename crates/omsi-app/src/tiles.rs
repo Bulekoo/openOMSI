@@ -1231,6 +1231,7 @@ impl Streamer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    include!("../../../tools/test-support/original_root.rs");
 
     #[test]
     fn first_area_stall_log_is_delayed_and_rate_limited() {
@@ -1447,9 +1448,9 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires OMSI_ROOT with the stock Grundorf map"]
+    #[ignore = "needs the original OMSI 2 install (OMSI_ROOT)"]
     fn grundorf_traffic_light_parents_exclude_gaussdorf() {
-        let root = PathBuf::from(std::env::var_os("OMSI_ROOT").expect("OMSI_ROOT"));
+        let root = original_root();
         let map_dir = root.join("maps/Grundorf");
         let global = omsi_map::GlobalCfg::load(&map_dir.join("global.cfg")).expect("Grundorf");
         let tiles = global.tiles.iter().map(|t| (t.index, t.x, t.y, map_dir.join(&t.file))).collect::<Vec<_>>();

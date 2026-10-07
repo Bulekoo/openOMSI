@@ -5267,6 +5267,7 @@ impl PlayerDuty {
 
 #[cfg(test)]
 pub(crate) mod tests {
+    include!("../../../tools/test-support/original_root.rs");
     #[test]
     fn off_centre_bounding_boxes_align_the_physical_flank_on_either_side() {
         let mut bus = script_test_vehicle("{frame}\n{end}\n", "", "");
@@ -5357,10 +5358,15 @@ pub(crate) mod tests {
         let mut v = ibis_test_vehicle();
         set_ai_destination(&mut v, Some(&hof), "5", "RUHLEBEN", &[]);
         assert_eq!(v.var("IBIS_TerminusCode"), Some(282.0));
+    }
+
+    #[test]
+    #[ignore = "needs the original OMSI 2 install (OMSI_ROOT)"]
+    fn stock_depot_termini_are_found_by_their_sign_text() {
         // every row of the stock Spandau and Grundorf depot files by its sign text
         for file in ["Spandau 86.hof", "Grundorf.hof"] {
-            let path = std::path::Path::new("../../../OMSI 2 Original/Vehicles/MAN_SD200").join(file);
-            let Ok(hof) = omsi_vehicle::Hof::load(&path) else { continue };
+            let path = original_root().join("Vehicles/MAN_SD200").join(file);
+            let hof = omsi_vehicle::Hof::load(&path).expect(file);
             for (i, row) in hof.termini.iter().enumerate() {
                 let Some(sign) = row.strings.iter().find(|s| !s.trim().is_empty()) else { continue };
                 let found = super::find_terminus(&hof, sign).map(|k| hof.termini[k].code);
@@ -5404,11 +5410,10 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[ignore = "needs the original OMSI 2 install (OMSI_ROOT)"]
     fn berlin_5e_uses_its_real_terminus_when_no_hof_route_exists() {
-        let path = std::path::Path::new("../../../OMSI 2 Original/Vehicles/MAN_SD202/Berlin.hof");
-        let Ok(hof) = omsi_vehicle::Hof::load(path) else {
-            return;
-        };
+        let path = original_root().join("Vehicles/MAN_SD202/Berlin.hof");
+        let hof = omsi_vehicle::Hof::load(&path).expect("Berlin.hof");
         let target = ibis_target(&hof, "5E", "Fernbahnhof Spandau", &[], None).expect("5E target");
         assert_eq!(target.terminus_code, Some(232));
         assert_eq!(
@@ -5421,12 +5426,10 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[ignore = "needs the original OMSI 2 install (OMSI_ROOT)"]
     fn berlin_5e_does_not_turn_hof_route_505_into_s5() {
-        let path =
-            std::path::Path::new("../../../OMSI 2 Original/Vehicles/MAN_NL_NG/Spandau 89-11.hof");
-        let Ok(hof) = omsi_vehicle::Hof::load(path) else {
-            return;
-        };
+        let path = original_root().join("Vehicles/MAN_NL_NG/Spandau 89-11.hof");
+        let hof = omsi_vehicle::Hof::load(&path).expect("Spandau 89-11.hof");
         let target = ibis_target(&hof, "5E", "Nervenklinik", &["U Rathaus Spandau"], None)
             .expect("5E route target");
         assert_eq!(target.route, Some(3));

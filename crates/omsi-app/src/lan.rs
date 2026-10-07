@@ -3749,6 +3749,7 @@ thread_local! {
 
 #[cfg(test)]
 mod tests {
+    include!("../../../tools/test-support/original_root.rs");
     use super::*;
 
     /// The natural weather and the cycle need no file: a client takes them from any host.
@@ -3833,15 +3834,11 @@ mod tests {
     /// What is seen comes before what is heard in the capped values list: the AA-FR Agora
     /// L's sound variables filled it in name order before its roller blind's scroll.
     #[test]
+    #[ignore = "needs OMSI_ROOT with AA-FR_BusBundle (not part of the stock install)"]
     fn the_roller_blind_scroll_is_in_the_sync_table() {
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/AA-FR_BusBundle/2002_Agora_L_4d_main.bus");
-        if !bus.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus]);
         let ty = omsi_sim::VehicleType::load(&root, &bus).expect("Agora L");
         let t = SyncTable::new(&ty, &[]);
         assert!(t.values.len() <= omsi_net::wire::MAX_VALUES);
@@ -3854,16 +3851,12 @@ mod tests {
     /// and outside sounds (the AA-FR Agora L's rear section stood dark and silent in the
     /// other players' games).
     #[test]
+    #[ignore = "needs OMSI_ROOT with AA-FR_BusBundle (not part of the stock install)"]
     fn the_rear_section_is_in_the_sync_table() {
-        let root = omsi_cfg::env::var_os("OMSI_ROOT")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/AA-FR_BusBundle/2002_Agora_L_3d_main.bus");
         let trail = root.join("Vehicles/AA-FR_BusBundle/2002_Agora_L_3d_trail.bus");
-        if !bus.exists() || !trail.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus, &trail]);
         let ty = omsi_sim::VehicleType::load(&root, &bus).expect("Agora L");
         let part = Arc::new(omsi_sim::VehicleType::load(&root, &trail).expect("Agora L trail"));
         let alone = SyncTable::new(&ty, &[]);
