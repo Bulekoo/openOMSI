@@ -2627,6 +2627,8 @@ fn duty_args_for_root(d: &Duty, root: &Path) -> Result<Vec<String>> {
         if let Some(i) = a.iter().position(|x| x == "--time") {
             a[i + 1] = format!("{h:02}:{m:02}");
         }
+        // (a duty picked for later starts now, not ten minutes before its first trip)
+        a.push("--keep-time".into());
     }
     let mut date = d.date.as_deref().map(|x| x.trim().to_string()).filter(|x| !x.is_empty());
     if let (true, Some((y, mo, dd, _, _))) = (on("use_real_date"), now) {
