@@ -74,9 +74,7 @@ impl Traffic {
         // (the host's poses say where it stands; nothing here pulls it onto the ground)
         vehicle.ground = None;
         vehicle.apply_paint_vars(scheme);
-        let render = world.add_vehicle_shared(renderer, scene, &ty, scheme, None);
-        let trailer_renders =
-            self.attach_trailers(world, renderer, scene, &mut vehicle, scheme, &render);
+        let render = self.new_car_render(world, renderer, scene, &mut vehicle, &ty, scheme);
         if !ty.model.text_textures.is_empty() {
             vehicle.init_text_textures(&mut world.fonts.lock(), &|p| {
                 omsi_texture::decode_file(p)
@@ -95,9 +93,8 @@ impl Traffic {
         self.cars.push(AiCar {
             id,
             state,
+            render: DrawnAs { set: Some((ty.def.path.clone(), scheme)) },
             vehicle,
-            render,
-            trailer_renders,
             body,
             stopped: 0.0,
             lead_car: None,
@@ -134,6 +131,7 @@ impl Traffic {
             consist_reversed: false,
             park: None,
         });
+        self.view.insert(id, render);
         self.cars.len() - 1
     }
 

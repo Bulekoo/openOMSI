@@ -217,9 +217,7 @@ impl Traffic {
         };
         let c = self.cars.swap_remove(i);
         self.orphan_sounds.extend(c.sounds);
-        for r in std::iter::once(c.render).chain(c.trailer_renders) {
-            world.release_vehicle(renderer, scene, r);
-        }
+        self.view.release_car(world, renderer, scene, c.id);
         true
     }
 

@@ -203,7 +203,7 @@ impl Traffic {
                 why.push("road not clear".into());
                 continue;
             }
-            if world.depart_parked(renderer, scene, key).is_none() {
+            if depart_parked(world, renderer, scene, key).is_none() {
                 continue;
             }
             if let Some(list) = self.parked.get_mut(&l) {

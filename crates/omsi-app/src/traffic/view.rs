@@ -2,7 +2,7 @@
 //! traffic lamps.
 
 use super::*;
-use crate::scene::World;
+use crate::scene::{VehicleRender, World};
 use omsi_render::{Renderer, Scene};
 
 pub(super) const SCRIPT_UPLOAD_BUDGET: usize = 4 << 20;
@@ -15,7 +15,129 @@ pub(super) const DRIVER_NEAR: f64 = 70.0;
 /// within this range - farther out it is not worth a mesh update every frame it steers.
 pub(super) const SKIN_DISTANCE: f64 = 200.0;
 
+/// What an AI car looks like on the screen: the render of its body and those of its
+/// coupled parts (trailers, rear sections, the cars of a train), in their order.
+pub(super) struct CarRender {
+    pub(super) body: VehicleRender,
+    pub(super) trailers: Vec<VehicleRender>,
+}
+
+/// The GPU side of the traffic, kept apart from the simulation: the cars' renders by car
+/// id, and the drivers of the timetable buses.
+#[derive(Default)]
+pub(super) struct TrafficView {
+    cars: HashMap<u64, CarRender>,
+    /// Renders of cars that have gone, given back at the next `sync`.
+    released: Vec<VehicleRender>,
+    /// The drivers at the wheel of the timetable buses near the camera, by car id (see
+    /// `driver.rs`; made within `DRIVER_NEAR` m of the camera, let go beyond twice that).
+    drivers: HashMap<u64, crate::driver::DriverFigure>,
+    /// Figures let go by their bus, hidden, for the next one (their GPU meshes stay).
+    driver_pool: Vec<crate::driver::DriverFigure>,
+}
+
+impl TrafficView {
+    /// The renders of the car `id` that has just been put on the road.
+    pub(super) fn insert(&mut self, id: u64, render: CarRender) {
+        if let Some(old) = self.cars.insert(id, render) {
+            log::warn!("traffic: two cars with id {id}; the renders of the first are let go");
+            self.released.push(old.body);
+            self.released.extend(old.trailers);
+        }
+    }
+
+    /// Take the renders of car `id` out (it is made anew under the same id).
+    pub(super) fn take(&mut self, id: u64) -> Option<CarRender> {
+        self.cars.remove(&id)
+    }
+
+    /// Car `id` has gone: its renders go back to the world at the next sync.
+    pub(super) fn retire(&mut self, id: u64) {
+        if let Some(r) = self.cars.remove(&id) {
+            self.released.push(r.body);
+            self.released.extend(r.trailers);
+        }
+    }
+
+    /// Car `id` has gone: its renders go back to the world now.
+    pub(super) fn release_car(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, id: u64) {
+        if let Some(r) = self.cars.remove(&id) {
+            release_car_render(world, renderer, scene, r);
+        }
+    }
+
+    /// Couple another part of type `t` to car `id`'s picture.
+    pub(super) fn add_trailer(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, id: u64, t: &Arc<VehicleType>) {
+        if let Some(r) = self.cars.get_mut(&id) {
+            r.trailers
+                .push(world.add_vehicle_shared(renderer, scene, t, None, Some(&r.body)));
+        }
+    }
+
+    /// Let the renders of car `id`'s coupled parts go now (it gets others).
+    pub(super) fn release_trailers(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, id: u64) {
+        if let Some(r) = self.cars.get_mut(&id) {
+            for t in r.trailers.drain(..) {
+                world.release_vehicle(renderer, scene, t);
+            }
+        }
+    }
+}
+
+/// Give the renders of a car back to the world, its body first.
+pub(super) fn release_car_render(world: &World, renderer: &Renderer, scene: &mut Scene, r: CarRender) {
+    for r in std::iter::once(r.body).chain(r.trailers) {
+        world.release_vehicle(renderer, scene, r);
+    }
+}
+
+/// A parked car drives off: its object goes from the scene (None when it is not there).
+pub(super) fn depart_parked(world: &World, renderer: &Renderer, scene: &mut Scene, key: i64) -> Option<()> {
+    world.depart_parked(renderer, scene, key).map(|_| ())
+}
+
 impl Traffic {
+    /// Load and attach the `[couple_back]` chain of `vehicle`; returns the renders.
+    pub(super) fn attach_trailers(
+        &mut self,
+        world: &World,
+        renderer: &Renderer,
+        scene: &mut Scene,
+        vehicle: &mut VehicleInstance,
+        scheme: Option<usize>,
+        lead: &VehicleRender,
+    ) -> Vec<VehicleRender> {
+        let mut renders = Vec::new();
+        let ty = vehicle.ty.clone();
+        for (t, rev) in self.trailer_chain(&ty) {
+            renders.push(world.add_vehicle_shared(
+                renderer,
+                scene,
+                &t,
+                scheme.filter(|i| *i < t.paint_schemes.len()),
+                Some(lead),
+            ));
+            vehicle.attach_trailer_ex(t, rev);
+        }
+        renders
+    }
+
+    /// The renders of a new car of type `ty` (paint `scheme`) and of the parts its
+    /// `[couple_back]` chain couples to `vehicle`.
+    pub(super) fn new_car_render(
+        &mut self,
+        world: &World,
+        renderer: &Renderer,
+        scene: &mut Scene,
+        vehicle: &mut VehicleInstance,
+        ty: &Arc<VehicleType>,
+        scheme: Option<usize>,
+    ) -> CarRender {
+        let body = world.add_vehicle_shared(renderer, scene, ty, scheme, None);
+        let trailers = self.attach_trailers(world, renderer, scene, vehicle, scheme, &body);
+        CarRender { body, trailers }
+    }
+
     pub fn precache_random(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene) {
         let t0 = std::time::Instant::now();
         let sets = self.random_sets();
@@ -47,16 +169,16 @@ impl Traffic {
                 continue;
             }
             keep.push(c.id);
-            if !self.drivers.contains_key(&c.id) {
+            if !self.view.drivers.contains_key(&c.id) {
                 if d > DRIVER_NEAR {
                     continue;
                 }
-                let figure = match self.driver_pool.pop() {
+                let figure = match self.view.driver_pool.pop() {
                     Some(mut f) => {
                         if f.attach(&c.vehicle) {
                             Some(f)
                         } else {
-                            self.driver_pool.push(f);
+                            self.view.driver_pool.push(f);
                             None
                         }
                     }
@@ -64,20 +186,20 @@ impl Traffic {
                 };
                 match figure {
                     Some(f) => {
-                        self.drivers.insert(c.id, f);
+                        self.view.drivers.insert(c.id, f);
                     }
                     None => continue,
                 }
             }
-            if let Some(f) = self.drivers.get_mut(&c.id) {
-                f.update(renderer, scene, &c.vehicle, &c.render, dt, true, false);
+            if let (Some(f), Some(r)) = (self.view.drivers.get_mut(&c.id), self.view.cars.get(&c.id)) {
+                f.update(renderer, scene, &c.vehicle, &r.body, dt, true, false);
             }
         }
-        let gone: Vec<u64> = self.drivers.keys().copied().filter(|id| !keep.contains(id)).collect();
+        let gone: Vec<u64> = self.view.drivers.keys().copied().filter(|id| !keep.contains(id)).collect();
         for id in gone {
-            if let Some(mut f) = self.drivers.remove(&id) {
+            if let Some(mut f) = self.view.drivers.remove(&id) {
                 f.hide(renderer, scene);
-                self.driver_pool.push(f);
+                self.view.driver_pool.push(f);
             }
         }
     }
@@ -100,16 +222,21 @@ impl Traffic {
                         log::info!("car {} has parked (space {})", c.id, p.key);
                     }
                     self.orphan_sounds.extend(c.sounds);
-                    self.released.push(c.render);
-                    self.released.extend(c.trailer_renders);
+                    self.view.retire(c.id);
                 }
                 _ => i += 1,
             }
         }
-        for r in std::mem::take(&mut self.released) {
+        for r in std::mem::take(&mut self.view.released) {
             world.release_vehicle(renderer, scene, r);
         }
         self.sync_drivers(world, renderer, scene);
+        self.sync_lamps(world, renderer, scene);
+        self.sync_cars(world, renderer, scene);
+    }
+
+    /// The traffic light lamps (see `sync`).
+    fn sync_lamps(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene) {
         // traffic light lamps: the lamp's script (or the stock rules) turns the state of its
         // light into the `[visible] red|yellow|green 1` meshes and the coronas, and moves
         // what it animates (a barrier arm); it runs on the time since the last sync (an
@@ -284,6 +411,11 @@ impl Traffic {
                 }
             }
         }
+    }
+
+    /// The AI vehicles' pictures: where they stand, their materials, their script
+    /// textures (see `sync`).
+    fn sync_cars(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene) {
         // A far car's script textures (its destination sign) stay as they are drawn: OMSI
         // shows them at any distance its model level has them. (They were stood in for by
         // their mean colour beyond 50 m, and every timetable bus coming up the street had
@@ -301,40 +433,41 @@ impl Traffic {
             }
         }
         for c in &mut self.cars {
+            let Some(r) = self.view.cars.get_mut(&c.id) else { continue };
+            let (render, trailer_renders) = (&mut r.body, &mut r.trailers);
             // out of sight (`tick` decided): hidden once, then left alone until it comes
             // into view again - its many per-mesh updates were a third of this stage
             if !c.vehicle.ai_visuals {
-                if !c.render.hidden {
-                    c.render.hidden = true;
-                    for inst in c
-                        .render
+                if !render.hidden {
+                    render.hidden = true;
+                    for inst in render
                         .instances
                         .iter()
-                        .chain(c.trailer_renders.iter().flat_map(|r| r.instances.iter()))
+                        .chain(trailer_renders.iter().flat_map(|r| r.instances.iter()))
                     {
                         renderer.set_params(scene, *inst, &[], false, &[]);
                     }
                 }
                 continue;
             }
-            c.render.hidden = false;
+            render.hidden = false;
             if let Some(cam) = self.camera {
                 let far = (c.vehicle.position - cam).length() > crate::scene::DISPLAYS_FAR;
-                let due = c.render.display_tick != tick;
-                c.render.displays_far = far && !due;
+                let due = render.display_tick != tick;
+                render.displays_far = far && !due;
                 if far && due {
-                    c.render.display_tick = tick;
+                    render.display_tick = tick;
                 }
             }
-            crate::scene::sync_vehicle_textures(renderer, scene, &mut c.vehicle, &c.render, &mut budget);
-            crate::scene::sync_vehicle_materials(renderer, scene, &c.vehicle, &mut c.render);
+            crate::scene::sync_vehicle_textures(renderer, scene, &mut c.vehicle, &*render, &mut budget);
+            crate::scene::sync_vehicle_materials(renderer, scene, &c.vehicle, render);
             // a coupled part runs no scripts of its own: its plates, its displays and its
             // switched materials follow the leading vehicle's, as the player's own rear
             // sections do (without this an AI bus's rear section kept the blank textures and
             // the unswitched materials it was built with)
             {
                 let mut trailers = std::mem::take(&mut c.vehicle.trailers);
-                for (t, r) in trailers.iter_mut().zip(c.trailer_renders.iter_mut()) {
+                for (t, r) in trailers.iter_mut().zip(trailer_renders.iter_mut()) {
                     crate::scene::sync_vehicle_part(renderer, scene, &c.vehicle, t, r);
                 }
                 c.vehicle.trailers = trailers;
@@ -342,8 +475,8 @@ impl Traffic {
             // an articulated AI bus (timetable or random traffic) bends its bellows like the
             // player's while it is near enough for the fold to show; farther out its shape
             // just stays as it was, which nobody can tell from still following the road
-            if !c.render.skinned.is_empty()
-                || c.trailer_renders.iter().any(|r| !r.skinned.is_empty())
+            if !render.skinned.is_empty()
+                || trailer_renders.iter().any(|r| !r.skinned.is_empty())
             {
                 let near = self
                     .camera
@@ -354,12 +487,12 @@ impl Traffic {
                         renderer,
                         scene,
                         &mut c.vehicle,
-                        &mut c.render,
-                        &mut c.trailer_renders,
+                        render,
+                        trailer_renders,
                     );
                 }
             }
-            for (i, inst) in c.render.instances.iter().enumerate() {
+            for (i, inst) in render.instances.iter().enumerate() {
                 renderer.set_transform(
                     scene,
                     *inst,
@@ -393,7 +526,7 @@ impl Traffic {
                 renderer.set_slot_night(scene, *inst, &p.slot_night);
                 renderer.set_interior(scene, *inst, p.interior);
             }
-            for (t, r) in c.vehicle.trailers.iter().zip(&c.trailer_renders) {
+            for (t, r) in c.vehicle.trailers.iter().zip(trailer_renders.iter()) {
                 for (i, inst) in r.instances.iter().enumerate() {
                     renderer.set_transform(scene, *inst, t.position, t.mesh_local_transform(i));
                     let p = &t.mesh_props[i];

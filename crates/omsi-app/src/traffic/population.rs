@@ -277,9 +277,7 @@ impl Traffic {
                     walk: c.seed ^ c.id.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1,
                 });
                 self.orphan_sounds.extend(c.sounds);
-                for r in std::iter::once(c.render).chain(c.trailer_renders) {
-                    world.release_vehicle(renderer, scene, r);
-                }
+                self.view.release_car(world, renderer, scene, c.id);
             } else if remove {
                 let c = self.cars.swap_remove(i);
                 if c.is_bus() && (unloaded || at_edge) {
@@ -290,9 +288,7 @@ impl Traffic {
                     log::info!("population t={:.1}: car {} removed at ({:.0}, {:.0}), {:.0} m from the player, in frame {}, behind a building {}, {}", self.time, c.id, p.x, p.y, dist, v.map(|v| v.frames(p, r)).unwrap_or(false), v.map(|v| self.occluded(world, &v, p, r)).unwrap_or(false), if c.gone { "finished" } else { "far away" });
                 }
                 self.orphan_sounds.extend(c.sounds);
-                for r in std::iter::once(c.render).chain(c.trailer_renders) {
-                    world.release_vehicle(renderer, scene, r);
-                }
+                self.view.release_car(world, renderer, scene, c.id);
             } else {
                 i += 1;
             }
@@ -625,9 +621,7 @@ impl Traffic {
             }) as std::sync::Arc<dyn omsi_sim::rigid::Ground>
         });
         vehicle.apply_paint_vars(scheme);
-        let render = world.add_vehicle_shared(renderer, scene, &ty, scheme, None);
-        let trailer_renders =
-            self.attach_trailers(world, renderer, scene, &mut vehicle, scheme, &render);
+        let render = self.new_car_render(world, renderer, scene, &mut vehicle, &ty, scheme);
         if !ty.model.text_textures.is_empty() || bus.is_some() {
             vehicle.init_text_textures(&mut world.fonts.lock(), &|p| {
                 omsi_texture::decode_file(p)
@@ -759,9 +753,8 @@ impl Traffic {
         self.cars.push(AiCar {
             id,
             state,
+            render: DrawnAs { set: Some((ty.def.path.clone(), scheme)) },
             vehicle,
-            render,
-            trailer_renders,
             body,
             stopped: 0.0,
             lead_car: None,
@@ -798,6 +791,7 @@ impl Traffic {
             seed,
             scheme,
         });
+        self.view.insert(id, render);
         if kind != LaneKind::Air {
             let i = self.cars.len() - 1;
             if let Some(gap) = self.red_ahead(i) {

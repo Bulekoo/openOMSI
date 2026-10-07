@@ -1199,8 +1199,7 @@ impl Traffic {
             let c = self.cars.swap_remove(i);
             self.orphan_sounds.extend(c.sounds);
             // the renders go back to the world at the next sync
-            self.released.push(c.render);
-            self.released.extend(c.trailer_renders);
+            self.view.retire(c.id);
         }
     }
 

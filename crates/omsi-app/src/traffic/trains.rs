@@ -1,7 +1,7 @@
 //! Coupled vehicles: trailers, rear sections and the cars of a train.
 
 use super::*;
-use crate::scene::{VehicleRender, World};
+use crate::scene::World;
 use omsi_render::{Renderer, Scene};
 
 impl Traffic {
@@ -16,8 +16,7 @@ impl Traffic {
     ) {
         let c = &mut self.cars[car];
         for (t, rev) in cars {
-            c.trailer_renders
-                .push(world.add_vehicle_shared(renderer, scene, t, None, Some(&c.render)));
+            self.view.add_trailer(world, renderer, scene, c.id, t);
             c.vehicle.attach_trailer_ex(t.clone(), *rev);
         }
     }
@@ -32,9 +31,7 @@ impl Traffic {
     /// Couple `cars` behind car `ci` instead of the ones it has (a train made up anew).
     pub(crate) fn set_trailers(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, ci: usize, cars: &[(Arc<VehicleType>, bool)]) {
         let c = &mut self.cars[ci];
-        for r in c.trailer_renders.drain(..) {
-            world.release_vehicle(renderer, scene, r);
-        }
+        self.view.release_trailers(world, renderer, scene, c.id);
         c.vehicle.trailers.clear();
         self.attach_cars(world, renderer, scene, ci, cars);
     }
@@ -58,6 +55,8 @@ impl Traffic {
         let before: Vec<DVec3> = std::iter::once(self.cars[ci].vehicle.position).chain(self.cars[ci].vehicle.trailers.iter().map(|t| t.position)).collect();
         let center = self.viewer.map(|v| v.pos).unwrap_or_default();
         let kind = self.net.lanes[lane].kind;
+        // (the new car takes the id: the old one's renders are let go once it is replaced)
+        let old_render = self.view.take(id);
         self.create_car(world, renderer, scene, center, kind, lane, s, lead, seed, Some(scheme), Some(id), Some(0.0), None);
         let Some(mut new) = self.cars.pop() else { return };
         let old = &mut self.cars[ci];
@@ -75,8 +74,8 @@ impl Traffic {
         new.consist_reversed = reversed;
         let old = std::mem::replace(&mut self.cars[ci], new);
         self.orphan_sounds.extend(old.sounds);
-        for r in std::iter::once(old.render).chain(old.trailer_renders) {
-            world.release_vehicle(renderer, scene, r);
+        if let Some(r) = old_render {
+            release_car_render(world, renderer, scene, r);
         }
         self.set_trailers(world, renderer, scene, ci, &cars[1..]);
         self.seed_rail_trail(ci, behind);
@@ -159,30 +158,5 @@ impl Traffic {
             lead_rev = r;
         }
         out
-    }
-
-    /// Load and attach the `[couple_back]` chain of `vehicle`; returns the renders.
-    pub(super) fn attach_trailers(
-        &mut self,
-        world: &World,
-        renderer: &Renderer,
-        scene: &mut Scene,
-        vehicle: &mut VehicleInstance,
-        scheme: Option<usize>,
-        lead: &VehicleRender,
-    ) -> Vec<VehicleRender> {
-        let mut renders = Vec::new();
-        let ty = vehicle.ty.clone();
-        for (t, rev) in self.trailer_chain(&ty) {
-            renders.push(world.add_vehicle_shared(
-                renderer,
-                scene,
-                &t,
-                scheme.filter(|i| *i < t.paint_schemes.len()),
-                Some(lead),
-            ));
-            vehicle.attach_trailer_ex(t, rev);
-        }
-        renders
     }
 }

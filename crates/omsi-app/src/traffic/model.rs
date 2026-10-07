@@ -2,7 +2,6 @@
 //! vehicle on its way.
 
 use super::*;
-use crate::scene::VehicleRender;
 
 /// Pulling out onto the other half of the road round something standing in the lane.
 #[derive(Debug, Clone, Copy)]
@@ -61,8 +60,8 @@ pub struct AiCar {
     pub scheme: Option<usize>,
     pub state: AiState,
     pub vehicle: VehicleInstance,
-    pub render: VehicleRender,
-    pub trailer_renders: Vec<VehicleRender>,
+    /// What it is drawn as (see `DrawnAs`); the pictures themselves are `TrafficView`'s.
+    pub render: DrawnAs,
     /// The body following the way `state` lays out.
     pub body: AiBody,
     /// Seconds this car has been standing still without a stop of its own: a red light or
@@ -144,6 +143,14 @@ pub struct AiCar {
     /// A train turned round as a whole (its last car leads now): what a trip's
     /// `[trainreverse]` is compared with (Omsi.exe's vehicle +0x4e1).
     pub consist_reversed: bool,
+}
+
+/// What an AI car is drawn as, for whoever describes it to others (a LAN host's cars to
+/// its clients): the vehicle file and the paint scheme of the shared GPU set it is drawn
+/// with (`VehicleRender::set`).
+#[derive(Debug, Clone, Default)]
+pub struct DrawnAs {
+    pub set: Option<(std::path::PathBuf, Option<usize>)>,
 }
 
 /// A free parking space beside a lane that a car means to park in: the space of parked car

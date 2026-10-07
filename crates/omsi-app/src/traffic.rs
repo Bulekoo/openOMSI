@@ -26,7 +26,6 @@ mod viewer;
 mod tests;
 
 use crate::bus_service::{BusService, Phase};
-use crate::scene::VehicleRender;
 use anyhow::Result;
 use glam::{DVec2, DVec3};
 use hashbrown::HashMap;
@@ -52,6 +51,7 @@ use obstacles::*;
 use parked::*;
 use population::*;
 use tick::*;
+use view::{depart_parked, release_car_render, TrafficView};
 use viewer::*;
 
 pub(crate) use model::{ibis_to_next_stop, vehicle_bodies, AiCar, BusSetup, DormantCar, ParkPlan, Passing, PlayerBox};
@@ -108,8 +108,8 @@ pub struct Traffic {
     pub lights_only: bool,
     pub spawn_radius: f64,
     pub time: f32,
-    /// Renders of cars that have gone, given back at the next `sync`.
-    released: Vec<VehicleRender>,
+    /// What the cars look like on the screen (see `view`).
+    view: TrafficView,
     /// Where the camera is (the window sets it before `sync`): far cars show their script
     /// textures as stand-ins.
     pub camera: Option<DVec3>,
@@ -211,11 +211,6 @@ pub struct Traffic {
     /// before each `tick`: the cars stop behind them and go round them as round the
     /// player's bus.
     pub others: Vec<(u32, PlayerBox)>,
-    /// The drivers at the wheel of the timetable buses near the camera, by car id (see
-    /// `driver.rs`; made within `DRIVER_NEAR` m of the camera, let go beyond twice that).
-    drivers: HashMap<u64, crate::driver::DriverFigure>,
-    /// Figures let go by their bus, hidden, for the next one (their GPU meshes stay).
-    driver_pool: Vec<crate::driver::DriverFigure>,
     /// Where the last `tick` spent its time (s, OMSI_PROFILE): who is on which lane and the
     /// light programs, every car's plan, the bodies and scripts on the workers.
     pub tick_split: [f64; 3],
