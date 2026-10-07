@@ -64,6 +64,10 @@ impl Task {
     }
 }
 
+/// Seconds a person stands at a shut door of the bus they want before going back to wait
+/// at the stop (`Pax::door_since`).
+const DOOR_GIVE_UP: f64 = 25.0;
+
 /// The ticket a passenger has (+0x61c): nothing to do, a ticket to stamp, one to buy.
 pub(super) const TICKET_NONE: u8 = 0;
 pub(super) const TICKET_STAMP: u8 = 2;
@@ -97,6 +101,11 @@ pub(super) struct Pax {
     pub pt_target: Option<usize>,
     /// Stop 0.7 m short of the target (+0x5ec).
     pub short: bool,
+    /// Since when (`time`) the person has stood at the shut door of the bus they want
+    /// (`DOOR_GIVE_UP`), and the bus they then left standing: not walked to again before it
+    /// opens a door.
+    pub door_since: Option<f64>,
+    pub shunned: Option<BusId>,
     /// Walking to a door from outside (+0x5d0): keep 0.5 m off the bus side
     /// (`clamp_x`, +0x5cc) unless the door is open (+0x5d1) and they are level with it;
     /// a door on the left (+0x5d2).
@@ -192,6 +201,8 @@ impl Pax {
             pt: None,
             pt_target: None,
             short: false,
+            door_since: None,
+            shunned: None,
             clamp: false,
             clamp_open: false,
             clamp_left: false,
@@ -1721,6 +1732,13 @@ impl Humans {
                 };
                 let (b, why) = b;
                 let Some(bn) = bus_ix.get(&b).map(|k| &buses[*k]) else { return };
+                // (a bus they gave up on at its shut doors: once it opens one)
+                if self.pax(i).unwrap().shunned == Some(b) {
+                    if !bn.entry_open.iter().any(|o| *o) {
+                        return;
+                    }
+                    self.pax_mut(i).unwrap().shunned = None;
+                }
                 self.pax_mut(i).unwrap().bus = Some(b);
                 // still rolling in, or standing in the stop's box: to the gather point
                 if bn.speed.abs() <= 2.0 && !self.in_stop_box(stop, b) {
@@ -1849,6 +1867,28 @@ impl Humans {
             }
         }
         if p.seat.is_none() {
+            self.set_task(i, Task::WalkingToBusstop, buses, bus_ix, world);
+            return;
+        }
+        // At a shut door that stays shut - a bus on its layover, at the end of its trip, or
+        // standing in the stop's box without serving it - nobody stands pressed against it
+        // for good: after `DOOR_GIVE_UP` the place is given back and the person waits at the
+        // stop again, for this bus only once it opens a door (they stood at its doors for
+        // ten minutes and more).
+        let at_shut_door = p.st == 2 && !bn.entry_open.iter().any(|o| *o);
+        let since = if at_shut_door { Some(p.door_since.unwrap_or(self.time)) } else { None };
+        self.pax_mut(i).unwrap().door_since = since;
+        if since.is_some_and(|t| self.time - t > DOOR_GIVE_UP) {
+            if let Some(k) = p.seat {
+                self.free_seat(bn.id, k);
+            }
+            let pp = self.pax_mut(i).unwrap();
+            pp.seat = None;
+            pp.door_since = None;
+            pp.shunned = Some(bn.id);
+            if super::debug_pax() {
+                log::info!("t={:.1} pax {} gives up at the shut doors of {:?}", self.time, self.people[i].label(), bn.id);
+            }
             self.set_task(i, Task::WalkingToBusstop, buses, bus_ix, world);
             return;
         }
@@ -2860,3 +2900,4 @@ mod tests {
         assert_eq!(next(1, 2), Some(2));
     }
 }
+
