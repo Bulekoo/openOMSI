@@ -4711,7 +4711,9 @@ impl Traffic {
                     })
                 });
                 if let Some((space, speed, lane)) = queued_exit_vehicle(way, exit, need, occupied) {
-                    if speed < 1.5 && space < need {
+                    // (only near the crossing, as before: a car far off plans no stop for a
+                    // queue that may well have moved on by the time it gets there)
+                    if speed < 1.5 && space < need && exit.1 < 40.0 {
                         ruled = true;
                         exit_full = true;
                         if explain {
