@@ -540,3 +540,129 @@ mod lane_permission_tests {
         );
     }
 }
+
+/// The traffic simulation on its own: no world, no renderer, a network made up here and a
+/// vehicle type of two small files. `Traffic::assemble` and `Traffic::place_car` are the
+/// parts of `Traffic::new` and `Traffic::create_car` that need neither.
+#[cfg(test)]
+mod headless_tests {
+    use super::*;
+    use omsi_sim::traffic::LaneBuilder;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use crate::traffic::setup::RandomTypes;
+
+    /// A vehicle type with no model and no scripts, in a folder of its own.
+    struct Fixture {
+        dir: std::path::PathBuf,
+        ty: Arc<VehicleType>,
+    }
+
+    impl Fixture {
+        fn new() -> Fixture {
+            static NEXT: AtomicUsize = AtomicUsize::new(0);
+            let dir = std::env::temp_dir().join(format!(
+                "omsi-traffic-headless-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("car.bus"), "[model]\nmodel.cfg\n").unwrap();
+            std::fs::write(dir.join("model.cfg"), "").unwrap();
+            let ty = Arc::new(VehicleType::load_ai(&dir, &dir.join("car.bus")).unwrap());
+            Fixture { dir, ty }
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    /// A straight street north: `lengths` metres of lanes one after the other, ending in a
+    /// dead end.
+    fn road(lengths: &[f64]) -> Network {
+        let mut lanes: Vec<omsi_sim::traffic::Lane> = Vec::new();
+        let mut start = DVec3::ZERO;
+        for &len in lengths {
+            let l = LaneBuilder::arc(start, 0.0, len, 0.0, 0.0, LaneKind::Street, 3.0);
+            start = l.end();
+            lanes.push(l);
+        }
+        let mut net = Network { lanes, ..Default::default() };
+        net.link(1.5);
+        net
+    }
+
+    fn traffic(f: &Fixture, net: Network) -> Traffic {
+        let random = RandomTypes {
+            types: Vec::new(),
+            groups: Vec::new(),
+            group_curves: false,
+            group_uvg: Vec::new(),
+            uvg_defaults: Vec::new(),
+        };
+        Traffic::assemble(&f.dir, net, random, Vec::new(), HashMap::new(), (Vec::new(), Vec::new()), Vec::new(), (1.0, 0), 0)
+    }
+
+    /// A random car of the fixture's type on `lane` at `s` (as `create_car` puts one, without
+    /// its picture and the ground under it).
+    fn add_car(t: &mut Traffic, f: &Fixture, lane: usize, s: f32, seed: u64) -> u64 {
+        let vehicle = VehicleInstance::new(f.ty.clone(), omsi_sim::VehicleHost::new(omsi_sim::SimClock::default()));
+        t.place_car(vehicle, LaneKind::Street, lane, s, f.ty.clone(), seed, None, None, None, None)
+    }
+
+    fn car(t: &Traffic, id: u64) -> &AiCar {
+        t.cars.iter().find(|c| c.id == id).unwrap()
+    }
+
+    #[test]
+    fn cars_drive_along_the_road_one_behind_the_other() {
+        let f = Fixture::new();
+        let mut t = traffic(&f, road(&[300.0, 300.0, 300.0]));
+        let lead = add_car(&mut t, &f, 0, 60.0, 0x1234_5678);
+        let follow = add_car(&mut t, &f, 0, 20.0, 0x8765_4321);
+        let start = (car(&t, lead).vehicle.position, car(&t, follow).vehicle.position);
+        for _ in 0..600 {
+            t.tick(0.05, None);
+            let (a, b) = (car(&t, lead), car(&t, follow));
+            // the follower stays behind its lead, its front clear of the lead's rear
+            let gap = (a.vehicle.position.y - b.vehicle.position.y) as f32 - a.state.rear - b.state.front;
+            assert!(gap > 0.5, "the cars touch: gap {gap:.2} m at t={:.2}", t.time);
+        }
+        let (a, b) = (car(&t, lead), car(&t, follow));
+        assert!(a.vehicle.position.y - start.0.y > 100.0, "the lead drove {:.1} m", a.vehicle.position.y - start.0.y);
+        assert!(b.vehicle.position.y - start.1.y > 100.0, "the follower drove {:.1} m", b.vehicle.position.y - start.1.y);
+        assert_eq!(b.lead_car, Some(lead));
+        assert!((t.time - 30.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_car_at_a_dead_end_leaves_the_road() {
+        let f = Fixture::new();
+        let mut t = traffic(&f, road(&[120.0]));
+        add_car(&mut t, &f, 0, 10.0, 42);
+        let mut steps = 0;
+        while !t.cars.is_empty() && steps < 1200 {
+            t.tick(0.05, None);
+            steps += 1;
+        }
+        assert!(t.cars.is_empty(), "the car still stands at s {:.1}", t.cars[0].state.s);
+    }
+
+    #[test]
+    fn the_same_start_makes_the_same_traffic() {
+        let run = || {
+            let f = Fixture::new();
+            let mut t = traffic(&f, road(&[200.0, 200.0]));
+            for (k, s) in [15.0, 45.0, 80.0].into_iter().enumerate() {
+                add_car(&mut t, &f, 0, s, 7 + k as u64 * 0x9E37_79B9);
+            }
+            for _ in 0..200 {
+                t.tick(0.05, None);
+            }
+            t.cars.iter().map(|c| (c.id, c.state.lane, c.state.s, c.state.speed)).collect::<Vec<_>>()
+        };
+        assert_eq!(run(), run());
+    }
+}

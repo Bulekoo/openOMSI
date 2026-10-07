@@ -20,6 +20,17 @@ pub(super) const PRIORITY_WARN_GAP: f32 = 60.0;
 /// lateral place, out on that lane passing something).
 pub(super) type ByLane = HashMap<usize, Vec<(usize, f32, f32, bool)>>;
 
+/// What a car follows: the gap to it and who it is (a car's index, `usize::MAX` the player's bus or a
+/// LAN player's, None a parked car).
+pub(super) type LeadOf = Option<(Lead, Option<usize>)>;
+/// The cars coming to each junction lane: (car, distance from its origin to the lane start).
+pub(super) type Coming = HashMap<usize, Vec<(usize, f32)>>;
+/// The cars that have claimed each junction lane.
+pub(super) type Claims = HashMap<usize, Vec<usize>>;
+/// `Traffic::right_of_way`: where the merge holds a car, its way ahead, where a light holds it,
+/// where it gives way.
+type RightOfWay = (Option<f32>, Vec<(usize, f32)>, Option<f32>, Option<f32>);
+
 /// What every car's plan in a tick reads of the tick's start: who is where, the player's
 /// vehicle and the LAN players'.
 pub(super) struct TickScene {
@@ -32,7 +43,7 @@ pub(super) struct TickScene {
     pub(super) feet: Vec<Footprint>,
     pub(super) by_lane: ByLane,
     /// Cars coming to a junction lane: (car, distance from its origin to the lane start).
-    pub(super) coming: HashMap<usize, Vec<(usize, f32)>>,
+    pub(super) coming: Coming,
     /// Pedestrians on the footpaths by lane (distance along it).
     pub(super) walkers: HashMap<usize, Vec<f32>>,
 }
@@ -72,9 +83,9 @@ impl Traffic {
         let feet = self.footprints();
         self.break_lead_pairs();
         let ts = TickScene { dt, debug, player, player_standing, others, feet, by_lane, coming, walkers };
-        for i in 0..self.cars.len() {
+        for (i, frame) in frames.iter_mut().enumerate() {
             match self.plan_car(i, &ts, &mut reservations) {
-                Some(frame) => frames[i] = Some(frame),
+                Some(f) => *frame = Some(f),
                 None => remove.push(i),
             }
         }
@@ -99,7 +110,7 @@ impl Traffic {
     /// Where every car is: its lane with its lateral place (and the lane a passing car is
     /// over on, where it counts for the oncoming traffic), the cars coming to each junction
     /// lane and the junction lanes each has claimed.
-    fn occupancy(&self) -> (ByLane, HashMap<usize, Vec<(usize, f32)>>, HashMap<usize, Vec<usize>>) {
+    fn occupancy(&self) -> (ByLane, Coming, Claims) {
         let mut by_lane: HashMap<usize, Vec<(usize, f32, f32, bool)>> = HashMap::new();
         // cars coming to a junction lane: (car, distance from its origin to the lane start)
         let mut coming: HashMap<usize, Vec<(usize, f32)>> = HashMap::new();
@@ -339,7 +350,7 @@ impl Traffic {
 
     /// Car `i`'s plan for this tick and its drive: its frame for the body and the scripts,
     /// None when it ran out of road (it is taken off).
-    fn plan_car(&mut self, i: usize, ts: &TickScene, reservations: &mut HashMap<usize, Vec<usize>>) -> Option<AiFrame> {
+    fn plan_car(&mut self, i: usize, ts: &TickScene, reservations: &mut Claims) -> Option<AiFrame> {
         let (lead, player, player_standing) = self.car_lead(i, ts);
         let (lead, parked_ahead, parked_box, kerb_swerve) = self.kerb_and_squeeze(i, lead, &ts.by_lane);
         let (standing, obstacle_len, at_stop, keep_back) = self.keep_back(i, lead, parked_ahead, player, player_standing);
@@ -354,11 +365,11 @@ impl Traffic {
     /// What car `i` follows: the car ahead (it may change lanes first), the player's bus or
     /// a LAN player's where it is in the way, another body off the lanes. Also the player's
     /// vehicle that stands for "the player's bus" from here on, and how long it has stood.
-    fn car_lead(&mut self, i: usize, ts: &TickScene) -> (Option<(Lead, Option<usize>)>, Option<PlayerBox>, f32) {
+    fn car_lead(&mut self, i: usize, ts: &TickScene) -> (LeadOf, Option<PlayerBox>, f32) {
         let (by_lane, feet, others, debug) = (&ts.by_lane, &ts.feet, &ts.others, ts.debug);
         let (player, player_standing) = (ts.player, ts.player_standing);
-        self.plan_lane_change(i, &by_lane);
-        let ahead = self.obstacle_ahead(i, look_ahead(self.cars[i].state.speed), &by_lane);
+        self.plan_lane_change(i, by_lane);
+        let ahead = self.obstacle_ahead(i, look_ahead(self.cars[i].state.speed), by_lane);
         // remember whom it lets in at a merge (a car on another lane)
         let merging = ahead
             .filter(|(_, j)| {
@@ -397,7 +408,7 @@ impl Traffic {
             }
         }
         // other vehicles' bodies in the way off the lanes
-        if let Some((l, j)) = self.body_in_way(i, &feet, &by_lane) {
+        if let Some((l, j)) = self.body_in_way(i, feet, by_lane) {
             self.cars[i].geo_block = Some(self.cars[j].id);
             if lead.map(|x| l.gap < x.0.gap - 0.5).unwrap_or(true) {
                 if debug
@@ -421,7 +432,7 @@ impl Traffic {
 
     /// Parked cars: stop behind one in the lane, swerve round one at the kerb; squeeze past
     /// a bus standing half in its bay.
-    fn kerb_and_squeeze(&mut self, i: usize, mut lead: Option<(Lead, Option<usize>)>, by_lane: &ByLane) -> (Option<(Lead, Option<usize>)>, bool, Option<Obb>, Option<f32>) {
+    fn kerb_and_squeeze(&mut self, i: usize, mut lead: LeadOf, by_lane: &ByLane) -> (LeadOf, bool, Option<Obb>, Option<f32>) {
         // parked cars: stop behind one in the middle of the lane, swerve round one at
         // the kerb (a parked car eats the right half of the lane; the passing car
         // moves left by what is missing, and back once it is past)
@@ -565,7 +576,7 @@ impl Traffic {
 
     /// Something standing ahead: how long it is, whether it is a queue at a stop, and how
     /// far behind it car `i` stops to be able to pull out round it later.
-    fn keep_back(&mut self, i: usize, lead: Option<(Lead, Option<usize>)>, parked_ahead: bool, player: Option<PlayerBox>, player_standing: f32) -> (bool, f32, bool, Option<f32>) {
+    fn keep_back(&mut self, i: usize, lead: LeadOf, parked_ahead: bool, player: Option<PlayerBox>, player_standing: f32) -> (bool, f32, bool, Option<f32>) {
         let standing = self.standing_obstacle(i, lead, parked_ahead, player_standing);
         // (a queue at a stop is passed as a whole)
         let (obstacle_len, at_stop) = match lead.and_then(|l| l.1) {
@@ -648,10 +659,10 @@ impl Traffic {
     /// Going round what stands in the way: another lane, the other half of the road, and
     /// back in once past.
     #[allow(clippy::too_many_arguments)]
-    fn pass_step(&mut self, i: usize, lead: Option<(Lead, Option<usize>)>, obstacle_len: f32, standing: bool, parked_ahead: bool, at_stop: bool, by_lane: &ByLane, player: Option<PlayerBox>, parked_box: Option<Obb>, feet: &[Footprint]) {
-        self.plan_bypass(i, lead.map(|l| l.0.gap), standing, &by_lane);
+    fn pass_step(&mut self, i: usize, lead: LeadOf, obstacle_len: f32, standing: bool, parked_ahead: bool, at_stop: bool, by_lane: &ByLane, player: Option<PlayerBox>, parked_box: Option<Obb>, feet: &[Footprint]) {
+        self.plan_bypass(i, lead.map(|l| l.0.gap), standing, by_lane);
         let way_now = self.way_lanes(&self.cars[i].state, 120.0);
-        self.guard_pass(i, &by_lane);
+        self.guard_pass(i, by_lane);
         self.plan_pass(
             i,
             lead,
@@ -659,10 +670,10 @@ impl Traffic {
             standing,
             parked_ahead || at_stop,
             &way_now,
-            &by_lane,
+            by_lane,
             player,
             parked_box,
-            &feet,
+            feet,
         );
         // passing: back into the lane once past (and give up if the way out closes
         // before the car has moved)
@@ -708,9 +719,9 @@ impl Traffic {
 
     /// Merging, the lights and the right of way at the junction ahead: (where the merge
     /// holds car `i`, its way ahead, where a light holds it, where it gives way).
-    fn right_of_way(&mut self, i: usize, ts: &TickScene, lead: Option<(Lead, Option<usize>)>, reservations: &mut HashMap<usize, Vec<usize>>) -> (Option<f32>, Vec<(usize, f32)>, Option<f32>, Option<f32>) {
+    fn right_of_way(&mut self, i: usize, ts: &TickScene, lead: LeadOf, reservations: &mut Claims) -> RightOfWay {
         let (by_lane, coming, walkers, dt) = (&ts.by_lane, &ts.coming, &ts.walkers, ts.dt);
-        let merge_wait = self.plan_route_change(i, &by_lane);
+        let merge_wait = self.plan_route_change(i, by_lane);
         let way = self.way_lanes(&self.cars[i].state, 200.0);
         // traffic lights
         let light = if self.net.lanes[self.cars[i].state.lane].kind == LaneKind::Air {
@@ -747,10 +758,10 @@ impl Traffic {
                 jn,
                 &way,
                 lead.map(|l| l.0),
-                &by_lane,
-                &coming,
+                by_lane,
+                coming,
                 reservations,
-                &walkers,
+                walkers,
             ),
             None => {
                 let old = std::mem::take(&mut self.cars[i].reserved);
@@ -804,12 +815,12 @@ impl Traffic {
     /// the junction, the merge, what it keeps back from, people on foot, its own pulling
     /// out of a parking space, the player's bus leaving its stop.
     #[allow(clippy::too_many_arguments)]
-    fn stop_points(&mut self, i: usize, ts: &TickScene, way: &[(usize, f32)], lead: Option<(Lead, Option<usize>)>, light: Option<f32>, yield_at: Option<f32>, merge_wait: Option<f32>, keep_back: Option<f32>) -> (Option<f32>, (&'static str, f32)) {
+    fn stop_points(&mut self, i: usize, ts: &TickScene, way: &[(usize, f32)], lead: LeadOf, light: Option<f32>, yield_at: Option<f32>, merge_wait: Option<f32>, keep_back: Option<f32>) -> (Option<f32>, (&'static str, f32)) {
         let (debug, dt) = (ts.debug, ts.dt);
         let for_people = if self.net.lanes[self.cars[i].state.lane].kind == LaneKind::Air {
             None
         } else {
-            self.people_stop(i, &way)
+            self.people_stop(i, way)
         };
         if let Some((at, who)) = for_people {
             let car = &self.cars[i];
@@ -867,7 +878,7 @@ impl Traffic {
                 let ctx = crate::bus_service::Ctx {
                     wanted,
                     net: &self.net,
-                    way: &way,
+                    way,
                     day_time: self.day_time,
                     dt,
                     id: car.id,
@@ -1044,7 +1055,7 @@ impl Traffic {
     /// Car `i` drives: what it waited for, its speed, and its frame for the body and the
     /// scripts (None: it ran out of road).
     #[allow(clippy::too_many_arguments)]
-    fn drive_car(&mut self, i: usize, ts: &TickScene, lead: Option<(Lead, Option<usize>)>, stop_at: Option<f32>, why: (&'static str, f32), light: Option<f32>, yield_at: Option<f32>, merge_wait: Option<f32>) -> Option<AiFrame> {
+    fn drive_car(&mut self, i: usize, ts: &TickScene, lead: LeadOf, stop_at: Option<f32>, why: (&'static str, f32), light: Option<f32>, yield_at: Option<f32>, merge_wait: Option<f32>) -> Option<AiFrame> {
         let (debug, dt) = (ts.debug, ts.dt);
         let lead_id = lead
             .and_then(|l| l.1)
@@ -1347,7 +1358,7 @@ impl Traffic {
             }
         }
         if omsi_cfg::env::var_os("OMSI_CHECK_OVERLAP").is_some() {
-            self.check_overlaps(player, &others);
+            self.check_overlaps(player, others);
         }
     }
 

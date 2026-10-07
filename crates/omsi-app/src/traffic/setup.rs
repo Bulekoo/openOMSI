@@ -151,7 +151,7 @@ impl Traffic {
         random: RandomTypes,
         lights: Vec<TrafficLightController>,
         controller_of_object: HashMap<i64, usize>,
-        (parked_cars, lane_tiles): (Vec<(DVec3, f64)>, Vec<(i32, i32)>),
+        (parked_cars, lane_tiles): (Vec<(DVec3, f64)>, Tiles),
         density_curve: Vec<(f32, f32)>,
         (unsched_factor, max_scheduled): (f32, u32),
         target: usize,
@@ -318,6 +318,9 @@ pub(super) fn take_from_tiles(
     });
     (new, parked, tiles)
 }
+
+/// Tiles by their grid position.
+pub(super) type Tiles = Vec<(i32, i32)>;
 
 /// The random traffic's vehicle types (with weight, the lanes they run on and their group),
 /// its groups with their density curves and the paths' density rules for them.

@@ -13,9 +13,6 @@ pub(super) const PHANTOM_WAIT: f32 = 90.0;
 /// is taken off (m); in plain view a car stays until it is too small to see.
 pub(super) const DESPAWN_FACTOR: f64 = 1.6;
 
-/// Cruising speed of an AI aircraft where its flight path sets no limit (km/h): an
-/// airliner on its final approach.
-pub(super) const AIRCRAFT_KMH: f32 = 280.0;
 
 /// Ground height for an AI vehicle's wheels: the road surface (blended between raster
 /// texels), else any surface, else the terrain.
@@ -639,166 +636,16 @@ impl Traffic {
                     .map(|i| (i.width, i.height, i.rgba))
             });
         }
-        let mut state = AiState::new(lane, s, seed);
-        state.veh_type = if bus.is_some() { -1 } else { ty.def.ai_veh_type };
-        if bus.is_none() {
-            state.traffic_pool = self.types.iter().find(|t| Arc::ptr_eq(&t.0, &ty))
-                .and_then(|t| self.group_uvg[t.3])
-                .map(|pool| (pool, self.uvg_defaults.clone()));
-        }
-        state.plan_next(&self.net);
-        // heavy vehicles (trucks, vans) cruise slower, which is what gets them overtaken
-        let heavy = ty.def.mass > 6.0 || bus.is_some();
-        personality(&mut state, seed, heavy);
-        state.max_speed_kmh = if kind == LaneKind::Air {
-            AIRCRAFT_KMH
-        } else if bus.is_some() {
-            // a bus driver keeps to the limit (the town's 50) like the cars round him,
-            // with a little more on the arterial roads
-            56.0 + (seed % 7) as f32
-        } else if heavy {
-            // (a truck keeps to the limit like the cars, up to a truck's own 80-90 km/h: it
-            // took 38-47 on every road, crawling along 80 km/h roads, #327)
-            80.0 + (seed % 10) as f32
-        } else if kind == LaneKind::Street && ty.def.mass > 0.0 && ty.def.mass <= 0.3 {
-            // a bicycle (stock ones weigh exactly 0.3 t): 15-21 km/h, the `vmax` range their
-            // script cuts the drive at (#327)
-            15.0 + (seed % 7) as f32
-        } else {
-            100.0
-        };
-        // lorries and vans take bends more gently than cars
-        state.lat_accel = if kind == LaneKind::Air {
-            50.0
-        } else if heavy {
-            1.6
-        } else {
-            2.4 + (seed % 7) as f32 * 0.1
-        };
-        if bus.is_some() {
-            // it brakes for its stops the way the town's drivers brake for a light: with
-            // 1.5 m/s² of "comfortable" braking the planner braked at half that and crept
-            // up to every stop for a hundred metres
-            state.decel = 2.1;
-            state.accel = state.accel.max(1.0);
-            state.min_gap = state.min_gap.max(2.2);
-        }
-        let (front, rear, half_width) = extents(&ty, if bus.is_some() { 12.0 } else { 4.5 });
-        state.front = front;
-        state.rear = rear;
-        state.length = front + rear;
-        if let Some(b) = &bus {
-            state.set_route(&self.net, b.route.clone(), s);
-        }
-        state.speed = (self.net.lanes[lane]
-            .speed_limit_kmh
-            .min(state.max_speed_kmh)
-            / 3.6
-            * 0.7)
-            .min(state.curve_speed(&self.net));
-        if kind == LaneKind::Air {
-            state.speed = self.net.lanes[lane]
-                .speed_limit_kmh
-                .min(state.max_speed_kmh)
-                / 3.6;
-            state.accel = 0.5;
-            state.decel = 0.5;
-        }
-        // a bus put out at a stop stands there (in the bay, if it has one)
-        let at_stop = bus
-            .as_ref()
-            .and_then(|b| b.stops.first())
-            .filter(|st| st.ri == 0 && (st.s - s).abs() < 1.5);
-        if let Some(st) = at_stop {
-            state.speed = 0.0;
-            if st.bay.abs() > 0.01 {
-                state.lateral = st.bay;
-                state.lateral_target = st.bay;
-                state.lateral_ramp = (st.bay, st.bay, 0.0, 1.0);
-            }
-        }
-        let body = place_body(&self.net, &state, &mut vehicle, motion_kind(kind));
-        if omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some() {
-            let pos = vehicle.position;
-            log::info!(
-                "spawn {} on lane {lane} s={s:.1} at ({:.1}, {:.1}, {:.1}) heading {:.0}",
-                ty.def.path.display(),
-                pos.x,
-                pos.y,
-                pos.z,
-                vehicle.heading
-            );
-        }
-        let pass_room = if kind == LaneKind::Street {
-            self.pull_out_room(&ty, front, rear, half_width)
-        } else {
-            0.0
-        };
-        let id = id.unwrap_or_else(|| {
-            let id = self.next_id;
-            self.next_id += 1;
-            id
-        });
-        if let Some(v) = speed {
-            state.speed = v.min(state.speed.max(v * 0.5));
-        }
+        let id = self.place_car(vehicle, kind, lane, s, ty, seed, scheme, id, speed, bus);
         if self.debug_population && kind == LaneKind::Street {
             let v = self.viewer;
-            let pos = vehicle.position;
+            let pos = self.cars[self.cars.len() - 1].vehicle.position;
             if !self.initial && v.map(|v| v.frames(pos, 2.5)).unwrap_or(false) {
                 self.framed_spawns.push((id, pos));
             }
             log::info!("population t={:.1}: car {id} appears at ({:.0}, {:.0}), {:.0} m from the centre, {:.0} m from the camera, in frame {}, behind a building {}{}", self.time, pos.x, pos.y, (pos - center).length(), v.map(|v| (pos - v.pos).length()).unwrap_or(0.0), v.map(|v| v.frames(pos, 2.5)).unwrap_or(false), v.map(|v| self.occluded(world, &v, pos, 2.5)).unwrap_or(false), if self.initial { " (initial)" } else { "" });
         }
-        self.cars.push(AiCar {
-            id,
-            state,
-            render: DrawnAs { set: Some((ty.def.path.clone(), scheme)) },
-            vehicle,
-            body,
-            stopped: 0.0,
-            lead_car: None,
-            ignore_lead: None,
-            crawl: 0.0,
-            progress: (0.0, 0.0),
-            bus: bus.map(|b| Box::new(BusService::new(b.stops))),
-            sounds: None,
-            half_width,
-            yielding: false,
-            light_hold: false,
-            reserved: Vec::new(),
-            amber: None,
-            passing: None,
-            gone: false,
-            fresh: 1.5,
-            merge_after: None,
-            holding: None,
-            why: ("", 0.0),
-            held: false,
-            geo_block: None,
-            lead_info: None,
-            junction_why: String::new(),
-            wait_at: None,
-            squeeze: None,
-            pass_room,
-            pass_retry: 0.0,
-            light_at: None,
-            pull_out: 0.0,
-            rail_trail: Default::default(),
-            ai_secs: 0.0,
-            consist_reversed: false,
-            park: None,
-            seed,
-            scheme,
-        });
         self.view.insert(id, render);
-        if kind != LaneKind::Air {
-            let i = self.cars.len() - 1;
-            if let Some(gap) = self.red_ahead(i) {
-                let st = &mut self.cars[i].state;
-                st.speed = st.speed.min((2.0 * st.decel * (gap - 1.0).max(0.0)).sqrt());
-            }
-        }
         id
     }
 

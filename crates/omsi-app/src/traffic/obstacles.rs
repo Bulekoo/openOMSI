@@ -19,7 +19,6 @@ pub(super) const LOOK_AHEAD_MAX: f32 = 150.0;
 /// How far ahead a driver at `speed` watches for something standing in the way: far enough
 /// to slow down gently for it. With a fixed 70 m a car at 50-65 km/h first saw the player's
 /// bus standing (or a bus at its stop) so late that the following model braked at 4-5 m/s².
-
 pub(super) fn look_ahead(speed: f32) -> f32 {
     (speed * speed / 3.0 + speed * 2.0 + 20.0).clamp(LOOK_AHEAD, LOOK_AHEAD_MAX)
 }

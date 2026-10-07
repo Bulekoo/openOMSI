@@ -275,7 +275,6 @@ pub(super) fn way_user_verdict(st: &AiState, u: &WayUser, dm: f32, c: &omsi_sim:
 impl Traffic {
     /// The lanes of a car's way with their distance from its origin: the current lane (at
     /// minus `s`) and the plan, up to `within` metres.
-
     pub(super) fn way_lanes(&self, st: &AiState, within: f32) -> Vec<(usize, f32)> {
         let mut out = vec![(st.lane, -st.s)];
         let mut d = self.net.lanes[st.lane].length() - st.s;
