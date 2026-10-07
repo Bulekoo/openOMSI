@@ -61,182 +61,13 @@ impl Traffic {
             log::info!("traffic: the map drives on the left");
         }
         net.link(1.5);
-        let mut types = Vec::new();
-        let mut groups: Vec<omsi_map::ailists::UnschedGroup> = Vec::new();
-        let mut group_uvg: Vec<Option<usize>> = Vec::new();
-        let mut uvg_defaults: Vec<i32> = Vec::new();
-        // `unsched_trafficdens.txt`: per random group a factor and its density over the day
-        // (by day of the week); the global.cfg curve is the fallback of maps without it
-        let dens: Vec<omsi_map::ailists::UnschedGroup> =
-            omsi_cfg::CfgFile::read(&world.map_dir.join("unsched_trafficdens.txt"))
-                .ok()
-                .map(|f| omsi_map::ailists::parse_unsched_trafficdens(&f))
-                .unwrap_or_default();
-        let group_curves = !dens.is_empty();
-        {
-            // `unsched_vehgroups.txt` names the groups the random traffic is made of. The
-            // other `[aigroup_2]`s exist only for the timetable: on Berlin-Spandau "Pan Am"
-            // and "Mi-8 Soviet AF" fly TXL.ttl and Relais.ttl, and taking them into the
-            // random pool put airliners on the flight paths at any hour of the day. Its
-            // number is the group's default density on the paths without a `[rule]
-            // trafficdensity` for it (see `uvg_density`): 0 means only where the paths ask
-            // for the group. Taken as "off", Spandau had no trucks and no Trabant at all,
-            // though 865 paths ask for the one and 462 around Falkensee for the other.
-            // `OMSI_TRAFFIC_ALL_GROUPS=1` lets such groups drive everywhere (and, on a map
-            // without the file, every group, not only the default one).
-            let all_groups = omsi_cfg::env::var_os("OMSI_TRAFFIC_ALL_GROUPS").is_some();
-            let unscheduled: Option<Vec<(String, i32)>> =
-                omsi_cfg::CfgFile::read(&world.map_dir.join("unsched_vehgroups.txt"))
-                    .ok()
-                    .map(|f| {
-                        omsi_map::ailists::parse_unsched_vehgroups(&f)
-                            .into_iter()
-                            .map(|(n, c)| (n.trim().to_ascii_lowercase(), c))
-                            .collect()
-                    });
-            if let Some(names) = &unscheduled {
-                log::info!("random traffic groups (unsched_vehgroups.txt): {names:?}");
-                uvg_defaults = names
-                    .iter()
-                    .map(|n| if all_groups && n.1 <= 0 { 1 } else { n.1 })
-                    .collect();
-            }
-            let lists = &world.ailists;
-            // Without `unsched_vehgroups.txt` the random traffic is the ailists' default group
-            // alone (the first, or the one the `[ailist]` header names): Omsi.exe 0x785f98
-            // makes one nameless group then, and a nameless group takes the default group.
-            // Taking every group instead, a map whose ailists keep an ambulance (or a bus,
-            // or a lorry) in a group of its own had one car in four of that kind (#1025).
-            if unscheduled.is_none() && !all_groups {
-                if let Some(g) = lists.groups.get(lists.default_group) {
-                    log::info!("random traffic: no unsched_vehgroups.txt, only the default AI group {}", g.name);
-                }
-            }
-            for (_, g) in lists.groups.iter().enumerate().filter(|(i, g)| {
-                !g.is_depot
-                    && g.hof.is_none()
-                    && (unscheduled.is_some() || all_groups || *i == lists.default_group)
-                    && !g
-                        .vehicles
-                        .iter()
-                        .any(|v| v.file.to_ascii_lowercase().ends_with(".zug"))
-            }) {
-                let lname = g.name.trim().to_ascii_lowercase();
-                let uvg = match &unscheduled {
-                    Some(names) => match names.iter().position(|n| n.0 == lname) {
-                        None => continue,
-                        Some(u) => {
-                            if uvg_defaults.get(u).copied().unwrap_or(0) <= 0 {
-                                log::info!(
-                                    "random traffic group {} drives only where its paths ask for it (unsched_vehgroups.txt)",
-                                    g.name
-                                );
-                            }
-                            Some(u)
-                        }
-                    },
-                    None => None,
-                };
-                let gi = groups.len();
-                group_uvg.push(uvg);
-                groups.push(
-                    dens.iter()
-                        .find(|d| d.name.trim().eq_ignore_ascii_case(g.name.trim()))
-                        .cloned()
-                        .unwrap_or(omsi_map::ailists::UnschedGroup {
-                            name: g.name.clone(),
-                            factor: if group_curves { 0.0 } else { 1.0 },
-                            densities: Vec::new(),
-                        }),
-                );
-                for v in &g.vehicles {
-                    let lower = v.file.to_ascii_lowercase();
-                    if lower.ends_with(".zug")
-                        || lower.contains("trains\\")
-                        || lower.contains("trains/")
-                    {
-                        continue;
-                    }
-                    let path = omsi_cfg::resolve_path(root, &v.file);
-                    match VehicleType::load_ai(root, &path) {
-                        Ok(t) => {
-                            // rail (only as scheduled trains), 3 = aircraft on flight paths
-                            let rail = t.def.is_rail();
-                            let air =
-                                matches!(t.def.kind, omsi_vehicle::vehicle::VehicleKind::Other(3));
-                            if rail {
-                                log::debug!(
-                                    "AI vehicle {} is rail-bound, not street traffic",
-                                    v.file
-                                );
-                            } else {
-                                types.push((
-                                    Arc::new(t),
-                                    v.weight.max(0.0),
-                                    if air { LaneKind::Air } else { LaneKind::Street },
-                                    gi,
-                                ));
-                            }
-                        }
-                        Err(e) => log::warn!("AI vehicle {}: {e}", v.file),
-                    }
-                }
-            }
-        }
+        let RandomTypes { types, groups, group_curves, group_uvg, uvg_defaults } = random_types(root, world);
         // No buses in the random road traffic: the depot groups of `ailists.cfg` are the
         // fleet the *timetable* drives, and OMSI puts a bus on a street only because a trip
         // of the map's TTData runs there. Mixing the depot fleet into the random pool put
         // the map's one bus type on every road of the map - on Grundorf that is a single
         // articulated GN92, which is why it seemed to be a type of our own choosing.
-        if let Ok(list) = omsi_cfg::env::var("OMSI_DEBUG_LANES") {
-            // lane indices, or `at:x,y,r` for the street lanes passing within r m of a point
-            // (the indices change from run to run on a map whose tiles load in parallel)
-            let chosen: Vec<usize> = match list.strip_prefix("at:") {
-                Some(rest) => {
-                    let v: Vec<f64> = rest
-                        .split(',')
-                        .filter_map(|x| x.trim().parse().ok())
-                        .collect();
-                    let (p, r) = (
-                        DVec3::new(
-                            v.first().copied().unwrap_or(0.0),
-                            v.get(1).copied().unwrap_or(0.0),
-                            0.0,
-                        ),
-                        v.get(2).copied().unwrap_or(10.0),
-                    );
-                    (0..net.lanes.len())
-                        .filter(|&i| {
-                            net.lanes[i].kind == LaneKind::Street
-                                && net.lanes[i]
-                                    .points
-                                    .iter()
-                                    .any(|q| (q.truncate() - p.truncate()).length() < r)
-                        })
-                        .collect()
-                }
-                None => list
-                    .split(',')
-                    .filter_map(|v| v.trim().parse::<usize>().ok())
-                    .filter(|&i| i < net.lanes.len())
-                    .collect(),
-            };
-            for i in chosen {
-                let l = &net.lanes[i];
-                let samples: Vec<String> = (0..l.points.len())
-                    .step_by((l.points.len() / 8).max(1))
-                    .map(|k| {
-                        format!(
-                            "[{:.1} m h {:.1} k {:.3}]",
-                            l.dist[k],
-                            l.headings[k],
-                            l.curvature.get(k).copied().unwrap_or(0.0)
-                        )
-                    })
-                    .collect();
-                log::info!("lane {i}: {} {:?} rev {} turn {} prio {} len {:.1} start ({:.1}, {:.1}) end ({:.1}, {:.1}) next {:?} light {:?} crossings {:?} {}", l.name, l.key, l.reversed, l.turn, l.priority, l.length(), l.start().x, l.start().y, l.end().x, l.end().y, l.next, l.traffic_light, net.crossings.get(i), samples.join(" "));
-            }
-        }
+        log_debug_lanes(&net);
         if omsi_cfg::env::var_os("OMSI_DEBUG_WHEELS").is_some() {
             for (t, ..) in &types {
                 let v = VehicleInstance::new(
@@ -250,7 +81,6 @@ impl Traffic {
         }
         let lights = world.traffic_lights.lock().clone();
         let controller_of_object = world.controller_of_object.lock().clone();
-        let parked: HashMap<usize, Vec<(f32, f32)>> = HashMap::new();
         let turning = net.lanes.iter().filter(|l| l.turn != 0).count();
         let with_side = net
             .lanes
@@ -302,6 +132,32 @@ impl Traffic {
             })
             .count();
         log::info!("traffic: {inner_lights} lit paths inside crossings (a car already in the crossing is not held there again)");
+        let density_curve = world.global.traffic_density_road.clone();
+        let unsched_factor = crate::settings::Settings::load().ai_unsched_factor;
+        let max_scheduled = crate::settings::Settings::load().ai_max_scheduled;
+        let random = RandomTypes { types, groups, group_curves, group_uvg, uvg_defaults };
+        Ok(Traffic::assemble(root, net, random, lights, controller_of_object, (parked_cars, lane_tiles), density_curve, (unsched_factor, max_scheduled), target))
+    }
+
+    /// The traffic made of its parts: the linked network, the random traffic's types,
+    /// the light programs (and which crossing object has which), the parked cars and
+    /// tiles the network came from, the map's density curve and the options' share of
+    /// random traffic and number of timetable vehicles. Nothing in it needs a world or a
+    /// GPU (see `Traffic::new`).
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn assemble(
+        root: &Path,
+        net: Network,
+        random: RandomTypes,
+        lights: Vec<TrafficLightController>,
+        controller_of_object: HashMap<i64, usize>,
+        (parked_cars, lane_tiles): (Vec<(DVec3, f64)>, Vec<(i32, i32)>),
+        density_curve: Vec<(f32, f32)>,
+        (unsched_factor, max_scheduled): (f32, u32),
+        target: usize,
+    ) -> Traffic {
+        let RandomTypes { types, groups, group_curves, group_uvg, uvg_defaults } = random;
+        let parked: HashMap<usize, Vec<(f32, f32)>> = HashMap::new();
         let light_log = omsi_cfg::env::var("OMSI_DEBUG_LIGHTS").ok();
         let light_prev = lights.iter().map(|c| vec![-100; c.lights.len()]).collect();
         let lanes = 0..net.lanes.len();
@@ -348,9 +204,9 @@ impl Traffic {
             first_red: None,
             first_yield: None,
             first_passer: None,
-            density_curve: world.global.traffic_density_road.clone(),
-            unsched_factor: crate::settings::Settings::load().ai_unsched_factor,
-            max_scheduled: crate::settings::Settings::load().ai_max_scheduled,
+            density_curve,
+            unsched_factor,
+            max_scheduled,
             no_timetable_buses: false,
             viewer: None,
             occluders: None,
@@ -385,7 +241,7 @@ impl Traffic {
             lan_centers: Vec::new(),
         };
         t.sort_parked(parked_cars, lanes);
-        Ok(t)
+        t
     }
 
     /// Take in what the tiles loaded since the last call brought: their lanes (linked into
@@ -461,4 +317,194 @@ pub(super) fn take_from_tiles(
             ))
     });
     (new, parked, tiles)
+}
+
+/// The random traffic's vehicle types (with weight, the lanes they run on and their group),
+/// its groups with their density curves and the paths' density rules for them.
+pub(super) struct RandomTypes {
+    pub(super) types: Vec<(Arc<VehicleType>, f32, LaneKind, usize)>,
+    pub(super) groups: Vec<omsi_map::ailists::UnschedGroup>,
+    pub(super) group_curves: bool,
+    pub(super) group_uvg: Vec<Option<usize>>,
+    pub(super) uvg_defaults: Vec<i32>,
+}
+
+/// Load the AI car types of the map's `ailists.cfg` that make its random traffic.
+fn random_types(root: &Path, world: &World) -> RandomTypes {
+    let mut types = Vec::new();
+    let mut groups: Vec<omsi_map::ailists::UnschedGroup> = Vec::new();
+    let mut group_uvg: Vec<Option<usize>> = Vec::new();
+    let mut uvg_defaults: Vec<i32> = Vec::new();
+    // `unsched_trafficdens.txt`: per random group a factor and its density over the day
+    // (by day of the week); the global.cfg curve is the fallback of maps without it
+    let dens: Vec<omsi_map::ailists::UnschedGroup> =
+        omsi_cfg::CfgFile::read(&world.map_dir.join("unsched_trafficdens.txt"))
+            .ok()
+            .map(|f| omsi_map::ailists::parse_unsched_trafficdens(&f))
+            .unwrap_or_default();
+    let group_curves = !dens.is_empty();
+    {
+        // `unsched_vehgroups.txt` names the groups the random traffic is made of. The
+        // other `[aigroup_2]`s exist only for the timetable: on Berlin-Spandau "Pan Am"
+        // and "Mi-8 Soviet AF" fly TXL.ttl and Relais.ttl, and taking them into the
+        // random pool put airliners on the flight paths at any hour of the day. Its
+        // number is the group's default density on the paths without a `[rule]
+        // trafficdensity` for it (see `uvg_density`): 0 means only where the paths ask
+        // for the group. Taken as "off", Spandau had no trucks and no Trabant at all,
+        // though 865 paths ask for the one and 462 around Falkensee for the other.
+        // `OMSI_TRAFFIC_ALL_GROUPS=1` lets such groups drive everywhere (and, on a map
+        // without the file, every group, not only the default one).
+        let all_groups = omsi_cfg::env::var_os("OMSI_TRAFFIC_ALL_GROUPS").is_some();
+        let unscheduled: Option<Vec<(String, i32)>> =
+            omsi_cfg::CfgFile::read(&world.map_dir.join("unsched_vehgroups.txt"))
+                .ok()
+                .map(|f| {
+                    omsi_map::ailists::parse_unsched_vehgroups(&f)
+                        .into_iter()
+                        .map(|(n, c)| (n.trim().to_ascii_lowercase(), c))
+                        .collect()
+                });
+        if let Some(names) = &unscheduled {
+            log::info!("random traffic groups (unsched_vehgroups.txt): {names:?}");
+            uvg_defaults = names
+                .iter()
+                .map(|n| if all_groups && n.1 <= 0 { 1 } else { n.1 })
+                .collect();
+        }
+        let lists = &world.ailists;
+        // Without `unsched_vehgroups.txt` the random traffic is the ailists' default group
+        // alone (the first, or the one the `[ailist]` header names): Omsi.exe 0x785f98
+        // makes one nameless group then, and a nameless group takes the default group.
+        // Taking every group instead, a map whose ailists keep an ambulance (or a bus,
+        // or a lorry) in a group of its own had one car in four of that kind (#1025).
+        if unscheduled.is_none() && !all_groups {
+            if let Some(g) = lists.groups.get(lists.default_group) {
+                log::info!("random traffic: no unsched_vehgroups.txt, only the default AI group {}", g.name);
+            }
+        }
+        for (_, g) in lists.groups.iter().enumerate().filter(|(i, g)| {
+            !g.is_depot
+                && g.hof.is_none()
+                && (unscheduled.is_some() || all_groups || *i == lists.default_group)
+                && !g
+                    .vehicles
+                    .iter()
+                    .any(|v| v.file.to_ascii_lowercase().ends_with(".zug"))
+        }) {
+            let lname = g.name.trim().to_ascii_lowercase();
+            let uvg = match &unscheduled {
+                Some(names) => match names.iter().position(|n| n.0 == lname) {
+                    None => continue,
+                    Some(u) => {
+                        if uvg_defaults.get(u).copied().unwrap_or(0) <= 0 {
+                            log::info!(
+                                "random traffic group {} drives only where its paths ask for it (unsched_vehgroups.txt)",
+                                g.name
+                            );
+                        }
+                        Some(u)
+                    }
+                },
+                None => None,
+            };
+            let gi = groups.len();
+            group_uvg.push(uvg);
+            groups.push(
+                dens.iter()
+                    .find(|d| d.name.trim().eq_ignore_ascii_case(g.name.trim()))
+                    .cloned()
+                    .unwrap_or(omsi_map::ailists::UnschedGroup {
+                        name: g.name.clone(),
+                        factor: if group_curves { 0.0 } else { 1.0 },
+                        densities: Vec::new(),
+                    }),
+            );
+            for v in &g.vehicles {
+                let lower = v.file.to_ascii_lowercase();
+                if lower.ends_with(".zug")
+                    || lower.contains("trains\\")
+                    || lower.contains("trains/")
+                {
+                    continue;
+                }
+                let path = omsi_cfg::resolve_path(root, &v.file);
+                match VehicleType::load_ai(root, &path) {
+                    Ok(t) => {
+                        // rail (only as scheduled trains), 3 = aircraft on flight paths
+                        let rail = t.def.is_rail();
+                        let air =
+                            matches!(t.def.kind, omsi_vehicle::vehicle::VehicleKind::Other(3));
+                        if rail {
+                            log::debug!(
+                                "AI vehicle {} is rail-bound, not street traffic",
+                                v.file
+                            );
+                        } else {
+                            types.push((
+                                Arc::new(t),
+                                v.weight.max(0.0),
+                                if air { LaneKind::Air } else { LaneKind::Street },
+                                gi,
+                            ));
+                        }
+                    }
+                    Err(e) => log::warn!("AI vehicle {}: {e}", v.file),
+                }
+            }
+        }
+    }
+    RandomTypes { types, groups, group_curves, group_uvg, uvg_defaults }
+}
+
+/// `OMSI_DEBUG_LANES`: the chosen lanes as the network has them.
+fn log_debug_lanes(net: &Network) {
+    if let Ok(list) = omsi_cfg::env::var("OMSI_DEBUG_LANES") {
+        // lane indices, or `at:x,y,r` for the street lanes passing within r m of a point
+        // (the indices change from run to run on a map whose tiles load in parallel)
+        let chosen: Vec<usize> = match list.strip_prefix("at:") {
+            Some(rest) => {
+                let v: Vec<f64> = rest
+                    .split(',')
+                    .filter_map(|x| x.trim().parse().ok())
+                    .collect();
+                let (p, r) = (
+                    DVec3::new(
+                        v.first().copied().unwrap_or(0.0),
+                        v.get(1).copied().unwrap_or(0.0),
+                        0.0,
+                    ),
+                    v.get(2).copied().unwrap_or(10.0),
+                );
+                (0..net.lanes.len())
+                    .filter(|&i| {
+                        net.lanes[i].kind == LaneKind::Street
+                            && net.lanes[i]
+                                .points
+                                .iter()
+                                .any(|q| (q.truncate() - p.truncate()).length() < r)
+                    })
+                    .collect()
+            }
+            None => list
+                .split(',')
+                .filter_map(|v| v.trim().parse::<usize>().ok())
+                .filter(|&i| i < net.lanes.len())
+                .collect(),
+        };
+        for i in chosen {
+            let l = &net.lanes[i];
+            let samples: Vec<String> = (0..l.points.len())
+                .step_by((l.points.len() / 8).max(1))
+                .map(|k| {
+                    format!(
+                        "[{:.1} m h {:.1} k {:.3}]",
+                        l.dist[k],
+                        l.headings[k],
+                        l.curvature.get(k).copied().unwrap_or(0.0)
+                    )
+                })
+                .collect();
+            log::info!("lane {i}: {} {:?} rev {} turn {} prio {} len {:.1} start ({:.1}, {:.1}) end ({:.1}, {:.1}) next {:?} light {:?} crossings {:?} {}", l.name, l.key, l.reversed, l.turn, l.priority, l.length(), l.start().x, l.start().y, l.end().x, l.end().y, l.next, l.traffic_light, net.crossings.get(i), samples.join(" "));
+        }
+    }
 }

@@ -694,6 +694,84 @@ impl Traffic {
             skip(format!("car {who_opp} on the oncoming side is there in {t:.1} s, the pass needs {t_need:.1} s"));
             return;
         }
+        let debug = omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some();
+        let Some(ramp) = self.pull_out_ramp(i, who, real, rolling, side, player, parked_box, feet, debug) else {
+            return;
+        };
+        let car = &self.cars[i];
+        let st = &car.state;
+        let id = car.id;
+        let odo = st.odometer;
+        let out = self.net.oncoming_sign();
+        let car = &mut self.cars[i];
+        car.passing = Some(Passing {
+            lane: opp,
+            side,
+            until: odo + until_d,
+            block: odo + real,
+            back,
+            aborted: false,
+            hold: 0.0,
+            creep: !rolling,
+        });
+        car.state.lateral_target = side * out;
+        // pull out over what room there is (from a standstill a car turns out steeply)
+        let lat0 = car.state.lateral;
+        car.state.lateral_ramp = (lat0, side * out, odo, ramp);
+        car.stopped = 0.0;
+        if self.first_passer.is_none() {
+            self.first_passer = Some((id, self.time));
+        }
+        if debug {
+            log::info!("t={:.1}: car {id} passes a standing obstacle {real:.2} m ahead on the oncoming lane {opp} ({side:.1} m to the left, S-curve {ramp:.1} m, {t_need:.1} s out there)", self.time);
+        }
+        if omsi_cfg::env::var_os("OMSI_DEBUG_PASS").is_some() {
+            // what it saw coming on the oncoming side
+            let lanes = self.net.upstream(opp, from, 150.0, 48);
+            let seen: Vec<String> = lanes
+                .iter()
+                .flat_map(|&(l, off, _)| {
+                    by_lane
+                        .get(&l)
+                        .into_iter()
+                        .flatten()
+                        .map(move |e| (l, off, *e))
+                })
+                .map(|(l, off, (j, sj, _, out))| {
+                    format!(
+                        "car {} on lane {l} at {:.1} m, {:.1} m/s{}",
+                        self.cars[j].id,
+                        sj + off,
+                        self.cars[j].state.speed,
+                        if out { " (out passing)" } else { "" }
+                    )
+                })
+                .collect();
+            log::info!(
+                "  (its stretch {from:.1}..{to:.1} of lane {opp}; lanes before it {:?}; {:?})",
+                lanes.iter().map(|e| (e.0, e.1.round())).collect::<Vec<_>>(),
+                seen
+            );
+        }
+    }
+
+    /// `plan_pass`: the S-curve along which car `i` can steer out round what it stands
+    /// behind (`real` m ahead) onto the oncoming lane `side` m over, None when none clears.
+    #[allow(clippy::too_many_arguments)]
+    fn pull_out_ramp(
+        &mut self,
+        i: usize,
+        who: Option<usize>,
+        real: f32,
+        rolling: bool,
+        side: f32,
+        player: Option<PlayerBox>,
+        parked_box: Option<Obb>,
+        feet: &[Footprint],
+        debug: bool,
+    ) -> Option<f32> {
+        let car = &self.cars[i];
+        let st = &car.state;
         // Can it steer out round the corner from where it stands? The body is driven along
         // each S-curve in turn (its own wheelbase, lock and steering rate) against the
         // obstacle's box; the gentlest that clears is taken.
@@ -728,7 +806,6 @@ impl Traffic {
         } else {
             PULL_OUT_CLEARANCE
         };
-        let debug = omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some();
         let mut chosen = None;
         let mut best_seen = f64::MIN;
         let mut tried: Vec<String> = Vec::new();
@@ -783,61 +860,9 @@ impl Traffic {
                 log::info!("t={:.1}: car {} cannot steer out round the obstacle {real:.2} m ahead (best clearance {best_seen:.2} m, room {:.2} m, oncoming lane {side:.2} m over, lateral {:.2}): {}; S-curves {}", self.time, car.id, car.pass_room, st.lateral, rel.unwrap_or_default(), tried.join(", "));
             }
             self.cars[i].pass_retry = self.time + 1.0;
-            return;
+            return None;
         };
-        let id = car.id;
-        let odo = st.odometer;
-        let out = self.net.oncoming_sign();
-        let car = &mut self.cars[i];
-        car.passing = Some(Passing {
-            lane: opp,
-            side,
-            until: odo + until_d,
-            block: odo + real,
-            back,
-            aborted: false,
-            hold: 0.0,
-            creep: !rolling,
-        });
-        car.state.lateral_target = side * out;
-        // pull out over what room there is (from a standstill a car turns out steeply)
-        let lat0 = car.state.lateral;
-        car.state.lateral_ramp = (lat0, side * out, odo, ramp);
-        car.stopped = 0.0;
-        if self.first_passer.is_none() {
-            self.first_passer = Some((id, self.time));
-        }
-        if debug {
-            log::info!("t={:.1}: car {id} passes a standing obstacle {real:.2} m ahead on the oncoming lane {opp} ({side:.1} m to the left, S-curve {ramp:.1} m, {t_need:.1} s out there)", self.time);
-        }
-        if omsi_cfg::env::var_os("OMSI_DEBUG_PASS").is_some() {
-            // what it saw coming on the oncoming side
-            let lanes = self.net.upstream(opp, from, 150.0, 48);
-            let seen: Vec<String> = lanes
-                .iter()
-                .flat_map(|&(l, off, _)| {
-                    by_lane
-                        .get(&l)
-                        .into_iter()
-                        .flatten()
-                        .map(move |e| (l, off, *e))
-                })
-                .map(|(l, off, (j, sj, _, out))| {
-                    format!(
-                        "car {} on lane {l} at {:.1} m, {:.1} m/s{}",
-                        self.cars[j].id,
-                        sj + off,
-                        self.cars[j].state.speed,
-                        if out { " (out passing)" } else { "" }
-                    )
-                })
-                .collect();
-            log::info!(
-                "  (its stretch {from:.1}..{to:.1} of lane {opp}; lanes before it {:?}; {:?})",
-                lanes.iter().map(|e| (e.0, e.1.round())).collect::<Vec<_>>(),
-                seen
-            );
-        }
+        Some(ramp)
     }
 
     /// Who on the oncoming side comes too soon for a car that will be out on lane `opp`

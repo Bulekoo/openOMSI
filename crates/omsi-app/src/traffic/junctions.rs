@@ -9,6 +9,19 @@ use super::*;
 pub(super) const LONG_WAIT_CLAIM: f32 = 45.0;
 pub(super) const GRIDLOCK_WAIT: f32 = 45.0;
 
+/// What `Traffic::weigh_crossings` found at a junction: somebody physically in the way
+/// (`hard`), only the rules in the way (`ruled`), the cars this one waits for that wait
+/// themselves (`soft`), why (for the debug output), where to stop, and whether anybody is
+/// near the crossing lanes at all (`contested`).
+pub(super) struct Weighing {
+    hard: bool,
+    ruled: bool,
+    soft: Vec<usize>,
+    why: Vec<String>,
+    stop_at: Option<f32>,
+    contested: bool,
+}
+
 /// Where a vehicle meets a crossing lane on its way: its lane in the sequence, the distance
 /// from its origin to that lane's start.
 #[derive(Debug, Clone)]
@@ -382,7 +395,6 @@ impl Traffic {
             && lead
                 .map(|l| l.speed < 1.0 && l.gap < entry - st.front + 3.0)
                 .unwrap_or(false);
-        let a_me = st.accel;
         // decided already (a claim from the frames before), or past the point where it could
         // still stop without an emergency brake
         let committed = car.reserved.contains(&jn.lanes[0].0);
@@ -392,25 +404,171 @@ impl Traffic {
         // and the car standing there used to count as one that could not stop any more)
         let cannot_stop = !jn.inside && v > 1.0 && room < v * v / (2.0 * MAX_BRAKE * 0.7);
         let cannot_stop_gently = !jn.inside && v > 1.0 && room < v * v / (2.0 * st.decel * 1.5);
+        let explain = omsi_cfg::env::var_os("OMSI_DEBUG_JUNCTION").is_some() || omsi_cfg::env::var_os("OMSI_DEBUG_STUCK").is_some();
+        let stop_at = if jn.inside { None } else { Some(entry) };
+        // A driver who has waited long accepts a shorter gap (the critical gap shrinks with
+        // the wait, by up to a third after forty seconds): a bus that needed twelve seconds
+        // of a busy main road stood at the mouth of its side road for minutes.
+        let wait = self.cars[i].state.yield_time;
+        let patience = 1.0 - (wait / 40.0).min(1.0) / 3.0;
+        let Weighing { hard, mut ruled, soft, mut why, stop_at, contested } =
+            self.weigh_crossings(i, jn, way, on_lane, coming, reservations, walkers, committed, patience, explain, stop_at);
+        // keep the junction clear: the exit must take the whole car
+        let ruled_before_exit = ruled;
+        let mut exit_full = false;
+        if !jn.inside {
+            if let Some(exit) = jn.exit {
+                let need = st.length + st.min_gap;
+                // A map often builds the road immediately beyond a crossing from several
+                // short path objects. Looking only at the first exit lane then calls the
+                // exit empty while a queue stands on the next 2 m piece, and a car enters
+                // the box with nowhere to put its body. Follow this car's chosen way until
+                // there is enough clear road for all of it.
+                let all_cars = &self.cars;
+                let occupied = on_lane.iter().flat_map(|(&lane, cars)| {
+                    cars.iter().filter_map(move |&(j, s, _, passing)| {
+                        (!passing && j != i).then_some((
+                            lane,
+                            s - all_cars[j].state.rear,
+                            all_cars[j].state.speed,
+                        ))
+                    })
+                });
+                if let Some((space, speed, lane)) = queued_exit_vehicle(way, exit, need, occupied) {
+                    // (only near the crossing, as before: a car far off plans no stop for a
+                    // queue that may well have moved on by the time it gets there)
+                    if speed < 1.5 && space < need && exit.1 < 40.0 {
+                        ruled = true;
+                        exit_full = true;
+                        if explain {
+                            why.push(format!("exit {} full on lane {lane} ({space:.1} m)", exit.0));
+                        }
+                    }
+                }
+            }
+        }
+        let mut blocked =
+            (hard && !cannot_stop) || ((ruled || !soft.is_empty()) && !cannot_stop_gently);
+        // held only by a full exit for long: a ring of queues each waiting for the next
+        // junction's exit (round a block) never clears by itself - squeeze in, as drivers do
+        // (but only into a junction nobody else needs: stopped in it with its exit still full,
+        // a car stands across the crossing traffic's way - on a big junction behind a long
+        // queue the cars of every direction squeezed in after their 45 s, each standing in
+        // the others' way, and the junction was locked for good, timetable buses and all)
+        if blocked && exit_full && !hard && !ruled_before_exit && soft.is_empty() && wait > GRIDLOCK_WAIT && !contested {
+            blocked = false;
+            if omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some() {
+                log::info!("t={:.1}: car {} squeezes into a full exit after {wait:.0} s (gridlock)", self.time, self.cars[i].id);
+            }
+        }
+        if !hard && !ruled && !soft.is_empty() && wait > 2.5 + st.reaction {
+            // everybody is waiting for somebody: the longest waiter goes
+            let wins = soft.iter().all(|&j| {
+                let o = &self.cars[j];
+                (o.yielding || o.state.speed < 0.3)
+                    && (wait > o.state.yield_time + 0.05
+                        || ((wait - o.state.yield_time).abs() <= 0.05 && self.cars[i].id < o.id))
+            });
+            if wins {
+                blocked = false;
+                if omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some() {
+                    log::info!("t={:.1}: car {} ends a wait of {wait:.1} s at a junction ({} waiting on it)", self.time, self.cars[i].id, soft.len());
+                }
+            }
+        }
+        let lanes: Vec<usize> = jn.lanes.iter().map(|x| x.0).collect();
+        // (and every ten seconds of a long wait)
+        let long_wait =
+            wait > 15.0 && (wait / 10.0).floor() != ((wait - self.last_dt) / 10.0).floor();
+        if explain && (blocked != self.cars[i].yielding || (blocked && long_wait)) {
+            log::info!("t={:.2}: car {} at {:.1} m/s {} the junction {:?} (entry {:.1} m, inside {}): hard {hard}, waiting for {:?}, claims {:?} {:?}", self.time, self.cars[i].id, v, if blocked { "waits at" } else { "goes into" }, lanes, entry - st.front, jn.inside, soft.iter().map(|&j| self.cars[j].id).collect::<Vec<_>>(), lanes.iter().map(|l| reservations.get(l).map(|r| r.iter().map(|&j| self.cars[j].id).collect::<Vec<_>>())).collect::<Vec<_>>(), why);
+        }
+        if explain {
+            self.cars[i].junction_why = if blocked { format!("{why:?} soft {:?}", soft.iter().map(|&j| self.cars[j].id).collect::<Vec<_>>()) } else { String::new() };
+        }
+        // A driver who has waited long at the line makes himself seen: he keeps a claim on
+        // his way through while still waiting, so the cars not yet committed to the
+        // junction hold back for him and he goes once those already on their way are
+        // through. Without it a side road's car at a busy main road waited four and a half
+        // minutes while every newcomer claimed the junction first. (Two such on crossing
+        // ways are sorted out by the claims' order: the first there, a tie the lower number.)
+        if blocked && !jn.inside && wait > LONG_WAIT_CLAIM && !queued {
+            for &l in &lanes {
+                let list = reservations.entry(l).or_default();
+                if !list.contains(&i) {
+                    list.push(i);
+                }
+            }
+            let car = &mut self.cars[i];
+            for &l in &lanes {
+                if !car.reserved.contains(&l) {
+                    car.reserved.push(l);
+                }
+            }
+            return stop_at;
+        }
+        if blocked && !jn.inside {
+            let old = std::mem::take(&mut self.cars[i].reserved);
+            release(reservations, &old);
+            return stop_at;
+        }
+        if blocked {
+            return stop_at;
+        }
+        if queued && !jn.inside {
+            let old = std::mem::take(&mut self.cars[i].reserved);
+            release(reservations, &old);
+            return None;
+        }
+        // claim the way through
+        for &l in &lanes {
+            let list = reservations.entry(l).or_default();
+            if !list.contains(&i) {
+                list.push(i);
+            }
+        }
+        let car = &mut self.cars[i];
+        for l in lanes {
+            if !car.reserved.contains(&l) {
+                car.reserved.push(l);
+            }
+        }
+        None
+    }
+
+    /// `junction_stop`'s look at everybody on or coming to the lanes that cross car `i`'s
+    /// way through junction `jn`, and at the people on its crossings.
+    #[allow(clippy::too_many_arguments)]
+    fn weigh_crossings(
+        &self,
+        i: usize,
+        jn: &Junction,
+        way: &[(usize, f32)],
+        on_lane: &HashMap<usize, Vec<(usize, f32, f32, bool)>>,
+        coming: &HashMap<usize, Vec<(usize, f32)>>,
+        reservations: &HashMap<usize, Vec<usize>>,
+        walkers: &HashMap<usize, Vec<f32>>,
+        committed: bool,
+        patience: f32,
+        explain: bool,
+        mut stop_at: Option<f32>,
+    ) -> Weighing {
+        let car = &self.cars[i];
+        let st = &car.state;
+        let v = st.speed;
+        let a_me = st.accel;
         let mut hard = false;
         // what is only a matter of the rules (right of way, a full exit) against someone
         // physically in the way
         let mut ruled = false;
         let mut soft: Vec<usize> = Vec::new();
-        let explain = omsi_cfg::env::var_os("OMSI_DEBUG_JUNCTION").is_some() || omsi_cfg::env::var_os("OMSI_DEBUG_STUCK").is_some();
         let mut why: Vec<String> = Vec::new();
-        let mut stop_at = if jn.inside { None } else { Some(entry) };
         let me_id = car.id;
         // (Omsi.exe: a vehicle whose script sets `TrafficPriority` claims a crossing with
         // priority 1000, above any vehicle type's, FUN_007d9128 - the AI ambulance as much
         // as the player; ours honoured it for the player's bus only)
         let prio = |c: &AiCar| c.vehicle.var("TrafficPriority").is_some_and(|v| v > 0.5);
         let me_prio = prio(car);
-        // A driver who has waited long accepts a shorter gap (the critical gap shrinks with
-        // the wait, by up to a third after forty seconds): a bus that needed twelve seconds
-        // of a busy main road stood at the mouth of its side road for minutes.
-        let wait = self.cars[i].state.yield_time;
-        let patience = 1.0 - (wait / 40.0).min(1.0) / 3.0;
         // somebody on, or coming to, a lane that crosses this car's way through the junction
         // (see the gridlock squeeze below)
         let mut contested = false;
@@ -604,126 +762,6 @@ impl Traffic {
                 }
             }
         }
-        // keep the junction clear: the exit must take the whole car
-        let ruled_before_exit = ruled;
-        let mut exit_full = false;
-        if !jn.inside {
-            if let Some(exit) = jn.exit {
-                let need = st.length + st.min_gap;
-                // A map often builds the road immediately beyond a crossing from several
-                // short path objects. Looking only at the first exit lane then calls the
-                // exit empty while a queue stands on the next 2 m piece, and a car enters
-                // the box with nowhere to put its body. Follow this car's chosen way until
-                // there is enough clear road for all of it.
-                let all_cars = &self.cars;
-                let occupied = on_lane.iter().flat_map(|(&lane, cars)| {
-                    cars.iter().filter_map(move |&(j, s, _, passing)| {
-                        (!passing && j != i).then_some((
-                            lane,
-                            s - all_cars[j].state.rear,
-                            all_cars[j].state.speed,
-                        ))
-                    })
-                });
-                if let Some((space, speed, lane)) = queued_exit_vehicle(way, exit, need, occupied) {
-                    // (only near the crossing, as before: a car far off plans no stop for a
-                    // queue that may well have moved on by the time it gets there)
-                    if speed < 1.5 && space < need && exit.1 < 40.0 {
-                        ruled = true;
-                        exit_full = true;
-                        if explain {
-                            why.push(format!("exit {} full on lane {lane} ({space:.1} m)", exit.0));
-                        }
-                    }
-                }
-            }
-        }
-        let mut blocked =
-            (hard && !cannot_stop) || ((ruled || !soft.is_empty()) && !cannot_stop_gently);
-        // held only by a full exit for long: a ring of queues each waiting for the next
-        // junction's exit (round a block) never clears by itself - squeeze in, as drivers do
-        // (but only into a junction nobody else needs: stopped in it with its exit still full,
-        // a car stands across the crossing traffic's way - on a big junction behind a long
-        // queue the cars of every direction squeezed in after their 45 s, each standing in
-        // the others' way, and the junction was locked for good, timetable buses and all)
-        if blocked && exit_full && !hard && !ruled_before_exit && soft.is_empty() && wait > GRIDLOCK_WAIT && !contested {
-            blocked = false;
-            if omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some() {
-                log::info!("t={:.1}: car {} squeezes into a full exit after {wait:.0} s (gridlock)", self.time, self.cars[i].id);
-            }
-        }
-        if !hard && !ruled && !soft.is_empty() && wait > 2.5 + st.reaction {
-            // everybody is waiting for somebody: the longest waiter goes
-            let wins = soft.iter().all(|&j| {
-                let o = &self.cars[j];
-                (o.yielding || o.state.speed < 0.3)
-                    && (wait > o.state.yield_time + 0.05
-                        || ((wait - o.state.yield_time).abs() <= 0.05 && self.cars[i].id < o.id))
-            });
-            if wins {
-                blocked = false;
-                if omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some() {
-                    log::info!("t={:.1}: car {} ends a wait of {wait:.1} s at a junction ({} waiting on it)", self.time, self.cars[i].id, soft.len());
-                }
-            }
-        }
-        let lanes: Vec<usize> = jn.lanes.iter().map(|x| x.0).collect();
-        // (and every ten seconds of a long wait)
-        let long_wait =
-            wait > 15.0 && (wait / 10.0).floor() != ((wait - self.last_dt) / 10.0).floor();
-        if explain && (blocked != self.cars[i].yielding || (blocked && long_wait)) {
-            log::info!("t={:.2}: car {} at {:.1} m/s {} the junction {:?} (entry {:.1} m, inside {}): hard {hard}, waiting for {:?}, claims {:?} {:?}", self.time, self.cars[i].id, v, if blocked { "waits at" } else { "goes into" }, lanes, entry - st.front, jn.inside, soft.iter().map(|&j| self.cars[j].id).collect::<Vec<_>>(), lanes.iter().map(|l| reservations.get(l).map(|r| r.iter().map(|&j| self.cars[j].id).collect::<Vec<_>>())).collect::<Vec<_>>(), why);
-        }
-        if explain {
-            self.cars[i].junction_why = if blocked { format!("{why:?} soft {:?}", soft.iter().map(|&j| self.cars[j].id).collect::<Vec<_>>()) } else { String::new() };
-        }
-        // A driver who has waited long at the line makes himself seen: he keeps a claim on
-        // his way through while still waiting, so the cars not yet committed to the
-        // junction hold back for him and he goes once those already on their way are
-        // through. Without it a side road's car at a busy main road waited four and a half
-        // minutes while every newcomer claimed the junction first. (Two such on crossing
-        // ways are sorted out by the claims' order: the first there, a tie the lower number.)
-        if blocked && !jn.inside && wait > LONG_WAIT_CLAIM && !queued {
-            for &l in &lanes {
-                let list = reservations.entry(l).or_default();
-                if !list.contains(&i) {
-                    list.push(i);
-                }
-            }
-            let car = &mut self.cars[i];
-            for &l in &lanes {
-                if !car.reserved.contains(&l) {
-                    car.reserved.push(l);
-                }
-            }
-            return stop_at;
-        }
-        if blocked && !jn.inside {
-            let old = std::mem::take(&mut self.cars[i].reserved);
-            release(reservations, &old);
-            return stop_at;
-        }
-        if blocked {
-            return stop_at;
-        }
-        if queued && !jn.inside {
-            let old = std::mem::take(&mut self.cars[i].reserved);
-            release(reservations, &old);
-            return None;
-        }
-        // claim the way through
-        for &l in &lanes {
-            let list = reservations.entry(l).or_default();
-            if !list.contains(&i) {
-                list.push(i);
-            }
-        }
-        let car = &mut self.cars[i];
-        for l in lanes {
-            if !car.reserved.contains(&l) {
-                car.reserved.push(l);
-            }
-        }
-        None
+        Weighing { hard, ruled, soft, why, stop_at, contested }
     }
 }
