@@ -218,4 +218,239 @@ impl Humans {
         }
         meshes
     }
+
+    /// OMSI's `change_take`: the driver takes back the coins lying on the change tray.
+    pub fn take_change_tray(&mut self) {
+        if let Some(m) = self.money.as_mut() {
+            m.clear(true);
+        }
+    }
+
+    /// Coins the driver handed out (from the host's GiveChangeCoin list) onto the change point.
+    pub fn give_change(
+        &mut self,
+        world: &World,
+        renderer: &Renderer,
+        scene: &mut Scene,
+        coins: &[usize],
+    ) {
+        if coins.is_empty() {
+            return;
+        }
+        let point = self.player_cabin.as_ref().and_then(|c| {
+            c.data
+                .change_points
+                .first()
+                .or(c.data.money_points.first())
+                .cloned()
+        });
+        if let (Some(m), Some(pt)) = (self.money.as_mut(), point) {
+            m.place(
+                world,
+                renderer,
+                scene,
+                coins,
+                Vec3::from(pt.pos),
+                pt.var,
+                true,
+                pt.parent.as_deref(),
+            );
+        }
+    }
+
+    pub fn sync_money(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, bus: &VehicleInstance) {
+        if let Some(m) = self.money.as_mut() {
+            m.sync(renderer, scene, bus);
+        }
+        if let Some(pack) = self.tickets.as_ref().map(|t| t.path.clone()) {
+            let fresh = self.ticket_blocks.as_ref().is_none_or(|b| b.made_for != (bus.ty.def.path.clone(), pack.clone()));
+            if fresh && !bus.ty.def.attachments.is_empty() {
+                self.ticket_blocks = Some(crate::money::TicketBlocks::new(world, renderer, scene, bus, &pack));
+            }
+        }
+        if let Some(b) = self.ticket_blocks.as_ref() {
+            b.sync(renderer, scene, bus);
+        }
+    }
+
+    /// Skin the people due for a new pose and push transforms to the renderer. Near people
+    /// are posed every frame, far ones every few frames and people out of view rarely; the
+    /// posing and skinning run in parallel.
+    pub fn sync(&mut self, renderer: &Renderer, scene: &mut Scene, camera: DVec3) {
+        self.catch_up_bodies(renderer, scene);
+        for inst in self.bodies.hidden.drain(..) {
+            renderer.set_params(scene, inst, &[], false, &[]);
+        }
+        let started = std::time::Instant::now();
+        self.bodies.sync_frame = self.bodies.sync_frame.wrapping_add(1);
+        let eye = self.eye;
+        let from = eye.map(|e| e.pos).unwrap_or(camera);
+        // synced only now and then (offscreen snapshots): everybody is posed afresh
+        let all = self.time - self.bodies.last_sync > 0.12;
+        let sdt = (self.time - self.bodies.last_sync).clamp(0.0, 0.5) as f32;
+        self.bodies.last_sync = self.time;
+        let mut due: Vec<bool> = Vec::with_capacity(self.people.len());
+        for (k, p) in self.people.iter_mut().enumerate() {
+            p.since_posed = p.since_posed.saturating_add(1);
+            let d = p.position + DVec3::Z * 0.9 - from;
+            let dist = d.length();
+            let visible = match eye {
+                Some(e) => dist < 4.0 || d.dot(e.fwd) / dist.max(1e-3) > e.cos_half - 0.15,
+                None => true,
+            };
+            // everybody the eye can make out is posed every frame: a pose every other
+            // frame at 12-30 m moved walkers in steps and made planted feet shiver
+            // (within 30 m everybody, seen or not: the mirrors show the people behind the
+            // bus, who were posed every twelfth frame and moved in jerks there)
+            let every = if dist < 30.0 {
+                1
+            } else if !visible {
+                12
+            } else if dist < 45.0 {
+                1
+            } else if dist < 90.0 {
+                2
+            } else if dist < 160.0 {
+                3
+            } else {
+                6
+            };
+            let every = if p.vel.length_squared() < 1e-4 && dist > 20.0 { every * 2 } else { every };
+            // spread the far ones over the frames
+            let turn = (self.bodies.sync_frame + k as u32) % every == 0;
+            due.push(
+                !p.skinned
+                    || all
+                    || (p.since_posed >= every && (turn || p.since_posed >= 2 * every)),
+            );
+        }
+        let n_due = due.iter().filter(|d| **d).count();
+        let pose_one = |p: &mut Person| {
+            let Person { anim, ty, skins, skin_bones, pose_changed, .. } = p;
+            *pose_changed = false;
+            let bones = omsi_sim::human::slots_from_omsi(&anim.bones(&ty.omsi));
+            if bones.iter().any(|b| !b.is_finite()) && !skins.is_empty() {
+                // keep the last good mesh (the rest pose would be the file's T-pose)
+                return;
+            }
+            // (the same bones as the mesh was made with: nothing to skin or upload)
+            if skins.len() == ty.meshes.len() && skin_bones.as_ref().is_some_and(|b| b.iter().zip(&bones).all(|(a, c)| a.abs_diff_eq(*c, 1e-6))) {
+                return;
+            }
+            skins.resize_with(ty.meshes.len(), Default::default);
+            for (k, m) in ty.meshes.iter().enumerate() {
+                let (pos, nrm) = &mut skins[k];
+                skin(m, &bones, pos, nrm);
+            }
+            *skin_bones = Some(bones);
+            *pose_changed = true;
+        };
+        // a handful is quicker on this thread than handed to the pool
+        if n_due >= 8 {
+            self.people
+                .par_iter_mut()
+                .zip(due.par_iter())
+                .with_min_len(2)
+                .filter(|(_, go)| **go)
+                .for_each(|(p, _)| pose_one(p));
+        } else {
+            self.people
+                .iter_mut()
+                .zip(&due)
+                .filter(|(_, go)| **go)
+                .for_each(|(p, _)| pose_one(p));
+        }
+        let upload = std::time::Instant::now();
+        for (p, &go) in self.people.iter_mut().zip(&due) {
+            if go {
+                if p.pose_changed || !p.skinned {
+                    for (k, (id, _)) in p.meshes.iter().enumerate() {
+                        if let Some((pos, nrm)) = p.skins.get(k) {
+                            renderer.update_mesh(scene, *id, pos, nrm, &p.ty.meshes[k].data.uvs);
+                        }
+                    }
+                }
+                p.skinned = true;
+                p.since_posed = 0;
+                p.posed_at = (p.position, p.heading);
+            }
+            // riders go with their bus; on the ground a mesh not posed this frame goes on
+            // with the body too (left where it was posed, a far walker moved in jerks -
+            // its feet slide a few centimetres instead, which nobody sees at that distance)
+            let (at, heading) = match (p.puppet, p.place) {
+                (_, Place::Ground) if go => p.posed_at,
+                _ => (p.position, p.heading),
+            };
+            // (riders with the tilt of their floor)
+            let tilt = if matches!(p.place, Place::Bus(..)) { p.tilt } else { Mat4::IDENTITY };
+            let xf = tilt * Mat4::from_rotation_z((-heading).to_radians() as f32);
+            let lit_to = if matches!(p.place, Place::Bus(..)) { p.interior } else { 0.0 };
+            p.lit += (lit_to - p.lit) * (sdt / 0.4).min(1.0);
+            for (_, inst) in &p.meshes {
+                renderer.set_transform(scene, *inst, at, xf);
+                renderer.set_interior(scene, *inst, p.lit * 0.5);
+            }
+            if self.avatar_hidden.contains_key(&p.id) && omsi_cfg::env::var_os("OMSI_DEBUG_FOOT").is_some() && self.bodies.sync_frame % 30 == 0 {
+                log::info!("avatar drawn at ({:.2}, {:.2}, {:.2}) heading {:.0} place {:?} go {}", at.x, at.y, at.z, heading, matches!(p.place, Place::Ground), go);
+            }
+            if let Some(hide) = self.avatar_hidden.get_mut(&p.id) {
+                // (the first-person view: the avatar's own body out of the picture; set
+                // every frame, the posing would show it again)
+                for (_, inst) in &p.meshes {
+                    renderer.set_params(scene, *inst, &[], !*hide, &[]);
+                }
+            }
+            if let Some(t) = self.bodies.trace.as_mut() {
+                // OMSI_TRACE_PAX: where the mesh is drawn and where its ankles are, per frame
+                if (at - from).length() < 40.0 {
+                    use std::io::Write;
+                    let a = |k: usize| at + (xf.transform_vector3(p.ankles[k])).as_dvec3();
+                    let (l, r) = (a(0), a(1));
+                    let _ = writeln!(
+                        t,
+                        "{:.4},{},{},{},{},{:.4},{:.4},{:.4},{:.2},{:.4},{:.4},{:.4},{:.4},{:.4},{:.4},{:.3},{:.3}",
+                        self.time,
+                        p.id,
+                        p.state.name(),
+                        matches!(p.place, Place::Ground) as u8,
+                        go as u8,
+                        at.x,
+                        at.y,
+                        at.z,
+                        heading,
+                        l.x,
+                        l.y,
+                        l.z,
+                        r.x,
+                        r.y,
+                        r.z,
+                        p.vel.x,
+                        p.vel.y
+                    );
+                }
+            }
+        }
+        // OMSI_CHECK_TPOSE=1: everybody drawn with the arms out (the file's rest pose): the
+        // skinned mesh wider than 1.3 m from hand to hand
+        if omsi_cfg::env::var_os("OMSI_CHECK_TPOSE").is_some() {
+            for p in &self.people {
+                let Some((pos, _)) = p.skins.first() else {
+                    log::info!("t-pose? {} {}: never skinned", p.label(), p.state_name());
+                    continue;
+                };
+                let (lo, hi) = pos.iter().fold((f32::MAX, f32::MIN), |(lo, hi), v| (lo.min(v.x), hi.max(v.x)));
+                if hi - lo > 1.3 {
+                    let pax = match &p.state {
+                        State::Pax(x) => format!("pax_state {} speed {:.2} seat_h {:.2} room {:.2} st {}", x.pax_state, x.speed, x.seat_h, x.room, x.st),
+                        _ => String::new(),
+                    };
+                    log::info!("t-pose: {} {} width {:.2} skinned {} {pax}", p.label(), p.state_name(), hi - lo, p.skinned);
+                }
+            }
+        }
+        self.bodies.pose_stats.0 += 1;
+        self.bodies.pose_stats.1 += n_due;
+        self.bodies.pose_stats.2 += started.elapsed().as_secs_f64() * 1000.0;
+        self.bodies.pose_stats.3 += upload.elapsed().as_secs_f64() * 1000.0;
+    }
 }
