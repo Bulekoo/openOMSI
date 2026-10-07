@@ -192,6 +192,13 @@ pub(crate) struct App {
     pub(crate) headtrack: Option<crate::headtrack::HeadTracker>,
     /// When head tracking last failed to start (tried again a few seconds later).
     pub(crate) headtrack_failed: Option<std::time::Instant>,
+    /// Last TrackIR/OpenTrack output scales, used to keep the displayed camera position
+    /// fixed while a sensitivity slider is changed.
+    pub(crate) headtrack_scale_last: Option<[f32; 6]>,
+    /// Per-axis compensation for a live sensitivity change.
+    pub(crate) headtrack_scale_bias: [f32; 6],
+    /// Last inversion state; inversion is a direction change, not a new camera origin.
+    pub(crate) headtrack_invert_last: Option<[bool; 6]>,
     /// Steering wheels, pedals, joysticks and gamepads (`Inputs/gamectrler.cfg`).
     pub(crate) controllers: Option<crate::controllers::Controllers>,
     /// OMSI's mouse control (`toggel_mouse_ctrl`, O): the cursor's place steers (across) and

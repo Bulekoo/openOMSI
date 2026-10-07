@@ -1055,8 +1055,14 @@ impl ApplicationHandler for App {
                             // setting stays on: turning it off here undid the switch in the
                             // menu at once)
                             if self.settings.head_tracking && self.headtrack.is_none() && self.headtrack_failed.is_none_or(|t| t.elapsed().as_secs_f32() > 5.0) {
-                                self.headtrack = crate::headtrack::HeadTracker::start(self.settings.head_tracking_port);
+                                let hwnd = self.window.as_ref().and_then(|window| crate::controllers::window_handle(window));
+                                self.headtrack = crate::headtrack::HeadTracker::start(self.settings.head_tracking_port, hwnd);
                                 self.headtrack_failed = self.headtrack.is_none().then(std::time::Instant::now);
+                            }
+                            if !self.settings.head_tracking {
+                                self.headtrack_scale_last = None;
+                                self.headtrack_scale_bias = [0.0; 6];
+                                self.headtrack_invert_last = None;
                             }
                             let tracked = self.headtrack.as_ref().and_then(|h| h.pose()).filter(|_| self.settings.head_tracking && matches!(self.view.as_str(), "driver" | "pax"));
                             #[cfg(windows)]
@@ -1069,7 +1075,64 @@ impl ApplicationHandler for App {
                                 crate::player::steering_view_yaw(p.steer_look, p.vehicle.physics.controls.steering, dt,
                                                                  self.settings.steer_look && self.view == "driver", self.settings.steer_look_angle, self.settings.steer_look_response)
                             };
-                            if let Some(t) = tracked {
+                            let mut tracked_rot = None;
+                            if let Some(mut t) = tracked {
+                                // TrackIR/NPClient reports an absolute pose. Apply the six
+                                // user-facing sensitivity controls, but when a sensitivity
+                                // slider changes while the head is stationary, compensate the
+                                // already displayed output so the camera does not jump.
+                                // Inversion is deliberately NOT compensated: it only changes
+                                // direction, and switching it back restores the original pose.
+                                let mut scales = [0.0_f32; 6];
+                                scales[0] = (self.settings.head_tracking_x_sens / 100.0).clamp(0.0, 1.0).powi(2);
+                                scales[1] = (self.settings.head_tracking_y_sens / 100.0).clamp(0.0, 1.0).powi(2);
+                                scales[2] = (self.settings.head_tracking_z_sens / 100.0).clamp(0.0, 1.0).powi(2);
+                                scales[3] = (self.settings.head_tracking_yaw_sens / 100.0).clamp(0.0, 1.0).powi(2);
+                                scales[4] = (self.settings.head_tracking_pitch_sens / 100.0).clamp(0.0, 1.0).powi(2);
+                                scales[5] = (self.settings.head_tracking_roll_sens / 100.0).clamp(0.0, 1.0).powi(2);
+
+                                let legacy = ["yaw", "pitch", "roll"];
+                                let invert = [
+                                    self.settings.head_tracking_invert_x,
+                                    self.settings.head_tracking_invert_y,
+                                    self.settings.head_tracking_invert_z,
+                                    self.settings.head_tracking_invert_yaw || self.settings.head_tracking_invert.contains(legacy[0]),
+                                    self.settings.head_tracking_invert_pitch || self.settings.head_tracking_invert.contains(legacy[1]),
+                                    self.settings.head_tracking_invert_roll || self.settings.head_tracking_invert.contains(legacy[2]),
+                                ];
+                                for k in 0..6 {
+                                    if invert[k] { scales[k] = -scales[k]; }
+                                }
+
+                                let raw = [t.pos[0], t.pos[1], t.pos[2], t.rot[0], t.rot[1], t.rot[2]];
+                                let invert_changed = self.headtrack_invert_last.is_some_and(|previous| previous != invert);
+                                if invert_changed {
+                                    self.headtrack_scale_bias = [0.0; 6];
+                                } else if let Some(previous) = self.headtrack_scale_last {
+                                    let sensitivity_changed = (0..6).any(|k| (previous[k].abs() - scales[k].abs()).abs() > f32::EPSILON);
+                                    if sensitivity_changed {
+                                        for k in 0..6 {
+                                            let old_output = raw[k] * previous[k] + self.headtrack_scale_bias[k];
+                                            self.headtrack_scale_bias[k] = old_output - raw[k] * scales[k];
+                                        }
+                                    }
+                                } else {
+                                    self.headtrack_scale_bias = [0.0; 6];
+                                }
+                                self.headtrack_scale_last = Some(scales);
+                                self.headtrack_invert_last = Some(invert);
+
+                                let adjusted = [
+                                    raw[0] * scales[0] + self.headtrack_scale_bias[0],
+                                    raw[1] * scales[1] + self.headtrack_scale_bias[1],
+                                    raw[2] * scales[2] + self.headtrack_scale_bias[2],
+                                    raw[3] * scales[3] + self.headtrack_scale_bias[3],
+                                    raw[4] * scales[4] + self.headtrack_scale_bias[4],
+                                    raw[5] * scales[5] + self.headtrack_scale_bias[5],
+                                ];
+                                t.pos = [adjusted[0], adjusted[1], adjusted[2]];
+                                t.rot = [adjusted[3], adjusted[4], adjusted[5]];
+                                tracked_rot = Some(t.rot);
                                 p.seat += t.seat_offset();
                             }
                             // (the outside view's field of view starts from the plain 60
@@ -1097,14 +1160,6 @@ impl ApplicationHandler for App {
                             // what turns the bus's own camera into the picture: the head's turn,
                             // the field of view setting and the zoom (for the camera left in a
                             // switch as well as for the one taken)
-                            let tracked_rot = tracked.map(|mut t| {
-                                for (k, axis) in ["yaw", "pitch", "roll"].iter().enumerate() {
-                                    if self.settings.head_tracking_invert.contains(axis) {
-                                        t.rot[k] = -t.rot[k];
-                                    }
-                                }
-                                t.rot
-                            });
                             let fov_setting = self.settings.fov;
                             // Eased Space return (F1): look + zoom glide home on the
                             // same ease-out as the viewpoint switch instead of
