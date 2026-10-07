@@ -588,6 +588,30 @@ impl World {
                 _ => [-5.0; 4],
             }
         });
+        let (lanes, meshes) = self.stage_splines(&mut out, &tile, origin2);
+        // (every 2 m along the streets)
+        out.street_points = lanes
+            .iter()
+            .filter(|l| l.kind == LaneKind::Street)
+            .flat_map(|l| {
+                let n = (l.length() / 2.0).ceil().max(1.0) as usize;
+                (0..=n).map(move |k| l.at(l.length() * k as f32 / n as f32).0)
+            })
+            .collect();
+        *out.lanes.lock() = lanes;
+        *out.meshes.lock() = Some(meshes);
+        let rows = self.stage_objects(&mut out, &tile, origin2, index, &counts);
+        let mut counts = counts.into_inner();
+        counts.rows = rows;
+        counts.attached = tile.attach_objects.len();
+        out.counts = counts;
+        out
+    }
+
+    /// The splines of a tile being staged: their meshes (for the upload, in order) and
+    /// lanes, with their shapes, ground and holes in `out`.
+    fn stage_splines(&self, out: &mut StagedTile, tile: &omsi_map::Tile, origin2: DVec2) -> (Vec<Lane>, Vec<Arc<MeshData>>) {
+        let (tx, ty, origin) = (out.tx, out.ty, out.origin);
         let debug_splines = omsi_cfg::env::var_os("OMSI_DEBUG_SPLINES").is_some();
         let mut lanes: Vec<Lane> = Vec::new();
         let mut meshes: Vec<Arc<MeshData>> = Vec::new();
@@ -733,17 +757,20 @@ impl World {
                 meshes.push(Arc::new(mesh));
             }
         }
-        // (every 2 m along the streets)
-        out.street_points = lanes
-            .iter()
-            .filter(|l| l.kind == LaneKind::Street)
-            .flat_map(|l| {
-                let n = (l.length() / 2.0).ceil().max(1.0) as usize;
-                (0..=n).map(move |k| l.at(l.length() * k as f32 / n as f32).0)
-            })
-            .collect();
-        *out.lanes.lock() = lanes;
-        *out.meshes.lock() = Some(meshes);
+        (lanes, meshes)
+    }
+
+    /// The objects of a tile being staged: its `[object]`s, `[attachObj]`s and the objects
+    /// of its `[splineAttachement]` rows (the number of rows is returned).
+    fn stage_objects(
+        &self,
+        out: &mut StagedTile,
+        tile: &omsi_map::Tile,
+        origin2: DVec2,
+        index: &MapIndex,
+        counts: &Mutex<LoadStats>,
+    ) -> usize {
+        let (tx, ty) = (out.tx, out.ty);
         let only_object = omsi_cfg::env::var("OMSI_ONLY_OBJECT")
             .ok()
             .map(|f| f.to_ascii_lowercase());
@@ -768,7 +795,7 @@ impl World {
             if !wanted(&o.file) {
                 continue;
             }
-            let Some((ot, parked)) = self.placed_type(&o.file, &o.extra, o.id, tx, ty, &counts) else {
+            let Some((ot, parked)) = self.placed_type(&o.file, &o.extra, o.id, tx, ty, counts) else {
                 continue;
             };
             // Objects with traffic paths (crossings, switches, road pieces) are stored with
@@ -831,7 +858,7 @@ impl World {
             if !wanted(&o.file) {
                 continue;
             }
-            let Some((ot, parked)) = self.placed_type(&o.file, &o.extra, o.id, tx, ty, &counts) else {
+            let Some((ot, parked)) = self.placed_type(&o.file, &o.extra, o.id, tx, ty, counts) else {
                 continue;
             };
             let Some(parent) = o.parent_id else { continue };
@@ -877,7 +904,7 @@ impl World {
                 }
                 // every car park of a row draws its own car
                 let key = a.id.wrapping_mul(1_000_003).wrapping_add(ro.index as i64);
-                let Some((ot, parked)) = self.placed_type(&a.file, &a.strings, key, tx, ty, &counts) else {
+                let Some((ot, parked)) = self.placed_type(&a.file, &a.strings, key, tx, ty, counts) else {
                     continue;
                 };
                 let key = row_object_key(tx, ty, a.id, ro.index);
@@ -895,11 +922,7 @@ impl World {
                 });
             }
         }
-        let mut counts = counts.into_inner();
-        counts.rows = rows;
-        counts.attached = tile.attach_objects.len();
-        out.counts = counts;
-        out
+        rows
     }
 
     /// Note a type that is not in this installation, once per file.
