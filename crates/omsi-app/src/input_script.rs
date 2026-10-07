@@ -25,87 +25,13 @@ impl App {
     /// A key of the window, or of an `OMSI_INPUT` script.
     pub(crate) fn on_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, pressed: bool, repeat: bool) {
         if self.vr_nav_edit.is_some() {
-            if !pressed { self.keys.remove(&code); }
-            if matches!(code, KeyCode::ControlLeft | KeyCode::ControlRight | KeyCode::ShiftLeft | KeyCode::ShiftRight) && pressed {
-                self.keys.insert(code);
-            }
-            if pressed && !repeat {
-                match code {
-                    KeyCode::Escape | KeyCode::Enter => self.finish_vr_nav_edit(),
-                    KeyCode::KeyR => self.vr_nav_adjust("reset", 1.0),
-                    _ => {}
-                }
-            }
+            self.vr_nav_edit_key(code, pressed, repeat);
             return;
         }
         // The mirror panels (see mirror_hud.rs): Ctrl+M shows or hides them, Ctrl+Shift+M
         // starts and ends their editor; in the editor Insert, Delete, C and Esc are its keys.
-        if self.in_cab && self.game_menu.is_none() && self.player.is_some() {
-            let ctrl = self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight);
-            let shift = self.keys.contains(&KeyCode::ShiftLeft) || self.keys.contains(&KeyCode::ShiftRight);
-            if pressed && !repeat && code == KeyCode::KeyM && ctrl {
-                if let Some(p) = self.player.as_ref() {
-                    let msg = if shift { self.mirror_hud.toggle_edit(p) } else { self.mirror_hud.toggle(p) };
-                    self.service_msg = Some((msg, if shift { 6.0 } else { 3.0 }));
-                }
-                return;
-            }
-            // (in the editor the arrows aim the mirror under the cursor; see the frame)
-            if matches!(code, KeyCode::ArrowLeft | KeyCode::ArrowRight | KeyCode::ArrowUp | KeyCode::ArrowDown | KeyCode::PageUp | KeyCode::PageDown | KeyCode::Minus | KeyCode::Equal | KeyCode::NumpadAdd | KeyCode::NumpadSubtract) && self.mirror_hud.arrow(code, pressed) {
-                return;
-            }
-            // R puts the mirror under the cursor back as the bus has it, Shift+R every mirror
-            if self.mirror_hud.editing() && code == KeyCode::KeyR {
-                if pressed && !repeat {
-                    let size = self.hud_size();
-                    let which = self.mirror_hud.cam_under(self.hud_cursor(), size);
-                    let msg = match self.player.as_mut() {
-                        Some(p) if shift => {
-                            let n = p.vehicle.ty.def.cameras_reflexion.len();
-                            p.mirror_offsets = vec![[0.0; 2]; n];
-                            p.mirror_shifts = vec![[0.0; 3]; n];
-                            p.mirror_fovs = vec![0.0; n];
-                            p.mirrors_dirty = true;
-                            "Every mirror is back as the bus has it".to_string()
-                        }
-                        Some(p) if which.is_some() => {
-                            let i = which.unwrap_or(0);
-                            if let Some(o) = p.mirror_offsets.get_mut(i) {
-                                *o = [0.0; 2];
-                            }
-                            if let Some(s) = p.mirror_shifts.get_mut(i) {
-                                *s = [0.0; 3];
-                            }
-                            if let Some(f) = p.mirror_fovs.get_mut(i) {
-                                *f = 0.0;
-                            }
-                            p.mirrors_dirty = true;
-                            format!("Mirror {} is back as the bus has it (Shift+R: every mirror)", i + 1)
-                        }
-                        _ => "R: put the cursor on a mirror panel (Shift+R: every mirror)".to_string(),
-                    };
-                    self.service_msg = Some((msg, 3.0));
-                }
-                return;
-            }
-            if self.mirror_hud.editing() && matches!(code, KeyCode::BracketLeft | KeyCode::BracketRight | KeyCode::Semicolon | KeyCode::Quote) {
-                if pressed {
-                    let size = self.hud_size();
-                    self.mirror_hud.size_key(code, self.hud_cursor(), size);
-                }
-                return;
-            }
-            if self.mirror_hud.editing() && matches!(code, KeyCode::Insert | KeyCode::Delete | KeyCode::Backspace | KeyCode::KeyC | KeyCode::Escape) {
-                if pressed && !repeat {
-                    let size = self.hud_size();
-                    if let Some(p) = self.player.as_ref() {
-                        if let Some(msg) = self.mirror_hud.key(code, p, self.hud_cursor(), size) {
-                            self.service_msg = Some((msg, 4.0));
-                        }
-                    }
-                }
-                return;
-            }
+        if self.mirror_hud_key(code, pressed, repeat) {
+            return;
         }
         // Escape closes the city map first (it would end the session)
         if pressed && code == KeyCode::Escape {
@@ -119,38 +45,7 @@ impl App {
             }
         }
         let event_key = PhysicalKey::Code(code);
-        if let (Some(m), PhysicalKey::Code(code)) = (self.menu.as_mut(), event_key) {
-            if pressed {
-                if code == KeyCode::Escape {
-                    crate::platform::exit(event_loop);
-                }
-                m.key(code);
-                if m.start {
-                    self.args.map = m
-                        .maps
-                        .get(m.map)
-                        .map(|x| x.1.clone())
-                        .unwrap_or(self.args.map.clone());
-                    self.args.bus = m.vehicles.get(m.vehicle).map(|x| x.1.clone());
-                    self.args.time = format!("{:02}:00", m.hour);
-                    self.args.traffic = m.traffic;
-                    self.args.passengers = m.passengers;
-                    self.args.schedule = m.schedule;
-                    self.args.day_of_year = Some(m.day);
-                    if m.weather > 0 {
-                        self.args.weather = m.weathers.get(m.weather).map(|w| w.1.clone());
-                    }
-                    if m.situation > 0 {
-                        self.args.situation = m.situations.get(m.situation).map(|s| s.1.clone());
-                        if let Err(e) = apply_situation(&mut self.args) {
-                            log::error!("{e:#}");
-                        }
-                    }
-                    self.menu = None;
-                    self.hud = None;
-                    self.load_world_now(event_loop);
-                }
-            }
+        if self.start_menu_key(event_loop, event_key, pressed) {
             return;
         }
         if let PhysicalKey::Code(code) = event_key {
@@ -158,23 +53,8 @@ impl App {
             // LAN chat: its keys (`chat_open`, '/' or '`', and `chat_toggle`, V, in keyboard.cfg's
             // [game]: the player can move them, #130) open the line and show or hide the
             // chat, and while the line is open the keys are its own
-            if let Some(l) = self.lan.as_mut() {
-                let held = |a: KeyCode, b: KeyCode| self.keys.contains(&a) || self.keys.contains(&b);
-                let chord = omsi_content::input::chord(
-                    held(KeyCode::ShiftLeft, KeyCode::ShiftRight),
-                    held(KeyCode::ControlLeft, KeyCode::ControlRight),
-                    held(KeyCode::AltLeft, KeyCode::AltRight),
-                );
-                let bound = if held(KeyCode::SuperLeft, KeyCode::SuperRight) {
-                    None
-                } else {
-                    keys::dik_code(code).and_then(|scan| self.game_keys.iter()
-                        .find(|b| b.scan_code == scan && b.matches(chord) && b.action.to_ascii_lowercase().starts_with("chat_"))
-                        .map(|b| b.action.clone()))
-                };
-                if lan::chat_key(l, &mut self.remotes, code, pressed, repeat, bound.as_deref()) {
-                    return;
-                }
+            if self.lan_chat_key(code, pressed, repeat) {
+                return;
             }
             if pressed && !repeat {
                 self.keys.insert(code);
@@ -224,44 +104,8 @@ impl App {
                     }
                 }
             }
-            // placing a vehicle with the mouse: its keys first (Escape takes it away)
-            if self.game_menu.is_none() && self.placing_key(code, pressed) {
+            if self.overlay_key(event_loop, code, pressed, repeat) {
                 return;
-            }
-            // the game menu: Escape opens it (and pauses, except in a LAN session, which
-            // goes on for the others), and while it is open the keys are its own
-            if self.game_menu.is_some() {
-                if pressed && !repeat {
-                    self.menu_key(event_loop, code);
-                }
-                return;
-            }
-            // the object editor takes its keys first (Escape leaves it)
-            if pressed && self.editor.is_some() && self.editor_key(code) {
-                return;
-            }
-            if pressed && !repeat && code == KeyCode::Escape {
-                self.open_game_menu();
-                return;
-            }
-            // a tutorial's pages: Enter / Page Down on, Page Up back, Ctrl+T hides them
-            if let (true, Some(t)) = (pressed, self.tutorial.as_mut()) {
-                let ctrl = self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight);
-                match code {
-                    KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::PageDown if !t.hidden && self.lan.is_none() => {
-                        t.next();
-                        return;
-                    }
-                    KeyCode::PageUp if !t.hidden => {
-                        t.back();
-                        return;
-                    }
-                    KeyCode::KeyT if ctrl => {
-                        t.hidden = !t.hidden;
-                        return;
-                    }
-                    _ => {}
-                }
             }
             let ctrl = self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight);
             let alt = self.keys.contains(&KeyCode::AltLeft) || self.keys.contains(&KeyCode::AltRight);
@@ -273,337 +117,563 @@ impl App {
             // OMSI's global actions as `Inputs/keyboard.cfg` binds them ([game]); a key our
             // driving layout uses keeps that meaning (with the OMSI layout, every binding
             // counts)
-            if pressed && !repeat {
-                // (a modifier key pressed is a key of its own, not its own modifier: Shift
-                // bound to gear_up in keyboard.cfg came as Shift+Shift and matched nothing,
-                // #1477; OMSI fires it)
-                let m = omsi_content::input::chord(
-                    shift_now && !matches!(code, KeyCode::ShiftLeft | KeyCode::ShiftRight),
-                    ctrl && !matches!(code, KeyCode::ControlLeft | KeyCode::ControlRight),
-                    alt && !matches!(code, KeyCode::AltLeft | KeyCode::AltRight),
-                );
-                let own = keys::dik_code(code).is_some_and(|s| self.own_keys.contains(&s));
-                let ours = self.args.drive_keys != "omsi"
-                    && m == 0
-                    && !own
-                    && (fallback_action(code, &self.args.drive_keys).is_some()
-                    || matches!(code, KeyCode::KeyZ | KeyCode::KeyX | KeyCode::KeyC | KeyCode::KeyI | KeyCode::KeyL));
-                // plain Left/Right are OMSI's view_interiorcam_minus/plus, except when a wheel
-                // steers: then the arrows glance (held, the head turns) and only Ctrl+Left/Right
-                // switch the interior camera, below. (Where the arrows drive, `ours` skips this.)
-                // (unless the settings ask for the cameras on them all the same, #1345)
-                let plain_arrow = matches!(code, KeyCode::ArrowLeft | KeyCode::ArrowRight) && !ctrl
-                    && !self.settings.arrows_switch_cams
-                    && self.controllers.as_ref().is_some_and(|c| c.wheel_steering());
-                // (the keys that fly the camera are the camera's, unmodified: S, OMSI's
-                // view_toggle_viewpoint, threw the free camera back to the driver's view,
-                // and with no bus of one's own every view flies - #868; a chord such as
-                // Ctrl+S, OMSI's quicksave, stays a [game] key)
-                let flying = m == 0
-                    && flies_free_camera(code)
-                    && (self.view == "free" || (self.player.is_none() && self.on_foot.is_none()));
-                // (Ctrl+Alt+arrows turn the mirror looked at: not Ctrl+arrow's gear or camera)
-                let mirror_aim = ctrl && alt && matches!(code, KeyCode::ArrowLeft | KeyCode::ArrowRight | KeyCode::ArrowUp | KeyCode::ArrowDown);
-                if let Some(scan) = keys::dik_code(code).filter(|_| !ours && !flying && !mirror_aim) {
-                    let action = self.game_keys.iter().find(|b| b.scan_code == scan && b.matches(m)
-                        && !b.action.starts_with("vr_")
-                        && !(plain_arrow && b.action.starts_with("view_interiorcam_"))).map(|b| b.action.clone());
-                    // (a key bound in [game] and in [vehicles] does both, as in Omsi.exe: the
-                    // parking brake put on Space, the stock view_reset_all_directions key,
-                    // reset the view and never reached the bus - #745)
-                    let vehicle_too = self.player.as_ref().is_some_and(|p| p.bindings.iter().any(|b| b.scan_code == scan && b.matches(m)));
-                    log::debug!("key {code:?} (DIK {scan}, chord {m}): [game] {action:?}, a key of the bus too: {vehicle_too}; [game] keys on it: {:?}", self.game_keys.iter().filter(|b| b.scan_code == scan).collect::<Vec<_>>());
-                    // OMSI's `exit` (Ctrl+Q, or what the player put it on): the game ends as
-                    // the menu's Quit ends it. It was no action here at all, so the key did
-                    // nothing (#817)
-                    if action.as_deref() == Some("exit") {
-                        self.finish_vr_nav_edit();
-                        self.game_menu = None;
-                        self.finish_session();
-                        crate::platform::exit(event_loop);
-                        return;
-                    }
-                    if let Some(a) = action {
-                        if self.game_action(&a) && !vehicle_too {
-                            return;
-                        }
-                    }
-                }
+            if self.game_binding_key(event_loop, code, pressed, repeat, ctrl, alt, shift_now) {
+                return;
             }
-            if pressed && !repeat {
-                match code {
-                    // OMSI's `toggel_mouse_ctrl` (O): steering and pedals with the mouse
-                    KeyCode::KeyO if !ctrl && !alt && !shift_now && self.key_left_free(code, "toggel_mouse_ctrl") => {
-                        self.game_action("toggel_mouse_ctrl");
-                        return;
-                    }
-                    // (a manual gearbox's Ctrl+Up / Ctrl+Down are the [game] keys `gear_up` and
-                    // `gear_down` now, which can be moved: see `with_game_defaults`, #907)
-                    // (Ctrl+Alt+arrows turn the mirror looked at, see the frame)
-                    KeyCode::ArrowLeft | KeyCode::ArrowRight | KeyCode::ArrowUp | KeyCode::ArrowDown if ctrl && alt => return,
-                    // the interior cameras: Ctrl+Left/Right as well (the arrows drive) - unless
-                    // the player gave that combination to something else (#907)
-                    KeyCode::ArrowLeft | KeyCode::ArrowRight if ctrl && !self.chord_bound(code, shift_now, ctrl, alt) => {
-                        self.game_action(if code == KeyCode::ArrowLeft { "view_interiorcam_minus" } else { "view_interiorcam_plus" });
-                        return;
-                    }
-                    // OMSI's `screenshot` (Ctrl+Shift+P: 25 / 6), and F12 as most games have it
-                    KeyCode::KeyP if ctrl && shift_now => {
-                        self.take_screenshot();
-                        return;
-                    }
-                    // (F12 alone only where the bus has no key of its own on it: in OMSI's
-                    // keyboard.cfg it is the pram/wheelchair button, which it took away)
-                    KeyCode::F12 if !self.player.as_ref().is_some_and(|p| p.bindings.iter().any(|b| b.scan_code == 88 && b.chord() == 0 && p.vehicle.ty.program.trigger(&b.action).is_some())) => {
-                        self.take_screenshot();
-                        return;
-                    }
+            if self.shortcut_key(code, pressed, repeat, ctrl, alt, shift_now) {
+                return;
+            }
+            if self.layout_extra_key(code, pressed, repeat) {
+                return;
+            }
+            self.drive_key(code, pressed, repeat);
+        }
+    }
 
-                    // the duty's next stop given up (#1015), as the game menu's line ("H" for
-                    // Haltestelle: Ctrl+Shift+N is the VR navigator's)
-                    KeyCode::KeyH if ctrl && shift_now && !alt && self.duty.is_some() && !self.chord_bound(code, shift_now, ctrl, alt) => {
-                        self.skip_next_stop();
-                        return;
-                    }
-                    // the object editor (`crate::editor`)
-                    KeyCode::KeyE if ctrl && shift_now => {
-                        self.toggle_editor();
-                        return;
-                    }
-                    // OMSI's `sim_pause`
-                    KeyCode::KeyP if !ctrl && !alt && !shift_now => {
-                        self.toggle_pause();
-                        return;
-                    }
-                    // OMSI's `quicksave` (Alt+S)
-                    KeyCode::KeyS if alt && !ctrl => {
-                        self.quick_save();
-                        return;
-                    }
-                    // OMSI's `view_toggle_informationdisplay` (Ctrl+Y)
-                    // OMSI's `view_toggle_informationdisplay` (Shift+Y: 21 / 2)
-                    KeyCode::KeyY if shift_now && !ctrl => {
-                        self.set_info_bar(!self.info_bar);
-                        return;
-                    }
-                    // OMSI's `view_set_schedule` (Insert: 210 / 1, the key's state every frame),
-                    // only where keyboard.cfg has no entry for it: an entry is the player's
-                    // binding, handled above, and one with scan code 0 is unbound - Insert opened
-                    // the timetable all the same (#1245)
-                    KeyCode::Insert if !shift_now && !ctrl && !self.game_keys.iter().any(|b| b.action.eq_ignore_ascii_case("view_set_schedule")) => {
-                        self.timetable = !self.timetable;
-                        return;
-                    }
-                    _ => {}
-                }
+    /// `on_key` while the VR navigator is being placed: its keys are the only ones.
+    fn vr_nav_edit_key(&mut self, code: KeyCode, pressed: bool, repeat: bool) {
+        if !pressed { self.keys.remove(&code); }
+        if matches!(code, KeyCode::ControlLeft | KeyCode::ControlRight | KeyCode::ShiftLeft | KeyCode::ShiftRight) && pressed {
+            self.keys.insert(code);
+        }
+        if pressed && !repeat {
+            match code {
+                KeyCode::Escape | KeyCode::Enter => self.finish_vr_nav_edit(),
+                KeyCode::KeyR => self.vr_nav_adjust("reset", 1.0),
+                _ => {}
             }
-            // the extra keys of the ready-made layouts (below): not with Custom controls, not on
-            // a key the player bound, not with a modifier held
-            let extras = self.args.drive_keys != "omsi"
-                && !keys::dik_code(code).is_some_and(|s| self.own_keys.contains(&s))
-                && !self.keys.iter().any(|k| matches!(k, KeyCode::ControlLeft | KeyCode::ControlRight | KeyCode::AltLeft | KeyCode::AltRight | KeyCode::ShiftLeft | KeyCode::ShiftRight));
-            if pressed && !repeat {
-                // Z / X / C: indicator left / hazard / right, where the hand rests
-                // (OMSI's own layout wants Shift and the numpad for them). Each is a
-                // toggle: pressing the same key again turns it back off, tracked in
-                // `blinker_key_state` since the scripts expose separate "set"/"off"
-                // triggers for left/right rather than a toggle (hazard already has a
-                // dedicated toggle trigger, `blinker_warn_toggle`).
-                if self.view != "free"
-                    && extras
-                    && matches!(code, KeyCode::KeyZ | KeyCode::KeyX | KeyCode::KeyC)
-                {
-                    let want: u8 = match code {
-                        KeyCode::KeyZ => 1,
-                        KeyCode::KeyC => 2,
-                        _ => 3,
+        }
+    }
+
+    /// `on_key` for the mirror panels in the cab; true when the key was theirs.
+    fn mirror_hud_key(&mut self, code: KeyCode, pressed: bool, repeat: bool) -> bool {
+        if self.in_cab && self.game_menu.is_none() && self.player.is_some() {
+            let ctrl = self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight);
+            let shift = self.keys.contains(&KeyCode::ShiftLeft) || self.keys.contains(&KeyCode::ShiftRight);
+            if pressed && !repeat && code == KeyCode::KeyM && ctrl {
+                if let Some(p) = self.player.as_ref() {
+                    let msg = if shift { self.mirror_hud.toggle_edit(p) } else { self.mirror_hud.toggle(p) };
+                    self.service_msg = Some((msg, if shift { 6.0 } else { 3.0 }));
+                }
+                return true;
+            }
+            // (in the editor the arrows aim the mirror under the cursor; see the frame)
+            if matches!(code, KeyCode::ArrowLeft | KeyCode::ArrowRight | KeyCode::ArrowUp | KeyCode::ArrowDown | KeyCode::PageUp | KeyCode::PageDown | KeyCode::Minus | KeyCode::Equal | KeyCode::NumpadAdd | KeyCode::NumpadSubtract) && self.mirror_hud.arrow(code, pressed) {
+                return true;
+            }
+            // R puts the mirror under the cursor back as the bus has it, Shift+R every mirror
+            if self.mirror_hud.editing() && code == KeyCode::KeyR {
+                if pressed && !repeat {
+                    let size = self.hud_size();
+                    let which = self.mirror_hud.cam_under(self.hud_cursor(), size);
+                    let msg = match self.player.as_mut() {
+                        Some(p) if shift => {
+                            let n = p.vehicle.ty.def.cameras_reflexion.len();
+                            p.mirror_offsets = vec![[0.0; 2]; n];
+                            p.mirror_shifts = vec![[0.0; 3]; n];
+                            p.mirror_fovs = vec![0.0; n];
+                            p.mirrors_dirty = true;
+                            "Every mirror is back as the bus has it".to_string()
+                        }
+                        Some(p) if which.is_some() => {
+                            let i = which.unwrap_or(0);
+                            if let Some(o) = p.mirror_offsets.get_mut(i) {
+                                *o = [0.0; 2];
+                            }
+                            if let Some(s) = p.mirror_shifts.get_mut(i) {
+                                *s = [0.0; 3];
+                            }
+                            if let Some(f) = p.mirror_fovs.get_mut(i) {
+                                *f = 0.0;
+                            }
+                            p.mirrors_dirty = true;
+                            format!("Mirror {} is back as the bus has it (Shift+R: every mirror)", i + 1)
+                        }
+                        _ => "R: put the cursor on a mirror panel (Shift+R: every mirror)".to_string(),
                     };
-                    self.blinker(want);
+                    self.service_msg = Some((msg, 3.0));
                 }
-                // Shift + 1..9: open or close that physical door, front to back (see
-                // `door_trigger_groups`); plain digits are left alone (some buses put
-                // gears or numbered presets on them, `kw_s_1`/`automatic_1`).
-                if self.view != "free" && shift_held_now(&self.keys) && !keys::dik_code(code).is_some_and(|s| self.own_shift.contains(&s)) {
-                    if let Some(n) = digit_of(code) {
-                        if let Some(p) = self.player.as_mut() {
-                            let fire = p.door_key(n);
-                            if !fire.is_empty() {
-                                self.door_key_triggers.insert(code, fire);
-                            }
-                        }
-                    }
+                return true;
+            }
+            if self.mirror_hud.editing() && matches!(code, KeyCode::BracketLeft | KeyCode::BracketRight | KeyCode::Semicolon | KeyCode::Quote) {
+                if pressed {
+                    let size = self.hud_size();
+                    self.mirror_hud.size_key(code, self.hud_cursor(), size);
                 }
-                // I: every saloon light circuit of the bus at once (OMSI has a key for
-                // each: 7, 8, 9 - see Player::toggle_saloon_lights).
-                if self.view != "free"
-                    && !repeat
-                    && extras
-                    && code == KeyCode::KeyI
-                {
-                    if let Some(p) = self.player.as_mut() {
-                        let msg = p.toggle_saloon_lights();
-                        self.service_msg = Some((msg, 3.0));
-                    }
-                }
-                // (F1-F4 where keyboard.cfg has no view keys; a key the player gave to
-                // something else, or a view key moved elsewhere, leaves them alone, #701)
-                match code {
-                    KeyCode::F1 if self.key_left_free(code, "view_set_driver") => self.view = "driver".into(),
-                    KeyCode::F2 if self.key_left_free(code, "view_set_passenger") => self.view = "pax".into(),
-                    KeyCode::F3 if self.key_left_free(code, "view_set_outside") => self.view = "outside".into(),
-                    KeyCode::F4 if self.key_left_free(code, "view_set_map") => {
-                        // the free camera starts where the current view is looking
-                        self.view = "free".into();
-                        self.ego = false;
-                    }
-                    KeyCode::KeyU
-                    if self.keys.contains(&KeyCode::ShiftLeft)
-                        || self.keys.contains(&KeyCode::ShiftRight) =>
-                        {
-                            // Shift+U: toggle a bus's service state by itself (start a shut
-                            // bus, shut down a running one), and set its IBIS to the current
-                            // duty as the driver would do while putting it into service.
-                            if let Some(p) = self.player.as_mut() {
-                                let msg = p.start_up();
-                                self.service_msg = Some((msg, 6.0));
-                                if let Some(d) = self.duty.as_ref() {
-                                    let (trip, stop) = d.trip_for_ibis();
-                                    p.set_duty_destination(trip, stop);
-                                }
-                            }
-                        }
-
-                    KeyCode::KeyR
-                    if self.keys.contains(&KeyCode::ShiftLeft)
-                        || self.keys.contains(&KeyCode::ShiftRight) =>
-                        {
-                            // Shift+R: the next internet radio station (see radio.rs)
-                            let msg = self.radio.next_station();
+                return true;
+            }
+            if self.mirror_hud.editing() && matches!(code, KeyCode::Insert | KeyCode::Delete | KeyCode::Backspace | KeyCode::KeyC | KeyCode::Escape) {
+                if pressed && !repeat {
+                    let size = self.hud_size();
+                    if let Some(p) = self.player.as_ref() {
+                        if let Some(msg) = self.mirror_hud.key(code, p, self.hud_cursor(), size) {
                             self.service_msg = Some((msg, 4.0));
                         }
-                    KeyCode::KeyM
-                    if self.keys.contains(&KeyCode::ShiftLeft)
-                        || self.keys.contains(&KeyCode::ShiftRight) =>
-                        {
-                            // Shift+M: the city map (M alone is the starter)
-                            if let Some(n) = self.navigator.as_mut() {
-                                n.toggle_map();
-                            }
-                        }
-                    KeyCode::KeyN
-                    if self.keys.contains(&KeyCode::ShiftLeft)
-                        || self.keys.contains(&KeyCode::ShiftRight) =>
-                        {
-                            // Shift+N: navigator → navigator with the schedule → off (N alone is
-                            // the gearbox's neutral)
-                            if self.cycle_navigator() {
-                                return;
-                            }
-                        }
-                    KeyCode::F11 => {
-                        // (Ctrl+F11; F11 alone is OMSI's pedestrian view)
-                        // where am I: so a place that looks wrong can be named
-                        if let Some(cam) = self.camera.as_ref() {
-                            let ts = omsi_map::tile_size();
-                            let (tx, ty) = (
-                                (cam.position.x / ts).floor() as i32,
-                                (cam.position.y / ts).floor() as i32,
-                            );
-                            let line = format!(
-                                "Position {:.0}, {:.0}, {:.1}   tile {tx}_{ty}   heading {:.0} deg",
-                                cam.position.x, cam.position.y, cam.position.z, cam.yaw
-                            );
-                            log::info!(
-                                "{line}  (--cam {:.0},{:.0},{:.0},{:.0},{:.0})",
-                                cam.position.x,
-                                cam.position.y,
-                                cam.position.z,
-                                cam.yaw,
-                                cam.pitch
-                            );
-                            self.service_msg = Some((line, 12.0));
+                    }
+                }
+                return true;
+            }
+        }
+        false
+    }
+
+    /// `on_key` while the start menu is shown (it takes every key); true when it was.
+    fn start_menu_key(&mut self, event_loop: &ActiveEventLoop, event_key: PhysicalKey, pressed: bool) -> bool {
+        if let (Some(m), PhysicalKey::Code(code)) = (self.menu.as_mut(), event_key) {
+            if pressed {
+                if code == KeyCode::Escape {
+                    crate::platform::exit(event_loop);
+                }
+                m.key(code);
+                if m.start {
+                    self.args.map = m
+                        .maps
+                        .get(m.map)
+                        .map(|x| x.1.clone())
+                        .unwrap_or(self.args.map.clone());
+                    self.args.bus = m.vehicles.get(m.vehicle).map(|x| x.1.clone());
+                    self.args.time = format!("{:02}:00", m.hour);
+                    self.args.traffic = m.traffic;
+                    self.args.passengers = m.passengers;
+                    self.args.schedule = m.schedule;
+                    self.args.day_of_year = Some(m.day);
+                    if m.weather > 0 {
+                        self.args.weather = m.weathers.get(m.weather).map(|w| w.1.clone());
+                    }
+                    if m.situation > 0 {
+                        self.args.situation = m.situations.get(m.situation).map(|s| s.1.clone());
+                        if let Err(e) = apply_situation(&mut self.args) {
+                            log::error!("{e:#}");
                         }
                     }
-                    KeyCode::F9 => {
-                        // write the run into the driver's personnel file
-                        let line = self.career.summary();
-                        if self.career.path.is_some() {
-                            if let Err(e) = self.career.save() {
-                                log::warn!("writing the personnel file: {e}");
-                            }
-                        } else {
-                            log::info!("this run: {line}");
-                        }
-                        self.service_msg = Some((line, 8.0));
-                    }
-                    // F5-F8 are the destination sign and roller blind keys of OMSI's
-                    // keyboard.cfg (bus_linie_minus/plus, bus_ziel_minus/plus,
-                    // bus_rollband_setL1..T): they go to the bus below and nowhere else. The
-                    // depot services are in the game menu (Esc), as in OMSI's menu.
-                    _ => {}
+                    self.menu = None;
+                    self.hud = None;
+                    self.load_world_now(event_loop);
                 }
             }
-            // the arrow keys drive when a bus is being driven (the free camera keeps them)
-            // (a key the player bound to something else is theirs, not the preset's)
-            let own = keys::dik_code(code).is_some_and(|s| self.own_keys.contains(&s));
-            let wheel = self.controllers.as_ref().is_some_and(|c| c.wheel_steering());
-            let wasd = if own {
-                "omsi"
-            } else if wheel {
-                // (with a wheel steering, the arrow keys are OMSI's: they look around)
-                match self.args.drive_keys.as_str() {
-                    "arrows" | "omsi" => "omsi",
-                    _ => "wasd",
-                }
+            return true;
+        }
+        false
+    }
+
+    /// `on_key` for the LAN chat; true when the key was the chat's.
+    fn lan_chat_key(&mut self, code: KeyCode, pressed: bool, repeat: bool) -> bool {
+        if let Some(l) = self.lan.as_mut() {
+            let held = |a: KeyCode, b: KeyCode| self.keys.contains(&a) || self.keys.contains(&b);
+            let chord = omsi_content::input::chord(
+                held(KeyCode::ShiftLeft, KeyCode::ShiftRight),
+                held(KeyCode::ControlLeft, KeyCode::ControlRight),
+                held(KeyCode::AltLeft, KeyCode::AltRight),
+            );
+            let bound = if held(KeyCode::SuperLeft, KeyCode::SuperRight) {
+                None
             } else {
-                self.args.drive_keys.as_str()
+                keys::dik_code(code).and_then(|scan| self.game_keys.iter()
+                    .find(|b| b.scan_code == scan && b.matches(chord) && b.action.to_ascii_lowercase().starts_with("chat_"))
+                    .map(|b| b.action.clone()))
             };
-            let shift_held =
-                self.keys.contains(&KeyCode::ShiftLeft) || self.keys.contains(&KeyCode::ShiftRight);
-            if let Some(p) = self.player.as_mut() {
-                let ctrl_alt_held = (self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight)) && (self.keys.contains(&KeyCode::AltLeft) || self.keys.contains(&KeyCode::AltRight));
-                if self.view != "free" && !repeat && !shift_held && !(ctrl_alt_held && pressed) {
-                    if let Some(a) = fallback_action(code, wasd) {
-                        p.axes.set(a, pressed);
-                    }
-                } else if !pressed {
-                    // a driving key let go always lets go: released while Shift was held (or
-                    // in the free view) it stayed "pressed", and the wheel went on turning to
-                    // full lock until that key was pressed again (#1040, #1050, #1053)
-                    if let Some(a) = fallback_action(code, wasd) {
-                        p.axes.set(a, false);
+            if lan::chat_key(l, &mut self.remotes, code, pressed, repeat, bound.as_deref()) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// `on_key` for what lies over the driving: placing a vehicle, the game menu, the object
+    /// editor, Escape, a tutorial's pages. True when the key was theirs.
+    fn overlay_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, pressed: bool, repeat: bool) -> bool {
+        // placing a vehicle with the mouse: its keys first (Escape takes it away)
+        if self.game_menu.is_none() && self.placing_key(code, pressed) {
+            return true;
+        }
+        // the game menu: Escape opens it (and pauses, except in a LAN session, which
+        // goes on for the others), and while it is open the keys are its own
+        if self.game_menu.is_some() {
+            if pressed && !repeat {
+                self.menu_key(event_loop, code);
+            }
+            return true;
+        }
+        // the object editor takes its keys first (Escape leaves it)
+        if pressed && self.editor.is_some() && self.editor_key(code) {
+            return true;
+        }
+        if pressed && !repeat && code == KeyCode::Escape {
+            self.open_game_menu();
+            return true;
+        }
+        // a tutorial's pages: Enter / Page Down on, Page Up back, Ctrl+T hides them
+        if let (true, Some(t)) = (pressed, self.tutorial.as_mut()) {
+            let ctrl = self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight);
+            match code {
+                KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::PageDown if !t.hidden && self.lan.is_none() => {
+                    t.next();
+                    return true;
+                }
+                KeyCode::PageUp if !t.hidden => {
+                    t.back();
+                    return true;
+                }
+                KeyCode::KeyT if ctrl => {
+                    t.hidden = !t.hidden;
+                    return true;
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// `on_key` for the [game] keys of keyboard.cfg; true when the key was used up.
+    #[allow(clippy::too_many_arguments)]
+    fn game_binding_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, pressed: bool, repeat: bool, ctrl: bool, alt: bool, shift_now: bool) -> bool {
+        if pressed && !repeat {
+            // (a modifier key pressed is a key of its own, not its own modifier: Shift
+            // bound to gear_up in keyboard.cfg came as Shift+Shift and matched nothing,
+            // #1477; OMSI fires it)
+            let m = omsi_content::input::chord(
+                shift_now && !matches!(code, KeyCode::ShiftLeft | KeyCode::ShiftRight),
+                ctrl && !matches!(code, KeyCode::ControlLeft | KeyCode::ControlRight),
+                alt && !matches!(code, KeyCode::AltLeft | KeyCode::AltRight),
+            );
+            let own = keys::dik_code(code).is_some_and(|s| self.own_keys.contains(&s));
+            let ours = self.args.drive_keys != "omsi"
+                && m == 0
+                && !own
+                && (fallback_action(code, &self.args.drive_keys).is_some()
+                || matches!(code, KeyCode::KeyZ | KeyCode::KeyX | KeyCode::KeyC | KeyCode::KeyI | KeyCode::KeyL));
+            // plain Left/Right are OMSI's view_interiorcam_minus/plus, except when a wheel
+            // steers: then the arrows glance (held, the head turns) and only Ctrl+Left/Right
+            // switch the interior camera, below. (Where the arrows drive, `ours` skips this.)
+            // (unless the settings ask for the cameras on them all the same, #1345)
+            let plain_arrow = matches!(code, KeyCode::ArrowLeft | KeyCode::ArrowRight) && !ctrl
+                && !self.settings.arrows_switch_cams
+                && self.controllers.as_ref().is_some_and(|c| c.wheel_steering());
+            // (the keys that fly the camera are the camera's, unmodified: S, OMSI's
+            // view_toggle_viewpoint, threw the free camera back to the driver's view,
+            // and with no bus of one's own every view flies - #868; a chord such as
+            // Ctrl+S, OMSI's quicksave, stays a [game] key)
+            let flying = m == 0
+                && flies_free_camera(code)
+                && (self.view == "free" || (self.player.is_none() && self.on_foot.is_none()));
+            // (Ctrl+Alt+arrows turn the mirror looked at: not Ctrl+arrow's gear or camera)
+            let mirror_aim = ctrl && alt && matches!(code, KeyCode::ArrowLeft | KeyCode::ArrowRight | KeyCode::ArrowUp | KeyCode::ArrowDown);
+            if let Some(scan) = keys::dik_code(code).filter(|_| !ours && !flying && !mirror_aim) {
+                let action = self.game_keys.iter().find(|b| b.scan_code == scan && b.matches(m)
+                    && !b.action.starts_with("vr_")
+                    && !(plain_arrow && b.action.starts_with("view_interiorcam_"))).map(|b| b.action.clone());
+                // (a key bound in [game] and in [vehicles] does both, as in Omsi.exe: the
+                // parking brake put on Space, the stock view_reset_all_directions key,
+                // reset the view and never reached the bus - #745)
+                let vehicle_too = self.player.as_ref().is_some_and(|p| p.bindings.iter().any(|b| b.scan_code == scan && b.matches(m)));
+                log::debug!("key {code:?} (DIK {scan}, chord {m}): [game] {action:?}, a key of the bus too: {vehicle_too}; [game] keys on it: {:?}", self.game_keys.iter().filter(|b| b.scan_code == scan).collect::<Vec<_>>());
+                // OMSI's `exit` (Ctrl+Q, or what the player put it on): the game ends as
+                // the menu's Quit ends it. It was no action here at all, so the key did
+                // nothing (#817)
+                if action.as_deref() == Some("exit") {
+                    self.finish_vr_nav_edit();
+                    self.game_menu = None;
+                    self.finish_session();
+                    crate::platform::exit(event_loop);
+                    return true;
+                }
+                if let Some(a) = action {
+                    if self.game_action(&a) && !vehicle_too {
+                        return true;
                     }
                 }
             }
-            // A driving key held with shift is the vehicle key it covers: Shift+W is
-            // OMSI's wiper key, Shift+D selects the automatic's D, Shift+S the
-            // viewpoint - otherwise a bus driven with WASD could never be put in gear.
-            let shift =
-                self.keys.contains(&KeyCode::ShiftLeft) || self.keys.contains(&KeyCode::ShiftRight);
-            let covers_vehicle_key = fallback_action(code, wasd).is_some() && self.view != "free";
-            let driving_key = covers_vehicle_key && !shift;
-            // (the keys that fly the free camera are the camera's: W switched the wipers on
-            // while flying)
-            let fly_key = self.view == "free" && flies_free_camera(code);
-            if let (Some(p), Some(scan)) = (
-                self.player.as_mut(),
-                keys::dik_code(code).filter(|_| !driving_key && !fly_key),
-            ) {
-                if !repeat {
-                    let m = if covers_vehicle_key {
-                        0
-                    } else {
-                        // (a modifier key is a key of its own here, not its own modifier, #1477)
-                        omsi_content::input::chord(
-                            shift && !matches!(code, KeyCode::ShiftLeft | KeyCode::ShiftRight),
-                            (self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight))
-                                && !matches!(code, KeyCode::ControlLeft | KeyCode::ControlRight),
-                            (self.keys.contains(&KeyCode::AltLeft) || self.keys.contains(&KeyCode::AltRight))
-                                && !matches!(code, KeyCode::AltLeft | KeyCode::AltRight),
-                        )
-                    };
-                    p.key(scan, m, pressed);
+        }
+        false
+    }
+
+    /// `on_key` for the built-in shortcuts (mouse steering, screenshot, pause, quicksave...);
+    /// true when the key was one.
+    fn shortcut_key(&mut self, code: KeyCode, pressed: bool, repeat: bool, ctrl: bool, alt: bool, shift_now: bool) -> bool {
+        if pressed && !repeat {
+            match code {
+                // OMSI's `toggel_mouse_ctrl` (O): steering and pedals with the mouse
+                KeyCode::KeyO if !ctrl && !alt && !shift_now && self.key_left_free(code, "toggel_mouse_ctrl") => {
+                    self.game_action("toggel_mouse_ctrl");
+                    return true;
                 }
+                // (a manual gearbox's Ctrl+Up / Ctrl+Down are the [game] keys `gear_up` and
+                // `gear_down` now, which can be moved: see `with_game_defaults`, #907)
+                // (Ctrl+Alt+arrows turn the mirror looked at, see the frame)
+                KeyCode::ArrowLeft | KeyCode::ArrowRight | KeyCode::ArrowUp | KeyCode::ArrowDown if ctrl && alt => return true,
+                // the interior cameras: Ctrl+Left/Right as well (the arrows drive) - unless
+                // the player gave that combination to something else (#907)
+                KeyCode::ArrowLeft | KeyCode::ArrowRight if ctrl && !self.chord_bound(code, shift_now, ctrl, alt) => {
+                    self.game_action(if code == KeyCode::ArrowLeft { "view_interiorcam_minus" } else { "view_interiorcam_plus" });
+                    return true;
+                }
+                // OMSI's `screenshot` (Ctrl+Shift+P: 25 / 6), and F12 as most games have it
+                KeyCode::KeyP if ctrl && shift_now => {
+                    self.take_screenshot();
+                    return true;
+                }
+                // (F12 alone only where the bus has no key of its own on it: in OMSI's
+                // keyboard.cfg it is the pram/wheelchair button, which it took away)
+                KeyCode::F12 if !self.player.as_ref().is_some_and(|p| p.bindings.iter().any(|b| b.scan_code == 88 && b.chord() == 0 && p.vehicle.ty.program.trigger(&b.action).is_some())) => {
+                    self.take_screenshot();
+                    return true;
+                }
+
+                // the duty's next stop given up (#1015), as the game menu's line ("H" for
+                // Haltestelle: Ctrl+Shift+N is the VR navigator's)
+                KeyCode::KeyH if ctrl && shift_now && !alt && self.duty.is_some() && !self.chord_bound(code, shift_now, ctrl, alt) => {
+                    self.skip_next_stop();
+                    return true;
+                }
+                // the object editor (`crate::editor`)
+                KeyCode::KeyE if ctrl && shift_now => {
+                    self.toggle_editor();
+                    return true;
+                }
+                // OMSI's `sim_pause`
+                KeyCode::KeyP if !ctrl && !alt && !shift_now => {
+                    self.toggle_pause();
+                    return true;
+                }
+                // OMSI's `quicksave` (Alt+S)
+                KeyCode::KeyS if alt && !ctrl => {
+                    self.quick_save();
+                    return true;
+                }
+                // OMSI's `view_toggle_informationdisplay` (Ctrl+Y)
+                // OMSI's `view_toggle_informationdisplay` (Shift+Y: 21 / 2)
+                KeyCode::KeyY if shift_now && !ctrl => {
+                    self.set_info_bar(!self.info_bar);
+                    return true;
+                }
+                // OMSI's `view_set_schedule` (Insert: 210 / 1, the key's state every frame),
+                // only where keyboard.cfg has no entry for it: an entry is the player's
+                // binding, handled above, and one with scan code 0 is unbound - Insert opened
+                // the timetable all the same (#1245)
+                KeyCode::Insert if !shift_now && !ctrl && !self.game_keys.iter().any(|b| b.action.eq_ignore_ascii_case("view_set_schedule")) => {
+                    self.timetable = !self.timetable;
+                    return true;
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// `on_key` for the extra keys of the ready-made layouts and the camera / debug F-keys;
+    /// true when the key was used up.
+    fn layout_extra_key(&mut self, code: KeyCode, pressed: bool, repeat: bool) -> bool {
+        // the extra keys of the ready-made layouts (below): not with Custom controls, not on
+        // a key the player bound, not with a modifier held
+        let extras = self.args.drive_keys != "omsi"
+            && !keys::dik_code(code).is_some_and(|s| self.own_keys.contains(&s))
+            && !self.keys.iter().any(|k| matches!(k, KeyCode::ControlLeft | KeyCode::ControlRight | KeyCode::AltLeft | KeyCode::AltRight | KeyCode::ShiftLeft | KeyCode::ShiftRight));
+        if pressed && !repeat {
+            // Z / X / C: indicator left / hazard / right, where the hand rests
+            // (OMSI's own layout wants Shift and the numpad for them). Each is a
+            // toggle: pressing the same key again turns it back off, tracked in
+            // `blinker_key_state` since the scripts expose separate "set"/"off"
+            // triggers for left/right rather than a toggle (hazard already has a
+            // dedicated toggle trigger, `blinker_warn_toggle`).
+            if self.view != "free"
+                && extras
+                && matches!(code, KeyCode::KeyZ | KeyCode::KeyX | KeyCode::KeyC)
+            {
+                let want: u8 = match code {
+                    KeyCode::KeyZ => 1,
+                    KeyCode::KeyC => 2,
+                    _ => 3,
+                };
+                self.blinker(want);
+            }
+            // Shift + 1..9: open or close that physical door, front to back (see
+            // `door_trigger_groups`); plain digits are left alone (some buses put
+            // gears or numbered presets on them, `kw_s_1`/`automatic_1`).
+            if self.view != "free" && shift_held_now(&self.keys) && !keys::dik_code(code).is_some_and(|s| self.own_shift.contains(&s)) {
+                if let Some(n) = digit_of(code) {
+                    if let Some(p) = self.player.as_mut() {
+                        let fire = p.door_key(n);
+                        if !fire.is_empty() {
+                            self.door_key_triggers.insert(code, fire);
+                        }
+                    }
+                }
+            }
+            // I: every saloon light circuit of the bus at once (OMSI has a key for
+            // each: 7, 8, 9 - see Player::toggle_saloon_lights).
+            if self.view != "free"
+                && !repeat
+                && extras
+                && code == KeyCode::KeyI
+            {
+                if let Some(p) = self.player.as_mut() {
+                    let msg = p.toggle_saloon_lights();
+                    self.service_msg = Some((msg, 3.0));
+                }
+            }
+            // (F1-F4 where keyboard.cfg has no view keys; a key the player gave to
+            // something else, or a view key moved elsewhere, leaves them alone, #701)
+            match code {
+                KeyCode::F1 if self.key_left_free(code, "view_set_driver") => self.view = "driver".into(),
+                KeyCode::F2 if self.key_left_free(code, "view_set_passenger") => self.view = "pax".into(),
+                KeyCode::F3 if self.key_left_free(code, "view_set_outside") => self.view = "outside".into(),
+                KeyCode::F4 if self.key_left_free(code, "view_set_map") => {
+                    // the free camera starts where the current view is looking
+                    self.view = "free".into();
+                    self.ego = false;
+                }
+                KeyCode::KeyU
+                if self.keys.contains(&KeyCode::ShiftLeft)
+                    || self.keys.contains(&KeyCode::ShiftRight) =>
+                    {
+                        // Shift+U: toggle a bus's service state by itself (start a shut
+                        // bus, shut down a running one), and set its IBIS to the current
+                        // duty as the driver would do while putting it into service.
+                        if let Some(p) = self.player.as_mut() {
+                            let msg = p.start_up();
+                            self.service_msg = Some((msg, 6.0));
+                            if let Some(d) = self.duty.as_ref() {
+                                let (trip, stop) = d.trip_for_ibis();
+                                p.set_duty_destination(trip, stop);
+                            }
+                        }
+                    }
+
+                KeyCode::KeyR
+                if self.keys.contains(&KeyCode::ShiftLeft)
+                    || self.keys.contains(&KeyCode::ShiftRight) =>
+                    {
+                        // Shift+R: the next internet radio station (see radio.rs)
+                        let msg = self.radio.next_station();
+                        self.service_msg = Some((msg, 4.0));
+                    }
+                KeyCode::KeyM
+                if self.keys.contains(&KeyCode::ShiftLeft)
+                    || self.keys.contains(&KeyCode::ShiftRight) =>
+                    {
+                        // Shift+M: the city map (M alone is the starter)
+                        if let Some(n) = self.navigator.as_mut() {
+                            n.toggle_map();
+                        }
+                    }
+                KeyCode::KeyN
+                if self.keys.contains(&KeyCode::ShiftLeft)
+                    || self.keys.contains(&KeyCode::ShiftRight) =>
+                    {
+                        // Shift+N: navigator → navigator with the schedule → off (N alone is
+                        // the gearbox's neutral)
+                        if self.cycle_navigator() {
+                            return true;
+                        }
+                    }
+                KeyCode::F11 => {
+                    // (Ctrl+F11; F11 alone is OMSI's pedestrian view)
+                    // where am I: so a place that looks wrong can be named
+                    if let Some(cam) = self.camera.as_ref() {
+                        let ts = omsi_map::tile_size();
+                        let (tx, ty) = (
+                            (cam.position.x / ts).floor() as i32,
+                            (cam.position.y / ts).floor() as i32,
+                        );
+                        let line = format!(
+                            "Position {:.0}, {:.0}, {:.1}   tile {tx}_{ty}   heading {:.0} deg",
+                            cam.position.x, cam.position.y, cam.position.z, cam.yaw
+                        );
+                        log::info!(
+                            "{line}  (--cam {:.0},{:.0},{:.0},{:.0},{:.0})",
+                            cam.position.x,
+                            cam.position.y,
+                            cam.position.z,
+                            cam.yaw,
+                            cam.pitch
+                        );
+                        self.service_msg = Some((line, 12.0));
+                    }
+                }
+                KeyCode::F9 => {
+                    // write the run into the driver's personnel file
+                    let line = self.career.summary();
+                    if self.career.path.is_some() {
+                        if let Err(e) = self.career.save() {
+                            log::warn!("writing the personnel file: {e}");
+                        }
+                    } else {
+                        log::info!("this run: {line}");
+                    }
+                    self.service_msg = Some((line, 8.0));
+                }
+                // F5-F8 are the destination sign and roller blind keys of OMSI's
+                // keyboard.cfg (bus_linie_minus/plus, bus_ziel_minus/plus,
+                // bus_rollband_setL1..T): they go to the bus below and nowhere else. The
+                // depot services are in the game menu (Esc), as in OMSI's menu.
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// `on_key` for the driving keys and the vehicle's own keys of keyboard.cfg.
+    fn drive_key(&mut self, code: KeyCode, pressed: bool, repeat: bool) {
+        // the arrow keys drive when a bus is being driven (the free camera keeps them)
+        // (a key the player bound to something else is theirs, not the preset's)
+        let own = keys::dik_code(code).is_some_and(|s| self.own_keys.contains(&s));
+        let wheel = self.controllers.as_ref().is_some_and(|c| c.wheel_steering());
+        let wasd = if own {
+            "omsi"
+        } else if wheel {
+            // (with a wheel steering, the arrow keys are OMSI's: they look around)
+            match self.args.drive_keys.as_str() {
+                "arrows" | "omsi" => "omsi",
+                _ => "wasd",
+            }
+        } else {
+            self.args.drive_keys.as_str()
+        };
+        let shift_held =
+            self.keys.contains(&KeyCode::ShiftLeft) || self.keys.contains(&KeyCode::ShiftRight);
+        if let Some(p) = self.player.as_mut() {
+            let ctrl_alt_held = (self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight)) && (self.keys.contains(&KeyCode::AltLeft) || self.keys.contains(&KeyCode::AltRight));
+            if self.view != "free" && !repeat && !shift_held && !(ctrl_alt_held && pressed) {
+                if let Some(a) = fallback_action(code, wasd) {
+                    p.axes.set(a, pressed);
+                }
+            } else if !pressed {
+                // a driving key let go always lets go: released while Shift was held (or
+                // in the free view) it stayed "pressed", and the wheel went on turning to
+                // full lock until that key was pressed again (#1040, #1050, #1053)
+                if let Some(a) = fallback_action(code, wasd) {
+                    p.axes.set(a, false);
+                }
+            }
+        }
+        // A driving key held with shift is the vehicle key it covers: Shift+W is
+        // OMSI's wiper key, Shift+D selects the automatic's D, Shift+S the
+        // viewpoint - otherwise a bus driven with WASD could never be put in gear.
+        let shift =
+            self.keys.contains(&KeyCode::ShiftLeft) || self.keys.contains(&KeyCode::ShiftRight);
+        let covers_vehicle_key = fallback_action(code, wasd).is_some() && self.view != "free";
+        let driving_key = covers_vehicle_key && !shift;
+        // (the keys that fly the free camera are the camera's: W switched the wipers on
+        // while flying)
+        let fly_key = self.view == "free" && flies_free_camera(code);
+        if let (Some(p), Some(scan)) = (
+            self.player.as_mut(),
+            keys::dik_code(code).filter(|_| !driving_key && !fly_key),
+        ) {
+            if !repeat {
+                let m = if covers_vehicle_key {
+                    0
+                } else {
+                    // (a modifier key is a key of its own here, not its own modifier, #1477)
+                    omsi_content::input::chord(
+                        shift && !matches!(code, KeyCode::ShiftLeft | KeyCode::ShiftRight),
+                        (self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight))
+                            && !matches!(code, KeyCode::ControlLeft | KeyCode::ControlRight),
+                        (self.keys.contains(&KeyCode::AltLeft) || self.keys.contains(&KeyCode::AltRight))
+                            && !matches!(code, KeyCode::AltLeft | KeyCode::AltRight),
+                    )
+                };
+                p.key(scan, m, pressed);
             }
         }
     }
