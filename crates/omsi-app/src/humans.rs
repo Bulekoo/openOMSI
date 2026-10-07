@@ -1549,6 +1549,9 @@ pub struct Humans {
     pub paid: Option<(f32, f32)>,
     pub change_due: Option<f32>,
     pub money: Option<crate::money::Money>,
+    /// The people inside the player's bus's box last frame (`run_over`): knocked down once
+    /// when they come into it, not again every frame they are in it.
+    under_bus: hashbrown::HashSet<u32>,
     /// The tear-off ticket blocks of the player's bus (`money::TicketBlocks`).
     pub ticket_blocks: Option<crate::money::TicketBlocks>,
     /// A rider pressed the stop button for the next stop (the app fires the vehicle trigger `int_haltewunsch`).
@@ -1847,6 +1850,7 @@ impl Humans {
             paid: None,
             change_due: None,
             money: None,
+            under_bus: hashbrown::HashSet::new(),
             ticket_blocks: None,
             stop_request: false,
             tickets_sold: 0,
@@ -3655,14 +3659,18 @@ impl Humans {
     /// People the moving bus has just knocked down. OMSI counts them in the driver's
     /// personnel file; they are only counted once and then walk away.
     pub fn run_over(&mut self, bus: &VehicleInstance) -> u32 {
-        if bus.physics.velocity_kmh().abs() < 5.0 {
-            return 0;
-        }
-        let Some(bb) = bus.ty.def.bounding_box else {
+        let moving = bus.physics.velocity_kmh().abs() >= 5.0;
+        let Some(bb) = bus.ty.def.bounding_box.filter(|_| moving) else {
+            self.under_bus.clear();
             return 0;
         };
-        let (half_x, half_y) = ((bb[0] - bb[3]).abs() / 2.0, (bb[1] - bb[4]).abs() / 2.0);
+        // (the box: its size and its centre in the bus frame - the size less the centre's
+        // coordinate had been taken for the half size, and anyone standing in that box was
+        // knocked down again every frame: 17 at once in one place, #1805)
+        let (half_x, half_y, half_z) = (bb[0] / 2.0, bb[1] / 2.0, bb[2] / 2.0);
+        let centre = Vec3::new(bb[3], bb[4], bb[5]);
         let inv = bus.body_rotation().transpose();
+        let mut inside: hashbrown::HashSet<u32> = hashbrown::HashSet::new();
         let mut knocked = Vec::new();
         for (i, p) in self.people.iter().enumerate() {
             // (sub_62a6a0 at 0x62dc6c: the people waiting at a stop and those on the pavements)
@@ -3674,11 +3682,15 @@ impl Humans {
             if p.place != Place::Ground || !counts {
                 continue;
             }
-            let local = inv.transform_vector3((p.position - bus.position).as_vec3());
-            if local.x.abs() < half_x + 0.2 && local.y.abs() < half_y + 0.2 && local.z.abs() < 3.0 {
-                knocked.push(i);
+            let local = inv.transform_vector3((p.position - bus.position).as_vec3()) - centre;
+            if local.x.abs() < half_x + 0.2 && local.y.abs() < half_y + 0.2 && local.z.abs() < half_z + 1.0 {
+                inside.insert(p.id);
+                if !self.under_bus.contains(&p.id) {
+                    knocked.push(i);
+                }
             }
         }
+        self.under_bus = inside;
         let mut gone = Vec::new();
         for &i in knocked.iter().rev() {
             // a waiting passenger knocked down leaves the stop and walks off (sub_626818)
