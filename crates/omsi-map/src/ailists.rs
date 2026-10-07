@@ -437,7 +437,7 @@ mod tests {
     /// that does it is active and names the line; before it, nothing takes the line off.
     #[test]
     fn spandau_takes_line_5_off_in_1991() {
-        let root = std::env::var_os("OMSI_ROOT").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("../../../OMSI 2 Original"));
+        let root = omsi_cfg::flags::OMSI_ROOT.live_os().map(PathBuf::from).unwrap_or_else(|| PathBuf::from("../../../OMSI 2 Original"));
         let map = root.join("maps/Berlin-Spandau");
         if !map.join("Chrono").is_dir() {
             eprintln!("skipped: no {}", map.display());

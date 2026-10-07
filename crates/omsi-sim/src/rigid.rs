@@ -44,8 +44,7 @@ const OMSI_FRAME: f32 = 1.0 / 30.0;
 /// The suspension as Omsi.exe has it (see `step_slice`); `OMSI_TYRE_SUSPENSION=1` gives
 /// the old one with a wheel mass, a tyre and bump stops (A/B).
 fn omsi_suspension() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| omsi_cfg::env::var_os("OMSI_TYRE_SUSPENSION").is_none())
+    !omsi_cfg::flags::OMSI_TYRE_SUSPENSION.is_set()
 }
 
 /// What is left of the body's pitch and roll rate after `dt` seconds of OMSI's damping.
@@ -235,7 +234,7 @@ impl RigidWheel {
         let mu_n = friction * c.grip;
         // (`OMSI_NO_WHEEL_SLIP=1`: every wheel grips, as before the wheels had a turning of
         // their own - for comparison)
-        let no_slip = omsi_cfg::env::var_os("OMSI_NO_WHEEL_SLIP").is_some();
+        let no_slip = omsi_cfg::flags::OMSI_NO_WHEEL_SLIP.is_set();
         if no_slip {
             self.slipping = false;
             self.locked = false;
@@ -925,7 +924,7 @@ impl RigidBody {
                     if before != 0.0 && sign(before) != sign(w.spin) && brake_w > 0.0 {
                         w.spin = 0.0;
                     }
-                    w.slipping = omsi_cfg::env::var_os("OMSI_NO_WHEEL_SLIP").is_none();
+                    w.slipping = !omsi_cfg::flags::OMSI_NO_WHEEL_SLIP.is_set();
                     w.rpm = w.spin * 60.0 / std::f32::consts::TAU;
                     w.rotation_deg = (w.rotation_deg + w.spin.to_degrees() * h).rem_euclid(360.0);
                     // the tyre off the ground (or nothing under it: the edge of the loaded

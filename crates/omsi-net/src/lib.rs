@@ -1459,7 +1459,7 @@ impl LanSession {
             trying: 0.0,
             lost_at: None,
             timed_out: false,
-            join_timeout: std::env::var("OMSI_LAN_JOIN_TIMEOUT")
+            join_timeout: omsi_cfg::flags::OMSI_LAN_JOIN_TIMEOUT.live_var()
                 .ok()
                 .and_then(|v| v.parse::<f32>().ok())
                 .filter(|v| *v > 0.0)
@@ -1585,7 +1585,7 @@ impl LanSession {
                 s.host = None;
                 // `OMSI_BRIDGE_ONLY`: forget the code's own addresses, so that only what the
                 // rendezvous tells is tried (to check that path)
-                if std::env::var_os("OMSI_BRIDGE_ONLY").is_some() {
+                if omsi_cfg::flags::OMSI_BRIDGE_ONLY.live_os().is_some() {
                     s.candidates.clear();
                 }
             }
