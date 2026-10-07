@@ -1,0 +1,69 @@
+# Size ratchet of the Rust sources, checked by scripts/size-budget.sh (see there).
+# file <lines> <path>: files over 1500 lines may grow 5 % past this.
+# fn <lines> <crate>::<name> <where>: functions over 300 lines may grow 5 % past this.
+# Lower it with `scripts/size-budget.sh --update`; raise it only by hand, with a reason.
+file 3662 crates/omsi-app/src/app_events.rs
+file 3027 crates/omsi-app/src/controllers.rs
+file 1504 crates/omsi-app/src/dinput.rs
+file 1715 crates/omsi-app/src/driver.rs
+file 3047 crates/omsi-app/src/game_lists.rs
+file 6754 crates/omsi-app/src/humans.rs
+file 2903 crates/omsi-app/src/humans_pax.rs
+file 4942 crates/omsi-app/src/input_script.rs
+file 3932 crates/omsi-app/src/lan.rs
+file 1554 crates/omsi-app/src/lan_world.rs
+file 1740 crates/omsi-app/src/launcher/drive.rs
+file 2958 crates/omsi-app/src/launcher/pages.rs
+file 1609 crates/omsi-app/src/launcher/ui.rs
+file 2937 crates/omsi-app/src/navigator.rs
+file 3106 crates/omsi-app/src/offscreen.rs
+file 3242 crates/omsi-app/src/player.rs
+file 14857 crates/omsi-app/src/scene.rs
+file 6823 crates/omsi-app/src/schedule.rs
+file 1780 crates/omsi-app/src/tiles.rs
+file 8311 crates/omsi-app/src/traffic.rs
+file 2635 crates/omsi-app/src/ui.rs
+file 3005 crates/omsi-geometry/src/lib.rs
+file 1935 crates/omsi-launcher-core/src/install.rs
+file 3368 crates/omsi-launcher-core/src/lib.rs
+file 3236 crates/omsi-net/src/lib.rs
+file 1517 crates/omsi-net/src/tests.rs
+file 15830 crates/omsi-render/src/lib.rs
+file 2902 crates/omsi-sim/src/human.rs
+file 2399 crates/omsi-sim/src/rigid.rs
+file 3341 crates/omsi-sim/src/traffic.rs
+file 6005 crates/omsi-sim/src/vehicle.rs
+fn 467 crates/omsi-app::client crates/omsi-app/src/lan_world.rs
+fn 409 crates/omsi-app::cut_terrain crates/omsi-app/src/scene.rs
+fn 370 crates/omsi-app::draw crates/omsi-app/src/navigator.rs
+fn 424 crates/omsi-app::draw_menu crates/omsi-app/src/ui.rs
+fn 349 crates/omsi-app::game_controllers crates/omsi-app/src/launcher/pages.rs
+fn 321 crates/omsi-app::host crates/omsi-app/src/lan_world.rs
+fn 382 crates/omsi-app::junction_stop crates/omsi-app/src/traffic.rs
+fn 323 crates/omsi-app::make_app crates/omsi-app/src/lib.rs
+fn 340 crates/omsi-app::new crates/omsi-app/src/traffic.rs
+fn 584 crates/omsi-app::on_key crates/omsi-app/src/input_script.rs
+fn 1252 crates/omsi-app::place_step crates/omsi-app/src/scene.rs
+fn 596 crates/omsi-app::place_tile crates/omsi-app/src/scene.rs
+fn 359 crates/omsi-app::plan_pass crates/omsi-app/src/traffic.rs
+fn 454 crates/omsi-app::render crates/omsi-app/src/openxr.rs
+fn 2973 crates/omsi-app::run_offscreen crates/omsi-app/src/offscreen.rs
+fn 516 crates/omsi-app::spawn_departure crates/omsi-app/src/schedule.rs
+fn 489 crates/omsi-app::spawn_player crates/omsi-app/src/spawn.rs
+fn 363 crates/omsi-app::stage_tile crates/omsi-app/src/scene.rs
+fn 338 crates/omsi-app::sync crates/omsi-app/src/traffic.rs
+fn 1182 crates/omsi-app::tick crates/omsi-app/src/traffic.rs
+fn 315 crates/omsi-app::toggle_set crates/omsi-app/src/game_lists.rs
+fn 337 crates/omsi-app::type_gpu crates/omsi-app/src/scene.rs
+fn 537 crates/omsi-app::upload_vehicle crates/omsi-app/src/scene.rs
+fn 3038 crates/omsi-app::window_event crates/omsi-app/src/app_events.rs
+fn 349 crates/omsi-map::parse crates/omsi-map/src/tile.rs
+fn 491 crates/omsi-model::handle_keyword crates/omsi-model/src/lib.rs
+fn 2026 crates/omsi-render::build crates/omsi-render/src/lib.rs
+fn 353 crates/omsi-render::new_on crates/omsi-render/src/lib.rs
+fn 2391 crates/omsi-render::render_inner crates/omsi-render/src/lib.rs
+fn 366 crates/omsi-script::aachen_ibox_route_pad crates/omsi-script/src/compat.rs
+fn 441 crates/omsi-sim::advance crates/omsi-sim/src/human.rs
+fn 437 crates/omsi-sim::bones crates/omsi-sim/src/human.rs
+fn 349 crates/omsi-sim::callback crates/omsi-sim/src/host.rs
+fn 496 crates/omsi-sim::step_slice crates/omsi-sim/src/rigid.rs
