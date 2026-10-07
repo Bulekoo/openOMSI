@@ -16,11 +16,31 @@ pub(super) const CREEP_PAST: f32 = 2.0;
 /// m).
 pub(super) const PRIORITY_WARN_GAP: f32 = 60.0;
 
+/// Where every car is (see `Traffic::occupancy`): per lane, (car, distance along the lane,
+/// lateral place, out on that lane passing something).
+pub(super) type ByLane = HashMap<usize, Vec<(usize, f32, f32, bool)>>;
+
+/// What every car's plan in a tick reads of the tick's start: who is where, the player's
+/// vehicle and the LAN players'.
+pub(super) struct TickScene {
+    pub(super) dt: f32,
+    pub(super) debug: bool,
+    pub(super) player: Option<PlayerBox>,
+    /// Seconds the player's vehicle has stood.
+    pub(super) player_standing: f32,
+    pub(super) others: Vec<(u32, PlayerBox)>,
+    pub(super) feet: Vec<Footprint>,
+    pub(super) by_lane: ByLane,
+    /// Cars coming to a junction lane: (car, distance from its origin to the lane start).
+    pub(super) coming: HashMap<usize, Vec<(usize, f32)>>,
+    /// Pedestrians on the footpaths by lane (distance along it).
+    pub(super) walkers: HashMap<usize, Vec<f32>>,
+}
+
 impl Traffic {
     /// Advance all cars.
     /// `player`: (centre, heading in degrees, half length, half width, speed) of the
     /// player's vehicle.
-
     pub fn tick(&mut self, dt: f32, player: Option<PlayerBox>) {
         self.lamp_dt += dt;
         if self.mirror {
@@ -41,8 +61,45 @@ impl Traffic {
             .map(|(i, c)| (c.id, i))
             .collect();
         let debug = omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some();
-        // where every car is: its lane with its lateral place (and the lane a passing car
-        // is over on, where it counts for the oncoming traffic)
+        let (by_lane, coming, mut reservations) = self.occupancy();
+        self.request_lights(player);
+        let walkers = self.walker_requests();
+        self.run_light_programs(dt);
+        let (others, player_standing) = self.track_players(dt, player);
+        let t_plan = std::time::Instant::now();
+        let mut remove = Vec::new();
+        let mut frames: Vec<Option<AiFrame>> = vec![None; self.cars.len()];
+        let feet = self.footprints();
+        self.break_lead_pairs();
+        let ts = TickScene { dt, debug, player, player_standing, others, feet, by_lane, coming, walkers };
+        for i in 0..self.cars.len() {
+            match self.plan_car(i, &ts, &mut reservations) {
+                Some(frame) => frames[i] = Some(frame),
+                None => remove.push(i),
+            }
+        }
+        let others = ts.others;
+        self.set_visibility();
+        let t_par = std::time::Instant::now();
+        self.step_bodies(dt, &mut frames);
+        self.tick_split = [
+            (t_plan - t_start).as_secs_f64(),
+            (t_par - t_plan).as_secs_f64(),
+            t_par.elapsed().as_secs_f64(),
+        ];
+        self.debug_tick(debug, player, &others, &frames);
+        for i in remove.into_iter().rev() {
+            let c = self.cars.swap_remove(i);
+            self.orphan_sounds.extend(c.sounds);
+            // the renders go back to the world at the next sync
+            self.view.retire(c.id);
+        }
+    }
+
+    /// Where every car is: its lane with its lateral place (and the lane a passing car is
+    /// over on, where it counts for the oncoming traffic), the cars coming to each junction
+    /// lane and the junction lanes each has claimed.
+    fn occupancy(&self) -> (ByLane, HashMap<usize, Vec<(usize, f32)>>, HashMap<usize, Vec<usize>>) {
         let mut by_lane: HashMap<usize, Vec<(usize, f32, f32, bool)>> = HashMap::new();
         // cars coming to a junction lane: (car, distance from its origin to the lane start)
         let mut coming: HashMap<usize, Vec<(usize, f32)>> = HashMap::new();
@@ -123,6 +180,12 @@ impl Traffic {
                 reservations.entry(l).or_default().push(i);
             }
         }
+        (by_lane, coming, reservations)
+    }
+
+    /// The light programs' requests: of every car, of the player's bus and the other
+    /// players' vehicles.
+    fn request_lights(&mut self, player: Option<PlayerBox>) {
         // the light programs: requests of whoever is coming, then the cycle clocks
         for c in self.lights.iter_mut() {
             c.request.iter_mut().for_each(|r| *r = false);
@@ -198,6 +261,10 @@ impl Traffic {
                 }
             }
         }
+    }
+
+    /// The pedestrians by lane, and the push buttons of the pedestrian lights they come to.
+    fn walker_requests(&mut self) -> HashMap<usize, Vec<f32>> {
         let mut walkers: HashMap<usize, Vec<f32>> = HashMap::new();
         for &(l, s) in &self.walkers {
             walkers.entry(l).or_default().push(s);
@@ -223,12 +290,23 @@ impl Traffic {
                 }
             }
         }
+        walkers
+    }
+
+    /// The light programs' clocks move on.
+    fn run_light_programs(&mut self, dt: f32) {
         let day_time = self.day_time;
         for c in self.lights.iter_mut() {
             c.start(day_time);
             c.advance(dt);
         }
         self.log_lights();
+    }
+
+    /// How long the player's vehicle and the LAN players' have stood, the player's
+    /// indicator, and all of them on the lanes for the right of way. Returns the LAN
+    /// players' vehicles (taken from `others`) and the seconds the player's has stood.
+    fn track_players(&mut self, dt: f32, player: Option<PlayerBox>) -> (Vec<(u32, PlayerBox)>, f32) {
         self.player_still = match player {
             Some(p) if p.4.abs() < 0.3 => self.player_still + dt,
             _ => 0.0,
@@ -256,798 +334,871 @@ impl Traffic {
             users.extend(way_user_on(&self.net, b, 0, self.others_still.get(id).copied().unwrap_or(0.0), false));
         }
         self.way_users = users;
-        let t_plan = std::time::Instant::now();
-        let mut remove = Vec::new();
-        let mut frames: Vec<Option<AiFrame>> = vec![None; self.cars.len()];
-        let feet = self.footprints();
-        self.break_lead_pairs();
-        for i in 0..self.cars.len() {
-            self.plan_lane_change(i, &by_lane);
-            let ahead = self.obstacle_ahead(i, look_ahead(self.cars[i].state.speed), &by_lane);
-            // remember whom it lets in at a merge (a car on another lane)
-            let merging = ahead
-                .filter(|(_, j)| {
-                    self.cars[*j].state.lane != self.cars[i].state.lane
-                        && !self.cars[i]
-                            .state
-                            .upcoming()
-                            .any(|u| u == self.cars[*j].state.lane)
-                })
-                .map(|(_, j)| self.cars[j].id);
-            self.cars[i].merge_after = merging;
-            let mut lead = ahead.map(|(l, j)| (l, Some(j)));
-            // the player's bus, wherever it overlaps this car's way, or a LAN player's (the
-            // nearest in the way stands for "the player's bus" in what follows)
-            let (mut player, mut player_standing) = (player, player_standing);
-            if let Some(p) = player.as_ref() {
-                if let Some(l) = self.player_in_way(i, p) {
-                    if lead.map(|x| l.gap < x.0.gap).unwrap_or(true) {
-                        lead = Some((l, Some(usize::MAX)));
-                    }
-                }
-            }
-            // (or coming to the joint where this car's lane runs into its own)
-            if let Some(l) = merging_lead(&self.net, &self.cars[i].state, &self.way_users) {
+        (others, player_standing)
+    }
+
+    /// Car `i`'s plan for this tick and its drive: its frame for the body and the scripts,
+    /// None when it ran out of road (it is taken off).
+    fn plan_car(&mut self, i: usize, ts: &TickScene, reservations: &mut HashMap<usize, Vec<usize>>) -> Option<AiFrame> {
+        let (lead, player, player_standing) = self.car_lead(i, ts);
+        let (lead, parked_ahead, parked_box, kerb_swerve) = self.kerb_and_squeeze(i, lead, &ts.by_lane);
+        let (standing, obstacle_len, at_stop, keep_back) = self.keep_back(i, lead, parked_ahead, player, player_standing);
+        self.pass_step(i, lead, obstacle_len, standing, parked_ahead, at_stop, &ts.by_lane, player, parked_box, &ts.feet);
+        let (merge_wait, way, light, yield_at) = self.right_of_way(i, ts, lead, reservations);
+        let (stop_at, why) = self.stop_points(i, ts, &way, lead, light, yield_at, merge_wait, keep_back);
+        let (stop_at, why) = self.service_and_park(i, ts, &way, kerb_swerve, stop_at, why);
+        let (stop_at, why) = self.end_of_way(i, ts, &way, stop_at, why);
+        self.drive_car(i, ts, lead, stop_at, why, light, yield_at, merge_wait)
+    }
+
+    /// What car `i` follows: the car ahead (it may change lanes first), the player's bus or
+    /// a LAN player's where it is in the way, another body off the lanes. Also the player's
+    /// vehicle that stands for "the player's bus" from here on, and how long it has stood.
+    fn car_lead(&mut self, i: usize, ts: &TickScene) -> (Option<(Lead, Option<usize>)>, Option<PlayerBox>, f32) {
+        let (by_lane, feet, others, debug) = (&ts.by_lane, &ts.feet, &ts.others, ts.debug);
+        let (player, player_standing) = (ts.player, ts.player_standing);
+        self.plan_lane_change(i, &by_lane);
+        let ahead = self.obstacle_ahead(i, look_ahead(self.cars[i].state.speed), &by_lane);
+        // remember whom it lets in at a merge (a car on another lane)
+        let merging = ahead
+            .filter(|(_, j)| {
+                self.cars[*j].state.lane != self.cars[i].state.lane
+                    && !self.cars[i]
+                        .state
+                        .upcoming()
+                        .any(|u| u == self.cars[*j].state.lane)
+            })
+            .map(|(_, j)| self.cars[j].id);
+        self.cars[i].merge_after = merging;
+        let mut lead = ahead.map(|(l, j)| (l, Some(j)));
+        // the player's bus, wherever it overlaps this car's way, or a LAN player's (the
+        // nearest in the way stands for "the player's bus" in what follows)
+        let (mut player, mut player_standing) = (player, player_standing);
+        if let Some(p) = player.as_ref() {
+            if let Some(l) = self.player_in_way(i, p) {
                 if lead.map(|x| l.gap < x.0.gap).unwrap_or(true) {
                     lead = Some((l, Some(usize::MAX)));
                 }
             }
-            for (id, o) in &others {
-                if let Some(l) = self.player_in_way(i, o) {
-                    if lead.map(|x| l.gap < x.0.gap).unwrap_or(true) {
-                        lead = Some((l, Some(usize::MAX)));
-                        player = Some(*o);
-                        player_standing = self.others_still.get(id).copied().unwrap_or(0.0);
-                    }
+        }
+        // (or coming to the joint where this car's lane runs into its own)
+        if let Some(l) = merging_lead(&self.net, &self.cars[i].state, &self.way_users) {
+            if lead.map(|x| l.gap < x.0.gap).unwrap_or(true) {
+                lead = Some((l, Some(usize::MAX)));
+            }
+        }
+        for (id, o) in others.iter() {
+            if let Some(l) = self.player_in_way(i, o) {
+                if lead.map(|x| l.gap < x.0.gap).unwrap_or(true) {
+                    lead = Some((l, Some(usize::MAX)));
+                    player = Some(*o);
+                    player_standing = self.others_still.get(id).copied().unwrap_or(0.0);
                 }
             }
-            // other vehicles' bodies in the way off the lanes
-            if let Some((l, j)) = self.body_in_way(i, &feet, &by_lane) {
-                self.cars[i].geo_block = Some(self.cars[j].id);
-                if lead.map(|x| l.gap < x.0.gap - 0.5).unwrap_or(true) {
-                    if debug
-                        && l.gap < 3.0
-                        && l.speed < 0.5
-                        && self.cars[i].stopped == 0.0
-                        && self.cars[i].state.speed > 0.5
+        }
+        // other vehicles' bodies in the way off the lanes
+        if let Some((l, j)) = self.body_in_way(i, &feet, &by_lane) {
+            self.cars[i].geo_block = Some(self.cars[j].id);
+            if lead.map(|x| l.gap < x.0.gap - 0.5).unwrap_or(true) {
+                if debug
+                    && l.gap < 3.0
+                    && l.speed < 0.5
+                    && self.cars[i].stopped == 0.0
+                    && self.cars[i].state.speed > 0.5
+                {
+                    log::info!("t={:.1}: car {} stops for the body of car {} in its way ({:.1} m) off the lanes", self.time, self.cars[i].id, self.cars[j].id, l.gap);
+                }
+                lead = Some((l, Some(j)));
+            }
+        }
+        if let Some((_, Some(j))) = lead {
+            if j < self.cars.len() && self.cars[i].ignore_lead.is_some_and(|(id, until)| id == self.cars[j].id && (self.time as f64) < until) {
+                lead = None;
+            }
+        }
+        (lead, player, player_standing)
+    }
+
+    /// Parked cars: stop behind one in the lane, swerve round one at the kerb; squeeze past
+    /// a bus standing half in its bay.
+    fn kerb_and_squeeze(&mut self, i: usize, mut lead: Option<(Lead, Option<usize>)>, by_lane: &ByLane) -> (Option<(Lead, Option<usize>)>, bool, Option<Obb>, Option<f32>) {
+        // parked cars: stop behind one in the middle of the lane, swerve round one at
+        // the kerb (a parked car eats the right half of the lane; the passing car
+        // moves left by what is missing, and back once it is past)
+        let mut parked_ahead = false;
+        let mut parked_box: Option<Obb> = None;
+        let kerb_swerve: Option<f32>;
+        let mut squeeze: Option<u64> = None;
+        {
+            let car = &self.cars[i];
+            let st = &car.state;
+            let near_way = self.way_lanes(st, 100.0);
+            let passing = car.passing.map(|p| !p.aborted).unwrap_or(false);
+            let mut swerve: Option<f32> = None;
+            let mut stand: Option<(f32, usize, f32, f32)> = None;
+            let mut check = |along: f32, lat: f32, lane: usize, at: f32| {
+                if !(-6.0..=100.0).contains(&along) {
+                    return;
+                }
+                let a = lat.abs();
+                // in the way at the side the car is on now (a car pulled out onto the
+                // other half passes it)
+                let blocks = if passing {
+                    (lat - st.lateral_ahead(along)).abs() < car.half_width + 0.9 + 0.2
+                } else {
+                    a < 0.9
+                };
+                if blocks {
+                    if along > 0.0 {
+                        let gap = along - 2.3 - st.front;
+                        if stand.map(|o| gap < o.0).unwrap_or(true) {
+                            stand = Some((gap, lane, at, lat));
+                        }
+                    }
+                } else if !passing && a < car.half_width + 0.9 + 0.15 && along < 30.0 {
+                    // (only as far as the two bodies would touch: OMSI's cars keep to
+                    // their paths, and moved out by a margin of our own round every car
+                    // at the kerb - 2.7 m from the lane's middle - the traffic of a
+                    // narrow British street lined with parked cars wove to and fro
+                    // across the road instead of keeping to its lane)
+                    let need = (car.half_width + 0.9 + 0.15 - a) * -lat.signum();
+                    swerve = Some(
+                        swerve
+                            .map(|w| if w.abs() > need.abs() { w } else { need })
+                            .unwrap_or(need),
+                    );
+                }
+            };
+            // (once committed to a lane change - well over, or pulling out round what
+            // stands in the way - the parked cars of the lane it leaves hold it no more,
+            // as the cars standing there do not, `obstacle_ahead`: counted still, the car
+            // that had begun to pull out round a row of them stopped with its nose on the
+            // first, and a lane change that moves on with the car never got anywhere -
+            // six cars queued for good behind the parked row on the Heerstraße)
+            let leaving = st
+                .change
+                .filter(|c| c.t > 0.4 || (c.bypass && c.wait <= 0.0))
+                .map(|_| st.lane);
+            for &(l, d) in &near_way {
+                if Some(l) == leaving {
+                    continue;
+                }
+                for &(s, lat) in self.parked.get(&l).map(|v| v.as_slice()).unwrap_or(&[]) {
+                    check(d + s, lat, l, s);
+                }
+            }
+            // a bus standing half in its bay: squeeze past on
+            // the other side when a metre is enough, instead of queueing behind it -
+            // and stay out until past its front (moving back in while still beside it
+            // steered the car into the bus)
+            if !passing {
+                let swerving = st.lateral_target.abs() > 0.1;
+                for &(l, d) in &near_way {
+                    for &(j, os, lat, foreign) in
+                        by_lane.get(&l).map(|v| v.as_slice()).unwrap_or(&[])
                     {
-                        log::info!("t={:.1}: car {} stops for the body of car {} in its way ({:.1} m) off the lanes", self.time, self.cars[i].id, self.cars[j].id, l.gap);
+                        let o = &self.cars[j];
+                        let along = d + os;
+                        if foreign
+                            || j == i
+                            || lat.abs() < 0.5
+                            || !(-(o.state.front + st.rear + 1.0)..=40.0).contains(&along)
+                        {
+                            continue;
+                        }
+                        // a bus that is about to pull away (its last seconds at the stop, the
+                        // indicator on) is not started round; one the car is already going
+                        // round is passed, unless the car can still stop behind it gently
+                        // (only a bus at its stop stands out of the lane on purpose: a car
+                        // off the middle is squeezing past something itself)
+                        let standing = o.state.speed < 0.3 && o.standing_for(self.day_time) > 3.0;
+                        let keep = swerving
+                            && car.squeeze == Some(o.id)
+                            && (o.state.speed < 2.0
+                                || along
+                                    < o.state.front
+                                        + st.front
+                                        + st.speed * st.speed / (2.0 * st.decel.max(1.0)));
+                        if !standing && !keep {
+                            continue;
+                        }
+                        let need = car.half_width + o.half_width + 0.35 - lat.abs();
+                        if need > 0.0 && need <= 1.1 {
+                            let w = need * -lat.signum();
+                            if swerve.map(|v: f32| w.abs() > v.abs()).unwrap_or(true) {
+                                swerve = Some(w);
+                                squeeze = Some(o.id);
+                            }
+                        }
                     }
-                    lead = Some((l, Some(j)));
                 }
             }
-            if let Some((_, Some(j))) = lead {
-                if j < self.cars.len() && self.cars[i].ignore_lead.is_some_and(|(id, until)| id == self.cars[j].id && (self.time as f64) < until) {
-                    lead = None;
+            if let Some((gap, pl, ps, lat)) = stand {
+                // stop a little further back than behind a car that will move on
+                let l = Lead {
+                    gap: (gap - 2.0).max(0.0),
+                    speed: 0.0,
+                    acc: 0.0,
+                };
+                if lead.map(|x| l.gap < x.0.gap).unwrap_or(true) {
+                    lead = Some((l, None));
+                    parked_ahead = true;
+                    // (a parked car's box, for pulling out round it)
+                    let (q, h) = self.net.lanes[pl].at(ps);
+                    let hr = (h as f64).to_radians();
+                    let centre = q.truncate() + DVec2::new(hr.cos(), -hr.sin()) * lat as f64;
+                    parked_box = Some(Obb::vehicle(centre, h as f64, 2.3, 2.3, 0.9));
                 }
             }
-            // parked cars: stop behind one in the middle of the lane, swerve round one at
-            // the kerb (a parked car eats the right half of the lane; the passing car
-            // moves left by what is missing, and back once it is past)
-            let mut parked_ahead = false;
-            let mut parked_box: Option<Obb> = None;
-            let kerb_swerve: Option<f32>;
-            let mut squeeze: Option<u64> = None;
-            {
+            kerb_swerve = swerve;
+        }
+        if squeeze.is_some()
+            && self.cars[i].squeeze.is_none()
+            && self.first_passer.is_none()
+            && !self.cars[i].is_bus()
+        {
+            self.first_passer = Some((self.cars[i].id, self.time));
+        }
+        self.cars[i].squeeze = squeeze;
+        (lead, parked_ahead, parked_box, kerb_swerve)
+    }
+
+    /// Something standing ahead: how long it is, whether it is a queue at a stop, and how
+    /// far behind it car `i` stops to be able to pull out round it later.
+    fn keep_back(&mut self, i: usize, lead: Option<(Lead, Option<usize>)>, parked_ahead: bool, player: Option<PlayerBox>, player_standing: f32) -> (bool, f32, bool, Option<f32>) {
+        let standing = self.standing_obstacle(i, lead, parked_ahead, player_standing);
+        // (a queue at a stop is passed as a whole)
+        let (obstacle_len, at_stop) = match lead.and_then(|l| l.1) {
+            Some(usize::MAX) => (
+                player.map(|p| p.2 * 2.0).unwrap_or(12.0),
+                player_standing > 10.0,
+            ),
+            Some(j) if j < self.cars.len() => self.standing_queue(j),
+            _ => (4.8, false),
+        };
+        self.cars[i].lead_info = lead.and_then(|(l, who)| {
+            who.filter(|&j| j < self.cars.len())
+                .map(|j| (self.cars[j].id, l.gap))
+        });
+        // Something that may stand for a while (a bus at its stop, the player's bus that
+        // has stopped) is waited behind with room to pull out round it later: a car that
+        // had stopped a metre behind the player's bus scraped its corner when it went
+        // round, and no car can steer out of that.
+        let may_stand = lead
+            .map(|(l, who)| {
+                l.speed.abs() < 0.3
+                    && match who {
+                        Some(usize::MAX) => player.map(|p| p.4.abs() < 0.3).unwrap_or(false),
+                        Some(j) if j < self.cars.len() => {
+                            self.cars[j].at_stop()
+                        }
+                        _ => false,
+                    }
+            })
+            .unwrap_or(false);
+        // It stops `pass_room` short of it (the room its own steering needs to get out
+        // round it), or as far back as it can without braking hard. The two metres taken
+        // off the gap it keeps to such a thing were not enough: the car still crept up to
+        // under three metres behind the player's bus and never got round it.
+        let mut keep_back: Option<f32> = None;
+        if standing || may_stand {
+            if let Some((l, who)) = lead.filter(|_| !parked_ahead) {
                 let car = &self.cars[i];
                 let st = &car.state;
-                let near_way = self.way_lanes(st, 100.0);
-                let passing = car.passing.map(|p| !p.aborted).unwrap_or(false);
-                let mut swerve: Option<f32> = None;
-                let mut stand: Option<(f32, usize, f32, f32)> = None;
-                let mut check = |along: f32, lat: f32, lane: usize, at: f32| {
-                    if !(-6.0..=100.0).contains(&along) {
-                        return;
-                    }
-                    let a = lat.abs();
-                    // in the way at the side the car is on now (a car pulled out onto the
-                    // other half passes it)
-                    let blocks = if passing {
-                        (lat - st.lateral_ahead(along)).abs() < car.half_width + 0.9 + 0.2
+                let real = l.gap
+                    + if who == Some(usize::MAX) {
+                        PLAYER_BOX_MARGIN
                     } else {
-                        a < 0.9
+                        0.0
                     };
-                    if blocks {
-                        if along > 0.0 {
-                            let gap = along - 2.3 - st.front;
-                            if stand.map(|o| gap < o.0).unwrap_or(true) {
-                                stand = Some((gap, lane, at, lat));
-                            }
-                        }
-                    } else if !passing && a < car.half_width + 0.9 + 0.15 && along < 30.0 {
-                        // (only as far as the two bodies would touch: OMSI's cars keep to
-                        // their paths, and moved out by a margin of our own round every car
-                        // at the kerb - 2.7 m from the lane's middle - the traffic of a
-                        // narrow British street lined with parked cars wove to and fro
-                        // across the road instead of keeping to its lane)
-                        let need = (car.half_width + 0.9 + 0.15 - a) * -lat.signum();
-                        swerve = Some(
-                            swerve
-                                .map(|w| if w.abs() > need.abs() { w } else { need })
-                                .unwrap_or(need),
-                        );
-                    }
+                // (a timetable bus queueing for its own stop is not going round it)
+                let queues = car
+                    .next_stop()
+                    .map(|(ri, ss)| {
+                        ri >= st.route_index
+                            && st.route_distance(&self.net, ri, ss)
+                                < real + obstacle_len + st.front + 15.0
+                    })
+                    .unwrap_or(false);
+                let want = if queues {
+                    st.min_gap + 2.0
+                } else {
+                    car.pass_room.max(st.min_gap)
                 };
-                // (once committed to a lane change - well over, or pulling out round what
-                // stands in the way - the parked cars of the lane it leaves hold it no more,
-                // as the cars standing there do not, `obstacle_ahead`: counted still, the car
-                // that had begun to pull out round a row of them stopped with its nose on the
-                // first, and a lane change that moves on with the car never got anywhere -
-                // six cars queued for good behind the parked row on the Heerstraße)
-                let leaving = st
-                    .change
-                    .filter(|c| c.t > 0.4 || (c.bypass && c.wait <= 0.0))
-                    .map(|_| st.lane);
-                for &(l, d) in &near_way {
-                    if Some(l) == leaving {
-                        continue;
-                    }
-                    for &(s, lat) in self.parked.get(&l).map(|v| v.as_slice()).unwrap_or(&[]) {
-                        check(d + s, lat, l, s);
-                    }
-                }
-                // a bus standing half in its bay: squeeze past on
-                // the other side when a metre is enough, instead of queueing behind it -
-                // and stay out until past its front (moving back in while still beside it
-                // steered the car into the bus)
-                if !passing {
-                    let swerving = st.lateral_target.abs() > 0.1;
-                    for &(l, d) in &near_way {
-                        for &(j, os, lat, foreign) in
-                            by_lane.get(&l).map(|v| v.as_slice()).unwrap_or(&[])
-                        {
-                            let o = &self.cars[j];
-                            let along = d + os;
-                            if foreign
-                                || j == i
-                                || lat.abs() < 0.5
-                                || !(-(o.state.front + st.rear + 1.0)..=40.0).contains(&along)
-                            {
-                                continue;
-                            }
-                            // a bus that is about to pull away (its last seconds at the stop, the
-                            // indicator on) is not started round; one the car is already going
-                            // round is passed, unless the car can still stop behind it gently
-                            // (only a bus at its stop stands out of the lane on purpose: a car
-                            // off the middle is squeezing past something itself)
-                            let standing = o.state.speed < 0.3 && o.standing_for(self.day_time) > 3.0;
-                            let keep = swerving
-                                && car.squeeze == Some(o.id)
-                                && (o.state.speed < 2.0
-                                    || along
-                                        < o.state.front
-                                            + st.front
-                                            + st.speed * st.speed / (2.0 * st.decel.max(1.0)));
-                            if !standing && !keep {
-                                continue;
-                            }
-                            let need = car.half_width + o.half_width + 0.35 - lat.abs();
-                            if need > 0.0 && need <= 1.1 {
-                                let w = need * -lat.signum();
-                                if swerve.map(|v: f32| w.abs() > v.abs()).unwrap_or(true) {
-                                    swerve = Some(w);
-                                    squeeze = Some(o.id);
-                                }
-                            }
-                        }
-                    }
-                }
-                if let Some((gap, pl, ps, lat)) = stand {
-                    // stop a little further back than behind a car that will move on
-                    let l = Lead {
-                        gap: (gap - 2.0).max(0.0),
-                        speed: 0.0,
-                        acc: 0.0,
-                    };
-                    if lead.map(|x| l.gap < x.0.gap).unwrap_or(true) {
-                        lead = Some((l, None));
-                        parked_ahead = true;
-                        // (a parked car's box, for pulling out round it)
-                        let (q, h) = self.net.lanes[pl].at(ps);
-                        let hr = (h as f64).to_radians();
-                        let centre = q.truncate() + DVec2::new(hr.cos(), -hr.sin()) * lat as f64;
-                        parked_box = Some(Obb::vehicle(centre, h as f64, 2.3, 2.3, 0.9));
-                    }
-                }
-                kerb_swerve = swerve;
+                let comfortable = st.speed * st.speed / (2.0 * st.decel.max(1.0));
+                let stop_gap = if real - want >= comfortable {
+                    want
+                } else {
+                    // (a gap wanted under half a metre is the floor itself: clamp
+                    // panicked with its bounds the wrong way round, #138)
+                    (real - comfortable).clamp(real.min(0.5).min(want), want)
+                };
+                keep_back = Some(st.front + (real - stop_gap).max(0.0) + 0.6);
             }
-            if squeeze.is_some()
-                && self.cars[i].squeeze.is_none()
-                && self.first_passer.is_none()
+        }
+        // a pass it gave up: stop where it said it would
+        if let Some(p) = self.cars[i].passing.filter(|p| p.aborted) {
+            let st = &self.cars[i].state;
+            let at = st.front + (p.hold - st.odometer).max(0.0) + 0.6;
+            keep_back = Some(keep_back.map(|k| k.min(at)).unwrap_or(at));
+        }
+        (standing, obstacle_len, at_stop, keep_back)
+    }
+
+    /// Going round what stands in the way: another lane, the other half of the road, and
+    /// back in once past.
+    #[allow(clippy::too_many_arguments)]
+    fn pass_step(&mut self, i: usize, lead: Option<(Lead, Option<usize>)>, obstacle_len: f32, standing: bool, parked_ahead: bool, at_stop: bool, by_lane: &ByLane, player: Option<PlayerBox>, parked_box: Option<Obb>, feet: &[Footprint]) {
+        self.plan_bypass(i, lead.map(|l| l.0.gap), standing, &by_lane);
+        let way_now = self.way_lanes(&self.cars[i].state, 120.0);
+        self.guard_pass(i, &by_lane);
+        self.plan_pass(
+            i,
+            lead,
+            obstacle_len,
+            standing,
+            parked_ahead || at_stop,
+            &way_now,
+            &by_lane,
+            player,
+            parked_box,
+            &feet,
+        );
+        // passing: back into the lane once past (and give up if the way out closes
+        // before the car has moved)
+        {
+            let car = &mut self.cars[i];
+            if let Some(mut p) = car.passing {
+                if !p.aborted
+                    && car.stopped > 8.0
+                    && car.state.odometer < p.until
+                    && car.state.lateral.abs() < p.side * 0.5
+                {
+                    // held before it got out: back in behind the obstacle rather than
+                    // wait half in the oncoming lane
+                    p.until = car.state.odometer;
+                    p.aborted = true;
+                    p.hold = car.state.odometer;
+                    car.passing = Some(p);
+                }
+                if p.aborted {
+                    // standing behind what it gave up going round: free to look again
+                    // (from where it stands, half out or not)
+                    if car.state.speed < 0.1
+                        && (car.state.odometer >= p.hold - 0.3 || car.stopped > 1.0)
+                    {
+                        car.passing = None;
+                    }
+                } else if car.state.odometer >= p.until {
+                    car.state.lateral_target = 0.0;
+                    let odo = car.state.odometer;
+                    let from = car.state.lateral;
+                    if (car.state.lateral_ramp.1 - 0.0).abs() > 1e-3 {
+                        // back in gently, as a driver does once past: over the S-curve
+                        // planned for the speed it has here and the room ahead
+                        car.state.lateral_ramp = (from, 0.0, odo, p.back);
+                    }
+                    if car.state.lateral.abs() < 0.05 {
+                        car.passing = None;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Merging, the lights and the right of way at the junction ahead: (where the merge
+    /// holds car `i`, its way ahead, where a light holds it, where it gives way).
+    fn right_of_way(&mut self, i: usize, ts: &TickScene, lead: Option<(Lead, Option<usize>)>, reservations: &mut HashMap<usize, Vec<usize>>) -> (Option<f32>, Vec<(usize, f32)>, Option<f32>, Option<f32>) {
+        let (by_lane, coming, walkers, dt) = (&ts.by_lane, &ts.coming, &ts.walkers, ts.dt);
+        let merge_wait = self.plan_route_change(i, &by_lane);
+        let way = self.way_lanes(&self.cars[i].state, 200.0);
+        // traffic lights
+        let light = if self.net.lanes[self.cars[i].state.lane].kind == LaneKind::Air {
+            None
+        } else {
+            self.light_stop(i, &way)
+        };
+        self.cars[i].light_hold = light.is_some();
+        self.cars[i].light_at = light;
+        if light.is_some() && self.cars[i].state.speed < 0.5 {
+            self.held_at_red += 1;
+            if self.first_red.is_none()
+                && self.cars[i].state.speed < 0.2
                 && !self.cars[i].is_bus()
             {
-                self.first_passer = Some((self.cars[i].id, self.time));
+                self.first_red = Some((self.cars[i].id, self.time));
             }
-            self.cars[i].squeeze = squeeze;
-            let standing = self.standing_obstacle(i, lead, parked_ahead, player_standing);
-            // (a queue at a stop is passed as a whole)
-            let (obstacle_len, at_stop) = match lead.and_then(|l| l.1) {
-                Some(usize::MAX) => (
-                    player.map(|p| p.2 * 2.0).unwrap_or(12.0),
-                    player_standing > 10.0,
-                ),
-                Some(j) if j < self.cars.len() => self.standing_queue(j),
-                _ => (4.8, false),
-            };
-            self.cars[i].lead_info = lead.and_then(|(l, who)| {
-                who.filter(|&j| j < self.cars.len())
-                    .map(|j| (self.cars[j].id, l.gap))
-            });
-            // Something that may stand for a while (a bus at its stop, the player's bus that
-            // has stopped) is waited behind with room to pull out round it later: a car that
-            // had stopped a metre behind the player's bus scraped its corner when it went
-            // round, and no car can steer out of that.
-            let may_stand = lead
-                .map(|(l, who)| {
-                    l.speed.abs() < 0.3
-                        && match who {
-                            Some(usize::MAX) => player.map(|p| p.4.abs() < 0.3).unwrap_or(false),
-                            Some(j) if j < self.cars.len() => {
-                                self.cars[j].at_stop()
-                            }
-                            _ => false,
-                        }
-                })
-                .unwrap_or(false);
-            // It stops `pass_room` short of it (the room its own steering needs to get out
-            // round it), or as far back as it can without braking hard. The two metres taken
-            // off the gap it keeps to such a thing were not enough: the car still crept up to
-            // under three metres behind the player's bus and never got round it.
-            let mut keep_back: Option<f32> = None;
-            if standing || may_stand {
-                if let Some((l, who)) = lead.filter(|_| !parked_ahead) {
-                    let car = &self.cars[i];
-                    let st = &car.state;
-                    let real = l.gap
-                        + if who == Some(usize::MAX) {
-                            PLAYER_BOX_MARGIN
-                        } else {
-                            0.0
-                        };
-                    // (a timetable bus queueing for its own stop is not going round it)
-                    let queues = car
-                        .next_stop()
-                        .map(|(ri, ss)| {
-                            ri >= st.route_index
-                                && st.route_distance(&self.net, ri, ss)
-                                    < real + obstacle_len + st.front + 15.0
-                        })
-                        .unwrap_or(false);
-                    let want = if queues {
-                        st.min_gap + 2.0
-                    } else {
-                        car.pass_room.max(st.min_gap)
-                    };
-                    let comfortable = st.speed * st.speed / (2.0 * st.decel.max(1.0));
-                    let stop_gap = if real - want >= comfortable {
-                        want
-                    } else {
-                        // (a gap wanted under half a metre is the floor itself: clamp
-                        // panicked with its bounds the wrong way round, #138)
-                        (real - comfortable).clamp(real.min(0.5).min(want), want)
-                    };
-                    keep_back = Some(st.front + (real - stop_gap).max(0.0) + 0.6);
-                }
-            }
-            // a pass it gave up: stop where it said it would
-            if let Some(p) = self.cars[i].passing.filter(|p| p.aborted) {
-                let st = &self.cars[i].state;
-                let at = st.front + (p.hold - st.odometer).max(0.0) + 0.6;
-                keep_back = Some(keep_back.map(|k| k.min(at)).unwrap_or(at));
-            }
-            self.plan_bypass(i, lead.map(|l| l.0.gap), standing, &by_lane);
-            let way_now = self.way_lanes(&self.cars[i].state, 120.0);
-            self.guard_pass(i, &by_lane);
-            self.plan_pass(
+        }
+        // right of way: at every junction before the red light's line (and in the one the
+        // car is in already) - skipping them all whenever some light ahead was red let a
+        // car cross another's path unchecked on its way to a light further on
+        let junction = if self.net.lanes[self.cars[i].state.lane].kind == LaneKind::Air {
+            None
+        } else {
+            self.junction_ahead(&way).filter(|jn| {
+                light
+                    .map(|l| jn.inside || jn.lanes[0].1 < l - 0.5)
+                    .unwrap_or(true)
+            })
+        };
+        let yield_at = match &junction {
+            Some(jn) => self.junction_stop(
                 i,
-                lead,
-                obstacle_len,
-                standing,
-                parked_ahead || at_stop,
-                &way_now,
+                jn,
+                &way,
+                lead.map(|l| l.0),
                 &by_lane,
-                player,
-                parked_box,
-                &feet,
-            );
-            // passing: back into the lane once past (and give up if the way out closes
-            // before the car has moved)
-            {
-                let car = &mut self.cars[i];
-                if let Some(mut p) = car.passing {
-                    if !p.aborted
-                        && car.stopped > 8.0
-                        && car.state.odometer < p.until
-                        && car.state.lateral.abs() < p.side * 0.5
-                    {
-                        // held before it got out: back in behind the obstacle rather than
-                        // wait half in the oncoming lane
-                        p.until = car.state.odometer;
-                        p.aborted = true;
-                        p.hold = car.state.odometer;
-                        car.passing = Some(p);
-                    }
-                    if p.aborted {
-                        // standing behind what it gave up going round: free to look again
-                        // (from where it stands, half out or not)
-                        if car.state.speed < 0.1
-                            && (car.state.odometer >= p.hold - 0.3 || car.stopped > 1.0)
-                        {
-                            car.passing = None;
-                        }
-                    } else if car.state.odometer >= p.until {
-                        car.state.lateral_target = 0.0;
-                        let odo = car.state.odometer;
-                        let from = car.state.lateral;
-                        if (car.state.lateral_ramp.1 - 0.0).abs() > 1e-3 {
-                            // back in gently, as a driver does once past: over the S-curve
-                            // planned for the speed it has here and the room ahead
-                            car.state.lateral_ramp = (from, 0.0, odo, p.back);
-                        }
-                        if car.state.lateral.abs() < 0.05 {
-                            car.passing = None;
-                        }
+                &coming,
+                reservations,
+                &walkers,
+            ),
+            None => {
+                let old = std::mem::take(&mut self.cars[i].reserved);
+                for l in old {
+                    if let Some(list) = reservations.get_mut(&l) {
+                        list.retain(|&c| c != i);
                     }
                 }
-            }
-            let merge_wait = self.plan_route_change(i, &by_lane);
-            let way = self.way_lanes(&self.cars[i].state, 200.0);
-            // traffic lights
-            let light = if self.net.lanes[self.cars[i].state.lane].kind == LaneKind::Air {
                 None
-            } else {
-                self.light_stop(i, &way)
-            };
-            self.cars[i].light_hold = light.is_some();
-            self.cars[i].light_at = light;
-            if light.is_some() && self.cars[i].state.speed < 0.5 {
-                self.held_at_red += 1;
-                if self.first_red.is_none()
-                    && self.cars[i].state.speed < 0.2
-                    && !self.cars[i].is_bus()
-                {
-                    self.first_red = Some((self.cars[i].id, self.time));
-                }
             }
-            // right of way: at every junction before the red light's line (and in the one the
-            // car is in already) - skipping them all whenever some light ahead was red let a
-            // car cross another's path unchecked on its way to a light further on
-            let junction = if self.net.lanes[self.cars[i].state.lane].kind == LaneKind::Air {
-                None
-            } else {
-                self.junction_ahead(&way).filter(|jn| {
-                    light
-                        .map(|l| jn.inside || jn.lanes[0].1 < l - 0.5)
-                        .unwrap_or(true)
-                })
-            };
-            let yield_at = match &junction {
-                Some(jn) => self.junction_stop(
-                    i,
-                    jn,
-                    &way,
-                    lead.map(|l| l.0),
-                    &by_lane,
-                    &coming,
-                    &mut reservations,
-                    &walkers,
-                ),
-                None => {
-                    let old = std::mem::take(&mut self.cars[i].reserved);
-                    for l in old {
-                        if let Some(list) = reservations.get_mut(&l) {
-                            list.retain(|&c| c != i);
-                        }
-                    }
-                    None
-                }
-            };
-            // what it has claimed and is through no longer counts
-            {
-                let car = &mut self.cars[i];
-                let on_way: Vec<usize> = way.iter().map(|w| w.0).collect();
-                car.reserved.retain(|l| on_way.contains(l));
-                car.yielding = yield_at.is_some();
-                car.wait_at = yield_at;
-                let st = &mut car.state;
-                if yield_at.is_some() && st.speed < 0.3 {
-                    st.yield_time += dt;
-                } else if yield_at.is_none() {
-                    st.yield_time = 0.0;
-                }
-                // (`--follow yield`: a car that has stood for a couple of seconds giving way at
-                // a junction without lights)
-                if car.yielding
-                    && st.yield_time >= 2.0
-                    && st.yield_time - dt < 2.0
-                    && self.first_yield.is_none()
-                    && !car.is_bus()
-                    && junction
-                        .as_ref()
-                        .map(|j| {
-                            j.lanes.iter().all(|l| {
-                                self.net.lanes[l.0].traffic_light.is_none()
-                                    && self.net.prev[l.0]
-                                        .iter()
-                                        .all(|&p| self.net.lanes[p].traffic_light.is_none())
-                            })
+        };
+        // what it has claimed and is through no longer counts
+        {
+            let car = &mut self.cars[i];
+            let on_way: Vec<usize> = way.iter().map(|w| w.0).collect();
+            car.reserved.retain(|l| on_way.contains(l));
+            car.yielding = yield_at.is_some();
+            car.wait_at = yield_at;
+            let st = &mut car.state;
+            if yield_at.is_some() && st.speed < 0.3 {
+                st.yield_time += dt;
+            } else if yield_at.is_none() {
+                st.yield_time = 0.0;
+            }
+            // (`--follow yield`: a car that has stood for a couple of seconds giving way at
+            // a junction without lights)
+            if car.yielding
+                && st.yield_time >= 2.0
+                && st.yield_time - dt < 2.0
+                && self.first_yield.is_none()
+                && !car.is_bus()
+                && junction
+                    .as_ref()
+                    .map(|j| {
+                        j.lanes.iter().all(|l| {
+                            self.net.lanes[l.0].traffic_light.is_none()
+                                && self.net.prev[l.0]
+                                    .iter()
+                                    .all(|&p| self.net.lanes[p].traffic_light.is_none())
                         })
-                        .unwrap_or(false)
-                {
-                    self.first_yield = Some((car.id, self.time));
+                    })
+                    .unwrap_or(false)
+            {
+                self.first_yield = Some((car.id, self.time));
+            }
+        }
+        (merge_wait, way, light, yield_at)
+    }
+
+    /// Where car `i` has to stop (distance from its origin) and what holds it: the light,
+    /// the junction, the merge, what it keeps back from, people on foot, its own pulling
+    /// out of a parking space, the player's bus leaving its stop.
+    #[allow(clippy::too_many_arguments)]
+    fn stop_points(&mut self, i: usize, ts: &TickScene, way: &[(usize, f32)], lead: Option<(Lead, Option<usize>)>, light: Option<f32>, yield_at: Option<f32>, merge_wait: Option<f32>, keep_back: Option<f32>) -> (Option<f32>, (&'static str, f32)) {
+        let (debug, dt) = (ts.debug, ts.dt);
+        let for_people = if self.net.lanes[self.cars[i].state.lane].kind == LaneKind::Air {
+            None
+        } else {
+            self.people_stop(i, &way)
+        };
+        if let Some((at, who)) = for_people {
+            let car = &self.cars[i];
+            if debug && car.state.speed > 0.5 {
+                log::info!(
+                    "t={:.2}: car {} stops for somebody on foot {:.1} m ahead",
+                    self.time,
+                    car.id,
+                    at - car.state.front
+                );
+            }
+            // somebody who never moves out of the way (standing in the carriageway)
+            if car.stopped >= 20.0 && car.stopped - dt < 20.0 {
+                log::info!(
+                    "car {} has stood 20 s for somebody on foot at ({:.1}, {:.1})",
+                    car.id,
+                    who.x,
+                    who.y
+                );
+            }
+        }
+        let people = for_people.map(|x| x.0);
+        // a car that has just left its parking space waits a moment before pulling out
+        let parked_wait = (self.cars[i].pull_out > 0.0).then(|| self.cars[i].state.front + 0.1);
+        self.cars[i].pull_out = (self.cars[i].pull_out - dt).max(0.0);
+        // the player's bus indicating out of its stop
+        let let_out = self.player.and_then(|p| self.letting_out(i, &p)).map(|g| self.cars[i].state.front + (g - 1.0).max(0.0));
+        let stop_at = [light, yield_at, merge_wait, keep_back, people, parked_wait, let_out]
+            .into_iter()
+            .flatten()
+            .reduce(f32::min);
+        let mut why: (&'static str, f32) = ("", f32::MAX);
+        for (name, v) in [("light", light), ("yield", yield_at), ("merge", merge_wait), ("keep_back", keep_back), ("people", people), ("pull_out", parked_wait), ("let_out", let_out)] {
+            if let Some(v) = v {
+                if v < why.1 {
+                    why = (name, v);
                 }
             }
-            let for_people = if self.net.lanes[self.cars[i].state.lane].kind == LaneKind::Air {
-                None
-            } else {
-                self.people_stop(i, &way)
-            };
-            if let Some((at, who)) = for_people {
-                let car = &self.cars[i];
-                if debug && car.state.speed > 0.5 {
+        }
+        self.cars[i].held = stop_at.is_some() || lead.map(|l| l.0.gap < 12.0).unwrap_or(false);
+        (stop_at, why)
+    }
+
+    /// A timetable bus's service (its stops), any other car's place in its lane; parking.
+    fn service_and_park(&mut self, i: usize, ts: &TickScene, way: &[(usize, f32)], kerb_swerve: Option<f32>, mut stop_at: Option<f32>, mut why: (&'static str, f32)) -> (Option<f32>, (&'static str, f32)) {
+        let (debug, dt) = (ts.debug, ts.dt);
+        // a timetable bus: its stops (see `bus_service`); any other car keeps to the middle
+        // of its lane, or swerves round a car parked at the kerb
+        {
+            let car = &mut self.cars[i];
+            if let Some(service) = car.bus.as_mut() {
+                let wanted = self.stop_wishes.as_ref().map(|(alighting, waiting)| {
+                    alighting.contains(&car.id) || service.stops.front().is_some_and(|s| waiting.contains(&s.id))
+                });
+                let ctx = crate::bus_service::Ctx {
+                    wanted,
+                    net: &self.net,
+                    way: &way,
+                    day_time: self.day_time,
+                    dt,
+                    id: car.id,
+                    stopped: car.stopped,
+                    passing: car.passing.is_some(),
+                    kerb_swerve,
+                    debug: debug || omsi_cfg::env::var_os("OMSI_DEBUG_PAX").is_some(),
+                };
+                if let Some(at) = service.step(&mut car.state, &mut car.vehicle, &ctx) {
+                    stop_at = Some(stop_at.map(|x| x.min(at)).unwrap_or(at));
+                    if at < why.1 {
+                        why = ("service", at);
+                    }
+                }
+                service.feed_timetable(&mut car.vehicle, self.day_time);
+            } else if car.passing.is_none() && car.park.is_none() {
+                // round a car parked at the kerb, else in the middle of the lane
+                let target = kerb_swerve.unwrap_or(0.0);
+                if debug && (target - car.state.lateral_target).abs() > 0.3 {
                     log::info!(
-                        "t={:.2}: car {} stops for somebody on foot {:.1} m ahead",
+                        "t={:.2}: car {} swerves to {target:+.2} (was {:+.2}, now at {:+.2})",
                         self.time,
                         car.id,
-                        at - car.state.front
+                        car.state.lateral_target,
+                        car.state.lateral
                     );
                 }
-                // somebody who never moves out of the way (standing in the carriageway)
-                if car.stopped >= 20.0 && car.stopped - dt < 20.0 {
-                    log::info!(
-                        "car {} has stood 20 s for somebody on foot at ({:.1}, {:.1})",
-                        car.id,
-                        who.x,
-                        who.y
-                    );
-                }
+                car.state.lateral_target = target;
             }
-            let people = for_people.map(|x| x.0);
-            // a car that has just left its parking space waits a moment before pulling out
-            let parked_wait = (self.cars[i].pull_out > 0.0).then(|| self.cars[i].state.front + 0.1);
-            self.cars[i].pull_out = (self.cars[i].pull_out - dt).max(0.0);
-            // the player's bus indicating out of its stop
-            let let_out = self.player.and_then(|p| self.letting_out(i, &p)).map(|g| self.cars[i].state.front + (g - 1.0).max(0.0));
-            let mut stop_at = [light, yield_at, merge_wait, keep_back, people, parked_wait, let_out]
-                .into_iter()
-                .flatten()
-                .reduce(f32::min);
-            let mut why: (&'static str, f32) = ("", f32::MAX);
-            for (name, v) in [("light", light), ("yield", yield_at), ("merge", merge_wait), ("keep_back", keep_back), ("people", people), ("pull_out", parked_wait), ("let_out", let_out)] {
-                if let Some(v) = v {
-                    if v < why.1 {
-                        why = (name, v);
+        }
+        // parking: stop beside the space, move over into it, and stand there
+        {
+            let car = &mut self.cars[i];
+            if let Some(mut plan) = car.park {
+                let st = &mut car.state;
+                match way.iter().find(|w| w.0 == plan.lane) {
+                    None if st.lane != plan.lane => {
+                        // (its way went elsewhere after all)
+                        car.park = None;
                     }
-                }
-            }
-            self.cars[i].held = stop_at.is_some() || lead.map(|l| l.0.gap < 12.0).unwrap_or(false);
-            // a timetable bus: its stops (see `bus_service`); any other car keeps to the middle
-            // of its lane, or swerves round a car parked at the kerb
-            {
-                let car = &mut self.cars[i];
-                if let Some(service) = car.bus.as_mut() {
-                    let wanted = self.stop_wishes.as_ref().map(|(alighting, waiting)| {
-                        alighting.contains(&car.id) || service.stops.front().is_some_and(|s| waiting.contains(&s.id))
-                    });
-                    let ctx = crate::bus_service::Ctx {
-                        wanted,
-                        net: &self.net,
-                        way: &way,
-                        day_time: self.day_time,
-                        dt,
-                        id: car.id,
-                        stopped: car.stopped,
-                        passing: car.passing.is_some(),
-                        kerb_swerve,
-                        debug: debug || omsi_cfg::env::var_os("OMSI_DEBUG_PAX").is_some(),
-                    };
-                    if let Some(at) = service.step(&mut car.state, &mut car.vehicle, &ctx) {
-                        stop_at = Some(stop_at.map(|x| x.min(at)).unwrap_or(at));
-                        if at < why.1 {
-                            why = ("service", at);
-                        }
-                    }
-                    service.feed_timetable(&mut car.vehicle, self.day_time);
-                } else if car.passing.is_none() && car.park.is_none() {
-                    // round a car parked at the kerb, else in the middle of the lane
-                    let target = kerb_swerve.unwrap_or(0.0);
-                    if debug && (target - car.state.lateral_target).abs() > 0.3 {
-                        log::info!(
-                            "t={:.2}: car {} swerves to {target:+.2} (was {:+.2}, now at {:+.2})",
-                            self.time,
-                            car.id,
-                            car.state.lateral_target,
-                            car.state.lateral
-                        );
-                    }
-                    car.state.lateral_target = target;
-                }
-            }
-            // parking: stop beside the space, move over into it, and stand there
-            {
-                let car = &mut self.cars[i];
-                if let Some(mut plan) = car.park {
-                    let st = &mut car.state;
-                    match way.iter().find(|w| w.0 == plan.lane) {
-                        None if st.lane != plan.lane => {
-                            // (its way went elsewhere after all)
-                            car.park = None;
-                        }
-                        found => {
-                            let dl = found.map(|w| w.1).unwrap_or(-st.s);
-                            let d = dl + plan.s; // origin to the space's middle
-                            if d < 80.0 {
-                                let at = d + st.front + 0.3;
-                                stop_at = Some(stop_at.map(|x| x.min(at)).unwrap_or(at));
-                                if at < why.1 {
-                                    why = ("park", at);
-                                }
-                                st.signal = 2;
-                                st.signal_time = st.signal_time.max(1.0);
+                    found => {
+                        let dl = found.map(|w| w.1).unwrap_or(-st.s);
+                        let d = dl + plan.s; // origin to the space's middle
+                        if d < 80.0 {
+                            let at = d + st.front + 0.3;
+                            stop_at = Some(stop_at.map(|x| x.min(at)).unwrap_or(at));
+                            if at < why.1 {
+                                why = ("park", at);
                             }
-                            // over into the space along the last metres, the move ending
-                            // where the car stops (the lateral place follows the distance
-                            // driven: started too late, the car stood half out of the space)
-                            if car.passing.is_none() {
-                                let len = (plan.lat.abs() * 6.0).clamp(10.0, 22.0);
-                                if !plan.ramped && d < len + 1.0 && d > 2.0 {
-                                    plan.ramped = true;
-                                    st.lateral_target = plan.lat;
-                                    st.lateral_ramp = (st.lateral, plan.lat, st.odometer, (d - 0.6).max(4.0));
-                                } else if plan.ramped {
-                                    st.lateral_target = plan.lat;
-                                } else {
-                                    st.lateral_target = 0.0;
-                                }
-                            }
-                            if d.abs() < 1.5 && st.speed < 0.2 && (st.lateral - plan.lat).abs() < 0.3 {
-                                plan.done = true;
-                            } else if d < -4.0 {
-                                car.park = None;
+                            st.signal = 2;
+                            st.signal_time = st.signal_time.max(1.0);
+                        }
+                        // over into the space along the last metres, the move ending
+                        // where the car stops (the lateral place follows the distance
+                        // driven: started too late, the car stood half out of the space)
+                        if car.passing.is_none() {
+                            let len = (plan.lat.abs() * 6.0).clamp(10.0, 22.0);
+                            if !plan.ramped && d < len + 1.0 && d > 2.0 {
+                                plan.ramped = true;
+                                st.lateral_target = plan.lat;
+                                st.lateral_ramp = (st.lateral, plan.lat, st.odometer, (d - 0.6).max(4.0));
+                            } else if plan.ramped {
+                                st.lateral_target = plan.lat;
+                            } else {
                                 st.lateral_target = 0.0;
                             }
-                            if car.park.is_some() {
-                                car.park = Some(plan);
-                            }
+                        }
+                        if d.abs() < 1.5 && st.speed < 0.2 && (st.lateral - plan.lat).abs() < 0.3 {
+                            plan.done = true;
+                        } else if d < -4.0 {
+                            car.park = None;
+                            st.lateral_target = 0.0;
+                        }
+                        if car.park.is_some() {
+                            car.park = Some(plan);
                         }
                     }
                 }
             }
-            // the end of the way: a timetable bus at the end of its trip drives on as
-            // ordinary traffic until it is out of sight; a dead end is a place to stop
-            {
-                let car = &mut self.cars[i];
-                let st = &mut car.state;
-                let (last, end) = way
-                    .last()
-                    .map(|&(l, d)| (l, d + self.net.lanes[l].length()))
-                    .unwrap_or((st.lane, 0.0));
-                let exhausted = if st.route.is_empty() {
-                    self.net.lanes[last].next.is_empty()
-                } else {
-                    st.route.last() == Some(&last)
-                };
-                let air = self.net.lanes[st.lane].kind == LaneKind::Air;
-                if exhausted && st.change.is_none() && end < 150.0 {
-                    let service = car.bus.as_deref_mut();
-                    let in_service = service
-                        .as_ref()
-                        .map(|b| b.route_open || (b.stops.is_empty() && !b.at_stop()))
-                        .unwrap_or(false);
-                    let stops_left = service.as_ref().map(|b| !b.stops.is_empty() || b.at_stop()).unwrap_or(false);
-                    let waited_out = car.stopped > ROUTE_WAIT_MAX
-                        && service.as_ref().map(|b| b.route_open).unwrap_or(false);
-                    if waited_out && !air {
-                        // it has waited long for more route where the tiles are loaded: the
-                        // rest of its trip does not join what it has (a track the map does
-                        // not have any more). It stood in the carriageway for good, the
-                        // traffic queued behind it; now it drives on as ordinary traffic
-                        // and leaves once out of sight.
-                        if let Some(b) = service {
-                            b.route_open = false;
-                            b.stops.clear();
-                        }
-                        st.route.clear();
-                        st.route_index = 0;
-                        st.planned_next = None;
-                        st.ahead.clear();
-                        st.plan_next(&self.net);
-                        car.gone = true;
-                        log::info!("timetable bus {} waited {:.0} s for the rest of its route at ({:.0}, {:.0}): it does not join; the bus drives on and leaves", car.id, car.stopped, car.vehicle.position.x, car.vehicle.position.y);
-                    } else if !st.route.is_empty() && in_service && !air && !car.gone {
-                        // the end of the route it has: where the loaded tiles end, it waits
-                        // for more route (or to be taken off out of sight); at the end of its
-                        // trip, it stops there and waits for the timetable
-                        let at = end - 0.5;
-                        stop_at = Some(stop_at.map(|x| x.min(at)).unwrap_or(at));
-                        if at < why.1 {
-                            why = ("end", at);
-                        }
-                        let b = service.unwrap();
-                        if !b.route_open && st.speed < 0.3 && !b.trip_done() {
-                            b.phase = Phase::TripDone;
-                            b.phase_t = 0.0;
-                            if debug {
-                                log::info!("t={:.1}: timetable bus {} at the end of its trip", self.time, car.id);
-                            }
-                        }
-                    } else if !st.route.is_empty() && !stops_left {
-                        st.route.clear();
-                        st.route_index = 0;
-                        st.planned_next = None;
-                        st.ahead.clear();
-                        st.plan_next(&self.net);
-                        car.gone = true;
-                        if debug {
-                            log::info!(
-                                "t={:.1}: car {} finished its trip, drives on until out of sight",
-                                self.time,
-                                car.id
-                            );
-                        }
-                    } else if st.route.is_empty() {
-                        // a dead end (the map's edge, the end of a street spline): Omsi.exe
-                        // drives on at speed and deletes the car the frame it runs out of
-                        // road (0x71dc9c finds no next segment, 0x6fe3fc deletes it), and
-                        // `drive` takes it off there. Braking for the end, the cars stopped
-                        // there one by one and those behind queued into a stop-and-go (an
-                        // aircraft flies on in any case)
-                        car.gone = true;
-                    }
-                }
-            }
-            let lead_id = lead
-                .and_then(|l| l.1)
-                .filter(|&j| j < self.cars.len())
-                .map(|j| self.cars[j].id);
-            let car = &mut self.cars[i];
-            car.lead_car = lead_id;
-            if car.state.speed.abs() < 0.1 && !car.at_stop() {
-                car.stopped += dt;
-            } else {
-                car.stopped = 0.0;
-            }
-            if car.state.speed.abs() < 1.0 && !car.at_stop() {
-                car.crawl += dt;
-            } else {
-                car.crawl = 0.0;
-            }
-            if (car.state.odometer - car.progress.0).abs() > 2.0 || car.at_stop() {
-                car.progress = (car.state.odometer, 0.0);
-            } else {
-                car.progress.1 += dt;
-            }
-            let stood = car.stopped.max(car.progress.1);
-            // a random car that has stood for a minute without a light or a junction
-            // holding it has given up: it leaves as soon as nobody sees it
-            // (one yielding for minutes is in a gridlock nobody else will end)
-            if (stood > 60.0 && !car.yielding || stood > 150.0) && !car.is_bus() && !car.light_hold && !car.gone
-            {
-                car.gone = true;
-                if debug {
-                    log::info!(
-                        "t={:.1}: car {} stood for {:.0} s: taken off once out of sight",
-                        self.time,
-                        car.id,
-                        stood
-                    );
-                }
-            }
-            let lane_before = car.state.lane;
-            let lead_now = lead.map(|l| l.0);
-            car.why = match (why.1 < f32::MAX, lead_now) {
-                (_, Some(l)) if l.gap + car.state.front < why.1 => (
-                    match lead.and_then(|l| l.1) {
-                        Some(usize::MAX) => "player",
-                        Some(_) => "lead",
-                        None => "parked",
-                    },
-                    l.gap,
-                ),
-                (true, _) => (why.0, why.1 - car.state.front),
-                _ => ("", 0.0),
-            };
-            if car.fresh > 0.0 {
-                car.fresh -= dt;
-                // placed moving before a queue or a red light: arrive slower rather than
-                // start with an emergency stop
-                for _ in 0..16 {
-                    if car.state.speed < 0.5
-                        || car.state.desired_accel(&self.net, lead_now, stop_at) >= -car.state.decel
-                    {
-                        break;
-                    }
-                    car.state.speed *= 0.8;
-                }
-                if car.state.speed < 0.5 {
-                    car.state.speed = 0.0;
-                }
-            }
-            // edging out round something standing close ahead
-            car.state.accel_cap = car
-                .passing
-                .filter(|p| p.creep && !p.aborted && car.state.odometer < p.block + CREEP_PAST)
-                .map(|_| PULL_OUT_ACCEL);
-            let (speed_before, lane_now, s_now) = (car.state.speed, car.state.lane, car.state.s);
-            if debug && car.stopped > 30.0 {
-                car.holding = Some(format!("lead {:?} (car {:?}), stop {:?} (light {:?}, junction {:?}, merge {:?}), bus {:?}, lane {} s {:.1} of {:.1}, next {:?}, lateral {:.2}, stops {:?}", lead_now, lead_id, stop_at.map(|x| x - car.state.front), light, yield_at, merge_wait, car.bus.as_ref().map(|b| (b.phase, b.phase_t as i32)), car.state.lane, car.state.s, self.net.lanes[car.state.lane].length(), car.state.planned_next, car.state.lateral, car.next_stop()));
-                if car.stopped - dt <= 30.0 {
-                    log::info!(
-                        "t={:.1}: car {} ({}) has stood for 30 s at ({:.0}, {:.0}): {}",
-                        self.time,
-                        car.id,
-                        car.vehicle.ty.def.type_name,
-                        car.vehicle.position.x,
-                        car.vehicle.position.y,
-                        car.holding.as_deref().unwrap_or("-")
-                    );
-                }
-            }
-            if omsi_cfg::env::var("OMSI_DEBUG_CAR").ok().and_then(|v| v.parse::<u64>().ok()) == Some(car.id) {
-                let up: Vec<usize> = car.state.upcoming().take(4).collect();
-                log::info!("t={:.2} car {}: v {:.2} lane {} s {:.1}/{:.1} upcoming {:?} bend {:.2} desired {:.2} lead {:?} stop {:?} why {:?}", self.time, car.id, car.state.speed, car.state.lane, car.state.s, self.net.lanes[car.state.lane].length(), up, car.state.curve_speed(&self.net), car.state.desired_accel(&self.net, lead_now, stop_at), lead_now.map(|l| l.gap), stop_at.map(|x| x - car.state.front), car.why);
-            }
-            if !car.state.drive(&self.net, dt, lead_now, stop_at) {
-                if debug {
-                    log::info!("t={:.1}: car {} ran out of road at {:.1} m/s: taken off", self.time, car.id, car.state.speed);
-                }
-                remove.push(i);
-                continue;
-            }
-            if debug && car.state.acc < -4.5 {
-                // hard braking is for emergencies: say what asked for it
-                let who = match lead.and_then(|l| l.1) {
-                    Some(usize::MAX) => "the player".to_string(),
-                    Some(_) => format!("car {}", lead_id.unwrap_or(0)),
-                    None if lead.is_some() => "a parked car".to_string(),
-                    None => "-".to_string(),
-                };
-                log::info!("t={:.2}: car {} brakes {:.1} m/s² at {:.1} m/s on lane {lane_now} s {s_now:.2} (len {:.1}): lead {:?} ({who}), stop {:?} (light {:?}, junction {:?}, merge {:?})", self.time, car.id, car.state.acc, speed_before, self.net.lanes[lane_now].length(), lead_now, stop_at.map(|x| x - car.state.front), light.map(|x| x - car.state.front), yield_at.map(|x| x - car.state.front), merge_wait);
-            }
-            if car.state.lane != lane_before
-                && self.first_turner.is_none()
-                && !car.is_bus()
-                && self.net.lanes[car.state.lane].turn != 0
-            {
-                self.first_turner = Some((car.id, self.time));
-            }
-            car.state.update_blinker(&self.net);
-            if matches!(car.bus.as_ref().map(|b| b.phase), Some(Phase::Boarding | Phase::Waiting)) {
-                // waiting at a stop: dark until it is about to pull away
-                car.state.blinker = 0;
-            }
-            if omsi_cfg::env::var_os("OMSI_DEBUG_DOORS").is_some() && car.is_bus() && (self.time * 2.0).floor() != ((self.time - dt) * 2.0).floor() {
-                let v = &car.vehicle;
-                let g = |n: &str| v.var(n).map(|x| format!("{x:.2}")).unwrap_or("-".into());
-                let st = g("AI_Scheduled_AtStation");
-                if st != "0.00" || car.bus.as_ref().is_some_and(|b| b.at_stop()) {
-                    log::info!("doors t={:.1} car {} {} phase {:?} speed {:.1}: AtStation {st} door {} {} {} {} target {} {} {} halte {} timer {}", self.time, car.id, v.ty.def.type_name, car.bus.as_ref().map(|b| b.phase), car.state.speed, g("door_0"), g("door_1"), g("door_2"), g("door_3"), g("doorTarget_0"), g("doorTarget_1"), g("doorTarget_2"), g("bremse_halte_sw"), g("door_AI_timer"));
-                }
-            }
-            // An emergency vehicle (its script sets `TrafficPriority`, the stock ambulance)
-            // is told `TrafficPriorityWarningNeeded` while something holds it up close ahead:
-            // a car or the player's bus it catches up with or has to follow, a red light, a
-            // junction it has to wait at. Its script sounds the siren on it; without the
-            // variable it drove silent all day. (Behind a car at the same speed the siren
-            // flickered on a strict "slower".)
-            let priority_warning = car.vehicle.var("TrafficPriority").is_some_and(|v| v > 0.5)
-                && (lead_now.is_some_and(|l| l.gap < PRIORITY_WARN_GAP && l.speed < car.state.speed + 0.5)
-                    || stop_at.is_some_and(|x| x - car.state.front < PRIORITY_WARN_GAP));
-            frames[i] = Some(AiFrame {
-                speed: car.state.speed,
-                odometer: car.state.odometer,
-                steer_deg: 0.0,
-                blinker: car.state.blinker,
-                brake: car.state.braking,
-                lights: self.night,
-                at_station: car.at_station() as i32,
-                at_station_side: car.at_station_side(),
-                priority_warning,
-                engine_off: car.bus.as_ref().is_some_and(|b| !b.engine_running(self.day_time)),
-            });
         }
-        // Who can be seen: a car out of the view (and farther than the mirrors and the
-        // shadows reach) leaves its animations as they are and is not drawn at all.
+        (stop_at, why)
+    }
+
+    /// The end of the way: a timetable bus at the end of its trip drives on as ordinary
+    /// traffic until it is out of sight; a dead end is a place to stop.
+    fn end_of_way(&mut self, i: usize, ts: &TickScene, way: &[(usize, f32)], mut stop_at: Option<f32>, mut why: (&'static str, f32)) -> (Option<f32>, (&'static str, f32)) {
+        let debug = ts.debug;
+        // the end of the way: a timetable bus at the end of its trip drives on as
+        // ordinary traffic until it is out of sight; a dead end is a place to stop
+        {
+            let car = &mut self.cars[i];
+            let st = &mut car.state;
+            let (last, end) = way
+                .last()
+                .map(|&(l, d)| (l, d + self.net.lanes[l].length()))
+                .unwrap_or((st.lane, 0.0));
+            let exhausted = if st.route.is_empty() {
+                self.net.lanes[last].next.is_empty()
+            } else {
+                st.route.last() == Some(&last)
+            };
+            let air = self.net.lanes[st.lane].kind == LaneKind::Air;
+            if exhausted && st.change.is_none() && end < 150.0 {
+                let service = car.bus.as_deref_mut();
+                let in_service = service
+                    .as_ref()
+                    .map(|b| b.route_open || (b.stops.is_empty() && !b.at_stop()))
+                    .unwrap_or(false);
+                let stops_left = service.as_ref().map(|b| !b.stops.is_empty() || b.at_stop()).unwrap_or(false);
+                let waited_out = car.stopped > ROUTE_WAIT_MAX
+                    && service.as_ref().map(|b| b.route_open).unwrap_or(false);
+                if waited_out && !air {
+                    // it has waited long for more route where the tiles are loaded: the
+                    // rest of its trip does not join what it has (a track the map does
+                    // not have any more). It stood in the carriageway for good, the
+                    // traffic queued behind it; now it drives on as ordinary traffic
+                    // and leaves once out of sight.
+                    if let Some(b) = service {
+                        b.route_open = false;
+                        b.stops.clear();
+                    }
+                    st.route.clear();
+                    st.route_index = 0;
+                    st.planned_next = None;
+                    st.ahead.clear();
+                    st.plan_next(&self.net);
+                    car.gone = true;
+                    log::info!("timetable bus {} waited {:.0} s for the rest of its route at ({:.0}, {:.0}): it does not join; the bus drives on and leaves", car.id, car.stopped, car.vehicle.position.x, car.vehicle.position.y);
+                } else if !st.route.is_empty() && in_service && !air && !car.gone {
+                    // the end of the route it has: where the loaded tiles end, it waits
+                    // for more route (or to be taken off out of sight); at the end of its
+                    // trip, it stops there and waits for the timetable
+                    let at = end - 0.5;
+                    stop_at = Some(stop_at.map(|x| x.min(at)).unwrap_or(at));
+                    if at < why.1 {
+                        why = ("end", at);
+                    }
+                    let b = service.unwrap();
+                    if !b.route_open && st.speed < 0.3 && !b.trip_done() {
+                        b.phase = Phase::TripDone;
+                        b.phase_t = 0.0;
+                        if debug {
+                            log::info!("t={:.1}: timetable bus {} at the end of its trip", self.time, car.id);
+                        }
+                    }
+                } else if !st.route.is_empty() && !stops_left {
+                    st.route.clear();
+                    st.route_index = 0;
+                    st.planned_next = None;
+                    st.ahead.clear();
+                    st.plan_next(&self.net);
+                    car.gone = true;
+                    if debug {
+                        log::info!(
+                            "t={:.1}: car {} finished its trip, drives on until out of sight",
+                            self.time,
+                            car.id
+                        );
+                    }
+                } else if st.route.is_empty() {
+                    // a dead end (the map's edge, the end of a street spline): Omsi.exe
+                    // drives on at speed and deletes the car the frame it runs out of
+                    // road (0x71dc9c finds no next segment, 0x6fe3fc deletes it), and
+                    // `drive` takes it off there. Braking for the end, the cars stopped
+                    // there one by one and those behind queued into a stop-and-go (an
+                    // aircraft flies on in any case)
+                    car.gone = true;
+                }
+            }
+        }
+        (stop_at, why)
+    }
+
+    /// Car `i` drives: what it waited for, its speed, and its frame for the body and the
+    /// scripts (None: it ran out of road).
+    #[allow(clippy::too_many_arguments)]
+    fn drive_car(&mut self, i: usize, ts: &TickScene, lead: Option<(Lead, Option<usize>)>, stop_at: Option<f32>, why: (&'static str, f32), light: Option<f32>, yield_at: Option<f32>, merge_wait: Option<f32>) -> Option<AiFrame> {
+        let (debug, dt) = (ts.debug, ts.dt);
+        let lead_id = lead
+            .and_then(|l| l.1)
+            .filter(|&j| j < self.cars.len())
+            .map(|j| self.cars[j].id);
+        let car = &mut self.cars[i];
+        car.lead_car = lead_id;
+        if car.state.speed.abs() < 0.1 && !car.at_stop() {
+            car.stopped += dt;
+        } else {
+            car.stopped = 0.0;
+        }
+        if car.state.speed.abs() < 1.0 && !car.at_stop() {
+            car.crawl += dt;
+        } else {
+            car.crawl = 0.0;
+        }
+        if (car.state.odometer - car.progress.0).abs() > 2.0 || car.at_stop() {
+            car.progress = (car.state.odometer, 0.0);
+        } else {
+            car.progress.1 += dt;
+        }
+        let stood = car.stopped.max(car.progress.1);
+        // a random car that has stood for a minute without a light or a junction
+        // holding it has given up: it leaves as soon as nobody sees it
+        // (one yielding for minutes is in a gridlock nobody else will end)
+        if (stood > 60.0 && !car.yielding || stood > 150.0) && !car.is_bus() && !car.light_hold && !car.gone
+        {
+            car.gone = true;
+            if debug {
+                log::info!(
+                    "t={:.1}: car {} stood for {:.0} s: taken off once out of sight",
+                    self.time,
+                    car.id,
+                    stood
+                );
+            }
+        }
+        let lane_before = car.state.lane;
+        let lead_now = lead.map(|l| l.0);
+        car.why = match (why.1 < f32::MAX, lead_now) {
+            (_, Some(l)) if l.gap + car.state.front < why.1 => (
+                match lead.and_then(|l| l.1) {
+                    Some(usize::MAX) => "player",
+                    Some(_) => "lead",
+                    None => "parked",
+                },
+                l.gap,
+            ),
+            (true, _) => (why.0, why.1 - car.state.front),
+            _ => ("", 0.0),
+        };
+        if car.fresh > 0.0 {
+            car.fresh -= dt;
+            // placed moving before a queue or a red light: arrive slower rather than
+            // start with an emergency stop
+            for _ in 0..16 {
+                if car.state.speed < 0.5
+                    || car.state.desired_accel(&self.net, lead_now, stop_at) >= -car.state.decel
+                {
+                    break;
+                }
+                car.state.speed *= 0.8;
+            }
+            if car.state.speed < 0.5 {
+                car.state.speed = 0.0;
+            }
+        }
+        // edging out round something standing close ahead
+        car.state.accel_cap = car
+            .passing
+            .filter(|p| p.creep && !p.aborted && car.state.odometer < p.block + CREEP_PAST)
+            .map(|_| PULL_OUT_ACCEL);
+        let (speed_before, lane_now, s_now) = (car.state.speed, car.state.lane, car.state.s);
+        if debug && car.stopped > 30.0 {
+            car.holding = Some(format!("lead {:?} (car {:?}), stop {:?} (light {:?}, junction {:?}, merge {:?}), bus {:?}, lane {} s {:.1} of {:.1}, next {:?}, lateral {:.2}, stops {:?}", lead_now, lead_id, stop_at.map(|x| x - car.state.front), light, yield_at, merge_wait, car.bus.as_ref().map(|b| (b.phase, b.phase_t as i32)), car.state.lane, car.state.s, self.net.lanes[car.state.lane].length(), car.state.planned_next, car.state.lateral, car.next_stop()));
+            if car.stopped - dt <= 30.0 {
+                log::info!(
+                    "t={:.1}: car {} ({}) has stood for 30 s at ({:.0}, {:.0}): {}",
+                    self.time,
+                    car.id,
+                    car.vehicle.ty.def.type_name,
+                    car.vehicle.position.x,
+                    car.vehicle.position.y,
+                    car.holding.as_deref().unwrap_or("-")
+                );
+            }
+        }
+        if omsi_cfg::env::var("OMSI_DEBUG_CAR").ok().and_then(|v| v.parse::<u64>().ok()) == Some(car.id) {
+            let up: Vec<usize> = car.state.upcoming().take(4).collect();
+            log::info!("t={:.2} car {}: v {:.2} lane {} s {:.1}/{:.1} upcoming {:?} bend {:.2} desired {:.2} lead {:?} stop {:?} why {:?}", self.time, car.id, car.state.speed, car.state.lane, car.state.s, self.net.lanes[car.state.lane].length(), up, car.state.curve_speed(&self.net), car.state.desired_accel(&self.net, lead_now, stop_at), lead_now.map(|l| l.gap), stop_at.map(|x| x - car.state.front), car.why);
+        }
+        if !car.state.drive(&self.net, dt, lead_now, stop_at) {
+            if debug {
+                log::info!("t={:.1}: car {} ran out of road at {:.1} m/s: taken off", self.time, car.id, car.state.speed);
+            }
+            return None;
+        }
+        if debug && car.state.acc < -4.5 {
+            // hard braking is for emergencies: say what asked for it
+            let who = match lead.and_then(|l| l.1) {
+                Some(usize::MAX) => "the player".to_string(),
+                Some(_) => format!("car {}", lead_id.unwrap_or(0)),
+                None if lead.is_some() => "a parked car".to_string(),
+                None => "-".to_string(),
+            };
+            log::info!("t={:.2}: car {} brakes {:.1} m/s² at {:.1} m/s on lane {lane_now} s {s_now:.2} (len {:.1}): lead {:?} ({who}), stop {:?} (light {:?}, junction {:?}, merge {:?})", self.time, car.id, car.state.acc, speed_before, self.net.lanes[lane_now].length(), lead_now, stop_at.map(|x| x - car.state.front), light.map(|x| x - car.state.front), yield_at.map(|x| x - car.state.front), merge_wait);
+        }
+        if car.state.lane != lane_before
+            && self.first_turner.is_none()
+            && !car.is_bus()
+            && self.net.lanes[car.state.lane].turn != 0
+        {
+            self.first_turner = Some((car.id, self.time));
+        }
+        car.state.update_blinker(&self.net);
+        if matches!(car.bus.as_ref().map(|b| b.phase), Some(Phase::Boarding | Phase::Waiting)) {
+            // waiting at a stop: dark until it is about to pull away
+            car.state.blinker = 0;
+        }
+        if omsi_cfg::env::var_os("OMSI_DEBUG_DOORS").is_some() && car.is_bus() && (self.time * 2.0).floor() != ((self.time - dt) * 2.0).floor() {
+            let v = &car.vehicle;
+            let g = |n: &str| v.var(n).map(|x| format!("{x:.2}")).unwrap_or("-".into());
+            let st = g("AI_Scheduled_AtStation");
+            if st != "0.00" || car.bus.as_ref().is_some_and(|b| b.at_stop()) {
+                log::info!("doors t={:.1} car {} {} phase {:?} speed {:.1}: AtStation {st} door {} {} {} {} target {} {} {} halte {} timer {}", self.time, car.id, v.ty.def.type_name, car.bus.as_ref().map(|b| b.phase), car.state.speed, g("door_0"), g("door_1"), g("door_2"), g("door_3"), g("doorTarget_0"), g("doorTarget_1"), g("doorTarget_2"), g("bremse_halte_sw"), g("door_AI_timer"));
+            }
+        }
+        // An emergency vehicle (its script sets `TrafficPriority`, the stock ambulance)
+        // is told `TrafficPriorityWarningNeeded` while something holds it up close ahead:
+        // a car or the player's bus it catches up with or has to follow, a red light, a
+        // junction it has to wait at. Its script sounds the siren on it; without the
+        // variable it drove silent all day. (Behind a car at the same speed the siren
+        // flickered on a strict "slower".)
+        let priority_warning = car.vehicle.var("TrafficPriority").is_some_and(|v| v > 0.5)
+            && (lead_now.is_some_and(|l| l.gap < PRIORITY_WARN_GAP && l.speed < car.state.speed + 0.5)
+                || stop_at.is_some_and(|x| x - car.state.front < PRIORITY_WARN_GAP));
+        Some(AiFrame {
+            speed: car.state.speed,
+            odometer: car.state.odometer,
+            steer_deg: 0.0,
+            blinker: car.state.blinker,
+            brake: car.state.braking,
+            lights: self.night,
+            at_station: car.at_station() as i32,
+            at_station_side: car.at_station_side(),
+            priority_warning,
+            engine_off: car.bus.as_ref().is_some_and(|b| !b.engine_running(self.day_time)),
+        })
+    }
+
+    /// Who can be seen: a car out of the view (and farther than the mirrors and the
+    /// shadows reach) leaves its animations as they are and is not drawn at all.
+    fn set_visibility(&mut self) {
         if let Some(v) = self.viewer {
             for c in &mut self.cars {
                 let p = c.vehicle.position;
@@ -1056,7 +1207,10 @@ impl Traffic {
                     (p - v.pos).length() < UNSEEN_NEAR || v.frames(p, r);
             }
         }
-        let t_par = std::time::Instant::now();
+    }
+
+    /// The bodies and the scripts of the AI vehicles, on the workers.
+    fn step_bodies(&mut self, dt: f32, frames: &mut [Option<AiFrame>]) {
         // The bodies and the scripts of the AI vehicles run in parallel: each car follows
         // its own way and its OMSI script is its own little machine reading only its own
         // state; with thirty cars and a dozen timetable buses they were the largest single
@@ -1125,11 +1279,11 @@ impl Traffic {
                     }
                 });
         }
-        self.tick_split = [
-            (t_plan - t_start).as_secs_f64(),
-            (t_par - t_plan).as_secs_f64(),
-            t_par.elapsed().as_secs_f64(),
-        ];
+    }
+
+    /// The debug output of a tick (`OMSI_DEBUG_TRAILERS`, `OMSI_DEBUG_TRAFFIC`,
+    /// `OMSI_TRACE_AI`, `OMSI_CHECK_OVERLAP`).
+    fn debug_tick(&mut self, debug: bool, player: Option<PlayerBox>, others: &[(u32, PlayerBox)], frames: &[Option<AiFrame>]) {
         if omsi_cfg::env::var_os("OMSI_DEBUG_TRAILERS").is_some() {
             // coupled parts off the level of what pulls them (#140: trains' and articulated
             // buses' rear parts under bridges)
@@ -1146,7 +1300,7 @@ impl Traffic {
         }
         if debug {
             // a car pulled round harder than a driver would: what way was it given?
-            for (c, fr) in self.cars.iter().zip(&frames) {
+            for (c, fr) in self.cars.iter().zip(frames) {
                 if fr.is_none() || c.body.a_lat.abs() < 4.0 || !self.logged_hard.insert(c.id) {
                     continue;
                 }
@@ -1179,7 +1333,7 @@ impl Traffic {
             }
             // (`OMSI_TRACE_AI_BUSES=1`: the timetable buses only)
             let buses_only = omsi_cfg::env::var_os("OMSI_TRACE_AI_BUSES").is_some();
-            for (c, fr) in self.cars.iter().zip(&frames) {
+            for (c, fr) in self.cars.iter().zip(frames) {
                 let Some(fr) = fr else { continue };
                 if buses_only && !c.is_bus() {
                     continue;
@@ -1194,12 +1348,6 @@ impl Traffic {
         }
         if omsi_cfg::env::var_os("OMSI_CHECK_OVERLAP").is_some() {
             self.check_overlaps(player, &others);
-        }
-        for i in remove.into_iter().rev() {
-            let c = self.cars.swap_remove(i);
-            self.orphan_sounds.extend(c.sounds);
-            // the renders go back to the world at the next sync
-            self.view.retire(c.id);
         }
     }
 
