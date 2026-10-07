@@ -663,6 +663,9 @@ pub struct Lighting {
     pub wetness: f32,
     /// Snow cover on the ground and the roads (0..1).
     pub snow: f32,
+    /// The roads are kept clear of the snow (the weather's "snow on road" off): no cover is
+    /// laid on road surfaces.
+    pub roads_clear: bool,
     /// Enhanced graphics: the physically based high-range renderer (enhanced.wgsl) with its
     /// computed sky, automatic exposure, glow and tone mapping (post.wgsl).
     pub enhanced: bool,
@@ -789,6 +792,7 @@ impl Default for Lighting {
             lamp_shadows: false,
             wetness: 0.0,
             snow: 0.0,
+            roads_clear: false,
             enhanced: false,
             classic: false,
             inside: None,
@@ -8951,17 +8955,9 @@ impl Renderer {
                 light_view_proj_close,
             )));
         }
-        // where the sun stands on the screen (camera uniform post.zw; no shader reads it
-        // since the light shafts were removed)
         let vp_mat = projection
             .map(|p| p * Mat4::look_to_rh((camera.position - ro).as_vec3(), camera.forward(), camera.up()))
             .unwrap_or_else(|| camera.view_proj(aspect, ro));
-        let sun_clip = vp_mat * (cam_rel + sun * 5000.0).extend(1.0);
-        let sun_ndc = if sun_clip.w > 0.0 {
-            Vec3::new(sun_clip.x / sun_clip.w, sun_clip.y / sun_clip.w, 1.0)
-        } else {
-            Vec3::new(9.0, 9.0, 0.0)
-        };
         // where the tile light maps lie, relative to the render origin
         {
             let (lx, ly, side) = self.lm_place.get();
@@ -8972,7 +8968,8 @@ impl Renderer {
             post: [
                 if enhanced { 1.0 } else { 0.0 },
                 self.started.elapsed().as_secs_f32(),
-                sun_ndc.x,
+                // (z: the roads are kept clear of the snow, `Lighting::roads_clear`)
+                if lighting.roads_clear { 1.0 } else { 0.0 },
                 // (the sun's height on the screen is read by no shader any more: the close
                 // shadow map's share of its half of the atlas)
                 self.options.shadow_size.min(SHADOW_CLOSE_MAX) as f32 / self.options.shadow_size.max(1) as f32,
