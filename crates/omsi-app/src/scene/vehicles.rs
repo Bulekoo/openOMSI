@@ -1687,33 +1687,6 @@ impl World {
         // buttons light with door_light_n as well as with haltewunschlampe)
         let change_vars: Vec<String> = ov.iter().filter_map(|o| o.change.as_ref().map(|c| c.2.clone())).collect();
         let change_var = change_vars.first().cloned();
-        let base_overrides: Vec<MaterialDef> = ov.iter().map(|o| (*o).clone()).collect();
-        let mut alpha = material_alpha(&vm.materials, slot, &base_overrides);
-        // what the model.cfg says: without [matl_alpha] OMSI draws a slot opaque
-        // and its texture's alpha is only the reflection mask
-        let declared_alpha = alpha;
-        // Dirt.tga/Dreck.tga is an overlay controlled by Dirt_Norm or
-        // Dirt_Wiped. Keep it in the blended no-depth-write path globally,
-        // even when an add-on has a missing or misordered [matl_alpha].
-        let dirt_overlay = ov.iter().any(|o| o.alphascale.as_deref().is_some_and(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "dirt_norm" | "dirt_wiped")));
-        if dirt_overlay {
-            alpha = AlphaMode::Blend;
-        }
-        // `[alphascale]` is also used by some buses for dirt/paint variables.
-        // Treating every such slot as blended makes an otherwise solid body
-        // translucent on AI vehicles. Only the authored rain-window film is
-        // intrinsically transparent; ordinary body alphascales must retain the
-        // material's declared alpha mode. Stock rain-film materials declare
-        // `[matl_alpha] 2` explicitly, so the variable itself need not promote
-        // a slot into transparency.
-        // a `[isshadow]` mesh is a soft ground decal by convention, its texture's
-        // own alpha fading it out at the edges - without a `[matl_alpha]`
-        // override of its own (most shadow blobs have none) it defaulted to
-        // opaque, so the decal's square base texture painted a solid (often
-        // white or grey) tile under the bus instead of a soft shadow.
-        if def.is_shadow {
-            alpha = AlphaMode::Blend;
-        }
         // `\S:n` = script texture n as transparency map
         let script_trans = ov.iter().find_map(|o| o.transmap.clone()).and_then(|t| t.trim().strip_prefix("\\S:").and_then(|n| n.trim().parse::<usize>().ok()));
         let transmap = ov.iter().find_map(|o| o.transmap.clone()).filter(|t| !t.trim().is_empty() && !t.trim().starts_with("\\S:")).map(|t| subst(&t)).and_then(|t| {
@@ -1721,93 +1694,9 @@ impl World {
             let has_alpha = self.textures.has_alpha(&t, &dirs_ref).unwrap_or(false);
             Some((id, has_alpha))
         });
-        // A few bus packs mark a solid body mesh as `[matl_alpha] 2` and leave
-        // a non-opaque diffuse material alpha on it (the O530 Facelift's
-        // `wagenkasten_embl_eev.o3d` is a concrete example). That alpha belongs
-        // to the paint/reflection data, not to a window, so treating the whole
-        // panel as a blended surface makes the cabin and traffic show through.
-        // Keep real glass/dirt/display layers blended, and keep explicit
-        // transmaps on the mask path; repair only the unambiguous body case.
-        let mesh_name = def.file.to_ascii_lowercase();
-        let transparent_layer_name = ["regen", "dreck", "dirt", "folie"];
-        let material_name = format!("{} {}", mesh_name, m.texture).to_ascii_lowercase();
-        let named_pane = GLASS_WORDS
-            .iter()
-            .chain(transparent_layer_name.iter())
-            .any(|part| material_name.contains(part));
-        // A pane whose name says nothing: its faces lie on a see-through part of
-        // its texture. No list of words finds the SOR NB12's `celokint.o3d` (its
-        // windscreen), `okridic.o3d` (the driver's window) or `vyklopnel1.o3d`
-        // (a tilting window): taken for bodywork they wrote their depth, and the
-        // glow of every lamp and the lit lenses of the traffic lights behind them
-        // were gone - seen only through an opened window.
-        // The alpha that says so is the [matl_transmap]'s where the slot has one:
-        // the diffuse alpha is then only the reflection mask (the stock Golf 2's
-        // body texture is 0 almost everywhere, its transmap opaque). Read from
-        // the diffuse texture, every transmapped car body wrote no depth, and its
-        // wheel arches, far wheels and interior drawn after it showed through the
-        // paint (#928, #932).
-        let coverage_tex = subst(coverage_texture(ov.iter().find_map(|o| o.transmap.as_deref()), &m.texture));
-        let coverage = omsi_texture::find_texture(&coverage_tex, &dirs_ref).and_then(|p| alpha_mask(&p));
-        // (an invisible cover: clear all over and writing its depth - no pane, it is
-        // there to hide what comes after it, see `texture_is_clear`)
-        let cover = declared_alpha == AlphaMode::Blend
-            && !ov.iter().any(|o| o.no_z_write || o.no_z_check)
-            && coverage.as_ref().is_some_and(|mask| texture_is_clear(mask));
-        if cover {
-            log::debug!("  {} slot {slot} '{}': an invisible cover (clear texture), writes depth in model order", def.file, m.texture);
-        }
-        let see_through = !named_pane
-            && !cover
-            && declared_alpha == AlphaMode::Blend
-            && coverage.as_ref().is_some_and(|mask| slot_is_see_through(&vm.data, slot, mask));
-        if see_through {
-            log::debug!("  {} slot {slot} '{}': see-through by its texture's alpha, writes no depth", def.file, m.texture);
-        }
-        // (the name alone still says what is drawn as glass: the same test finds
-        // a gauge's needle film, a blind's net and the shadow under the bus)
-        let transparent_layer_hint = named_pane;
-        let named_body = ["body", "wagenkasten", "karos", "chassis", "kuzov"].iter().any(|part| mesh_name.contains(part));
-        let mesh_has_overlay = def.materials.iter().any(|o| o.no_z_write);
-        // (a body-sized part in any case: a name or a bump map alone also took a
-        // dashboard's display or a sticker on a mesh called "body" for bodywork)
-        let body_hint = (named_body || ov.iter().any(|o| o.bumpmap.is_some()) || !mesh_has_overlay)
-            && material_has_vehicle_volume(&vm.data, slot);
-        // a layer over another mesh of the same shape drawn before it (the WH UK
-        // AI cars' baked shading over their paint, `[matl_alpha] 2`): blended as
-        // the model says - made opaque, the dark bake covered the paint and the
-        // cars drove about black, or with black roofs
-        let layer = vt.mesh_boxes.get(mesh_index).is_some_and(|&(lo, hi)| {
-            (hi - lo).max_element() > 0.5
-                && vt.mesh_boxes[..mesh_index].iter().any(|&(l2, h2)| (l2 - lo).abs().max_element() < 0.03 && (h2 - hi).abs().max_element() < 0.03)
-        });
-        // (Retired: a body blended by `[matl_alpha] 2` is drawn as Omsi.exe draws
-        // it, in model order with its depth written - see `Instance::ordered` -
-        // instead of being guessed opaque, which drew overlay layers black, #127.
-        // `OMSI_REPAIR_BODY_DEPTH=1` brings the old guess back for comparison.)
-        let repair_body_depth = omsi_cfg::env::var_os("OMSI_REPAIR_BODY_DEPTH").is_some() && !layer && is_vehicle_body_material(&def.file, &m.texture, tex.is_some(), transmap.is_some(), ov.iter().any(|o| o.no_z_write), body_hint);
-        // (only a blended slot: an alpha-tested one - `[matl_alpha] 1`, the EN92's
-        // pictograms, a Sprinter's seat covers - is cut out as the model says, and
-        // made opaque its cut-out parts were grey boxes; and not a layer made of
-        // the same faces as another slot of its mesh, an ambient-occlusion or
-        // shading film over the floor, which drawn opaque was black)
-        if repair_body_depth && alpha == AlphaMode::Blend && !dirt_overlay && !transparent_layer_hint && !slot_overlays_another(&vm.data, slot) {
-            alpha = AlphaMode::Opaque;
-        }
-        // Body-volume heuristics must never turn a named pane back into an
-        // opaque draw (the windscreen became a pale grey wall from inside after
-        // the body-depth repair) - but only a pane the model.cfg declares
-        // blended: a "glass" slot without [matl_alpha] is opaque in OMSI (the
-        // LiAZ's dark glass_gr.dds around its displays and over its windows,
-        // which drawn blended let the sky show through the body).
-        if transparent_layer_hint && !dirt_overlay && declared_alpha == AlphaMode::Blend {
-            alpha = AlphaMode::Blend;
-        }
-        // Keep the material's declared alpha mode: a transmap mask alone must not
-        // make a solid body panel translucent.
-        if omsi_cfg::env::var_os("OMSI_FORCE_OPAQUE").is_some() && !dirt_overlay {
-            alpha = AlphaMode::Opaque;
-        }
+        let cx = SlotCx { vt, mesh_index, vm, def, slot, m, dirs_ref, subst: &subst };
+        let SlotAlpha { alpha, declared_alpha, dirt_overlay, cover, see_through, transparent_layer_hint, named_body, repair_body_depth } =
+            slot_alpha(&cx, &ov, tex, transmap);
         // (a night or light map named as a [CTCTexture] is the paint scheme's
         // picture as well, like the diffuse texture and the transparency map:
         // looked up by the model's own name, a destination display lit by its own
@@ -1848,61 +1737,15 @@ impl World {
             log::info!("  {} slot {slot} '{}' diffuse={:?} emissive={:?} specular={:?}/{} tex={:?} alpha={:?} transmap={:?} night={:?} light={:?} env={:?} mask={:?} bump={:?} text={:?} script={:?} script_trans={:?} noZwrite={} noZcheck={} zbias={}", def.file, m.texture, m.diffuse, m.emissive, m.specular, m.specular_power, tex, alpha, transmap, night, lightmap, envmap, env_mask, bump, text_slot, script_slot, script_trans, ov.iter().any(|o| o.no_z_write), ov.iter().any(|o| o.no_z_check), ov.iter().map(|o| o.z_bias).find(|b| *b != 0).unwrap_or(0));
         }
         let textured = tex.is_some() || text_slot.is_some() || script_slot.is_some() || freetex || vt.texchange(&m.texture).is_some();
-        let (color, emissive, specular, ambient) = d3d_material(m, ov.iter().find_map(|o| o.allcolor), textured);
-        let mut extra = material_extra(&ov, env_mask, bump, specular);
-        extra.ambient = Some(ambient);
-        // A vehicle's [matl_nightmap] is added whenever the mesh is drawn, by day
-        // as well, as OMSI 2 does - with or without a [matl_change] around it.
-        // Its lamps and displays are switched by the mesh's [visible] variable or
-        // by what the script draws, not by the time of day: faded in with the
-        // night, a dashboard's warning lamps stayed dark in the daylight (#497).
-        extra.night_switched = night.is_some();
-        // a script's screen (matrix displays, the IBIS's picture, LCDs) is the
-        // glow's and FXAA's business (see `MaterialExtra::screen`), and a `\S:n`
-        // mask makes it an LED panel whose lit dots are its own light
-        // (`MaterialExtra::led`, the enhanced picture's bloom). A slot that is a
-        // `[matl_item]` variant keeps its materials here, not in `dyn_slots`:
-        // without the flags on this `extra` the K++ and Krueger panels showed
-        // their dots but never glowed.
-        extra.screen = script_slot.is_some() || script_trans.is_some();
-        extra.led = script_trans.is_some() && lm_white(&ov);
-        if dirt_overlay {
-            extra.no_z_write = true;
-        }
-        // (chrome: a small opaque part with a sphere map, not the body - see
-        // `MaterialExtra::metal_ok`)
-        extra.metal_ok = envmap.is_some() && alpha == AlphaMode::Opaque && !named_body && !material_has_vehicle_volume(&vm.data, slot);
-        // A few stock vehicles leave noZwrite off on window/dirt materials even
-        // though their alpha mode is Blend. They are transparent colour layers,
-        // not solid shadow casters; letting them into the shadow map paints the
-        // bus shadow with the pane/film texture (the striped triangular artifact).
-        // (Its depth is still written as Omsi.exe writes it, whenever the model
-        // blends the slot by [matl_alpha] 2 without [matl_noZwrite] - a dirt
-        // film's as well: see `MaterialExtra::writes_depth`. Left out of the
-        // depth buffer, the stacked panes of a door blended over each other
-        // whichever lay in front, #211.)
-        if (transparent_layer_hint || see_through) && !cover && alpha == AlphaMode::Blend {
-            extra.writes_depth = declared_alpha == AlphaMode::Blend && !ov.iter().any(|o| o.no_z_write) && !def.is_shadow;
-            extra.no_z_write = true;
-        }
-        // Name the pane explicitly for the shader. A plain blended window has
-        // neither an envmap nor a transmap to identify it, while dirt/rain films
-        // must remain overlays and must not reveal the cabin behind themselves.
-        extra.glass = transparent_layer_hint
-            && alpha == AlphaMode::Blend
-            && !dirt_overlay
-            && !rain_layer;
-        // (while it snows the film is the snow-crystal texture, drawn as it is)
-        // (all three graphics: OMSI 2's own rain, its texture sliding down the
-        // pane, looked like wet paper next to drops that bend the street)
-        extra.rain_film = rain_layer && !snowing() && omsi_cfg::env::var_os("OMSI_TEXTURE_RAIN").is_none();
-        // Some mod buses put [matl_noZcheck] on the complete body mesh.
-        // That flag is for decals; on a body it disables depth writing and
-        // lets the cabin bleed through the outside shell. Keep it on genuine
-        // overlays, but make a repaired body a normal depth-writing surface.
-        if repair_body_depth {
-            extra.no_z_check = false;
-        }
+        let (color, emissive, extra) = slot_extra(
+            &cx,
+            &ov,
+            &SlotAlpha { alpha, declared_alpha, dirt_overlay, cover, see_through, transparent_layer_hint, named_body, repair_body_depth },
+            textured,
+            (night, envmap, env_mask, bump),
+            (script_slot, script_trans, rain_layer),
+            &lm_white,
+        );
         // Text textures repeat like any other (Direct3D's default): the D-series
         // Annax meshes address their lines at v = -0.85..-0.39, and clamped they
         // showed nothing but the empty top row. Number plates, whose UVs run far
@@ -2059,6 +1902,224 @@ impl World {
     }
 }
 
+
+/// One material slot of a vehicle mesh being uploaded (see [`World::vehicle_slot_material`]).
+#[derive(Clone, Copy)]
+struct SlotCx<'s> {
+    vt: &'s omsi_sim::VehicleType,
+    mesh_index: usize,
+    vm: &'s omsi_sim::vehicle::VehicleMesh,
+    def: &'s MeshDef,
+    slot: usize,
+    m: &'s omsi_o3d::Material,
+    dirs_ref: &'s [&'s Path],
+    /// The paint scheme's `[CTCTexture]` substitution.
+    subst: &'s dyn Fn(&str) -> String,
+}
+
+/// How a vehicle's material slot is blended and whether it writes depth.
+#[derive(Clone, Copy)]
+struct SlotAlpha {
+    alpha: AlphaMode,
+    declared_alpha: AlphaMode,
+    dirt_overlay: bool,
+    cover: bool,
+    see_through: bool,
+    transparent_layer_hint: bool,
+    named_body: bool,
+    repair_body_depth: bool,
+}
+
+/// The alpha mode of a vehicle's material slot: what the model.cfg declares, mended for
+/// dirt films, shadow decals, panes and (on request) bodies.
+fn slot_alpha(cx: &SlotCx, ov: &[&MaterialDef], tex: Option<TextureId>, transmap: Option<(TextureId, bool)>) -> SlotAlpha {
+    let SlotCx { vt, mesh_index, vm, def, slot, m, dirs_ref, subst } = *cx;
+    let base_overrides: Vec<MaterialDef> = ov.iter().map(|o| (*o).clone()).collect();
+    let mut alpha = material_alpha(&vm.materials, slot, &base_overrides);
+    // what the model.cfg says: without [matl_alpha] OMSI draws a slot opaque
+    // and its texture's alpha is only the reflection mask
+    let declared_alpha = alpha;
+    // Dirt.tga/Dreck.tga is an overlay controlled by Dirt_Norm or
+    // Dirt_Wiped. Keep it in the blended no-depth-write path globally,
+    // even when an add-on has a missing or misordered [matl_alpha].
+    let dirt_overlay = ov.iter().any(|o| o.alphascale.as_deref().is_some_and(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "dirt_norm" | "dirt_wiped")));
+    if dirt_overlay {
+        alpha = AlphaMode::Blend;
+    }
+    // `[alphascale]` is also used by some buses for dirt/paint variables.
+    // Treating every such slot as blended makes an otherwise solid body
+    // translucent on AI vehicles. Only the authored rain-window film is
+    // intrinsically transparent; ordinary body alphascales must retain the
+    // material's declared alpha mode. Stock rain-film materials declare
+    // `[matl_alpha] 2` explicitly, so the variable itself need not promote
+    // a slot into transparency.
+    // a `[isshadow]` mesh is a soft ground decal by convention, its texture's
+    // own alpha fading it out at the edges - without a `[matl_alpha]`
+    // override of its own (most shadow blobs have none) it defaulted to
+    // opaque, so the decal's square base texture painted a solid (often
+    // white or grey) tile under the bus instead of a soft shadow.
+    if def.is_shadow {
+        alpha = AlphaMode::Blend;
+    }
+    // A few bus packs mark a solid body mesh as `[matl_alpha] 2` and leave
+    // a non-opaque diffuse material alpha on it (the O530 Facelift's
+    // `wagenkasten_embl_eev.o3d` is a concrete example). That alpha belongs
+    // to the paint/reflection data, not to a window, so treating the whole
+    // panel as a blended surface makes the cabin and traffic show through.
+    // Keep real glass/dirt/display layers blended, and keep explicit
+    // transmaps on the mask path; repair only the unambiguous body case.
+    let mesh_name = def.file.to_ascii_lowercase();
+    let transparent_layer_name = ["regen", "dreck", "dirt", "folie"];
+    let material_name = format!("{} {}", mesh_name, m.texture).to_ascii_lowercase();
+    let named_pane = GLASS_WORDS
+        .iter()
+        .chain(transparent_layer_name.iter())
+        .any(|part| material_name.contains(part));
+    // A pane whose name says nothing: its faces lie on a see-through part of
+    // its texture. No list of words finds the SOR NB12's `celokint.o3d` (its
+    // windscreen), `okridic.o3d` (the driver's window) or `vyklopnel1.o3d`
+    // (a tilting window): taken for bodywork they wrote their depth, and the
+    // glow of every lamp and the lit lenses of the traffic lights behind them
+    // were gone - seen only through an opened window.
+    // The alpha that says so is the [matl_transmap]'s where the slot has one:
+    // the diffuse alpha is then only the reflection mask (the stock Golf 2's
+    // body texture is 0 almost everywhere, its transmap opaque). Read from
+    // the diffuse texture, every transmapped car body wrote no depth, and its
+    // wheel arches, far wheels and interior drawn after it showed through the
+    // paint (#928, #932).
+    let coverage_tex = subst(coverage_texture(ov.iter().find_map(|o| o.transmap.as_deref()), &m.texture));
+    let coverage = omsi_texture::find_texture(&coverage_tex, &dirs_ref).and_then(|p| alpha_mask(&p));
+    // (an invisible cover: clear all over and writing its depth - no pane, it is
+    // there to hide what comes after it, see `texture_is_clear`)
+    let cover = declared_alpha == AlphaMode::Blend
+        && !ov.iter().any(|o| o.no_z_write || o.no_z_check)
+        && coverage.as_ref().is_some_and(|mask| texture_is_clear(mask));
+    if cover {
+        log::debug!("  {} slot {slot} '{}': an invisible cover (clear texture), writes depth in model order", def.file, m.texture);
+    }
+    let see_through = !named_pane
+        && !cover
+        && declared_alpha == AlphaMode::Blend
+        && coverage.as_ref().is_some_and(|mask| slot_is_see_through(&vm.data, slot, mask));
+    if see_through {
+        log::debug!("  {} slot {slot} '{}': see-through by its texture's alpha, writes no depth", def.file, m.texture);
+    }
+    // (the name alone still says what is drawn as glass: the same test finds
+    // a gauge's needle film, a blind's net and the shadow under the bus)
+    let transparent_layer_hint = named_pane;
+    let named_body = ["body", "wagenkasten", "karos", "chassis", "kuzov"].iter().any(|part| mesh_name.contains(part));
+    let mesh_has_overlay = def.materials.iter().any(|o| o.no_z_write);
+    // (a body-sized part in any case: a name or a bump map alone also took a
+    // dashboard's display or a sticker on a mesh called "body" for bodywork)
+    let body_hint = (named_body || ov.iter().any(|o| o.bumpmap.is_some()) || !mesh_has_overlay)
+        && material_has_vehicle_volume(&vm.data, slot);
+    // a layer over another mesh of the same shape drawn before it (the WH UK
+    // AI cars' baked shading over their paint, `[matl_alpha] 2`): blended as
+    // the model says - made opaque, the dark bake covered the paint and the
+    // cars drove about black, or with black roofs
+    let layer = vt.mesh_boxes.get(mesh_index).is_some_and(|&(lo, hi)| {
+        (hi - lo).max_element() > 0.5
+            && vt.mesh_boxes[..mesh_index].iter().any(|&(l2, h2)| (l2 - lo).abs().max_element() < 0.03 && (h2 - hi).abs().max_element() < 0.03)
+    });
+    // (Retired: a body blended by `[matl_alpha] 2` is drawn as Omsi.exe draws
+    // it, in model order with its depth written - see `Instance::ordered` -
+    // instead of being guessed opaque, which drew overlay layers black, #127.
+    // `OMSI_REPAIR_BODY_DEPTH=1` brings the old guess back for comparison.)
+    let repair_body_depth = omsi_cfg::env::var_os("OMSI_REPAIR_BODY_DEPTH").is_some() && !layer && is_vehicle_body_material(&def.file, &m.texture, tex.is_some(), transmap.is_some(), ov.iter().any(|o| o.no_z_write), body_hint);
+    // (only a blended slot: an alpha-tested one - `[matl_alpha] 1`, the EN92's
+    // pictograms, a Sprinter's seat covers - is cut out as the model says, and
+    // made opaque its cut-out parts were grey boxes; and not a layer made of
+    // the same faces as another slot of its mesh, an ambient-occlusion or
+    // shading film over the floor, which drawn opaque was black)
+    if repair_body_depth && alpha == AlphaMode::Blend && !dirt_overlay && !transparent_layer_hint && !slot_overlays_another(&vm.data, slot) {
+        alpha = AlphaMode::Opaque;
+    }
+    // Body-volume heuristics must never turn a named pane back into an
+    // opaque draw (the windscreen became a pale grey wall from inside after
+    // the body-depth repair) - but only a pane the model.cfg declares
+    // blended: a "glass" slot without [matl_alpha] is opaque in OMSI (the
+    // LiAZ's dark glass_gr.dds around its displays and over its windows,
+    // which drawn blended let the sky show through the body).
+    if transparent_layer_hint && !dirt_overlay && declared_alpha == AlphaMode::Blend {
+        alpha = AlphaMode::Blend;
+    }
+    // Keep the material's declared alpha mode: a transmap mask alone must not
+    // make a solid body panel translucent.
+    if omsi_cfg::env::var_os("OMSI_FORCE_OPAQUE").is_some() && !dirt_overlay {
+        alpha = AlphaMode::Opaque;
+    }
+    SlotAlpha { alpha, declared_alpha, dirt_overlay, cover, see_through, transparent_layer_hint, named_body, repair_body_depth }
+}
+
+/// The colours and the shader flags (`MaterialExtra`) of a vehicle's material slot.
+fn slot_extra(
+    cx: &SlotCx,
+    ov: &[&MaterialDef],
+    a: &SlotAlpha,
+    textured: bool,
+    (night, envmap, env_mask, bump): (Option<TextureId>, Option<(TextureId, f32)>, Option<TextureId>, Option<(TextureId, f32)>),
+    (script_slot, script_trans, rain_layer): (Option<usize>, Option<usize>, bool),
+    lm_white: &dyn Fn(&[&MaterialDef]) -> bool,
+) -> ([f32; 4], [f32; 3], MaterialExtra) {
+    let SlotCx { vm, def, slot, m, .. } = *cx;
+    let SlotAlpha { alpha, declared_alpha, dirt_overlay, cover, see_through, transparent_layer_hint, named_body, repair_body_depth } = *a;
+    let (color, emissive, specular, ambient) = d3d_material(m, ov.iter().find_map(|o| o.allcolor), textured);
+    let mut extra = material_extra(&ov, env_mask, bump, specular);
+    extra.ambient = Some(ambient);
+    // A vehicle's [matl_nightmap] is added whenever the mesh is drawn, by day
+    // as well, as OMSI 2 does - with or without a [matl_change] around it.
+    // Its lamps and displays are switched by the mesh's [visible] variable or
+    // by what the script draws, not by the time of day: faded in with the
+    // night, a dashboard's warning lamps stayed dark in the daylight (#497).
+    extra.night_switched = night.is_some();
+    // a script's screen (matrix displays, the IBIS's picture, LCDs) is the
+    // glow's and FXAA's business (see `MaterialExtra::screen`), and a `\S:n`
+    // mask makes it an LED panel whose lit dots are its own light
+    // (`MaterialExtra::led`, the enhanced picture's bloom). A slot that is a
+    // `[matl_item]` variant keeps its materials here, not in `dyn_slots`:
+    // without the flags on this `extra` the K++ and Krueger panels showed
+    // their dots but never glowed.
+    extra.screen = script_slot.is_some() || script_trans.is_some();
+    extra.led = script_trans.is_some() && lm_white(&ov);
+    if dirt_overlay {
+        extra.no_z_write = true;
+    }
+    // (chrome: a small opaque part with a sphere map, not the body - see
+    // `MaterialExtra::metal_ok`)
+    extra.metal_ok = envmap.is_some() && alpha == AlphaMode::Opaque && !named_body && !material_has_vehicle_volume(&vm.data, slot);
+    // A few stock vehicles leave noZwrite off on window/dirt materials even
+    // though their alpha mode is Blend. They are transparent colour layers,
+    // not solid shadow casters; letting them into the shadow map paints the
+    // bus shadow with the pane/film texture (the striped triangular artifact).
+    // (Its depth is still written as Omsi.exe writes it, whenever the model
+    // blends the slot by [matl_alpha] 2 without [matl_noZwrite] - a dirt
+    // film's as well: see `MaterialExtra::writes_depth`. Left out of the
+    // depth buffer, the stacked panes of a door blended over each other
+    // whichever lay in front, #211.)
+    if (transparent_layer_hint || see_through) && !cover && alpha == AlphaMode::Blend {
+        extra.writes_depth = declared_alpha == AlphaMode::Blend && !ov.iter().any(|o| o.no_z_write) && !def.is_shadow;
+        extra.no_z_write = true;
+    }
+    // Name the pane explicitly for the shader. A plain blended window has
+    // neither an envmap nor a transmap to identify it, while dirt/rain films
+    // must remain overlays and must not reveal the cabin behind themselves.
+    extra.glass = transparent_layer_hint
+        && alpha == AlphaMode::Blend
+        && !dirt_overlay
+        && !rain_layer;
+    // (while it snows the film is the snow-crystal texture, drawn as it is)
+    // (all three graphics: OMSI 2's own rain, its texture sliding down the
+    // pane, looked like wet paper next to drops that bend the street)
+    extra.rain_film = rain_layer && !snowing() && omsi_cfg::env::var_os("OMSI_TEXTURE_RAIN").is_none();
+    // Some mod buses put [matl_noZcheck] on the complete body mesh.
+    // That flag is for decals; on a body it disables depth writing and
+    // lets the cabin bleed through the outside shell. Keep it on genuine
+    // overlays, but make a repaired body a normal depth-writing surface.
+    if repair_body_depth {
+        extra.no_z_check = false;
+    }
+    (color, emissive, extra)
+}
 /// What uploading a vehicle set gathers, slot by slot (see [`World::upload_vehicle`]).
 struct VehicleUpload<'a> {
     vt: &'a omsi_sim::VehicleType,
