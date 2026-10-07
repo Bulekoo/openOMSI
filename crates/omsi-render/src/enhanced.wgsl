@@ -1085,7 +1085,11 @@ fn shade_enhanced(in: FsIn, puddle_weight: ptr<function, vec2<f32>>, capture: bo
     let cabin_light = interior_lamps(in.world, n, in.params2.z);
     let cabin = sf.albedo * cabin_light * mix(1.0, ao, 0.85);
     var rgb = (direct + ambient + lamps) * pre + cabin;
-    var emit = tex.rgb * material.emissive.rgb * max(enh.exposure.z * 2.0, 0.8);
+    // A material's own emissive colour ([matl_allcolor], an .x's emissive) is the texture at
+    // full brightness in Omsi.exe: shown at the screen's white, not scaled with the eye's
+    // night adaptation - a texture lit that way by [matl_allcolor] glared at several times
+    // white at night (#1228, #1236). (The night maps of lit windows keep their light.)
+    var emit = tex.rgb * material.emissive.rgb * clamp(enh.exposure.z * 2.0, 0.8, 1.0);
     // (the tile light map on the splines and [LightMapMapping] objects is the vanilla
     // path's: here the map's lamps light them, tinted from that map, as they light every
     // other surface - added on top it lit the roads twice, with a hard edge where a road
