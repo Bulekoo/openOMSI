@@ -1298,6 +1298,9 @@ pub struct Scene {
     cpu_params: Vec<[f32; 4]>,
     /// The light grid and lights as last uploaded, so that unchanged ones are not sent again.
     last_grid: Vec<u32>,
+    /// The street lamps that had a shadow map last frame (their places in centimetres):
+    /// they keep it against a lamp only a little stronger (`prepare_lights`).
+    lamp_shadow_last: Vec<[i64; 3]>,
     last_lights: Vec<u8>,
     /// Material bind groups and uniform buffers made since the last `prepare`, by what they
     /// hold: materials made in one go with the same textures and values share them (a C2's
@@ -4998,6 +5001,7 @@ impl Renderer {
             cpu_models: Vec::new(),
             cpu_params: Vec::new(),
             last_grid: Vec::new(),
+            lamp_shadow_last: Vec::new(),
             last_lights: Vec::new(),
             bind_groups: HashMap::new(),
             looks: hashbrown::HashMap::new(),
@@ -7841,7 +7845,7 @@ impl Renderer {
     fn prepare_lights(&self, scene: &mut Scene, cam_rel: Vec3, enhanced: bool, lamp_shadows: bool) -> ([f32; 4], Vec<LampShadow>) {
         // the street lamps that get a shadow map: the few lighting the camera's
         // surroundings most (by their strength over the distance)
-        let mut chosen: Vec<(f32, LampShadow)> = Vec::new();
+        let mut chosen: Vec<(f32, LampShadow, [i64; 3])> = Vec::new();
         let ro = scene.render_origin;
         let side = LIGHT_GRID_SIDE;
         let half = side as f32 * LIGHT_CELL * 0.5;
@@ -7875,8 +7879,15 @@ impl Renderer {
             if lamp_shadows && enhanced && l.housed && l.intensity > 0.0 {
                 let d = (p - cam_rel).length();
                 if d < l.radius + LAMP_SHADOW_REACH {
-                    let score = l.intensity * (l.color[0] + l.color[1] + l.color[2]) * l.core * l.core / (d * d + 25.0);
-                    chosen.push((score, LampShadow { index: idx, position: p, range: l.radius }));
+                    let mut score = l.intensity * (l.color[0] + l.color[1] + l.color[2]) * l.core * l.core / (d * d + 25.0);
+                    // (a lamp that had a map keeps it until another is clearly stronger: the
+                    // set changing with every metre the camera moved switched shadows on and
+                    // off between lamps that light the view about alike, #1613)
+                    let key = l.position.to_array().map(|c| (c * 100.0).round() as i64);
+                    if scene.lamp_shadow_last.contains(&key) {
+                        score *= 1.6;
+                    }
+                    chosen.push((score, LampShadow { index: idx, position: p, range: l.radius }, key));
                 }
             }
             for y in (y0.max(0.0) as usize)..=(y1.min(side as f32 - 1.0) as usize) {
@@ -7938,7 +7949,9 @@ impl Renderer {
             self.rebuild_camera_bind_group(scene);
         }
         chosen.sort_by(|a, b| b.0.total_cmp(&a.0));
-        let lamps = chosen.into_iter().take(LAMP_SHADOWS).map(|c| c.1).collect();
+        chosen.truncate(LAMP_SHADOWS);
+        scene.lamp_shadow_last = chosen.iter().map(|c| c.2).collect();
+        let lamps = chosen.into_iter().map(|c| c.1).collect();
         ([origin[0], origin[1], LIGHT_CELL, side as f32], lamps)
     }
 
