@@ -2913,6 +2913,7 @@ pub fn cli(cmd: &str, arg: &str) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
+    include!("../../../tools/test-support/original_root.rs");
     #[test]
     fn vehicle_type_label_falls_back_to_the_file_name() {
         let path = std::path::Path::new("Vehicles/Pack/NL_202.bus");
@@ -3259,13 +3260,11 @@ mod tests {
     /// The lines follow the date as the game's do: Spandau's 1991 timetable change takes
     /// "5 & 5N" off and brings "130 & N30"; without a date it is the game's default day.
     #[test]
+    #[ignore = "needs the original OMSI 2 install (OMSI_ROOT)"]
     fn lines_follow_the_chrono_date() {
-        let root = omsi_cfg::flags::OMSI_ROOT.live_os().map(PathBuf::from).unwrap_or_else(|| PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let map = root.join("maps/Berlin-Spandau");
-        if !map.join("TTData").is_dir() {
-            eprintln!("skipped: no {}", map.display());
-            return;
-        }
+        require_content(&[&map.join("TTData")]);
         let names = |date: &str| lines_on(&map, date).unwrap().into_iter().map(|l| l.name).collect::<Vec<_>>();
         let (then, now) = (names(""), names("2026-09-17"));
         assert_eq!(then, names(DEFAULT_DATE));
@@ -3324,10 +3323,13 @@ pub fn local_now() -> Option<(i32, i32, i32, i32, i32)> {
 
 #[cfg(test)]
 mod omsi_options_tests {
+    include!("../../../tools/test-support/original_root.rs");
+
     #[test]
+    #[ignore = "needs the original OMSI 2 install (OMSI_ROOT)"]
     fn the_originals_options_are_read() {
-        let root = std::path::Path::new("../../../OMSI 2 Original");
-        let Some(o) = super::omsi_options(root) else { return };
+        let root = &original_root();
+        let o = super::omsi_options(root).expect("options.cfg of the original install");
         assert_eq!(o.last_map.as_deref(), Some("maps/Berlin-Spandau/global.cfg"));
         assert_eq!(o.last_driver.as_deref(), Some("OMSI-Fan"));
         assert_eq!(o.settings["max_fps"], 30);

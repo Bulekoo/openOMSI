@@ -4277,6 +4277,7 @@ pub fn skin_vertices(
 
 #[cfg(test)]
 mod tests {
+    include!("../../../tools/test-support/original_root.rs");
     use super::*;
     use std::sync::Arc;
 
@@ -5007,15 +5008,11 @@ mod tests {
     /// Volvo Wright's dashboard rear-close trigger falls back to its explicit external-close
     /// path when the handbrake guard only produced the button sound.
     #[test]
+    #[ignore = "needs OMSI_ROOT with Volvo_Wright_Family (not part of the stock install)"]
     fn volvo_wright_rear_close_fallback_moves_a_partly_open_door() {
-        let root = omsi_cfg::flags::OMSI_ROOT.os()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/Volvo_Wright_Family/AVBWS1.bus");
-        if !bus.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus]);
         let ty = Arc::new(VehicleType::load(&root, &bus).expect("AVBWS1"));
         let mut v = VehicleInstance::new(ty, VehicleHost::new(crate::SimClock::default()));
         for (name, value) in [
@@ -5036,15 +5033,11 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs OMSI_ROOT with Volvo_Wright_Family (not part of the stock install)"]
     fn volvo_wright_rear_toggle_falls_back_to_external_close() {
-        let root = omsi_cfg::flags::OMSI_ROOT.os()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/Volvo_Wright_Family/AVBWS1.bus");
-        if !bus.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus]);
         let ty = Arc::new(VehicleType::load(&root, &bus).expect("AVBWS1"));
         let mut v = VehicleInstance::new(ty, VehicleHost::new(crate::SimClock::default()));
         for (name, value) in [
@@ -5066,15 +5059,11 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs OMSI_ROOT with Volvo_Wright_Family (not part of the stock install)"]
     fn volvo_wright_rear_toggle_closes_open_leaves_even_with_zero_target() {
-        let root = omsi_cfg::flags::OMSI_ROOT.os()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/Volvo_Wright_Family/AVBWS1.bus");
-        if !bus.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus]);
         let ty = Arc::new(VehicleType::load(&root, &bus).expect("AVBWS1"));
         let mut v = VehicleInstance::new(ty, VehicleHost::new(crate::SimClock::default()));
         for (name, value) in [
@@ -5095,15 +5084,11 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs OMSI_ROOT with Volvo_Wright_Family (not part of the stock install)"]
     fn volvo_wright_rear_toggle_reopens_during_forced_close() {
-        let root = omsi_cfg::flags::OMSI_ROOT.os()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/Volvo_Wright_Family/AVBWS1.bus");
-        if !bus.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus]);
         let ty = Arc::new(VehicleType::load(&root, &bus).expect("AVBWS1"));
         let mut v = VehicleInstance::new(ty, VehicleHost::new(crate::SimClock::default()));
         for (name, value) in [
@@ -5126,15 +5111,11 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs OMSI_ROOT with Volvo_Wright_Family (not part of the stock install)"]
     fn volvo_wright_rear_toggle_keeps_close_target_through_frames() {
-        let root = omsi_cfg::flags::OMSI_ROOT.os()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/Volvo_Wright_Family/AVBWS1.bus");
-        if !bus.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus]);
         let ty = Arc::new(VehicleType::load(&root, &bus).expect("AVBWS1"));
         let mut v = VehicleInstance::new(ty, VehicleHost::new(crate::SimClock::default()));
         for (name, value) in [
@@ -5165,15 +5146,11 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs OMSI_ROOT with Volvo_Wright_Family (not part of the stock install)"]
     fn volvo_wright_family_rear_toggle_closes_every_bus_variant() {
-        let root = omsi_cfg::flags::OMSI_ROOT.os()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let dir = root.join("Vehicles/Volvo_Wright_Family");
-        if !dir.is_dir() {
-            eprintln!("skipped: no {}", dir.display());
-            return;
-        }
+        require_content(&[&dir]);
         let mut buses: Vec<_> = std::fs::read_dir(&dir)
             .expect("Volvo Wright directory")
             .filter_map(Result::ok)
@@ -5240,15 +5217,11 @@ mod tests {
     /// The resolved property plan gives what `compute_mesh_props` gives, for a stock bus
     /// with its variables set to changing values, and after an engine variable joins.
     #[test]
+    #[ignore = "needs the original OMSI 2 install (OMSI_ROOT)"]
     fn props_plan_matches_compute_mesh_props() {
-        let root = omsi_cfg::flags::OMSI_ROOT.os()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/MAN_NL_NG/MAN_EN92_main.bus");
-        if !bus.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus]);
         let ty = Arc::new(VehicleType::load(&root, &bus).expect("EN92"));
         let mut v = VehicleInstance::new(ty, VehicleHost::new(crate::SimClock::default()));
         let compare = |v: &VehicleInstance| {
@@ -5295,15 +5268,11 @@ mod tests {
     /// A `[matl_lightmap]` whose variable the bus does not have is always on (Omsi.exe's
     /// index -1, 0x7fe4e7); one on a variable at 0.3 is off.
     #[test]
+    #[ignore = "needs the original OMSI 2 install (OMSI_ROOT)"]
     fn a_lightmap_on_an_unknown_variable_is_on() {
-        let root = omsi_cfg::flags::OMSI_ROOT.os()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/MAN_NL_NG/MAN_EN92_main.bus");
-        if !bus.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus]);
         let light = |name: Option<&str>, value: f32| {
             let mut ty = VehicleType::load(&root, &bus).expect("EN92");
             let (i, slot, var) = ty
@@ -5344,16 +5313,12 @@ mod tests {
     /// jackknife protection's), and the joint's last dummy - the bone the bellows' rear end
     /// hangs on - turns with it onto the rear section's line.
     #[test]
+    #[ignore = "needs the original OMSI 2 install (OMSI_ROOT)"]
     fn articulation_alpha_turns_the_joint_onto_the_rear_section() {
-        let root = omsi_cfg::flags::OMSI_ROOT.os()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/MAN_NL_NG/MAN_GN92_main.bus");
         let trail = root.join("Vehicles/MAN_NL_NG/MAN_GN92_trail.bus");
-        if !bus.exists() || !trail.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus, &trail]);
         let ty = Arc::new(VehicleType::load(&root, &bus).expect("GN92"));
         let mut v = VehicleInstance::new(ty, VehicleHost::new(crate::SimClock::default()));
         v.attach_trailer_ex(
@@ -5468,15 +5433,11 @@ mod tests {
     /// A bus without `[kmcounter_init]` starts with Omsi.exe's defaults (in service since
     /// 1980, 60000 km a year, +-20 %), not at 0 km; reversing takes the counter back.
     #[test]
+    #[ignore = "needs the original OMSI 2 install (OMSI_ROOT)"]
     fn odometer_starts_at_the_default_service_life() {
-        let root = omsi_cfg::flags::OMSI_ROOT.os()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/MAN_SD200/MAN_SD77.bus");
-        if !bus.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus]);
         let mut ty = VehicleType::load(&root, &bus).expect("SD77");
         ty.def.km_counter_init = None;
         let mut v = VehicleInstance::new(Arc::new(ty), VehicleHost::new(crate::SimClock::default()));
@@ -5494,16 +5455,12 @@ mod tests {
     /// The GN92's joint stops at `[coupling_front_character]`'s 52.5 degrees: the front
     /// section swinging round 90 degrees drags the rear section's axle with it.
     #[test]
+    #[ignore = "needs the original OMSI 2 install (OMSI_ROOT)"]
     fn articulation_stops_at_the_coupling_max_alpha() {
-        let root = omsi_cfg::flags::OMSI_ROOT.os()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/MAN_NL_NG/MAN_GN92_main.bus");
         let trail = root.join("Vehicles/MAN_NL_NG/MAN_GN92_trail.bus");
-        if !bus.exists() || !trail.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus, &trail]);
         let ty = Arc::new(VehicleType::load(&root, &bus).expect("GN92"));
         let mut v = VehicleInstance::new(ty, VehicleHost::new(crate::SimClock::default()));
         v.attach_trailer_ex(
@@ -5563,16 +5520,12 @@ mod tests {
     /// A rear section turns about its own `[rot_pnt_long]` line: the stock GN92's is its
     /// axle; one set ahead of the axle (a steered rear axle, #322) is where it turns.
     #[test]
+    #[ignore = "needs the original OMSI 2 install (OMSI_ROOT)"]
     fn rear_section_turns_about_its_rot_pnt_long() {
-        let root = omsi_cfg::flags::OMSI_ROOT.os()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/MAN_NL_NG/MAN_GN92_main.bus");
         let trail = root.join("Vehicles/MAN_NL_NG/MAN_GN92_trail.bus");
-        if !bus.exists() || !trail.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus, &trail]);
         let ty = Arc::new(VehicleType::load(&root, &bus).expect("GN92"));
         let mut tt = VehicleType::load(&root, &trail).expect("GN92 trail");
         let stock = TrailerPart::new(Arc::new(VehicleType::load(&root, &trail).unwrap()), &ty, &ty.program, 2);
@@ -5586,17 +5539,13 @@ mod tests {
     /// no deck under its axle (a gap at a joint) does not drop it onto the road below, and
     /// one that had sunk under the deck finds it again (#135).
     #[test]
+    #[ignore = "needs the original OMSI 2 install (OMSI_ROOT)"]
     fn rear_section_stays_on_a_viaduct_deck() {
         use std::sync::atomic::{AtomicU8, Ordering};
-        let root = omsi_cfg::flags::OMSI_ROOT.os()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/MAN_NL_NG/MAN_GN92_main.bus");
         let trail = root.join("Vehicles/MAN_NL_NG/MAN_GN92_trail.bus");
-        if !bus.exists() || !trail.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus, &trail]);
         let ty = Arc::new(VehicleType::load(&root, &bus).expect("GN92"));
         let mut v = VehicleInstance::new(ty, VehicleHost::new(crate::SimClock::default()));
         v.attach_trailer_ex(Arc::new(VehicleType::load(&root, &trail).expect("GN92 trail")), false);
@@ -5636,16 +5585,12 @@ mod tests {
     /// #901: the rear section's wheels take the road under them - a kerb-high step under
     /// its left wheel pushes that wheel up into its arch and leaves the right one.
     #[test]
+    #[ignore = "needs the original OMSI 2 install (OMSI_ROOT)"]
     fn rear_section_wheels_spring_on_their_own() {
-        let root = omsi_cfg::flags::OMSI_ROOT.os()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/MAN_NL_NG/MAN_GN92_main.bus");
         let trail = root.join("Vehicles/MAN_NL_NG/MAN_GN92_trail.bus");
-        if !bus.exists() || !trail.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus, &trail]);
         let ty = Arc::new(VehicleType::load(&root, &bus).expect("GN92"));
         let mut v = VehicleInstance::new(ty, VehicleHost::new(crate::SimClock::default()));
         v.attach_trailer_ex(Arc::new(VehicleType::load(&root, &trail).expect("GN92 trail")), false);
@@ -5670,16 +5615,12 @@ mod tests {
     /// every AI articulated bus (and the rear-section trailer of a `.zug` train) drove with
     /// its bellows frozen in the rest pose through every corner.
     #[test]
+    #[ignore = "needs the original OMSI 2 install (OMSI_ROOT)"]
     fn ai_loaded_bellows_keep_their_skin_and_still_bend() {
-        let root = omsi_cfg::flags::OMSI_ROOT.os()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/MAN_NL_NG/MAN_GN92_main.bus");
         let trail = root.join("Vehicles/MAN_NL_NG/MAN_GN92_trail.bus");
-        if !bus.exists() || !trail.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus, &trail]);
         let ai = VehicleType::load_ai(&root, &bus).expect("GN92 (AI)");
         let skinned: Vec<usize> = (0..ai.meshes.len())
             .filter(|&i| !ai.meshes[i].skin.is_empty())
@@ -5737,6 +5678,7 @@ mod tests {
     /// stock GN92's `Gelenk_A-D` on its own files) still bends, both loaded normally and
     /// loaded as an AI copy - the fix is generic over `[setbone]` names, not tied to MAN's.
     #[test]
+    #[ignore = "needs OMSI_CONTENT with the MB_O530_Facelift mod"]
     fn o530g_mod_bellows_bend_and_survive_an_ai_load() {
         let content = omsi_cfg::flags::OMSI_CONTENT.os()
             .map(std::path::PathBuf::from)
@@ -5747,10 +5689,7 @@ mod tests {
             });
         let bus = content.join("Vehicles/MB_O530_Facelift/MB_O530GFL EL 3D Main.bus");
         let trail = content.join("Vehicles/MB_O530_Facelift/MB_O530GFL EL 3D Trail.bus");
-        if !bus.exists() || !trail.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus, &trail]);
         // loaded fully (the player's own bus): bends like the GN92
         let ty = Arc::new(VehicleType::load(&content, &bus).expect("O530G"));
         let skinned = ty
@@ -5801,15 +5740,11 @@ mod tests {
     /// `OMSI_DEBUG_WHEELS` reports the wheels of an AI type, whose vertices were let go after
     /// loading, exactly as it reports those of a fully loaded one.
     #[test]
+    #[ignore = "needs the original OMSI 2 install (OMSI_ROOT)"]
     fn wheel_pivot_report_reads_dropped_meshes() {
-        let root = omsi_cfg::flags::OMSI_ROOT.os()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/MAN_F90/AI_MAN_F90_Wechselbruecke.bus");
-        if !bus.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus]);
         let report = |ty: VehicleType| {
             VehicleInstance::new(Arc::new(ty), VehicleHost::new(crate::SimClock::default()))
                 .wheel_pivot_report()
@@ -5919,6 +5854,7 @@ pub fn road_grip(street_cond: f32, temperature: f32) -> f32 {
 
 #[cfg(test)]
 mod grip_tests {
+    include!("../../../tools/test-support/original_root.rs");
     use super::road_grip;
 
     #[test]
@@ -5935,17 +5871,13 @@ mod grip_tests {
     /// splits its vertices between `Bone` (unbound) and `Bone.001` (the animated dummy), and
     /// with the unbound share dropped the lever bent out of shape as it moved.
     #[test]
+    #[ignore = "needs OMSI_ROOT with AA-FR_BusBundle (not part of the stock install)"]
     fn unbound_bones_keep_their_share_of_a_vertex() {
         use super::*;
         use std::sync::Arc;
-        let root = omsi_cfg::flags::OMSI_ROOT.os()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/AA-FR_BusBundle/2002_Agora_S_2d.bus");
-        if !bus.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus]);
         let ty = Arc::new(VehicleType::load(&root, &bus).expect("Agora S"));
         let i = (0..ty.meshes.len())
             .find(|&i| ty.model.meshes[ty.meshes[i].def_index].file.to_ascii_lowercase().contains("retarderhebel_2"))
@@ -5984,18 +5916,14 @@ mod grip_tests {
     /// 0.5`) and the bone its bellows' far ring hangs on half-way towards the rear section,
     /// whichever way the front section pitches.
     #[test]
+    #[ignore = "needs OMSI_ROOT with AA-FR_BusBundle (not part of the stock install)"]
     fn articulation_beta_tilts_the_joint_towards_the_rear_section() {
         use super::*;
         use std::sync::Arc;
-        let root = omsi_cfg::flags::OMSI_ROOT.os()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from("../../../OMSI 2 Original"));
+        let root = original_root();
         let bus = root.join("Vehicles/AA-FR_BusBundle/2002_Agora_L_3d_main.bus");
         let trail = root.join("Vehicles/AA-FR_BusBundle/2002_Agora_L_3d_trail.bus");
-        if !bus.exists() || !trail.exists() {
-            eprintln!("skipped: no {}", bus.display());
-            return;
-        }
+        require_content(&[&bus, &trail]);
         let ty = Arc::new(VehicleType::load(&root, &bus).expect("Agora L"));
         let mut v = VehicleInstance::new(ty, VehicleHost::new(crate::SimClock::default()));
         v.attach_trailer_ex(Arc::new(VehicleType::load(&root, &trail).expect("Agora L trail")), false);
