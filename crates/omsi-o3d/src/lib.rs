@@ -569,17 +569,17 @@ mod tests {
         if s & 3 == 0 {
             n.x = -n.x;
         }
-        if s % 6 == 0 {
+        if s.is_multiple_of(6) {
             n.y = -n.y;
         }
-        if s % 7 == 0 {
+        if s.is_multiple_of(7) {
             n.z = -n.z;
         }
-        if s % 5 == 0 {
+        if s.is_multiple_of(5) {
             let m = (s % 100) as f32;
             uv.x += m * m / 10000.0;
         }
-        if s % 3 == 0 {
+        if s.is_multiple_of(3) {
             let m = (s % 50) as f32;
             uv.y += m * m / 2500.0;
         }
@@ -707,7 +707,7 @@ mod tests {
     fn unscramble_uv_offsets() {
         let run = |s: u16| {
             let mut uv = Vec2::new(1.0, 1.0);
-            unscramble(s, &mut Vec3::ZERO, &mut Vec3::ZERO, &mut uv);
+            unscramble(s, &mut Vec3::default(), &mut Vec3::default(), &mut uv);
             uv
         };
         // 1: neither multiple of 5 nor of 3
