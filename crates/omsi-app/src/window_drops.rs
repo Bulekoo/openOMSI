@@ -111,7 +111,7 @@ impl Drops {
         true
     }
 
-    fn random(&mut self) -> f32 {
+    pub fn random(&mut self) -> f32 {
         self.seed = self.seed.wrapping_mul(1664525).wrapping_add(1013904223);
         (self.seed >> 8) as f32 / 16777216.0
     }

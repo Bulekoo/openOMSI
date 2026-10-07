@@ -359,7 +359,9 @@ impl WindowWipers {
                     // its whole load to where the blade happened to stand and left a bank of
                     // snow there in the middle of the sweep.
                     let travel = previous[0].distance(current[0]).max(previous[1].distance(current[1]));
-                    let steps = (travel / 0.05).ceil().clamp(1.0, 32.0) as usize;
+                    // (steps narrower than the blade, so the water it pushes up at its ends
+                    // stays one ridge and does not settle as a comb of separate blobs)
+                    let steps = (travel / 0.015).ceil().clamp(1.0, 96.0) as usize;
                     let at = |k: usize| {
                         let t = k as f32 / steps as f32;
                         [previous[0].lerp(current[0], t), previous[1].lerp(current[1], t)]
@@ -372,9 +374,11 @@ impl WindowWipers {
                         }
                     }
                 }
-                film.runoff_time += dt;
-                if liquid && film.local && film.runoff_time >= 0.2 {
-                    film.runoff_time %= 0.2;
+                // The ridge lets a runner go now and then, at uneven times: at a fixed
+                // interval a moving blade left its runners' trails evenly spaced, a fence.
+                film.runoff_time -= dt;
+                if liquid && film.local && film.runoff_time <= 0.0 {
+                    film.runoff_time = 0.08 + film.drops.random() * 0.3;
                     release_runoff(
                         &mut film.wet,
                         &film.points,
