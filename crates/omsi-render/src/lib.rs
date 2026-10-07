@@ -517,7 +517,8 @@ struct MaterialUniform {
     /// `[matl_texadress_mirroronce]`; z the border colour's rgb packed as r * 65536 + g * 256 + b (bytes), w its alpha.
     flags: [f32; 4],
     /// rgb: the D3D material's ambient colour, which takes the ambient light (C); w: 1 for
-    /// a texture that is a season's snow picture (no snow laid over it), 2 the map's water
+    /// a texture that is a season's snow picture (no snow laid over it), 2 the map's water,
+    /// -1 a slot without a texture
     ambient: [f32; 4],
     /// `MaterialExtra::sway`: x 1 for foliage the wind moves, y its pivot's and z its top's
     /// height (mesh units), w how much it gives to the wind
@@ -5696,7 +5697,7 @@ impl Renderer {
             .map(|maps| maps.flags)
             .unwrap_or([0.0; 4]);
         if uniform.ambient[3] < 1.5 {
-            uniform.ambient[3] = snow_texture_flag(scene, texture);
+            uniform.ambient[3] = if texture.is_none() { -1.0 } else { snow_texture_flag(scene, texture) };
         }
         let slot = |t: Option<TextureId>| {
             t.and_then(|t| scene.textures.get(t).map(|g| (t, g.gen)))
@@ -6004,7 +6005,8 @@ impl Renderer {
             },
             ambient: {
                 let a = extra.ambient.unwrap_or([color[0], color[1], color[2]]);
-                [a[0], a[1], a[2], if extra.water { 2.0 } else { snow_texture_flag(scene, texture) }]
+                // (w -1: no texture - the Enhanced shading lights it by its diffuse colour)
+                [a[0], a[1], a[2], if extra.water { 2.0 } else if texture.is_none() { -1.0 } else { snow_texture_flag(scene, texture) }]
             },
             sway: extra.sway.map_or([0.0; 4], |s| [1.0, s[0], s[1], s[2]]),
         };
@@ -13578,6 +13580,38 @@ mod tests {
                     "pitch {pitch}, fov {fov}, floor {show_floor}: {pixel:?}");
             }
         }
+    }
+
+    /// An untextured slot (a Blender export's Base Color alone) keeps its colour in Enhanced:
+    /// the white ambient Omsi.exe gives every o3d slot turned it white under the sky (#1737).
+    #[test]
+    #[ignore = "requires a graphics adapter; run with --ignored on a GPU host"]
+    fn enhanced_untextured_keeps_its_colour() {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+        let mut renderer = pollster::block_on(Renderer::new_with(
+            &instance,
+            None,
+            Some(wgpu::TextureFormat::Rgba8UnormSrgb),
+            RenderOptions { msaa: 1, ssao: false, shadow_size: 1024, fxaa: false, render_scale: 1.0, ..Default::default() },
+        )).expect("test renderer");
+        let mut scene = renderer.new_scene();
+        let mesh = renderer.add_mesh(&mut scene, &MeshData {
+            positions: vec![Vec3::new(-8.0, 4.0, -8.0), Vec3::new(8.0, 4.0, -8.0), Vec3::new(8.0, 4.0, 8.0), Vec3::new(-8.0, 4.0, 8.0)],
+            normals: vec![-Vec3::Y; 4],
+            uvs: vec![glam::Vec2::ZERO; 4],
+            ranges: vec![(0, 6, 0)],
+            indices: vec![0, 1, 2, 0, 2, 3],
+            one_sided: false,
+        });
+        let camera = Camera { position: DVec3::ZERO, yaw: 0.0, pitch: 0.0, roll: 0.0, fov_deg: 90.0, near: 0.1, far: 100.0 };
+        let lighting = Lighting { enhanced: true, shadows: false, fog_density: 0.0, sun_dir: -Vec3::Y, ..Default::default() };
+        let material = renderer.add_material_extra(&mut scene, None, AlphaMode::Opaque,
+            [0.8, 0.05, 0.05, 1.0], false, None, None, None, None, [0.0; 3],
+            MaterialExtra { ambient: Some([1.0; 3]), ..Default::default() });
+        renderer.add_instance(&mut scene, mesh, DVec3::ZERO, Mat4::IDENTITY, vec![material]);
+        let rgba = renderer.render_to_image(&mut scene, 64, 64, &camera, &lighting).unwrap();
+        let px = &rgba[(32 * 64 + 32) * 4..][..3];
+        assert!(px[0] as u32 > px[1] as u32 * 2 + 10 && px[0] as u32 > px[2] as u32 * 2 + 10, "an untextured red slot must stay red: {px:?}");
     }
 
     /// Overlays drawn texel for pixel: onto whole pixels, their size kept.
