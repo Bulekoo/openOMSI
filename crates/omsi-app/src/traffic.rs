@@ -5326,7 +5326,13 @@ impl Traffic {
         for &(pos, heading) in &askers {
             // (off the lanes - a depot yard, a car park - a gate's lane that starts just
             // ahead, the way the bus is facing, is asked all the same: standing a few metres
-            // beside every lane there, the bus never opened the barrier in front of it)
+            // beside every lane there, the bus never opened the barrier in front of it.
+            // Only off the lanes: on the road it asked the lights of every lane up to 6 m
+            // beside it - Winsenburg's bus light jumped for a bus driving past on the road
+            // next to the bus bays, #1790; on a lane, the lanes ahead below ask)
+            if self.net.lane_along(pos, heading, LaneKind::Street, 2.5, 45.0).is_some() {
+                continue;
+            }
             let h = heading.to_radians();
             let fwd = glam::DVec2::new(h.sin(), h.cos());
             for l in 0..self.net.lanes.len() {
