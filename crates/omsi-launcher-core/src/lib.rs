@@ -2616,9 +2616,14 @@ fn duty_args_for_root(d: &Duty, root: &Path) -> Result<Vec<String>> {
     if d.passengers.unwrap_or(true) {
         a.push("--passengers".into());
     }
+    // (a duty needs the timetable even with the timetable buses switched off: the game
+    // then runs it for the player alone, #1762)
     let schedule = d.schedule.unwrap_or(true) || d.line.is_some();
     if schedule {
         a.push("--schedule".into());
+        if d.schedule == Some(false) {
+            a.push("--no-timetable-buses".into());
+        }
     }
     if let (Some(l), true) = (d.line.as_deref().filter(|x| !x.trim().is_empty()), schedule) {
         a.extend(["--line".into(), l.trim().to_string()]);

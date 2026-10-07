@@ -108,6 +108,10 @@ pub(crate) struct Args {
     /// Run the timetable: scheduled AI buses from the map's TTData (needs --traffic > 0 or this).
     #[arg(long)]
     pub(crate) schedule: bool,
+    /// With --schedule: the timetable for the player's own duty only, no timetable AI
+    /// buses (the launcher's "Disable timetable buses" with a line chosen).
+    #[arg(long)]
+    pub(crate) no_timetable_buses: bool,
     /// Date at start, YYYY-MM-DD (default 1989-05-30).
     #[arg(long)]
     pub(crate) date: Option<String>,

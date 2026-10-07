@@ -609,6 +609,9 @@ pub struct Traffic {
     pub unsched_factor: f32,
     /// The options' `[AIMaxCountScheduled]` (0 = no limit).
     pub max_scheduled: u32,
+    /// `--no-timetable-buses`: the timetable runs for the player's duty, but puts no AI
+    /// bus on the road (#1762).
+    pub no_timetable_buses: bool,
     /// Where the player looks from (set every frame).
     pub viewer: Option<Viewer>,
     /// Buildings that hide what is behind them (the player's collision world).
@@ -1442,6 +1445,7 @@ impl Traffic {
             density_curve: world.global.traffic_density_road.clone(),
             unsched_factor: crate::settings::Settings::load().ai_unsched_factor,
             max_scheduled: crate::settings::Settings::load().ai_max_scheduled,
+            no_timetable_buses: false,
             viewer: None,
             occluders: None,
             walkers: Vec::new(),
@@ -3009,6 +3013,9 @@ impl Traffic {
         let &lane = route.first()?;
         let kind = self.net.lanes.get(lane)?.kind;
         // the options' [AIMaxCountScheduled]: no more timetable vehicles than that at once
+        if self.no_timetable_buses {
+            return None;
+        }
         if self.max_scheduled > 0 && self.cars.iter().filter(|c| c.is_bus() || !c.state.route.is_empty()).count() >= self.max_scheduled as usize {
             return None;
         }

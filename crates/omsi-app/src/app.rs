@@ -773,6 +773,7 @@ impl App {
                     match traffic::Traffic::new(&self.args.root, &w, self.args.traffic) {
                         Ok(mut t) => {
                             t.lights_only = !populated;
+                            t.no_timetable_buses = self.args.no_timetable_buses;
                             if let Some(lan) = self.lan.as_ref() {
                                 t.set_lan_seed(lan::population_seed(lan));
                             }
