@@ -720,6 +720,8 @@ pub struct Lighting {
     /// chain has run them together, and what shimmer is left is a fraction of a
     /// full-resolution sample's; 4 is near the calm of the full chain.
     pub led_mips: f32,
+    /// How much brighter the night is shown, in exposure steps after sunset (the settings' 0 .. 3).
+    pub night_brightness: f32,
     /// The player's vehicle's velocity (m/s, world): at speed the airstream drives the drops
     /// on its glass up the windscreen and back along the side windows.
     pub glass_wind: Vec3,
@@ -804,6 +806,7 @@ impl Default for Lighting {
             rain: 0.0,
             fog_base: None,
             envir_tint: [Vec3::ONE; 3],
+            night_brightness: 0.0,
             led_glow: 1.5,
             led_mips: 1.3,
             glass_wind: Vec3::ZERO,
@@ -10777,6 +10780,7 @@ impl Renderer {
             // adaptation to it is the light model's already: lifted by the meter on top, a
             // lamp-lit street came out most of a stop brighter than any eye sees it)
             let mut m = meter_tuning();
+            let after_sunset = self.sky_state.as_ref().map_or(0.0, |st| ((0.052 - st.input.sun_dir.normalize_or_zero().z) / 0.157).clamp(0.0, 1.0));
             m[3] *= 1.0 - atmosphere::smoothstep(3.0, 7.0, self.exposure.unwrap_or(0.0) / std::f32::consts::LN_2);
             let pu = PostUniform {
                 // the metering may take a little off a bright picture and add a little to a
@@ -10794,7 +10798,7 @@ impl Renderer {
                     },
                 ],
                 // darker: the eye takes a few seconds; brighter: under one
-                b: [secs(2.5), secs(0.6), m[1], m[4]],
+                b: [secs(2.5), secs(0.6), m[1], m[4] + lighting.night_brightness * after_sunset],
                 // (w: an LED panel's dots count for this much in the glow's source. The mix
                 // the glow lands with is a few per cent - a lamp a hundred times brighter
                 // than white spreads, a white wall does not - so the dots are multiplied up

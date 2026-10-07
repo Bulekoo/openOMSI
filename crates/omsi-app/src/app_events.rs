@@ -2503,6 +2503,7 @@ impl ApplicationHandler for App {
                 // see `Settings::led_glow`); the panel's picture and its mask are held at
                 // this mip level at most (`Settings::led_mips`)
                 lighting.led_glow = self.settings.led_glow as f32 * 0.25;
+                lighting.night_brightness = self.settings.night_brightness;
                 lighting.led_mips = self.settings.led_mips;
                 let mut finish = false;
                 let mut reconfigure = false;

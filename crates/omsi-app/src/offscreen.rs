@@ -1249,6 +1249,7 @@ pub(crate) fn run_offscreen(
                     .filter_map(|t| t.ty.def.bounding_box.map(|bb| (t.position, t.heading, bb))).take(3).collect();
                 lighting.detail = settings.detail_textures;
                 lighting.windy_trees = settings.windy_trees();
+                lighting.night_brightness = settings.night_brightness;
                 world.finish_texture_upgrades(&renderer, &mut scene);
                 let pixels = renderer.render_to_image(&mut scene, w, h, &cam, &lighting)?;
                 let path = out.with_file_name(format!(
@@ -2503,6 +2504,7 @@ pub(crate) fn run_offscreen(
         .filter_map(|t| t.ty.def.bounding_box.map(|bb| (t.position, t.heading, bb))).take(3).collect();
     lighting.detail = settings.detail_textures;
     lighting.windy_trees = settings.windy_trees();
+    lighting.night_brightness = settings.night_brightness;
     lighting.glass_wind = player_ref.as_ref().or(player.as_ref()).map(|p| crate::lights::vehicle_velocity(&p.vehicle)).unwrap_or_default();
     // OMSI_CONDENSATION=<minutes>,<people>[,engine 0/1]: the cabin air and the condensation
     // on the player's glass after that long with that many aboard
