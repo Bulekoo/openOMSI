@@ -758,6 +758,12 @@ fn push_water(
     }
     let pixels = length2.sqrt() * WIDTH * (SIZE * SIZE) as f32 * bounds[2].abs() * bounds[3] * 0.5;
     let amount = water / pixels.max(1.0);
+    // The ridge starts a cell's half diagonal ahead of the blade: a cell the blade has only
+    // partly wiped must not be filled again, or the next sweep takes only the rest of it
+    // and leaves a stripe on the glass at every place the blade stood at a frame's end.
+    let clear = (0.5f32 / (SIZE as f32 * bounds[2].abs()))
+        .hypot(0.5 / (SIZE as f32 * bounds[3].abs()))
+        .min(WIDTH * 0.5);
     let pixel = |p: Vec3| pane_pixel(p, bounds);
     let lo = pixel(current[0].min(current[1]) - Vec3::splat(WIDTH))
         .floor()
@@ -780,10 +786,10 @@ fn push_water(
             let across = (motion - edge * (motion.dot(edge) / length2)).normalize_or_zero();
             let d = p - current[0] - edge * t;
             let distance = d.dot(across);
-            if d.dot(normal).abs() <= 0.1 && distance > 0.0 && distance < WIDTH {
+            if d.dot(normal).abs() <= 0.1 && distance > clear && distance < WIDTH {
                 // Values above one mark mobile water, even when the wiped
                 // pane carried only a few newly landed drops.
-                wet[i] = (wet[i].max(1.0) + amount * (1.0 - distance / WIDTH)).min(2.0);
+                wet[i] = (wet[i].max(1.0) + amount * (1.0 - (distance - clear) / (WIDTH - clear))).min(2.0);
             }
         }
     }
