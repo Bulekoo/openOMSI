@@ -2763,59 +2763,7 @@ impl Renderer {
         // 740/830 since 0.2.0), and the retry without multisampling was not checked at all.
         let mesh_pages = adapter.get_downlevel_capabilities().flags.contains(wgpu::DownlevelFlags::BASE_VERTEX);
         let name = format!("{} ({:?})", info.name, info.backend);
-        // As few builds as can be: each one compiles every shader again, and four of them in
-        // a row - a phone whose driver failed the first went through them all - kept the
-        // launcher from opening for a minute until Android closed it (#1708, since 0.2.4).
-        // What worked on this adapter before is remembered (`fallback_store`) and tried first;
-        // after a failure the one most likely to work (no multisampling, basic pipelines).
-        let remembered = fallback_load(&name);
-        let mut attempts: Vec<(u32, bool)> = match remembered {
-            Some((m, b)) => vec![(m.min(options.msaa).max(1), b), (1, true)],
-            // (a phone starts with the basic set: the full one failed on Adreno and the
-            // second build after it took long enough for Android to close the app)
-            None if cfg!(any(target_os = "android", target_os = "ios")) => vec![(options.msaa, true), (1, true)],
-            None => vec![(options.msaa, false), (1, false), (1, true)],
-        };
-        attempts.dedup();
-        let mut made: Result<Renderer> = Err(anyhow!("renderer pipelines: not built"));
-        let mut tried: Vec<String> = Vec::new();
-        for (msaa, basic) in attempts {
-            if tried.iter().any(|t| t == &format!("{msaa}{basic}")) || (!basic && basic_pipelines()) {
-                continue;
-            }
-            tried.push(format!("{msaa}{basic}"));
-            if basic {
-                BASIC_PIPELINES.store(true, std::sync::atomic::Ordering::Relaxed);
-            }
-            let internal = device.push_error_scope(wgpu::ErrorFilter::Internal);
-            let memory = device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
-            let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
-            let renderer = Self::build(device.clone(), queue.clone(), name.clone(), format, RenderOptions { msaa, ..options });
-            // (test hook: OMSI_FAKE_GPU_ERROR=pipeline fails a pipeline until the basic ones)
-            if !basic && omsi_cfg::env::var("OMSI_FAKE_GPU_ERROR").as_deref() == Ok("pipeline") {
-                let _ = device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some("test"), source: wgpu::ShaderSource::Wgsl("fn broken( {".into()) });
-            }
-            let errors = [validation.pop().await, memory.pop().await, internal.pop().await];
-            match errors.iter().flatten().next() {
-                None => {
-                    if msaa != options.msaa || basic {
-                        log::warn!("{}: drawing with {}x MSAA{}", info.name, msaa, if basic { ", without the snowfall, the lamps in the fog and the street lamps' shadows" } else { "" });
-                    }
-                    // (a fallback that worked is the first try next time; the full set
-                    // working again forgets it)
-                    if remembered != Some((msaa, basic)) && (msaa != options.msaa || basic || remembered.is_some()) {
-                        fallback_store(&name, (msaa != options.msaa || basic).then_some((msaa, basic)));
-                    }
-                    made = Ok(Renderer { mesh_pages, ..renderer });
-                    break;
-                }
-                Some(e) => {
-                    log::error!("{}: the renderer's pipelines failed ({}x MSAA{}): {}", info.name, msaa, if basic { ", basic pipelines" } else { "" }, gpu_error_text(e));
-                    made = Err(anyhow!("renderer pipelines: {}", gpu_error_text(e)));
-                    drop(renderer);
-                }
-            }
-        }
+        let made = Self::build_with_fallbacks(&device, &queue, &info, &name, format, options, mesh_pages).await;
         // A driver whose shader compiler fails on a pipeline answers "out of memory" or an
         // unknown error, and wgpu takes that as the device lost: on phones (Adreno, Mali)
         // one of 0.2's new pipelines did so, the renderer was made all the same and every
@@ -2838,6 +2786,72 @@ impl Renderer {
             // (and so from the start next time, see `fallback_load`)
             fallback_store(&name, Some((1, true)));
             return Box::pin(Self::new_on(adapter, surface, asked_format, asked_options)).await;
+        }
+        made
+    }
+
+    /// Build the renderer on `device`, again with less where a build fails (see `new_on`).
+    async fn build_with_fallbacks(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        info: &wgpu::AdapterInfo,
+        name: &str,
+        format: wgpu::TextureFormat,
+        options: RenderOptions,
+        mesh_pages: bool,
+    ) -> Result<Renderer> {
+        // As few builds as can be: each one compiles every shader again, and four of them in
+        // a row - a phone whose driver failed the first went through them all - kept the
+        // launcher from opening for a minute until Android closed it (#1708, since 0.2.4).
+        // What worked on this adapter before is remembered (`fallback_store`) and tried first;
+        // after a failure the one most likely to work (no multisampling, basic pipelines).
+        let remembered = fallback_load(name);
+        let mut attempts: Vec<(u32, bool)> = match remembered {
+            Some((m, b)) => vec![(m.min(options.msaa).max(1), b), (1, true)],
+            // (a phone starts with the basic set: the full one failed on Adreno and the
+            // second build after it took long enough for Android to close the app)
+            None if cfg!(any(target_os = "android", target_os = "ios")) => vec![(options.msaa, true), (1, true)],
+            None => vec![(options.msaa, false), (1, false), (1, true)],
+        };
+        attempts.dedup();
+        let mut made: Result<Renderer> = Err(anyhow!("renderer pipelines: not built"));
+        let mut tried: Vec<String> = Vec::new();
+        for (msaa, basic) in attempts {
+            if tried.iter().any(|t| t == &format!("{msaa}{basic}")) || (!basic && basic_pipelines()) {
+                continue;
+            }
+            tried.push(format!("{msaa}{basic}"));
+            if basic {
+                BASIC_PIPELINES.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+            let internal = device.push_error_scope(wgpu::ErrorFilter::Internal);
+            let memory = device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
+            let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
+            let renderer = Self::build(device.clone(), queue.clone(), name.to_string(), format, RenderOptions { msaa, ..options });
+            // (test hook: OMSI_FAKE_GPU_ERROR=pipeline fails a pipeline until the basic ones)
+            if !basic && omsi_cfg::env::var("OMSI_FAKE_GPU_ERROR").as_deref() == Ok("pipeline") {
+                let _ = device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some("test"), source: wgpu::ShaderSource::Wgsl("fn broken( {".into()) });
+            }
+            let errors = [validation.pop().await, memory.pop().await, internal.pop().await];
+            match errors.iter().flatten().next() {
+                None => {
+                    if msaa != options.msaa || basic {
+                        log::warn!("{}: drawing with {}x MSAA{}", info.name, msaa, if basic { ", without the snowfall, the lamps in the fog and the street lamps' shadows" } else { "" });
+                    }
+                    // (a fallback that worked is the first try next time; the full set
+                    // working again forgets it)
+                    if remembered != Some((msaa, basic)) && (msaa != options.msaa || basic || remembered.is_some()) {
+                        fallback_store(name, (msaa != options.msaa || basic).then_some((msaa, basic)));
+                    }
+                    made = Ok(Renderer { mesh_pages, ..renderer });
+                    break;
+                }
+                Some(e) => {
+                    log::error!("{}: the renderer's pipelines failed ({}x MSAA{}): {}", info.name, msaa, if basic { ", basic pipelines" } else { "" }, gpu_error_text(e));
+                    made = Err(anyhow!("renderer pipelines: {}", gpu_error_text(e)));
+                    drop(renderer);
+                }
+            }
         }
         made
     }
