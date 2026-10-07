@@ -1,0 +1,112 @@
+//! Discord, Steam, the Lua plugins and the personnel file's counts in the window's frame.
+
+use super::*;
+
+impl App {
+    /// Discord's status, Steam's callbacks, the plugins' frame (and what they asked the game
+    /// to do), `OMSI_WATCH_VARS`, and the people's counts for the personnel file.
+    pub(super) fn frame_integrations(&mut self, event_loop: &ActiveEventLoop, dt: f32) {
+        // Discord's status: the map, the bus, the line (every few seconds)
+        #[cfg(not(target_os = "android"))]
+        {
+            self.discord_t -= dt;
+            if self.discord_t <= 0.0 {
+                self.discord_t = 5.0;
+                if self.args.server.is_none()
+                    && self.discord.is_none()
+                    && self.settings.discord_status
+                {
+                    self.discord =
+                        crate::discord::Discord::start(&self.settings.discord_app_id);
+                }
+                if let Some(d) = self.discord.as_ref() {
+                    let bus = self.player.as_ref().map(|p| {
+                        let definition = &p.vehicle.ty.def;
+                        let short = omsi_launcher_lib::vehicle_type_label(&definition.type_name, &definition.path);
+                        let full = omsi_launcher_lib::display_bus_name(&format!("{} {short}", definition.manufacturer));
+                        (short, full)
+                    });
+                    let duty = self.duty.as_ref().map(|d| (d.line.as_str(), d.tour.as_str()));
+                    d.set(crate::discord::Presence::for_game(
+                        self.world.as_ref().map(|w| w.global.name.as_str()),
+                        bus.as_ref().map(|(short, full)| (short.as_str(), full.as_str())),
+                        duty,
+                        self.lan.is_some(),
+                    ));
+                }
+            }
+        }
+
+        // Steam's callbacks (rich presence)
+        #[cfg(steam)]
+        if let Some(steam) = self.steam.as_ref() {
+            steam.client.run_callbacks();
+        }
+        // the plugins' frame, with the bus's scripts done
+        let plugins = self.plugins.get_or_insert_with(crate::plugins::load);
+        if !plugins.is_empty() && !self.paused {
+            let info = crate::plugins::game_info(self);
+            let keys = std::mem::take(&mut self.plugin_keys);
+            let events = std::mem::take(&mut self.plugin_events);
+            let plugins = self.plugins.as_mut().unwrap();
+            // the vehicles around it: the AI traffic and the other players' buses
+            let mut others: Vec<(u64, &'static str, &mut omsi_sim::VehicleInstance)> = Vec::new();
+            if let Some(t) = self.traffic.as_mut() {
+                others.extend(t.cars.iter_mut().map(|c| (c.id, "ai", &mut c.vehicle)));
+            }
+            others.extend(self.remotes.remotes.iter_mut().map(|(id, r)| ((1u64 << 48) | *id as u64, "player", r.vehicle_mut())));
+            let mut io = crate::plugins::Io { vehicle: self.player.as_mut().map(|p| &mut p.vehicle), others, dt, message: None, info, commands: Vec::new(), keys, events };
+            plugins.frame(&mut io);
+            let commands = std::mem::take(&mut io.commands);
+            if let Some(m) = io.message {
+                self.service_msg = Some(m);
+            }
+            // what the plugins asked the game to do: lines of the game menu
+            for c in commands {
+                if let Some(k) = self.game_menu_items().iter().position(|m| m.0 == c) {
+                    let was = self.game_menu;
+                    self.menu_prev_pause = self.paused;
+                    self.menu_choose(event_loop, k);
+                    // (an action leaves the menu as it found it)
+                    if self.chooser.is_none() && was.is_none() {
+                        self.game_menu = None;
+                    }
+                } else {
+                    // (a line of the vehicle or world pages)
+                    self.menu_prev_pause = self.paused;
+                    self.page_action(&c);
+                }
+            }
+        } else {
+            self.plugin_keys.clear();
+            // (while the game is paused they wait for the next frame)
+            if self.plugins.as_ref().is_none_or(|p| p.is_empty()) {
+                self.plugin_events.clear();
+            }
+        }
+        // OMSI_WATCH_VARS=a,b: every change of those variables of the player's bus
+        if let (Some(p), Ok(list)) = (self.player.as_ref(), omsi_cfg::env::var("OMSI_WATCH_VARS")) {
+            thread_local!(static LAST: std::cell::RefCell<std::collections::HashMap<String, f32>> = Default::default());
+            LAST.with(|last| {
+                let mut last = last.borrow_mut();
+                for n in list.split(',').map(str::trim).filter(|n| !n.is_empty()) {
+                    let v = p.vehicle.var(n).unwrap_or(f32::NAN);
+                    if last.get(n).is_none_or(|&o| o.to_bits() != v.to_bits()) {
+                        log::info!("watch: {n} = {v} at {:.2} s", self.clock.time);
+                        last.insert(n.to_string(), v);
+                    }
+                }
+            });
+        }
+        if let (Some(h), Some(p)) = (self.humans.as_mut(), self.player.as_ref()) {
+            steps::career_from_humans(&mut self.career, h);
+            // the options' [no_collision_pedastrians]: nobody is knocked down
+            let hurt = if self.settings.collision_pedestrians { h.run_over(&p.vehicle) } else { 0 };
+            if hurt > 0 {
+                self.career.crashes[1] += hurt as i32;
+                self.service_msg = Some(("Pedestrian knocked down!".into(), 6.0));
+                crate::plugins::queue_event(&mut self.plugin_events, "pedestrian", vec![omsi_plugin::InfoValue::Num(hurt as f64)]);
+            }
+        }
+    }
+}
