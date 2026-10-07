@@ -320,6 +320,9 @@ pub(crate) struct App {
     pub(crate) fps_t: Instant,
     /// Last workshop / fuel pump / wash message, and how long it still shows.
     pub(crate) service_msg: Option<(String, f32)>,
+    /// The fuel pump or the bus wash running (`run_service`): which, and the seconds the
+    /// tank or the dirt has not changed (it ends after `SERVICE_SETTLE`).
+    pub(crate) pumping: Option<(&'static str, f32)>,
     /// The server's notifications on the screen (`notify`), oldest first.
     pub(crate) notices: Vec<crate::ui::Notice>,
     /// The look for a newer release during the session (cards over the navigator).

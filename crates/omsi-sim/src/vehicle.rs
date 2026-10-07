@@ -2176,7 +2176,9 @@ impl VehicleInstance {
     /// Run one of the engine's service triggers with `secs` on the clock: OMSI holds
     /// `veh_tank` / `veh_wash` down while the pump or the wash runs and the bus script
     /// decides what a second of it is worth (the SD202 takes 3 litres and caps at 250).
-    fn service(&mut self, name: &str, secs: f32) -> bool {
+    /// One step of a depot service: its trigger (`veh_tank`, `veh_wash`) with `secs` of
+    /// the script's clock. False when the bus has no such handling.
+    pub fn service(&mut self, name: &str, secs: f32) -> bool {
         let keep = self.host.clock.timegap;
         self.host.clock.timegap = secs;
         let ok = self.trigger(name);

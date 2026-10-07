@@ -1456,6 +1456,9 @@ impl ApplicationHandler for App {
                 }
                 *self.profile.entry("humans").or_default() += __t.elapsed().as_secs_f64();
                 self.foot_after_humans();
+                if !self.paused {
+                    self.tick_service(dt);
+                }
                 if let (Some(d), Some(p), Some(w), false) = (
                     self.duty.as_mut(),
                     self.player.as_mut(),
