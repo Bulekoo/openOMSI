@@ -1989,6 +1989,9 @@ pub struct Renderer {
     material_layout: wgpu::BindGroupLayout,
     pass: PassPipelines,
     hdr_pass: Option<PassPipelines>,
+    /// The enhanced sky tone-mapped into the plain pass's target: the sky of the mirrors
+    /// of an Enhanced picture (sky_enhanced.wgsl `fs_enhanced_mirror`).
+    sky_mirror_pipeline: Option<wgpu::RenderPipeline>,
     reflection_pass: Option<PassPipelines>,
     corona_bind_group: wgpu::BindGroup,
     /// The snowfall's parameters (snow.wgsl `SnowParams`) and their bind group.
@@ -3634,6 +3637,7 @@ impl Renderer {
             log::warn!("renderer: the enhanced graphics take more textures than OpenGL has units for on {adapter_name}; drawing vanilla+");
         }
         let leave_out_enhanced = leave_out_enhanced || sixteen_texture_units();
+        let sky_mirror_pipeline = (!leave_out_enhanced).then(|| sky_pipeline_for(format, "fs_enhanced_mirror"));
         let hdr_pass = (!leave_out_enhanced).then(|| PassPipelines {
             pipelines: scene_pipelines(hdr_format, "fs_enhanced", msaa),
             rain_pipelines: scene_pipelines(hdr_format, "fs_enhanced", 1),
@@ -4795,6 +4799,7 @@ impl Renderer {
             material_layout,
             pass,
             hdr_pass,
+            sky_mirror_pipeline,
             reflection_pass,
             corona_bind_group,
             snow_buf,
@@ -10407,6 +10412,12 @@ impl Renderer {
                     }
                 };
             let pp = self.main_pass(enhanced, reflection_frame);
+            // (a mirror of an Enhanced picture, plainly shaded: the window's sky, see
+            // `sky_mirror_pipeline`)
+            let sky_pipe = match &self.sky_mirror_pipeline {
+                Some(p) if lighting.enhanced && !enhanced && !with_overlays && self.sky_state.is_some() && omsi_cfg::env::var_os("OMSI_NO_ENHANCED").is_none() => p,
+                _ => &pp.sky_pipeline,
+            };
             // the enhanced pass's screen mask beside the picture (see `MASK_FORMAT`)
             let mask_attachment = hdr.map(|h| wgpu::RenderPassColorAttachment {
                 view: h.mask_msaa.as_ref().unwrap_or(&h.mask),
@@ -10465,7 +10476,7 @@ impl Renderer {
                     pass.set_bind_group(0, scene.camera_bind_group.as_ref().unwrap(), &[]);
                     if first {
                         if let Some(sky) = &scene.sky_bind_group {
-                            pass.set_pipeline(&pp.sky_pipeline);
+                            pass.set_pipeline(sky_pipe);
                             pass.set_bind_group(1, sky, &[]);
                             pass.set_vertex_buffer(0, self.sky_mesh.0.slice(..));
                             pass.set_index_buffer(self.sky_mesh.1.slice(..), wgpu::IndexFormat::Uint32);
@@ -10537,7 +10548,7 @@ impl Renderer {
             });
             pass.set_bind_group(0, scene.camera_bind_group.as_ref().unwrap(), &[]);
             if let Some(sky) = scene.sky_bind_group.as_ref().filter(|_| parts == 1) {
-                pass.set_pipeline(&pp.sky_pipeline);
+                pass.set_pipeline(sky_pipe);
                 pass.set_bind_group(1, sky, &[]);
                 pass.set_vertex_buffer(0, self.sky_mesh.0.slice(..));
                 pass.set_index_buffer(self.sky_mesh.1.slice(..), wgpu::IndexFormat::Uint32);
