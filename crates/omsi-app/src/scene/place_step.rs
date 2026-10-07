@@ -1024,7 +1024,7 @@ impl World {
     }
 
     /// `[texttexture]` + `[useTextTexture]` on one mesh of an object.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     fn object_text_textures(
         &self,
         renderer: &Renderer,
@@ -1205,7 +1205,7 @@ impl World {
     ) {
         let ObjectCx { ot, pos, xf, lamp, map_id, controller, strings, var_parent, key, tkey, images, .. } = *obj;
         let ObjectMade { mut all_instances, object_variants, script_texts, html_pages, .. } = made;
-        let texture_selection = scenery_texture_selection(&ot, &inst);
+        let texture_selection = scenery_texture_selection(ot, &inst);
         if !ot.dynamic_textures.is_empty() {
             if let Some(rows) = gpu.dynamic_texture_variant(
                 renderer,
@@ -1291,7 +1291,7 @@ impl World {
                 controller,
                 light_index: 0,
                 light_parent: if controller.is_none() && lamp.is_none() {
-                    light_child_of(&self.index().traffic_light_parents, var_parent, &strings)
+                    light_child_of(&self.index().traffic_light_parents, var_parent, strings)
                 } else {
                     None
                 },
@@ -1440,7 +1440,7 @@ fn object_html_pages(
 
 /// The instances of an object's lower levels of detail, and the ground of its
 /// `[terrainmapping]` slots on every level (the first level's go with its own instances).
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn place_object_lods(
     renderer: &Renderer,
     scene: &mut Scene,

@@ -1674,7 +1674,7 @@ impl World {
                 self.note_mirror_aspect(mi, &vm.data, slot);
             }
             Some(self.mirror_texture(renderer, scene, mi))
-        } else if rain_layer && snowing() && !seasonal_texture(&tex_name, &dirs_ref) {
+        } else if rain_layer && snowing() && !seasonal_texture(&tex_name, dirs_ref) {
             tex!("", &dirs_ref, snow_glass_texture)
         } else {
             tex!(&tex_name, &dirs_ref)
@@ -1691,7 +1691,7 @@ impl World {
         let script_trans = ov.iter().find_map(|o| o.transmap.clone()).and_then(|t| t.trim().strip_prefix("\\S:").and_then(|n| n.trim().parse::<usize>().ok()));
         let transmap = ov.iter().find_map(|o| o.transmap.clone()).filter(|t| !t.trim().is_empty() && !t.trim().starts_with("\\S:")).map(|t| subst(&t)).and_then(|t| {
             let id = tex!(&t, &dirs_ref)?;
-            let has_alpha = self.textures.has_alpha(&t, &dirs_ref).unwrap_or(false);
+            let has_alpha = self.textures.has_alpha(&t, dirs_ref).unwrap_or(false);
             Some((id, has_alpha))
         });
         let cx = SlotCx { vt, mesh_index, vm, def, slot, m, dirs_ref, subst: &subst };
@@ -1710,7 +1710,7 @@ impl World {
         // (a `\S:n` panel lit all over by its light map is an LED panel; one
         // whose light map is a picture is a flipdot: see `is_white_lightmap`)
         let lm_white = |ov: &[&MaterialDef]| -> bool {
-            ov.iter().find_map(|o| o.lightmap.as_ref()).and_then(|(t, _)| lightmap_is_white(&subst(t), &dirs_ref)).unwrap_or(true)
+            ov.iter().find_map(|o| o.lightmap.as_ref()).and_then(|(t, _)| lightmap_is_white(&subst(t), dirs_ref)).unwrap_or(true)
         };
         // [matl_envmap] tex factor: reflectivity = factor (saturating at 1) x the
         // reflection mask, which is the [matl_envmap_mask]'s alpha or else the
@@ -1787,7 +1787,7 @@ impl World {
             };
             let it_trans = ov_item.iter().find_map(|o| o.transmap.clone()).filter(|t| !t.trim().is_empty() && !t.trim().starts_with("\\S:")).and_then(|t| {
                 let id = find_tex(&subst(&t))?;
-                let has_alpha = self.textures.has_alpha(&t, &dirs_ref).unwrap_or(false);
+                let has_alpha = self.textures.has_alpha(&t, dirs_ref).unwrap_or(false);
                 Some((id, has_alpha))
             }).or(transmap);
             // `[matl_item]` inherits the base alpha mode. A transmap only supplies
@@ -1878,7 +1878,7 @@ impl World {
             let list = ov.iter().map(|o| &o.lightmaps).find(|l| !l.is_empty())?;
             let maps: Vec<(PathBuf, String)> = list
                 .iter()
-                .filter_map(|(t, v)| omsi_texture::find_texture(&subst(t), &dirs_ref).map(|p| (p, v.clone())))
+                .filter_map(|(t, v)| omsi_texture::find_texture(&subst(t), dirs_ref).map(|p| (p, v.clone())))
                 .collect();
             (maps.len() >= 2 && maps.len() <= 8).then(|| MultiLight {
                 maps,
@@ -1988,7 +1988,7 @@ fn slot_alpha(cx: &SlotCx, ov: &[&MaterialDef], tex: Option<TextureId>, transmap
     // wheel arches, far wheels and interior drawn after it showed through the
     // paint (#928, #932).
     let coverage_tex = subst(coverage_texture(ov.iter().find_map(|o| o.transmap.as_deref()), &m.texture));
-    let coverage = omsi_texture::find_texture(&coverage_tex, &dirs_ref).and_then(|p| alpha_mask(&p));
+    let coverage = omsi_texture::find_texture(&coverage_tex, dirs_ref).and_then(|p| alpha_mask(&p));
     // (an invisible cover: clear all over and writing its depth - no pane, it is
     // there to hide what comes after it, see `texture_is_clear`)
     let cover = declared_alpha == AlphaMode::Blend
@@ -2052,6 +2052,7 @@ fn slot_alpha(cx: &SlotCx, ov: &[&MaterialDef], tex: Option<TextureId>, transmap
 }
 
 /// The colours and the shader flags (`MaterialExtra`) of a vehicle's material slot.
+#[allow(clippy::type_complexity)]
 fn slot_extra(
     cx: &SlotCx,
     ov: &[&MaterialDef],
@@ -2064,7 +2065,7 @@ fn slot_extra(
     let SlotCx { vm, def, slot, m, .. } = *cx;
     let SlotAlpha { alpha, declared_alpha, dirt_overlay, cover, see_through, transparent_layer_hint, named_body, repair_body_depth } = *a;
     let (color, emissive, specular, ambient) = d3d_material(m, ov.iter().find_map(|o| o.allcolor), textured);
-    let mut extra = material_extra(&ov, env_mask, bump, specular);
+    let mut extra = material_extra(ov, env_mask, bump, specular);
     extra.ambient = Some(ambient);
     // A vehicle's [matl_nightmap] is added whenever the mesh is drawn, by day
     // as well, as OMSI 2 does - with or without a [matl_change] around it.
@@ -2080,7 +2081,7 @@ fn slot_extra(
     // without the flags on this `extra` the K++ and Krueger panels showed
     // their dots but never glowed.
     extra.screen = script_slot.is_some() || script_trans.is_some();
-    extra.led = script_trans.is_some() && lm_white(&ov);
+    extra.led = script_trans.is_some() && lm_white(ov);
     if dirt_overlay {
         extra.no_z_write = true;
     }

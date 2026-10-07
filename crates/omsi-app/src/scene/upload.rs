@@ -580,7 +580,7 @@ impl World {
                     let tex = if is_null_texture(&m.texture) || generated {
                         None
                     } else {
-                        match gpu.texture(renderer, scene, &m.texture, &dirs, images) {
+                        match gpu.texture(renderer, scene, &m.texture, dirs, images) {
                             Some((id, path)) => {
                                 t.textures.push(path);
                                 Some(id)

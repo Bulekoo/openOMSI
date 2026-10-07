@@ -354,6 +354,7 @@ impl World {
 
 /// OMSI_CHECK_ROADS on one tile (see [`Check`]); the ground over its roads goes to
 /// `over_road`.
+#[allow(clippy::type_complexity)]
 fn ground_cut_check(
     ts: &TileSurface,
     check_roads: bool,
