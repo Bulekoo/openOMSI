@@ -307,7 +307,7 @@ fn lamp_light(p: vec3<f32>, n: vec3<f32>, v: vec3<f32>, sf: Surface, thin: bool,
 const CAB_AMBIENT: f32 = 1.15;
 
 // How far the puddle threshold drops with the wetness: see the puddle mask in `shade_enhanced`.
-const PUDDLE_SPREAD: f32 = 0.45;
+const PUDDLE_SPREAD: f32 = 0.37;
 
 /// The mip level a pixel's footprint asks for, in levels of the texture whose size is
 /// `texels` (the usual `log2` of the larger derivative, held at 0 and up). An LED panel is
