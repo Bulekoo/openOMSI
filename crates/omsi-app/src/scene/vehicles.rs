@@ -1502,8 +1502,6 @@ impl World {
         scheme: Option<usize>,
         player: bool,
     ) -> VehicleSet {
-        let mut dyn_slots: Vec<DynSlot> = Vec::new();
-        let mut variants: Vec<VariantSlot> = Vec::new();
         let mut dirs = vt.texture_dirs(&self.root);
         let (subst, scheme_dir) = match scheme {
             Some(i) => vt.scheme_substitutions(i),
@@ -1512,48 +1510,12 @@ impl World {
         if let Some(d) = scheme_dir {
             dirs.insert(0, d);
         }
-        // [CTCTexture] slots swapped by the paint scheme
-        let subst = |name: &str| -> String {
-            subst
-                .get(&name.to_ascii_lowercase())
-                .cloned()
-                .unwrap_or_else(|| name.to_string())
-        };
         let dirs_ref: Vec<&Path> = dirs.iter().map(|p| p.as_path()).collect();
-        let mut tex_ids = self.vehicle_textures.lock();
+        let tex_ids = self.vehicle_textures.lock();
         let mut mesh_ids = self.vehicle_meshes.lock();
-        // what the set holds, given back when it is trimmed
-        let mut held: Vec<PathBuf> = Vec::new();
         let mut mesh_keys: Vec<(PathBuf, usize)> = Vec::new();
-        let mut materials: Vec<MaterialId> = Vec::new();
         let t_all = std::time::Instant::now();
         let mut mesh_secs = 0.0f64;
-        let tex_time = std::cell::RefCell::new((0usize, 0.0f64));
-        macro_rules! tex {
-            // (`reflexionN.bmp` wherever a material names it - its light map, its night map,
-            // a `[matl_item]`'s - is camera N's picture: a monitor that shows the camera once
-            // switched on names it so, and was white)
-            ($name:expr, $dirs:expr) => {{
-                let nm: &str = &$name;
-                match mirror_index(nm) {
-                    Some(mi) => Some(self.mirror_texture(renderer, scene, mi)),
-                    None => tex!(nm, $dirs, vehicle_texture),
-                }
-            }};
-            ($name:expr, $dirs:expr, $how:ident) => {{
-                let t = std::time::Instant::now();
-                let n = tex_ids.len();
-                let r = self.$how(renderer, scene, &mut tex_ids, &mut held, $name, $dirs);
-                if tex_ids.len() > n {
-                    let mut tt = tex_time.borrow_mut();
-                    tt.0 += 1;
-                    tt.1 += t.elapsed().as_secs_f64();
-                }
-                r
-            }};
-        }
-        let mut instances = Vec::new();
-        let mut missing_tex: Vec<String> = Vec::new();
         // OMSI_ONLY_MESH=a|b draws only the meshes whose file names contain one of the
         // parts (and logs their materials); OMSI_HIDE_MESH=a|b leaves those out
         let only = omsi_cfg::env::var("OMSI_ONLY_MESH").ok();
@@ -1563,6 +1525,23 @@ impl World {
                 !f.is_empty() && file.to_ascii_lowercase().contains(&f.to_ascii_lowercase())
             })
         };
+        let mut up = VehicleUpload {
+            vt,
+            player,
+            subst: &subst,
+            dirs: &dirs,
+            dirs_ref: &dirs_ref,
+            tex_ids,
+            // what the set holds, given back when it is trimmed
+            held: Vec::new(),
+            materials: Vec::new(),
+            tex_time: std::cell::RefCell::new((0usize, 0.0f64)),
+            instances: Vec::new(),
+            missing_tex: Vec::new(),
+            only: only.clone(),
+            variants: Vec::new(),
+            dyn_slots: Vec::new(),
+        };
         for (mesh_index, vm) in vt.meshes.iter().enumerate() {
             let def = &vt.model.meshes[vm.def_index];
             if only.as_deref().is_some_and(|f| !matches(f, &def.file))
@@ -1570,423 +1549,14 @@ impl World {
             {
                 // keep instance numbering stable: an empty placeholder mesh
                 let id = renderer.add_mesh(scene, &MeshData::default());
-                instances.push((id, vec![]));
+                up.instances.push((id, vec![]));
                 continue;
             }
             let mats: Vec<MaterialId> = vm
                 .materials
                 .iter()
                 .enumerate()
-                .map(|(slot, m)| {
-                    // [useTextTexture] replaces the material's texture by a generated one;
-                    // after a [matl_change]'s [matl_item] it is the item's picture alone (the
-                    // O530's ticket printer shows its text while the electrics are on, the
-                    // plain field otherwise)
-                    let of_slot = |o: &&MaterialDef| omsi_sim::vehicle::override_slot(&vm.materials, o) == Some(slot);
-                    let itemised = def.materials.iter().filter(of_slot).any(|o| o.item) && def.materials.iter().filter(of_slot).any(|o| !o.item && o.change.is_some());
-                    let text_of = |item: Option<bool>| def.materials.iter().filter(of_slot).find(|o| o.use_text_texture.is_some() && item.is_none_or(|i| o.item == i)).map(|o| o.use_text_texture.unwrap().max(0) as usize);
-                    let script_of = |item: Option<bool>| def.materials.iter().filter(of_slot).find(|o| o.use_script_texture.is_some() && item.is_none_or(|i| o.item == i)).map(|o| o.use_script_texture.unwrap().max(0) as usize);
-                    let (text_slot, script_slot) = (text_of(None), script_of(None));
-                    let (text_base, script_base) = if itemised { (text_of(Some(false)), script_of(Some(false))) } else { (text_slot, script_slot) };
-                    let (text_item, script_item) = (text_of(Some(true)).or(text_base), script_of(Some(true)).or(script_base));
-                    let tex_name = subst(&m.texture);
-                    // The film of water on the glass (`[alphascale] Rain_Window_…`) wears
-                    // snow crystals while it snows, unless the vehicle brings a seasonal
-                    // texture of its own: see `rain::snow_on_glass`.
-                    let rain_layer = vm.overrides.iter().filter(of_slot).any(|o| o.alphascale.as_deref().is_some_and(|v| v.trim().to_ascii_lowercase().starts_with("rain_window")));
-                    let tex = if is_null_texture(&m.texture) || text_base.is_some() || script_base.is_some() || vt.texchange(&m.texture).is_some() {
-                        // a slot fed by [useTextTexture] / [useScriptTexture] gets a
-                        // generated picture; the name in the mesh is a placeholder and
-                        // looking for it on disk only produced a false "texture not found"
-                        None
-                    } else if let Some(mi) = mirror_index(&tex_name) {
-                        if player {
-                            self.note_mirror_aspect(mi, &vm.data, slot);
-                        }
-                        Some(self.mirror_texture(renderer, scene, mi))
-                    } else if rain_layer && snowing() && !seasonal_texture(&tex_name, &dirs_ref) {
-                        tex!("", &dirs_ref, snow_glass_texture)
-                    } else {
-                        tex!(&tex_name, &dirs_ref)
-                    };
-                    let ov_all: Vec<&MaterialDef> = vm.overrides.iter().filter(|o| omsi_sim::vehicle::override_slot(&vm.materials, o) == Some(slot)).collect();
-                    let ov_item: Vec<&MaterialDef> = ov_all.iter().copied().filter(|o| o.item).collect();
-                    let ov: Vec<&MaterialDef> = ov_all.iter().copied().filter(|o| !o.item).collect();
-                    // (every [matl_change] of the slot: Omsi.exe keeps one switch per record,
-                    // each showing its item while its variable is on - the Procity's door
-                    // buttons light with door_light_n as well as with haltewunschlampe)
-                    let change_vars: Vec<String> = ov.iter().filter_map(|o| o.change.as_ref().map(|c| c.2.clone())).collect();
-                    let change_var = change_vars.first().cloned();
-                    let base_overrides: Vec<MaterialDef> = ov.iter().map(|o| (*o).clone()).collect();
-                    let mut alpha = material_alpha(&vm.materials, slot, &base_overrides);
-                    // what the model.cfg says: without [matl_alpha] OMSI draws a slot opaque
-                    // and its texture's alpha is only the reflection mask
-                    let declared_alpha = alpha;
-                    // Dirt.tga/Dreck.tga is an overlay controlled by Dirt_Norm or
-                    // Dirt_Wiped. Keep it in the blended no-depth-write path globally,
-                    // even when an add-on has a missing or misordered [matl_alpha].
-                    let dirt_overlay = ov.iter().any(|o| o.alphascale.as_deref().is_some_and(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "dirt_norm" | "dirt_wiped")));
-                    if dirt_overlay {
-                        alpha = AlphaMode::Blend;
-                    }
-                    // `[alphascale]` is also used by some buses for dirt/paint variables.
-                    // Treating every such slot as blended makes an otherwise solid body
-                    // translucent on AI vehicles. Only the authored rain-window film is
-                    // intrinsically transparent; ordinary body alphascales must retain the
-                    // material's declared alpha mode. Stock rain-film materials declare
-                    // `[matl_alpha] 2` explicitly, so the variable itself need not promote
-                    // a slot into transparency.
-                    // a `[isshadow]` mesh is a soft ground decal by convention, its texture's
-                    // own alpha fading it out at the edges - without a `[matl_alpha]`
-                    // override of its own (most shadow blobs have none) it defaulted to
-                    // opaque, so the decal's square base texture painted a solid (often
-                    // white or grey) tile under the bus instead of a soft shadow.
-                    if def.is_shadow {
-                        alpha = AlphaMode::Blend;
-                    }
-                    // `\S:n` = script texture n as transparency map
-                    let script_trans = ov.iter().find_map(|o| o.transmap.clone()).and_then(|t| t.trim().strip_prefix("\\S:").and_then(|n| n.trim().parse::<usize>().ok()));
-                    let transmap = ov.iter().find_map(|o| o.transmap.clone()).filter(|t| !t.trim().is_empty() && !t.trim().starts_with("\\S:")).map(|t| subst(&t)).and_then(|t| {
-                        let id = tex!(&t, &dirs_ref)?;
-                        let has_alpha = self.textures.has_alpha(&t, &dirs_ref).unwrap_or(false);
-                        Some((id, has_alpha))
-                    });
-                    // A few bus packs mark a solid body mesh as `[matl_alpha] 2` and leave
-                    // a non-opaque diffuse material alpha on it (the O530 Facelift's
-                    // `wagenkasten_embl_eev.o3d` is a concrete example). That alpha belongs
-                    // to the paint/reflection data, not to a window, so treating the whole
-                    // panel as a blended surface makes the cabin and traffic show through.
-                    // Keep real glass/dirt/display layers blended, and keep explicit
-                    // transmaps on the mask path; repair only the unambiguous body case.
-                    let mesh_name = def.file.to_ascii_lowercase();
-                    let transparent_layer_name = ["regen", "dreck", "dirt", "folie"];
-                    let material_name = format!("{} {}", mesh_name, m.texture).to_ascii_lowercase();
-                    let named_pane = GLASS_WORDS
-                        .iter()
-                        .chain(transparent_layer_name.iter())
-                        .any(|part| material_name.contains(part));
-                    // A pane whose name says nothing: its faces lie on a see-through part of
-                    // its texture. No list of words finds the SOR NB12's `celokint.o3d` (its
-                    // windscreen), `okridic.o3d` (the driver's window) or `vyklopnel1.o3d`
-                    // (a tilting window): taken for bodywork they wrote their depth, and the
-                    // glow of every lamp and the lit lenses of the traffic lights behind them
-                    // were gone - seen only through an opened window.
-                    // The alpha that says so is the [matl_transmap]'s where the slot has one:
-                    // the diffuse alpha is then only the reflection mask (the stock Golf 2's
-                    // body texture is 0 almost everywhere, its transmap opaque). Read from
-                    // the diffuse texture, every transmapped car body wrote no depth, and its
-                    // wheel arches, far wheels and interior drawn after it showed through the
-                    // paint (#928, #932).
-                    let coverage_tex = subst(coverage_texture(ov.iter().find_map(|o| o.transmap.as_deref()), &m.texture));
-                    let coverage = omsi_texture::find_texture(&coverage_tex, &dirs_ref).and_then(|p| alpha_mask(&p));
-                    // (an invisible cover: clear all over and writing its depth - no pane, it is
-                    // there to hide what comes after it, see `texture_is_clear`)
-                    let cover = declared_alpha == AlphaMode::Blend
-                        && !ov.iter().any(|o| o.no_z_write || o.no_z_check)
-                        && coverage.as_ref().is_some_and(|mask| texture_is_clear(mask));
-                    if cover {
-                        log::debug!("  {} slot {slot} '{}': an invisible cover (clear texture), writes depth in model order", def.file, m.texture);
-                    }
-                    let see_through = !named_pane
-                        && !cover
-                        && declared_alpha == AlphaMode::Blend
-                        && coverage.as_ref().is_some_and(|mask| slot_is_see_through(&vm.data, slot, mask));
-                    if see_through {
-                        log::debug!("  {} slot {slot} '{}': see-through by its texture's alpha, writes no depth", def.file, m.texture);
-                    }
-                    // (the name alone still says what is drawn as glass: the same test finds
-                    // a gauge's needle film, a blind's net and the shadow under the bus)
-                    let transparent_layer_hint = named_pane;
-                    let named_body = ["body", "wagenkasten", "karos", "chassis", "kuzov"].iter().any(|part| mesh_name.contains(part));
-                    let mesh_has_overlay = def.materials.iter().any(|o| o.no_z_write);
-                    // (a body-sized part in any case: a name or a bump map alone also took a
-                    // dashboard's display or a sticker on a mesh called "body" for bodywork)
-                    let body_hint = (named_body || ov.iter().any(|o| o.bumpmap.is_some()) || !mesh_has_overlay)
-                        && material_has_vehicle_volume(&vm.data, slot);
-                    // a layer over another mesh of the same shape drawn before it (the WH UK
-                    // AI cars' baked shading over their paint, `[matl_alpha] 2`): blended as
-                    // the model says - made opaque, the dark bake covered the paint and the
-                    // cars drove about black, or with black roofs
-                    let layer = vt.mesh_boxes.get(mesh_index).is_some_and(|&(lo, hi)| {
-                        (hi - lo).max_element() > 0.5
-                            && vt.mesh_boxes[..mesh_index].iter().any(|&(l2, h2)| (l2 - lo).abs().max_element() < 0.03 && (h2 - hi).abs().max_element() < 0.03)
-                    });
-                    // (Retired: a body blended by `[matl_alpha] 2` is drawn as Omsi.exe draws
-                    // it, in model order with its depth written - see `Instance::ordered` -
-                    // instead of being guessed opaque, which drew overlay layers black, #127.
-                    // `OMSI_REPAIR_BODY_DEPTH=1` brings the old guess back for comparison.)
-                    let repair_body_depth = omsi_cfg::env::var_os("OMSI_REPAIR_BODY_DEPTH").is_some() && !layer && is_vehicle_body_material(&def.file, &m.texture, tex.is_some(), transmap.is_some(), ov.iter().any(|o| o.no_z_write), body_hint);
-                    // (only a blended slot: an alpha-tested one - `[matl_alpha] 1`, the EN92's
-                    // pictograms, a Sprinter's seat covers - is cut out as the model says, and
-                    // made opaque its cut-out parts were grey boxes; and not a layer made of
-                    // the same faces as another slot of its mesh, an ambient-occlusion or
-                    // shading film over the floor, which drawn opaque was black)
-                    if repair_body_depth && alpha == AlphaMode::Blend && !dirt_overlay && !transparent_layer_hint && !slot_overlays_another(&vm.data, slot) {
-                        alpha = AlphaMode::Opaque;
-                    }
-                    // Body-volume heuristics must never turn a named pane back into an
-                    // opaque draw (the windscreen became a pale grey wall from inside after
-                    // the body-depth repair) - but only a pane the model.cfg declares
-                    // blended: a "glass" slot without [matl_alpha] is opaque in OMSI (the
-                    // LiAZ's dark glass_gr.dds around its displays and over its windows,
-                    // which drawn blended let the sky show through the body).
-                    if transparent_layer_hint && !dirt_overlay && declared_alpha == AlphaMode::Blend {
-                        alpha = AlphaMode::Blend;
-                    }
-                    // Keep the material's declared alpha mode: a transmap mask alone must not
-                    // make a solid body panel translucent.
-                    if omsi_cfg::env::var_os("OMSI_FORCE_OPAQUE").is_some() && !dirt_overlay {
-                        alpha = AlphaMode::Opaque;
-                    }
-                    // (a night or light map named as a [CTCTexture] is the paint scheme's
-                    // picture as well, like the diffuse texture and the transparency map:
-                    // looked up by the model's own name, a destination display lit by its own
-                    // texture glowed with the model's default text over the repaint's, #895)
-                    let night = ov.iter().find_map(|o| o.nightmap.clone()).and_then(|t| {
-                        tex!(&subst(&t), &dirs_ref)
-                    });
-                    let lightmap = ov.iter().find_map(|o| o.lightmap.clone()).and_then(|(t, _)| {
-                        tex!(&subst(&t), &dirs_ref)
-                    });
-                    // (a `\S:n` panel lit all over by its light map is an LED panel; one
-                    // whose light map is a picture is a flipdot: see `is_white_lightmap`)
-                    let lm_white = |ov: &[&MaterialDef]| -> bool {
-                        ov.iter().find_map(|o| o.lightmap.as_ref()).and_then(|(t, _)| lightmap_is_white(&subst(t), &dirs_ref)).unwrap_or(true)
-                    };
-                    // [matl_envmap] tex factor: reflectivity = factor (saturating at 1) x the
-                    // reflection mask, which is the [matl_envmap_mask]'s alpha or else the
-                    // diffuse alpha - 1 for a texture without an alpha channel, as D3D samples
-                    // it (a BC1 texture samples as 1 too): the SD200's dashboard (24-bit
-                    // bitmap, factor 0.1) keeps a faint gloss. The mask matters: the Citaro's
-                    // doors and the O530 Facelift's bodies carry a paint whose alpha is 255 and
-                    // a separate mask of about 6-10 %; read as the mask, the alpha made them
-                    // mirrors. The mask and the bump map are shared vehicle textures like the
-                    // rest (the bump map as a height map under a key of its own).
-                    let envmap = ov.iter().find_map(|o| o.envmap.clone()).filter(|_| omsi_cfg::env::var_os("OMSI_NO_ENVMAP").is_none()).and_then(|(t, f)| {
-                        let id = tex!(&t, &dirs_ref)?;
-                        Some((id, f))
-                    });
-                    let env_mask = ov.iter().find_map(|o| o.envmap_mask.clone()).filter(|t| envmap.is_some() && !t.trim().is_empty()).and_then(|t| tex!(&subst(&t), &dirs_ref));
-                    let bump = ov.iter().find_map(|o| o.bumpmap.clone()).filter(|_| envmap.is_some() && omsi_cfg::env::var_os("OMSI_NO_BUMP").is_none()).and_then(|(t, f)| tex!(&subst(&t), &dirs_ref, vehicle_bump_texture).map(|id| (id, f)));
-                    // a [matl_freetex] slot gets its texture from a string variable at run
-                    // time, so an empty slot here is not a missing file
-                    let freetex = ov_all.iter().any(|o| o.freetex.is_some());
-                    if tex.is_none() && !is_null_texture(&m.texture) && text_slot.is_none() && script_slot.is_none() && !freetex && vt.texchange(&m.texture).is_none() {
-                        missing_tex.push(format!("{} ({})", tex_name, def.file));
-                    }
-                    if only.is_some() {
-                        log::info!("  {} slot {slot} '{}' diffuse={:?} emissive={:?} specular={:?}/{} tex={:?} alpha={:?} transmap={:?} night={:?} light={:?} env={:?} mask={:?} bump={:?} text={:?} script={:?} script_trans={:?} noZwrite={} noZcheck={} zbias={}", def.file, m.texture, m.diffuse, m.emissive, m.specular, m.specular_power, tex, alpha, transmap, night, lightmap, envmap, env_mask, bump, text_slot, script_slot, script_trans, ov.iter().any(|o| o.no_z_write), ov.iter().any(|o| o.no_z_check), ov.iter().map(|o| o.z_bias).find(|b| *b != 0).unwrap_or(0));
-                    }
-                    let textured = tex.is_some() || text_slot.is_some() || script_slot.is_some() || freetex || vt.texchange(&m.texture).is_some();
-                    let (color, emissive, specular, ambient) = d3d_material(m, ov.iter().find_map(|o| o.allcolor), textured);
-                    let mut extra = material_extra(&ov, env_mask, bump, specular);
-                    extra.ambient = Some(ambient);
-                    // A vehicle's [matl_nightmap] is added whenever the mesh is drawn, by day
-                    // as well, as OMSI 2 does - with or without a [matl_change] around it.
-                    // Its lamps and displays are switched by the mesh's [visible] variable or
-                    // by what the script draws, not by the time of day: faded in with the
-                    // night, a dashboard's warning lamps stayed dark in the daylight (#497).
-                    extra.night_switched = night.is_some();
-                    // a script's screen (matrix displays, the IBIS's picture, LCDs) is the
-                    // glow's and FXAA's business (see `MaterialExtra::screen`), and a `\S:n`
-                    // mask makes it an LED panel whose lit dots are its own light
-                    // (`MaterialExtra::led`, the enhanced picture's bloom). A slot that is a
-                    // `[matl_item]` variant keeps its materials here, not in `dyn_slots`:
-                    // without the flags on this `extra` the K++ and Krueger panels showed
-                    // their dots but never glowed.
-                    extra.screen = script_slot.is_some() || script_trans.is_some();
-                    extra.led = script_trans.is_some() && lm_white(&ov);
-                    if dirt_overlay {
-                        extra.no_z_write = true;
-                    }
-                    // (chrome: a small opaque part with a sphere map, not the body - see
-                    // `MaterialExtra::metal_ok`)
-                    extra.metal_ok = envmap.is_some() && alpha == AlphaMode::Opaque && !named_body && !material_has_vehicle_volume(&vm.data, slot);
-                    // A few stock vehicles leave noZwrite off on window/dirt materials even
-                    // though their alpha mode is Blend. They are transparent colour layers,
-                    // not solid shadow casters; letting them into the shadow map paints the
-                    // bus shadow with the pane/film texture (the striped triangular artifact).
-                    // (Its depth is still written as Omsi.exe writes it, whenever the model
-                    // blends the slot by [matl_alpha] 2 without [matl_noZwrite] - a dirt
-                    // film's as well: see `MaterialExtra::writes_depth`. Left out of the
-                    // depth buffer, the stacked panes of a door blended over each other
-                    // whichever lay in front, #211.)
-                    if (transparent_layer_hint || see_through) && !cover && alpha == AlphaMode::Blend {
-                        extra.writes_depth = declared_alpha == AlphaMode::Blend && !ov.iter().any(|o| o.no_z_write) && !def.is_shadow;
-                        extra.no_z_write = true;
-                    }
-                    // Name the pane explicitly for the shader. A plain blended window has
-                    // neither an envmap nor a transmap to identify it, while dirt/rain films
-                    // must remain overlays and must not reveal the cabin behind themselves.
-                    extra.glass = transparent_layer_hint
-                        && alpha == AlphaMode::Blend
-                        && !dirt_overlay
-                        && !rain_layer;
-                    // (while it snows the film is the snow-crystal texture, drawn as it is)
-                    // (all three graphics: OMSI 2's own rain, its texture sliding down the
-                    // pane, looked like wet paper next to drops that bend the street)
-                    extra.rain_film = rain_layer && !snowing() && omsi_cfg::env::var_os("OMSI_TEXTURE_RAIN").is_none();
-                    // Some mod buses put [matl_noZcheck] on the complete body mesh.
-                    // That flag is for decals; on a body it disables depth writing and
-                    // lets the cabin bleed through the outside shell. Keep it on genuine
-                    // overlays, but make a repaired body a normal depth-writing surface.
-                    if repair_body_depth {
-                        extra.no_z_check = false;
-                    }
-                    // Text textures repeat like any other (Direct3D's default): the D-series
-                    // Annax meshes address their lines at v = -0.85..-0.39, and clamped they
-                    // showed nothing but the empty top row. Number plates, whose UVs run far
-                    // past the edges, ask for [matl_texadress_clamp] themselves.
-                    let address = tex_addressing(ov.iter().copied());
-                    let base_dyn = DynTex { text: text_base, script: script_base, script_trans, address };
-                    // a mirror already holds a rendered picture of the lit world, so it is
-                    // drawn as it is; shading it again by the glass's own normal (which
-                    // faces backwards, away from the sun) is what made mirrors look black
-                    let unlit = mirror_index(&tex_name).is_some();
-                    // [matl_item] variant: same slot with the item's own maps / colours
-                    // (Omsi.exe keeps every [matl_item] of a [matl_change] as a material of its
-                    // own and shows item round(x): a door button at 2 - lit while its door is
-                    // open - showed the plain dark material, and item 2's maps leaked into item
-                    // 1, #352. Each item of the first [matl_change] is made of its own block:
-                    // item 1 read item 2's `\S:n` mask, and an LED matrix showed the script
-                    // texture at 1 instead of its boot picture, #210. Items of a later
-                    // [matl_change] still merge into item 1.)
-                    let later_items: Vec<&MaterialDef> = {
-                        let mut changes = 0;
-                        let mut first = Vec::new();
-                        for o in &ov_all {
-                            if !o.item && o.change.is_some() {
-                                changes += 1;
-                            } else if o.item && changes == 1 {
-                                first.push(*o);
-                            }
-                        }
-                        first.into_iter().skip(1).collect()
-                    };
-                    let mut item_look = |ov_item: &Vec<&MaterialDef>| -> Look {
-                        let mut find_tex = |t: &str| -> Option<TextureId> { tex!(t, &dirs_ref) };
-                        let it_night = ov_item.iter().find_map(|o| o.nightmap.clone()).and_then(|t| find_tex(&subst(&t))).or(night);
-                        let it_light = ov_item.iter().find_map(|o| o.lightmap.clone()).and_then(|(t, _)| find_tex(&subst(&t))).or(lightmap);
-                        // the item's own transparency map, else the plain material's
-                        let it_script_trans = match ov_item.iter().find_map(|o| o.transmap.clone()) {
-                            Some(t) => t.trim().strip_prefix("\\S:").and_then(|n| n.trim().parse::<usize>().ok()),
-                            None => script_trans,
-                        };
-                        let it_trans = ov_item.iter().find_map(|o| o.transmap.clone()).filter(|t| !t.trim().is_empty() && !t.trim().starts_with("\\S:")).and_then(|t| {
-                            let id = find_tex(&subst(&t))?;
-                            let has_alpha = self.textures.has_alpha(&t, &dirs_ref).unwrap_or(false);
-                            Some((id, has_alpha))
-                        }).or(transmap);
-                        // `[matl_item]` inherits the base alpha mode. A transmap only supplies
-                        // the mask; it must not turn an otherwise opaque body variant into a
-                        // blended mesh (which makes the whole shared slot look like glass).
-                        // (An item block that never set `[matl_alpha]` carries OMSI's 0, not an
-                        // alpha of its own: read as one, a K++ panel's item - the half the
-                        // busbar switches to - was opaque, its `\S:n` mask cut nothing, and the
-                        // whole matrix was lit.)
-                        let it_alpha = if repair_body_depth { AlphaMode::Opaque } else { ov_item.iter().find(|o| o.alpha_set).map(|o| alpha_mode(o.alpha)).unwrap_or(alpha) };
-                        let (it_color, it_emissive, it_specular, it_ambient) = d3d_material(m, ov_item.iter().find_map(|o| o.allcolor).or(ov.iter().find_map(|o| o.allcolor)), textured);
-                        let mut it_extra = material_extra(&ov_item, env_mask, bump, it_specular);
-                        it_extra.ambient = Some(it_ambient);
-                        // (an item without a night map of its own keeps the plain one, lit
-                        // the same way)
-                        it_extra.night_switched = it_night.is_some();
-                        it_extra.screen = script_item.is_some() || it_script_trans.is_some();
-                        // (the item's `\S:n`, or the one it inherits from its base, keeps it
-                        // an LED panel: see `MaterialExtra::led`)
-                        it_extra.led = it_script_trans.is_some() && if ov_item.iter().any(|o| o.lightmap.is_some()) { lm_white(ov_item) } else { lm_white(&ov) };
-                        it_extra.no_z_write |= extra.no_z_write;
-                        it_extra.no_z_check |= extra.no_z_check;
-                        it_extra.glass |= extra.glass;
-                        if repair_body_depth {
-                            it_extra.no_z_check = false;
-                        }
-                        let it_dyn = DynTex { text: text_item, script: script_item, script_trans: it_script_trans, address };
-                        Look { alpha: it_alpha, color: it_color, emissive: it_emissive, unlit: false, diffuse: None, transmap: it_trans, night: it_night, lightmap: it_light, envmap, extra: it_extra, dyn_tex: it_dyn }
-                    };
-                    let first_item: Vec<&MaterialDef> = ov_item.iter().copied().filter(|o| !later_items.iter().any(|l| std::ptr::eq(*l, *o))).collect();
-                    let item_spec = (change_var.is_some() && !ov_item.is_empty()).then(|| item_look(&first_item));
-                    let more_items: Vec<Look> = if item_spec.is_some() { later_items.iter().map(|o| item_look(&vec![*o])).collect() } else { Vec::new() };
-                    if only.is_some() {
-                        if let Some(it) = &item_spec {
-                            log::info!("  {} slot {slot} item (switched by {:?}): alpha={:?} night={:?} light={:?} switched={}", def.file, change_var, it.alpha, it.night, it.lightmap, it.extra.night_switched);
-                        }
-                    }
-                    // [matl_noZwrite]: glass, the rain film and the dirt layer are blended
-                    // and must not write depth, or everything blended behind them is thrown
-                    // away and the window turns into a pale hole in the world
-                    let spec = SlotSpec { base: Look { alpha, color, emissive, unlit, diffuse: None, transmap, night, lightmap, envmap, extra, dyn_tex: base_dyn }, item: item_spec, more: more_items };
-                    // [texchanges]: the texture named in the mesh is only a key - the master
-                    // of that name holds the textures a script variable switches between
-                    // (the SD200's roller blinds, the seat covers of the AI interior).
-                    let master = vt.texchange(&m.texture);
-                    let entry_tex: Vec<Option<TextureId>> = match master {
-                        Some(master) => {
-                            let mut edirs: Vec<&Path> = vec![master.dir.as_path()];
-                            edirs.extend(dirs_ref.iter().copied());
-                            let mut find_tex = |t: &str| -> Option<TextureId> { tex!(t, &edirs) };
-                            master.entries.iter().map(|e| find_tex(&subst(e))).collect()
-                        }
-                        None => Vec::new(),
-                    };
-                    if let (Some(master), true) = (master, only.is_some()) {
-                        log::info!("    [texchanges] {} -> {} entries by '{}', loaded {:?}", master.texture, master.entries.len(), master.variable, entry_tex);
-                    }
-                    let base_tex = if master.is_some() { entry_tex.first().copied().flatten() } else { tex };
-                    let built = spec.build(renderer, scene, base_tex);
-                    let (base, item) = self.recycle_pair(renderer, scene, built);
-                    materials.extend([base, item]);
-                    let entries: Vec<(MaterialId, MaterialId)> = entry_tex
-                        .iter()
-                        .map(|t| {
-                            let built = spec.build(renderer, scene, *t);
-                            self.recycle_pair(renderer, scene, built)
-                        })
-                        .collect();
-                    materials.extend(entries.iter().flat_map(|e| [e.0, e.1]));
-                    let more = spec.build_more(renderer, scene, base_tex, |scene, m| self.gpu.lock().material(renderer, scene, m));
-                    materials.extend(more.iter().copied());
-                    // [matl_freetex]: the file is only known at run time (the destination
-                    // roller builds its path from the map's depot and terminus strings)
-                    let free: Vec<FreeTex> = free_texture_defs(&ov_all).into_iter().map(|(item_only, key, var)| FreeTex {
-                        var,
-                        diffuse: key.eq_ignore_ascii_case(&m.texture),
-                        key: tex!(&subst(&key), &dirs_ref),
-                        item_only,
-                        dirs: dirs.clone(),
-                        textures: self.textures.clone(),
-                        cache: HashMap::new(),
-                        current: None,
-                        shared: self.vehicle_textures.clone(),
-                        held: Vec::new(),
-                        wants_upgrade: self.freetex_upgrades.clone(),
-                    }).collect();
-                    let multi_light = |base: MaterialId, item: MaterialId| -> Option<MultiLight> {
-                        let list = ov.iter().map(|o| &o.lightmaps).find(|l| !l.is_empty())?;
-                        let maps: Vec<(PathBuf, String)> = list
-                            .iter()
-                            .filter_map(|(t, v)| omsi_texture::find_texture(&subst(t), &dirs_ref).map(|p| (p, v.clone())))
-                            .collect();
-                        (maps.len() >= 2 && maps.len() <= 8).then(|| MultiLight {
-                            maps,
-                            plain: (base, item),
-                            cache: HashMap::new(),
-                            // (none yet: the first frame makes the materials of what is on)
-                            current: u32::MAX,
-                            shared: self.vehicle_textures.clone(),
-                            held: Vec::new(),
-                        })
-                    };
-                    if spec.item.is_some() || !entries.is_empty() || !free.is_empty() {
-                        let tex_var = master.map(|m| m.variable.clone()).unwrap_or_default();
-                        variants.push(VariantSlot { mesh: instances.len(), slot, base, item, more, var: change_var.unwrap_or_default(), more_vars: change_vars.iter().skip(1).cloned().collect(), entries, tex_var, free, spec, base_tex, entry_tex, lights: multi_light(base, item) });
-                    } else if let Some(lights) = multi_light(base, item) {
-                        variants.push(VariantSlot { mesh: instances.len(), slot, base, item, more: Vec::new(), var: String::new(), more_vars: Vec::new(), entries, tex_var: String::new(), free: Vec::new(), spec, base_tex, entry_tex, lights: Some(lights) });
-                    } else if base_dyn.any() {
-                        dyn_slots.push(DynSlot { mesh: instances.len(), slot, text: text_slot, script: script_slot, script_trans, tex, alpha, transmap, night, lightmap, envmap, address, extra, color, emissive });
-                    }
-                    base
-                })
+                .map(|(slot, m)| self.vehicle_slot_material(renderer, scene, &mut up, (mesh_index, vm), slot, m))
                 .collect();
             let t_mesh = std::time::Instant::now();
             let id = self.vehicle_mesh(
@@ -1998,8 +1568,9 @@ impl World {
                 mesh_index,
             );
             mesh_secs += t_mesh.elapsed().as_secs_f64();
-            instances.push((id, mats));
+            up.instances.push((id, mats));
         }
+        let VehicleUpload { held, mut materials, tex_time, instances, mut missing_tex, variants, dyn_slots, .. } = up;
         if !missing_tex.is_empty() {
             missing_tex.sort();
             missing_tex.dedup();
@@ -2031,4 +1602,478 @@ impl World {
             idle_since: Some(std::time::Instant::now()),
         }
     }
+
+    /// The material of one slot of a vehicle mesh being uploaded (see
+    /// [`World::upload_vehicle`]); its `[matl_item]`s, `[texchanges]`, `[matl_freetex]` and
+    /// generated textures are noted in `up`.
+    fn vehicle_slot_material(
+        &self,
+        renderer: &Renderer,
+        scene: &mut Scene,
+        up: &mut VehicleUpload,
+        (mesh_index, vm): (usize, &omsi_sim::vehicle::VehicleMesh),
+        slot: usize,
+        m: &omsi_o3d::Material,
+    ) -> MaterialId {
+        let VehicleUpload { vt, player, subst, dirs, dirs_ref, .. } = *up;
+        let VehicleUpload { tex_ids, held, materials, tex_time, instances, missing_tex, only, variants, dyn_slots, .. } = up;
+        let def = &vt.model.meshes[vm.def_index];
+        // [CTCTexture] slots swapped by the paint scheme
+        let subst = |name: &str| -> String {
+            subst
+                .get(&name.to_ascii_lowercase())
+                .cloned()
+                .unwrap_or_else(|| name.to_string())
+        };
+        macro_rules! tex {
+            // (`reflexionN.bmp` wherever a material names it - its light map, its night map,
+            // a `[matl_item]`'s - is camera N's picture: a monitor that shows the camera once
+            // switched on names it so, and was white)
+            ($name:expr, $dirs:expr) => {{
+                let nm: &str = &$name;
+                match mirror_index(nm) {
+                    Some(mi) => Some(self.mirror_texture(renderer, scene, mi)),
+                    None => tex!(nm, $dirs, vehicle_texture),
+                }
+            }};
+            ($name:expr, $dirs:expr, $how:ident) => {{
+                let t = std::time::Instant::now();
+                let n = tex_ids.len();
+                let r = self.$how(renderer, scene, tex_ids, held, $name, $dirs);
+                if tex_ids.len() > n {
+                    let mut tt = tex_time.borrow_mut();
+                    tt.0 += 1;
+                    tt.1 += t.elapsed().as_secs_f64();
+                }
+                r
+            }};
+        }
+        // [useTextTexture] replaces the material's texture by a generated one;
+        // after a [matl_change]'s [matl_item] it is the item's picture alone (the
+        // O530's ticket printer shows its text while the electrics are on, the
+        // plain field otherwise)
+        let of_slot = |o: &&MaterialDef| omsi_sim::vehicle::override_slot(&vm.materials, o) == Some(slot);
+        let itemised = def.materials.iter().filter(of_slot).any(|o| o.item) && def.materials.iter().filter(of_slot).any(|o| !o.item && o.change.is_some());
+        let text_of = |item: Option<bool>| def.materials.iter().filter(of_slot).find(|o| o.use_text_texture.is_some() && item.is_none_or(|i| o.item == i)).map(|o| o.use_text_texture.unwrap().max(0) as usize);
+        let script_of = |item: Option<bool>| def.materials.iter().filter(of_slot).find(|o| o.use_script_texture.is_some() && item.is_none_or(|i| o.item == i)).map(|o| o.use_script_texture.unwrap().max(0) as usize);
+        let (text_slot, script_slot) = (text_of(None), script_of(None));
+        let (text_base, script_base) = if itemised { (text_of(Some(false)), script_of(Some(false))) } else { (text_slot, script_slot) };
+        let (text_item, script_item) = (text_of(Some(true)).or(text_base), script_of(Some(true)).or(script_base));
+        let tex_name = subst(&m.texture);
+        // The film of water on the glass (`[alphascale] Rain_Window_…`) wears
+        // snow crystals while it snows, unless the vehicle brings a seasonal
+        // texture of its own: see `rain::snow_on_glass`.
+        let rain_layer = vm.overrides.iter().filter(of_slot).any(|o| o.alphascale.as_deref().is_some_and(|v| v.trim().to_ascii_lowercase().starts_with("rain_window")));
+        let tex = if is_null_texture(&m.texture) || text_base.is_some() || script_base.is_some() || vt.texchange(&m.texture).is_some() {
+            // a slot fed by [useTextTexture] / [useScriptTexture] gets a
+            // generated picture; the name in the mesh is a placeholder and
+            // looking for it on disk only produced a false "texture not found"
+            None
+        } else if let Some(mi) = mirror_index(&tex_name) {
+            if player {
+                self.note_mirror_aspect(mi, &vm.data, slot);
+            }
+            Some(self.mirror_texture(renderer, scene, mi))
+        } else if rain_layer && snowing() && !seasonal_texture(&tex_name, &dirs_ref) {
+            tex!("", &dirs_ref, snow_glass_texture)
+        } else {
+            tex!(&tex_name, &dirs_ref)
+        };
+        let ov_all: Vec<&MaterialDef> = vm.overrides.iter().filter(|o| omsi_sim::vehicle::override_slot(&vm.materials, o) == Some(slot)).collect();
+        let ov_item: Vec<&MaterialDef> = ov_all.iter().copied().filter(|o| o.item).collect();
+        let ov: Vec<&MaterialDef> = ov_all.iter().copied().filter(|o| !o.item).collect();
+        // (every [matl_change] of the slot: Omsi.exe keeps one switch per record,
+        // each showing its item while its variable is on - the Procity's door
+        // buttons light with door_light_n as well as with haltewunschlampe)
+        let change_vars: Vec<String> = ov.iter().filter_map(|o| o.change.as_ref().map(|c| c.2.clone())).collect();
+        let change_var = change_vars.first().cloned();
+        let base_overrides: Vec<MaterialDef> = ov.iter().map(|o| (*o).clone()).collect();
+        let mut alpha = material_alpha(&vm.materials, slot, &base_overrides);
+        // what the model.cfg says: without [matl_alpha] OMSI draws a slot opaque
+        // and its texture's alpha is only the reflection mask
+        let declared_alpha = alpha;
+        // Dirt.tga/Dreck.tga is an overlay controlled by Dirt_Norm or
+        // Dirt_Wiped. Keep it in the blended no-depth-write path globally,
+        // even when an add-on has a missing or misordered [matl_alpha].
+        let dirt_overlay = ov.iter().any(|o| o.alphascale.as_deref().is_some_and(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "dirt_norm" | "dirt_wiped")));
+        if dirt_overlay {
+            alpha = AlphaMode::Blend;
+        }
+        // `[alphascale]` is also used by some buses for dirt/paint variables.
+        // Treating every such slot as blended makes an otherwise solid body
+        // translucent on AI vehicles. Only the authored rain-window film is
+        // intrinsically transparent; ordinary body alphascales must retain the
+        // material's declared alpha mode. Stock rain-film materials declare
+        // `[matl_alpha] 2` explicitly, so the variable itself need not promote
+        // a slot into transparency.
+        // a `[isshadow]` mesh is a soft ground decal by convention, its texture's
+        // own alpha fading it out at the edges - without a `[matl_alpha]`
+        // override of its own (most shadow blobs have none) it defaulted to
+        // opaque, so the decal's square base texture painted a solid (often
+        // white or grey) tile under the bus instead of a soft shadow.
+        if def.is_shadow {
+            alpha = AlphaMode::Blend;
+        }
+        // `\S:n` = script texture n as transparency map
+        let script_trans = ov.iter().find_map(|o| o.transmap.clone()).and_then(|t| t.trim().strip_prefix("\\S:").and_then(|n| n.trim().parse::<usize>().ok()));
+        let transmap = ov.iter().find_map(|o| o.transmap.clone()).filter(|t| !t.trim().is_empty() && !t.trim().starts_with("\\S:")).map(|t| subst(&t)).and_then(|t| {
+            let id = tex!(&t, &dirs_ref)?;
+            let has_alpha = self.textures.has_alpha(&t, &dirs_ref).unwrap_or(false);
+            Some((id, has_alpha))
+        });
+        // A few bus packs mark a solid body mesh as `[matl_alpha] 2` and leave
+        // a non-opaque diffuse material alpha on it (the O530 Facelift's
+        // `wagenkasten_embl_eev.o3d` is a concrete example). That alpha belongs
+        // to the paint/reflection data, not to a window, so treating the whole
+        // panel as a blended surface makes the cabin and traffic show through.
+        // Keep real glass/dirt/display layers blended, and keep explicit
+        // transmaps on the mask path; repair only the unambiguous body case.
+        let mesh_name = def.file.to_ascii_lowercase();
+        let transparent_layer_name = ["regen", "dreck", "dirt", "folie"];
+        let material_name = format!("{} {}", mesh_name, m.texture).to_ascii_lowercase();
+        let named_pane = GLASS_WORDS
+            .iter()
+            .chain(transparent_layer_name.iter())
+            .any(|part| material_name.contains(part));
+        // A pane whose name says nothing: its faces lie on a see-through part of
+        // its texture. No list of words finds the SOR NB12's `celokint.o3d` (its
+        // windscreen), `okridic.o3d` (the driver's window) or `vyklopnel1.o3d`
+        // (a tilting window): taken for bodywork they wrote their depth, and the
+        // glow of every lamp and the lit lenses of the traffic lights behind them
+        // were gone - seen only through an opened window.
+        // The alpha that says so is the [matl_transmap]'s where the slot has one:
+        // the diffuse alpha is then only the reflection mask (the stock Golf 2's
+        // body texture is 0 almost everywhere, its transmap opaque). Read from
+        // the diffuse texture, every transmapped car body wrote no depth, and its
+        // wheel arches, far wheels and interior drawn after it showed through the
+        // paint (#928, #932).
+        let coverage_tex = subst(coverage_texture(ov.iter().find_map(|o| o.transmap.as_deref()), &m.texture));
+        let coverage = omsi_texture::find_texture(&coverage_tex, &dirs_ref).and_then(|p| alpha_mask(&p));
+        // (an invisible cover: clear all over and writing its depth - no pane, it is
+        // there to hide what comes after it, see `texture_is_clear`)
+        let cover = declared_alpha == AlphaMode::Blend
+            && !ov.iter().any(|o| o.no_z_write || o.no_z_check)
+            && coverage.as_ref().is_some_and(|mask| texture_is_clear(mask));
+        if cover {
+            log::debug!("  {} slot {slot} '{}': an invisible cover (clear texture), writes depth in model order", def.file, m.texture);
+        }
+        let see_through = !named_pane
+            && !cover
+            && declared_alpha == AlphaMode::Blend
+            && coverage.as_ref().is_some_and(|mask| slot_is_see_through(&vm.data, slot, mask));
+        if see_through {
+            log::debug!("  {} slot {slot} '{}': see-through by its texture's alpha, writes no depth", def.file, m.texture);
+        }
+        // (the name alone still says what is drawn as glass: the same test finds
+        // a gauge's needle film, a blind's net and the shadow under the bus)
+        let transparent_layer_hint = named_pane;
+        let named_body = ["body", "wagenkasten", "karos", "chassis", "kuzov"].iter().any(|part| mesh_name.contains(part));
+        let mesh_has_overlay = def.materials.iter().any(|o| o.no_z_write);
+        // (a body-sized part in any case: a name or a bump map alone also took a
+        // dashboard's display or a sticker on a mesh called "body" for bodywork)
+        let body_hint = (named_body || ov.iter().any(|o| o.bumpmap.is_some()) || !mesh_has_overlay)
+            && material_has_vehicle_volume(&vm.data, slot);
+        // a layer over another mesh of the same shape drawn before it (the WH UK
+        // AI cars' baked shading over their paint, `[matl_alpha] 2`): blended as
+        // the model says - made opaque, the dark bake covered the paint and the
+        // cars drove about black, or with black roofs
+        let layer = vt.mesh_boxes.get(mesh_index).is_some_and(|&(lo, hi)| {
+            (hi - lo).max_element() > 0.5
+                && vt.mesh_boxes[..mesh_index].iter().any(|&(l2, h2)| (l2 - lo).abs().max_element() < 0.03 && (h2 - hi).abs().max_element() < 0.03)
+        });
+        // (Retired: a body blended by `[matl_alpha] 2` is drawn as Omsi.exe draws
+        // it, in model order with its depth written - see `Instance::ordered` -
+        // instead of being guessed opaque, which drew overlay layers black, #127.
+        // `OMSI_REPAIR_BODY_DEPTH=1` brings the old guess back for comparison.)
+        let repair_body_depth = omsi_cfg::env::var_os("OMSI_REPAIR_BODY_DEPTH").is_some() && !layer && is_vehicle_body_material(&def.file, &m.texture, tex.is_some(), transmap.is_some(), ov.iter().any(|o| o.no_z_write), body_hint);
+        // (only a blended slot: an alpha-tested one - `[matl_alpha] 1`, the EN92's
+        // pictograms, a Sprinter's seat covers - is cut out as the model says, and
+        // made opaque its cut-out parts were grey boxes; and not a layer made of
+        // the same faces as another slot of its mesh, an ambient-occlusion or
+        // shading film over the floor, which drawn opaque was black)
+        if repair_body_depth && alpha == AlphaMode::Blend && !dirt_overlay && !transparent_layer_hint && !slot_overlays_another(&vm.data, slot) {
+            alpha = AlphaMode::Opaque;
+        }
+        // Body-volume heuristics must never turn a named pane back into an
+        // opaque draw (the windscreen became a pale grey wall from inside after
+        // the body-depth repair) - but only a pane the model.cfg declares
+        // blended: a "glass" slot without [matl_alpha] is opaque in OMSI (the
+        // LiAZ's dark glass_gr.dds around its displays and over its windows,
+        // which drawn blended let the sky show through the body).
+        if transparent_layer_hint && !dirt_overlay && declared_alpha == AlphaMode::Blend {
+            alpha = AlphaMode::Blend;
+        }
+        // Keep the material's declared alpha mode: a transmap mask alone must not
+        // make a solid body panel translucent.
+        if omsi_cfg::env::var_os("OMSI_FORCE_OPAQUE").is_some() && !dirt_overlay {
+            alpha = AlphaMode::Opaque;
+        }
+        // (a night or light map named as a [CTCTexture] is the paint scheme's
+        // picture as well, like the diffuse texture and the transparency map:
+        // looked up by the model's own name, a destination display lit by its own
+        // texture glowed with the model's default text over the repaint's, #895)
+        let night = ov.iter().find_map(|o| o.nightmap.clone()).and_then(|t| {
+            tex!(&subst(&t), &dirs_ref)
+        });
+        let lightmap = ov.iter().find_map(|o| o.lightmap.clone()).and_then(|(t, _)| {
+            tex!(&subst(&t), &dirs_ref)
+        });
+        // (a `\S:n` panel lit all over by its light map is an LED panel; one
+        // whose light map is a picture is a flipdot: see `is_white_lightmap`)
+        let lm_white = |ov: &[&MaterialDef]| -> bool {
+            ov.iter().find_map(|o| o.lightmap.as_ref()).and_then(|(t, _)| lightmap_is_white(&subst(t), &dirs_ref)).unwrap_or(true)
+        };
+        // [matl_envmap] tex factor: reflectivity = factor (saturating at 1) x the
+        // reflection mask, which is the [matl_envmap_mask]'s alpha or else the
+        // diffuse alpha - 1 for a texture without an alpha channel, as D3D samples
+        // it (a BC1 texture samples as 1 too): the SD200's dashboard (24-bit
+        // bitmap, factor 0.1) keeps a faint gloss. The mask matters: the Citaro's
+        // doors and the O530 Facelift's bodies carry a paint whose alpha is 255 and
+        // a separate mask of about 6-10 %; read as the mask, the alpha made them
+        // mirrors. The mask and the bump map are shared vehicle textures like the
+        // rest (the bump map as a height map under a key of its own).
+        let envmap = ov.iter().find_map(|o| o.envmap.clone()).filter(|_| omsi_cfg::env::var_os("OMSI_NO_ENVMAP").is_none()).and_then(|(t, f)| {
+            let id = tex!(&t, &dirs_ref)?;
+            Some((id, f))
+        });
+        let env_mask = ov.iter().find_map(|o| o.envmap_mask.clone()).filter(|t| envmap.is_some() && !t.trim().is_empty()).and_then(|t| tex!(&subst(&t), &dirs_ref));
+        let bump = ov.iter().find_map(|o| o.bumpmap.clone()).filter(|_| envmap.is_some() && omsi_cfg::env::var_os("OMSI_NO_BUMP").is_none()).and_then(|(t, f)| tex!(&subst(&t), &dirs_ref, vehicle_bump_texture).map(|id| (id, f)));
+        // a [matl_freetex] slot gets its texture from a string variable at run
+        // time, so an empty slot here is not a missing file
+        let freetex = ov_all.iter().any(|o| o.freetex.is_some());
+        if tex.is_none() && !is_null_texture(&m.texture) && text_slot.is_none() && script_slot.is_none() && !freetex && vt.texchange(&m.texture).is_none() {
+            missing_tex.push(format!("{} ({})", tex_name, def.file));
+        }
+        if only.is_some() {
+            log::info!("  {} slot {slot} '{}' diffuse={:?} emissive={:?} specular={:?}/{} tex={:?} alpha={:?} transmap={:?} night={:?} light={:?} env={:?} mask={:?} bump={:?} text={:?} script={:?} script_trans={:?} noZwrite={} noZcheck={} zbias={}", def.file, m.texture, m.diffuse, m.emissive, m.specular, m.specular_power, tex, alpha, transmap, night, lightmap, envmap, env_mask, bump, text_slot, script_slot, script_trans, ov.iter().any(|o| o.no_z_write), ov.iter().any(|o| o.no_z_check), ov.iter().map(|o| o.z_bias).find(|b| *b != 0).unwrap_or(0));
+        }
+        let textured = tex.is_some() || text_slot.is_some() || script_slot.is_some() || freetex || vt.texchange(&m.texture).is_some();
+        let (color, emissive, specular, ambient) = d3d_material(m, ov.iter().find_map(|o| o.allcolor), textured);
+        let mut extra = material_extra(&ov, env_mask, bump, specular);
+        extra.ambient = Some(ambient);
+        // A vehicle's [matl_nightmap] is added whenever the mesh is drawn, by day
+        // as well, as OMSI 2 does - with or without a [matl_change] around it.
+        // Its lamps and displays are switched by the mesh's [visible] variable or
+        // by what the script draws, not by the time of day: faded in with the
+        // night, a dashboard's warning lamps stayed dark in the daylight (#497).
+        extra.night_switched = night.is_some();
+        // a script's screen (matrix displays, the IBIS's picture, LCDs) is the
+        // glow's and FXAA's business (see `MaterialExtra::screen`), and a `\S:n`
+        // mask makes it an LED panel whose lit dots are its own light
+        // (`MaterialExtra::led`, the enhanced picture's bloom). A slot that is a
+        // `[matl_item]` variant keeps its materials here, not in `dyn_slots`:
+        // without the flags on this `extra` the K++ and Krueger panels showed
+        // their dots but never glowed.
+        extra.screen = script_slot.is_some() || script_trans.is_some();
+        extra.led = script_trans.is_some() && lm_white(&ov);
+        if dirt_overlay {
+            extra.no_z_write = true;
+        }
+        // (chrome: a small opaque part with a sphere map, not the body - see
+        // `MaterialExtra::metal_ok`)
+        extra.metal_ok = envmap.is_some() && alpha == AlphaMode::Opaque && !named_body && !material_has_vehicle_volume(&vm.data, slot);
+        // A few stock vehicles leave noZwrite off on window/dirt materials even
+        // though their alpha mode is Blend. They are transparent colour layers,
+        // not solid shadow casters; letting them into the shadow map paints the
+        // bus shadow with the pane/film texture (the striped triangular artifact).
+        // (Its depth is still written as Omsi.exe writes it, whenever the model
+        // blends the slot by [matl_alpha] 2 without [matl_noZwrite] - a dirt
+        // film's as well: see `MaterialExtra::writes_depth`. Left out of the
+        // depth buffer, the stacked panes of a door blended over each other
+        // whichever lay in front, #211.)
+        if (transparent_layer_hint || see_through) && !cover && alpha == AlphaMode::Blend {
+            extra.writes_depth = declared_alpha == AlphaMode::Blend && !ov.iter().any(|o| o.no_z_write) && !def.is_shadow;
+            extra.no_z_write = true;
+        }
+        // Name the pane explicitly for the shader. A plain blended window has
+        // neither an envmap nor a transmap to identify it, while dirt/rain films
+        // must remain overlays and must not reveal the cabin behind themselves.
+        extra.glass = transparent_layer_hint
+            && alpha == AlphaMode::Blend
+            && !dirt_overlay
+            && !rain_layer;
+        // (while it snows the film is the snow-crystal texture, drawn as it is)
+        // (all three graphics: OMSI 2's own rain, its texture sliding down the
+        // pane, looked like wet paper next to drops that bend the street)
+        extra.rain_film = rain_layer && !snowing() && omsi_cfg::env::var_os("OMSI_TEXTURE_RAIN").is_none();
+        // Some mod buses put [matl_noZcheck] on the complete body mesh.
+        // That flag is for decals; on a body it disables depth writing and
+        // lets the cabin bleed through the outside shell. Keep it on genuine
+        // overlays, but make a repaired body a normal depth-writing surface.
+        if repair_body_depth {
+            extra.no_z_check = false;
+        }
+        // Text textures repeat like any other (Direct3D's default): the D-series
+        // Annax meshes address their lines at v = -0.85..-0.39, and clamped they
+        // showed nothing but the empty top row. Number plates, whose UVs run far
+        // past the edges, ask for [matl_texadress_clamp] themselves.
+        let address = tex_addressing(ov.iter().copied());
+        let base_dyn = DynTex { text: text_base, script: script_base, script_trans, address };
+        // a mirror already holds a rendered picture of the lit world, so it is
+        // drawn as it is; shading it again by the glass's own normal (which
+        // faces backwards, away from the sun) is what made mirrors look black
+        let unlit = mirror_index(&tex_name).is_some();
+        // [matl_item] variant: same slot with the item's own maps / colours
+        // (Omsi.exe keeps every [matl_item] of a [matl_change] as a material of its
+        // own and shows item round(x): a door button at 2 - lit while its door is
+        // open - showed the plain dark material, and item 2's maps leaked into item
+        // 1, #352. Each item of the first [matl_change] is made of its own block:
+        // item 1 read item 2's `\S:n` mask, and an LED matrix showed the script
+        // texture at 1 instead of its boot picture, #210. Items of a later
+        // [matl_change] still merge into item 1.)
+        let later_items: Vec<&MaterialDef> = {
+            let mut changes = 0;
+            let mut first = Vec::new();
+            for o in &ov_all {
+                if !o.item && o.change.is_some() {
+                    changes += 1;
+                } else if o.item && changes == 1 {
+                    first.push(*o);
+                }
+            }
+            first.into_iter().skip(1).collect()
+        };
+        let mut item_look = |ov_item: &Vec<&MaterialDef>| -> Look {
+            let mut find_tex = |t: &str| -> Option<TextureId> { tex!(t, &dirs_ref) };
+            let it_night = ov_item.iter().find_map(|o| o.nightmap.clone()).and_then(|t| find_tex(&subst(&t))).or(night);
+            let it_light = ov_item.iter().find_map(|o| o.lightmap.clone()).and_then(|(t, _)| find_tex(&subst(&t))).or(lightmap);
+            // the item's own transparency map, else the plain material's
+            let it_script_trans = match ov_item.iter().find_map(|o| o.transmap.clone()) {
+                Some(t) => t.trim().strip_prefix("\\S:").and_then(|n| n.trim().parse::<usize>().ok()),
+                None => script_trans,
+            };
+            let it_trans = ov_item.iter().find_map(|o| o.transmap.clone()).filter(|t| !t.trim().is_empty() && !t.trim().starts_with("\\S:")).and_then(|t| {
+                let id = find_tex(&subst(&t))?;
+                let has_alpha = self.textures.has_alpha(&t, &dirs_ref).unwrap_or(false);
+                Some((id, has_alpha))
+            }).or(transmap);
+            // `[matl_item]` inherits the base alpha mode. A transmap only supplies
+            // the mask; it must not turn an otherwise opaque body variant into a
+            // blended mesh (which makes the whole shared slot look like glass).
+            // (An item block that never set `[matl_alpha]` carries OMSI's 0, not an
+            // alpha of its own: read as one, a K++ panel's item - the half the
+            // busbar switches to - was opaque, its `\S:n` mask cut nothing, and the
+            // whole matrix was lit.)
+            let it_alpha = if repair_body_depth { AlphaMode::Opaque } else { ov_item.iter().find(|o| o.alpha_set).map(|o| alpha_mode(o.alpha)).unwrap_or(alpha) };
+            let (it_color, it_emissive, it_specular, it_ambient) = d3d_material(m, ov_item.iter().find_map(|o| o.allcolor).or(ov.iter().find_map(|o| o.allcolor)), textured);
+            let mut it_extra = material_extra(&ov_item, env_mask, bump, it_specular);
+            it_extra.ambient = Some(it_ambient);
+            // (an item without a night map of its own keeps the plain one, lit
+            // the same way)
+            it_extra.night_switched = it_night.is_some();
+            it_extra.screen = script_item.is_some() || it_script_trans.is_some();
+            // (the item's `\S:n`, or the one it inherits from its base, keeps it
+            // an LED panel: see `MaterialExtra::led`)
+            it_extra.led = it_script_trans.is_some() && if ov_item.iter().any(|o| o.lightmap.is_some()) { lm_white(ov_item) } else { lm_white(&ov) };
+            it_extra.no_z_write |= extra.no_z_write;
+            it_extra.no_z_check |= extra.no_z_check;
+            it_extra.glass |= extra.glass;
+            if repair_body_depth {
+                it_extra.no_z_check = false;
+            }
+            let it_dyn = DynTex { text: text_item, script: script_item, script_trans: it_script_trans, address };
+            Look { alpha: it_alpha, color: it_color, emissive: it_emissive, unlit: false, diffuse: None, transmap: it_trans, night: it_night, lightmap: it_light, envmap, extra: it_extra, dyn_tex: it_dyn }
+        };
+        let first_item: Vec<&MaterialDef> = ov_item.iter().copied().filter(|o| !later_items.iter().any(|l| std::ptr::eq(*l, *o))).collect();
+        let item_spec = (change_var.is_some() && !ov_item.is_empty()).then(|| item_look(&first_item));
+        let more_items: Vec<Look> = if item_spec.is_some() { later_items.iter().map(|o| item_look(&vec![*o])).collect() } else { Vec::new() };
+        if only.is_some() {
+            if let Some(it) = &item_spec {
+                log::info!("  {} slot {slot} item (switched by {:?}): alpha={:?} night={:?} light={:?} switched={}", def.file, change_var, it.alpha, it.night, it.lightmap, it.extra.night_switched);
+            }
+        }
+        // [matl_noZwrite]: glass, the rain film and the dirt layer are blended
+        // and must not write depth, or everything blended behind them is thrown
+        // away and the window turns into a pale hole in the world
+        let spec = SlotSpec { base: Look { alpha, color, emissive, unlit, diffuse: None, transmap, night, lightmap, envmap, extra, dyn_tex: base_dyn }, item: item_spec, more: more_items };
+        // [texchanges]: the texture named in the mesh is only a key - the master
+        // of that name holds the textures a script variable switches between
+        // (the SD200's roller blinds, the seat covers of the AI interior).
+        let master = vt.texchange(&m.texture);
+        let entry_tex: Vec<Option<TextureId>> = match master {
+            Some(master) => {
+                let mut edirs: Vec<&Path> = vec![master.dir.as_path()];
+                edirs.extend(dirs_ref.iter().copied());
+                let mut find_tex = |t: &str| -> Option<TextureId> { tex!(t, &edirs) };
+                master.entries.iter().map(|e| find_tex(&subst(e))).collect()
+            }
+            None => Vec::new(),
+        };
+        if let (Some(master), true) = (master, only.is_some()) {
+            log::info!("    [texchanges] {} -> {} entries by '{}', loaded {:?}", master.texture, master.entries.len(), master.variable, entry_tex);
+        }
+        let base_tex = if master.is_some() { entry_tex.first().copied().flatten() } else { tex };
+        let built = spec.build(renderer, scene, base_tex);
+        let (base, item) = self.recycle_pair(renderer, scene, built);
+        materials.extend([base, item]);
+        let entries: Vec<(MaterialId, MaterialId)> = entry_tex
+            .iter()
+            .map(|t| {
+                let built = spec.build(renderer, scene, *t);
+                self.recycle_pair(renderer, scene, built)
+            })
+            .collect();
+        materials.extend(entries.iter().flat_map(|e| [e.0, e.1]));
+        let more = spec.build_more(renderer, scene, base_tex, |scene, m| self.gpu.lock().material(renderer, scene, m));
+        materials.extend(more.iter().copied());
+        // [matl_freetex]: the file is only known at run time (the destination
+        // roller builds its path from the map's depot and terminus strings)
+        let free: Vec<FreeTex> = free_texture_defs(&ov_all).into_iter().map(|(item_only, key, var)| FreeTex {
+            var,
+            diffuse: key.eq_ignore_ascii_case(&m.texture),
+            key: tex!(&subst(&key), &dirs_ref),
+            item_only,
+            dirs: dirs.to_vec(),
+            textures: self.textures.clone(),
+            cache: HashMap::new(),
+            current: None,
+            shared: self.vehicle_textures.clone(),
+            held: Vec::new(),
+            wants_upgrade: self.freetex_upgrades.clone(),
+        }).collect();
+        let multi_light = |base: MaterialId, item: MaterialId| -> Option<MultiLight> {
+            let list = ov.iter().map(|o| &o.lightmaps).find(|l| !l.is_empty())?;
+            let maps: Vec<(PathBuf, String)> = list
+                .iter()
+                .filter_map(|(t, v)| omsi_texture::find_texture(&subst(t), &dirs_ref).map(|p| (p, v.clone())))
+                .collect();
+            (maps.len() >= 2 && maps.len() <= 8).then(|| MultiLight {
+                maps,
+                plain: (base, item),
+                cache: HashMap::new(),
+                // (none yet: the first frame makes the materials of what is on)
+                current: u32::MAX,
+                shared: self.vehicle_textures.clone(),
+                held: Vec::new(),
+            })
+        };
+        if spec.item.is_some() || !entries.is_empty() || !free.is_empty() {
+            let tex_var = master.map(|m| m.variable.clone()).unwrap_or_default();
+            variants.push(VariantSlot { mesh: instances.len(), slot, base, item, more, var: change_var.unwrap_or_default(), more_vars: change_vars.iter().skip(1).cloned().collect(), entries, tex_var, free, spec, base_tex, entry_tex, lights: multi_light(base, item) });
+        } else if let Some(lights) = multi_light(base, item) {
+            variants.push(VariantSlot { mesh: instances.len(), slot, base, item, more: Vec::new(), var: String::new(), more_vars: Vec::new(), entries, tex_var: String::new(), free: Vec::new(), spec, base_tex, entry_tex, lights: Some(lights) });
+        } else if base_dyn.any() {
+            dyn_slots.push(DynSlot { mesh: instances.len(), slot, text: text_slot, script: script_slot, script_trans, tex, alpha, transmap, night, lightmap, envmap, address, extra, color, emissive });
+        }
+        base
+    }
+}
+
+/// What uploading a vehicle set gathers, slot by slot (see [`World::upload_vehicle`]).
+struct VehicleUpload<'a> {
+    vt: &'a omsi_sim::VehicleType,
+    player: bool,
+    /// The paint scheme's `[CTCTexture]` substitutions.
+    subst: &'a HashMap<String, String>,
+    dirs: &'a [PathBuf],
+    dirs_ref: &'a [&'a Path],
+    tex_ids: parking_lot::MutexGuard<'a, HashMap<PathBuf, (TextureId, usize)>>,
+    held: Vec<PathBuf>,
+    materials: Vec<MaterialId>,
+    tex_time: std::cell::RefCell<(usize, f64)>,
+    instances: Vec<(MeshId, Vec<MaterialId>)>,
+    missing_tex: Vec<String>,
+    only: Option<String>,
+    variants: Vec<VariantSlot>,
+    dyn_slots: Vec<DynSlot>,
 }
