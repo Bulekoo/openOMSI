@@ -1323,7 +1323,9 @@ fn lines_on(map_dir: &Path, date: &str) -> Result<Vec<LineInfo>> {
                 let school = if calendar.in_holiday_range(c) { 1 << 8 } else { 1 << 9 };
                 mask & day != 0 && mask & school != 0
             };
-            let runs = mask & day_bit != 0 && mask & school_bit != 0;
+            // (and yesterday's night tour: its trips past 24:00 run today, #1576)
+            let night = t.trips.iter().any(|tt| tt.departure >= 24.0 * 60.0);
+            let runs = (mask & day_bit != 0 && mask & school_bit != 0) || (night && runs_on(day_before(code)));
             let next_run = (0..400).map(|k| add_days(code, k)).find(|c| runs_on(*c)).map(|c| format!("{:04}-{:02}-{:02}", c / 10000, c / 100 % 100, c % 100));
             let mut trips = Vec::new();
             for tt in &t.trips {
@@ -1399,6 +1401,22 @@ fn add_days(code: i32, k: i32) -> i32 {
         }
     }
     y * 10000 + m * 100 + d
+}
+
+/// The date code (YYYYMMDD) of the day before.
+fn day_before(code: i32) -> i32 {
+    let (y, m, d) = (code / 10000, code / 100 % 100, code % 100);
+    if d > 1 {
+        return code - 1;
+    }
+    let (y, m) = if m > 1 { (y, m - 1) } else { (y - 1, 12) };
+    let last = match m {
+        2 if (y % 4 == 0 && y % 100 != 0) || y % 400 == 0 => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    };
+    y * 10000 + m * 100 + last
 }
 
 /// Day of the week of a date code (YYYYMMDD): 0 = Monday … 6 = Sunday, as the game's clock.
@@ -1678,6 +1696,14 @@ pub fn delete_profile(name: &str) -> Result<()> {
 #[cfg(test)]
 mod profile_cleanup_tests {
     use super::*;
+
+    #[test]
+    fn the_day_before_crosses_months_and_years() {
+        assert_eq!(day_before(20261007), 20261006);
+        assert_eq!(day_before(20261001), 20260930);
+        assert_eq!(day_before(20240301), 20240229);
+        assert_eq!(day_before(20260101), 20251231);
+    }
 
     #[test]
     fn deleting_one_driver_keeps_other_and_unowned_runs() {

@@ -920,14 +920,33 @@ impl Schedule {
 
     /// Whether a tour is offered on the current day (the lists of lines and tours): its day
     /// mask has the day (and school day or holiday), or - for a night tour with trips after
-    /// 24:00 - the next day's weekday, as the night belongs to both.
+    /// 24:00 - the next day's weekday, as the night belongs to both, or the day before's
+    /// (its trips after midnight run today, #1576).
     pub(crate) fn tour_available(&self, tour: &omsi_timetable::Tour) -> bool {
         let m = tour.extra.trim().parse::<i32>().unwrap_or(1023);
         if m & self.day_bits.0 != 0 && m & self.day_bits.1 != 0 {
             return true;
         }
         let night = tour.trips.iter().any(|t| t.departure >= 24.0 * 60.0);
-        night && m & self.next_day_bit != 0 && m & self.day_bits.1 != 0
+        night && ((m & self.next_day_bit != 0 && m & self.day_bits.1 != 0) || self.tour_runs_on(tour, self.yesterday_bits()))
+    }
+
+    /// Whether a tour's day mask has these day bits (`day_bits`).
+    fn tour_runs_on(&self, tour: &omsi_timetable::Tour, bits: (i32, i32)) -> bool {
+        let m = tour.extra.trim().parse::<i32>().unwrap_or(1023);
+        m & bits.0 != 0 && m & bits.1 != 0
+    }
+
+    /// The day bits of the day before the current one.
+    fn yesterday_bits(&self) -> (i32, i32) {
+        let mut c = self.date_clock.clone();
+        if c.day_of_year > 1 {
+            c.day_of_year -= 1;
+        } else {
+            c.year -= 1;
+            c.day_of_year = omsi_sim::clock::days_in_year(c.year);
+        }
+        day_bits(&self.calendar, &c)
     }
 
     /// Whether departure `i`'s tour runs on the current day.
@@ -4145,6 +4164,21 @@ impl Schedule {
                 t.trips.len()
             ));
         }
+        // Yesterday's night tour, still under way after midnight (its trips past 24:00 are
+        // tonight's): its times a day earlier, so the duty goes on with the trip running
+        // now. After a restart at 0:45 the night lines begun the day before could not be
+        // taken (#1576).
+        if !self.tour_runs_on(t, self.day_bits) && self.tour_runs_on(t, self.yesterday_bits()) && trips.iter().any(|p| p.departure >= DAY) && trips.last().is_some_and(|p| p.end - DAY > now) {
+            for p in &mut trips {
+                p.departure -= DAY;
+                p.end -= DAY;
+                for s in &mut p.stops {
+                    s.arr -= DAY;
+                    s.dep -= DAY;
+                }
+            }
+            log::info!("player duty: line {} tour {} is yesterday's night tour, under way past midnight", l.name, t.number);
+        }
         let (line_name, tour_name) = (l.name.clone(), t.number.clone());
         let trip_index = match trip.map(str::trim).filter(|t| !t.is_empty()) {
             Some(pick) => chosen_trip(&trips, pick).ok_or_else(|| {
@@ -4156,13 +4190,7 @@ impl Schedule {
             })?,
             None => starting_trip(&trips, now),
         };
-        let hm = |t: f64| {
-            format!(
-                "{:02}:{:02}",
-                (t / 3600.0) as i32,
-                ((t % 3600.0) / 60.0) as i32
-            )
-        };
+        let hm = hhmm;
         // A picked trip is the duty, one way to its terminus, as a trip chosen in OMSI is;
         // the rest of the tour only with `--whole-tour`.
         let (trips, trip_index, first_trip) = if trip.is_some() && !whole_tour {
@@ -4470,6 +4498,8 @@ impl Schedule {
 
 /// "HH:MM" of a time of day in seconds.
 pub(crate) fn hhmm(t: f64) -> String {
+    // (yesterday's trips of a night tour taken after midnight are before 0:00)
+    let t = if t < 0.0 { t + DAY } else { t };
     format!("{:02}:{:02}", (t / 3600.0) as i32, ((t % 3600.0) / 60.0) as i32)
 }
 
