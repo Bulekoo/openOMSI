@@ -2061,11 +2061,7 @@ impl ApplicationHandler for App {
                         let (kind, rate) = precip_of(wt);
                         self.rain.set(kind, rate);
                         // [wind] direction (deg) speed (m/s)
-                        let wind = Vec3::new(
-                            wt.wind.0.to_radians().sin() * wt.wind.1,
-                            wt.wind.0.to_radians().cos() * wt.wind.1,
-                            0.0,
-                        );
+                        let wind = crate::rain::weather_wind(wt);
                         // every bus one may ride in keeps the weather out: the own, another
                         // player's, a timetable bus - each part of it: an articulated bus's
                         // rear section is a coupled part with its own [boundingbox] (#777)
@@ -2598,6 +2594,8 @@ impl ApplicationHandler for App {
                 lighting.detail = self.settings.detail_textures;
                 lighting.windy_trees = self.settings.windy_trees();
                 lighting.glass_wind = self.player.as_ref().map(|p| crate::lights::vehicle_velocity(&p.vehicle)).unwrap_or_default();
+                lighting.glass_wind -= self.weather.as_ref().map(crate::rain::weather_wind).unwrap_or_default();
+                lighting.animation_time = Some(self.clock.run_time as f32);
                 lighting.condensation = self.cabin_air.appearance();
                 // an LED panel's dots burn this much above their own colour (16 levels,
                 // see `Settings::led_glow`); the panel's picture and its mask are held at

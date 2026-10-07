@@ -1242,6 +1242,9 @@ pub(crate) fn run_offscreen(
                         .bounding_box
                         .map(|bb| (p.vehicle.position, p.vehicle.heading, bb))
                 });
+                lighting.glass_wind = player.as_ref().map(|p| lights::vehicle_velocity(&p.vehicle)).unwrap_or_default()
+                    - rain::weather_wind(&weather);
+                lighting.animation_time = Some(t_s + service_seconds as f32);
                 let puddle_surface = lighting.inside.and_then(|(o, _, _)| world.puddle_surface(o));
                 lighting.puddle_ground = puddle_surface.map(|(h, _)| h);
                 lighting.puddle_normal = puddle_surface.map_or(glam::Vec3::Z, |(_, n)| n);
@@ -2506,6 +2509,8 @@ pub(crate) fn run_offscreen(
     lighting.windy_trees = settings.windy_trees();
     lighting.night_brightness = settings.night_brightness;
     lighting.glass_wind = player_ref.as_ref().or(player.as_ref()).map(|p| crate::lights::vehicle_velocity(&p.vehicle)).unwrap_or_default();
+    lighting.glass_wind -= rain::weather_wind(&weather);
+    lighting.animation_time = Some(args.drive.unwrap_or(0.0) + service_seconds as f32);
     // OMSI_CONDENSATION=<minutes>,<people>[,engine 0/1]: the cabin air and the condensation
     // on the player's glass after that long with that many aboard
     if let (Ok(spec), Some(p)) = (omsi_cfg::env::var("OMSI_CONDENSATION"), player_ref.as_ref().or(player.as_ref())) {
@@ -2591,7 +2596,7 @@ pub(crate) fn run_offscreen(
                 1.0 / 30.0,
                 camera.position,
                 // ([wind] direction (deg) and speed (m/s), as the window's frame takes it)
-                Vec3::new(weather.wind.0.to_radians().sin() * weather.wind.1, weather.wind.0.to_radians().cos() * weather.wind.1, 0.0),
+                rain::weather_wind(&weather),
                 &mut scene,
                 &player_ref.as_ref().or(player.as_ref()).map(|p| rain::vehicle_boxes(&p.vehicle)).unwrap_or_default(),
             );
