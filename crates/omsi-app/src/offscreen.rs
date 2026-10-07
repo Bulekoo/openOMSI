@@ -1901,6 +1901,9 @@ pub(crate) fn run_offscreen(
             .as_ref()
             .map(|p| p.vehicle.position)
             .unwrap_or(camera.position);
+        if let Some(p) = player_ref.as_ref() {
+            h.sync_money(&world, &renderer, &mut scene, &p.vehicle);
+        }
         h.sync(&renderer, &mut scene, center);
         log::info!(
             "passengers: {} people ({}), request {:?}, paid {:?}, change due {:?}",

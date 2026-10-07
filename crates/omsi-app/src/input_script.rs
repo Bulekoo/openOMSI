@@ -1402,6 +1402,13 @@ impl App {
                     self.dragging = false;
                     return;
                 }
+                // a tear-off ticket block: a ticket of its type torn off for the passenger
+                if let Some(n) = self.humans.as_ref().and_then(|h| h.ticket_blocks.as_ref()).and_then(|b| b.hit(o, d, &p.vehicle)) {
+                    log::info!("ticket block {n}: a ticket torn off");
+                    p.vehicle.set_engine_var("GivenTicket", n as f32);
+                    self.dragging = false;
+                    return;
+                }
                 self.dragging = p
                     .click(o, d, spread)
                     .is_some();

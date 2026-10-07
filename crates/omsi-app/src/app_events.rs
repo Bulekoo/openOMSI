@@ -1450,7 +1450,7 @@ impl ApplicationHandler for App {
                         p.vehicle.host.humans_on_seat = h.seat_counts();
                         let coins: Vec<usize> = std::mem::take(&mut p.vehicle.host.change_coins);
                         h.give_change(w, r, scene, &coins);
-                        h.sync_money(r, scene, &p.vehicle);
+                        h.sync_money(w, r, scene, &p.vehicle);
                     }
                     h.sync(r, scene, center);
                 }

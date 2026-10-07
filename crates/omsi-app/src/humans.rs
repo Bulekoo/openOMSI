@@ -1549,6 +1549,8 @@ pub struct Humans {
     pub paid: Option<(f32, f32)>,
     pub change_due: Option<f32>,
     pub money: Option<crate::money::Money>,
+    /// The tear-off ticket blocks of the player's bus (`money::TicketBlocks`).
+    pub ticket_blocks: Option<crate::money::TicketBlocks>,
     /// A rider pressed the stop button for the next stop (the app fires the vehicle trigger `int_haltewunsch`).
     pub stop_request: bool,
     /// Tickets sold at the cash desk this session and what they were worth.
@@ -1845,6 +1847,7 @@ impl Humans {
             paid: None,
             change_due: None,
             money: None,
+            ticket_blocks: None,
             stop_request: false,
             tickets_sold: 0,
             ticket_cash: 0.0,
@@ -4721,9 +4724,18 @@ impl Humans {
         }
     }
 
-    pub fn sync_money(&mut self, renderer: &Renderer, scene: &mut Scene, bus: &VehicleInstance) {
+    pub fn sync_money(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, bus: &VehicleInstance) {
         if let Some(m) = self.money.as_mut() {
             m.sync(renderer, scene, bus);
+        }
+        if let Some(pack) = self.tickets.as_ref().map(|t| t.path.clone()) {
+            let fresh = self.ticket_blocks.as_ref().is_none_or(|b| b.made_for != (bus.ty.def.path.clone(), pack.clone()));
+            if fresh && !bus.ty.def.attachments.is_empty() {
+                self.ticket_blocks = Some(crate::money::TicketBlocks::new(world, renderer, scene, bus, &pack));
+            }
+        }
+        if let Some(b) = self.ticket_blocks.as_ref() {
+            b.sync(renderer, scene, bus);
         }
     }
 
