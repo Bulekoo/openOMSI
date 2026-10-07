@@ -2999,6 +2999,7 @@ fn drive_remote(rv: &mut RemoteVehicle, pose: &Pose, dt: f32, exact: bool) {
         // already in those values - the frame only runs the AI half of the script.
         at_station_side: 0.0,
         priority_warning: false,
+        engine_off: false,
     };
     // and every other variable of theirs, as their scripts have it (`omsi_net::vars`)
     pinned.extend(rv.synced.iter().filter(|(id, _)| !rv.smooth.contains(*id)).map(|(id, v)| (*id as VarId, *v)));

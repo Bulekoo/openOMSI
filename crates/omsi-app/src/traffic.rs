@@ -6201,6 +6201,7 @@ impl Traffic {
                 at_station: car.at_station() as i32,
                 at_station_side: car.at_station_side(),
                 priority_warning,
+                engine_off: car.bus.as_ref().is_some_and(|b| !b.engine_running(self.day_time)),
             });
         }
         // Who can be seen: a car out of the view (and farther than the mirrors and the

@@ -101,6 +101,8 @@ pub struct BusService {
     pub boarding: f32,
     /// When it may leave the stop (seconds of the day).
     pub leave_at: f64,
+    /// When it came to the stop it stands at (seconds of the day).
+    pub arrived_at: f64,
     /// The doors have been open at this stop already (a layover bus opens them only for
     /// the last minute before its departure).
     pub boarded: bool,
@@ -134,6 +136,12 @@ fn out_signal(bay: f32) -> i32 {
         1
     }
 }
+
+/// `AI_Engine` at a stop (`BusService::engine_running`): off this long after arriving when
+/// the departure is more than `ENGINE_OFF_WAIT` away, on again `ENGINE_ON_BEFORE` before it.
+const ENGINE_OFF_AFTER: f64 = 6.0;
+const ENGINE_OFF_WAIT: f64 = 60.0;
+const ENGINE_ON_BEFORE: f64 = 20.0;
 
 /// Seconds the doors stay open at a stop without anyone holding them.
 fn boarding_time(id: u64) -> f32 {
@@ -234,6 +242,7 @@ impl BusService {
             phase_t: 0.0,
             boarding: 0.0,
             leave_at: 0.0,
+            arrived_at: 0.0,
             boarded: false,
             delay: 0.0,
             layover: false,
@@ -267,6 +276,18 @@ impl BusService {
     }
 
     /// Standing at a stop (boarding, waiting or pulling out).
+    /// Whether its engine runs (`AI_Engine`): Omsi.exe (0x7d9128) switches a timetable
+    /// bus's engine off six seconds after it came to a stop it is to leave more than a
+    /// minute later, and on again twenty seconds before it leaves. The buses took their
+    /// breaks at the termini with the engines running (#1404).
+    pub fn engine_running(&self, day_time: f64) -> bool {
+        let standing = matches!(self.phase, Phase::Boarding | Phase::Waiting);
+        !(standing
+            && self.leave_at - self.arrived_at > ENGINE_OFF_WAIT
+            && day_time - self.arrived_at > ENGINE_OFF_AFTER
+            && self.leave_at - day_time > ENGINE_ON_BEFORE)
+    }
+
     pub fn at_stop(&self) -> bool {
         matches!(self.phase, Phase::Boarding | Phase::Waiting | Phase::Closing)
     }
@@ -332,6 +353,7 @@ impl BusService {
         let rail = ctx.net.lanes.get(at.0).is_some_and(|l| l.kind == LaneKind::Rail);
         let wait = early_wait(depart, ctx.day_time, layover, rail);
         self.leave_at = ctx.day_time + wait;
+        self.arrived_at = ctx.day_time;
         self.boarding = boarding_time(ctx.id);
         self.boarded = false;
         // a layover opens the doors for the last minute only; anywhere else people get off
@@ -558,6 +580,24 @@ pub fn stop_shift(ty: &omsi_sim::VehicleType, rail: bool) -> f32 {
 
 #[cfg(test)]
 mod tests {
+    /// A bus with a long wait at its stop switches its engine off after six seconds and on
+    /// twenty seconds before it leaves; a short stop keeps it running (#1404).
+    #[test]
+    fn the_engine_rests_through_a_long_wait() {
+        let mut b = super::BusService::new(Vec::new());
+        b.phase = super::Phase::Waiting;
+        b.arrived_at = 1000.0;
+        b.leave_at = 1300.0;
+        assert!(b.engine_running(1003.0), "just arrived");
+        assert!(!b.engine_running(1010.0), "resting");
+        assert!(b.engine_running(1285.0), "about to leave");
+        b.leave_at = 1040.0;
+        assert!(b.engine_running(1010.0), "a short stop");
+        b.leave_at = 1300.0;
+        b.phase = super::Phase::Running;
+        assert!(b.engine_running(1010.0), "driving");
+    }
+
     #[test]
     fn scheduled_ai_exposes_timetable_during_init_and_frame_ai() {
         let template = crate::schedule::tests::script_test_vehicle(
