@@ -4,6 +4,83 @@ Every push to `main` is released as `MAJOR.MINOR.COMMIT` (see
 [docs/VERSIONING.md](docs/VERSIONING.md)); the downloads are on the
 [Releases](https://github.com/openOMSI-Project/openOMSI/releases) page.
 
+## 0.2.17 - 2026-10-08
+
+A big one: early, mid and late seasons with trees that turn one by one, mouse steering to full
+lock, the wipers really clearing the glass, collisions with real momentum and dents, encrypted
+LAN mods, a DirectX 11 option for old graphics cards, and the game's code reorganised from the
+ground up so that it stays easy to change.
+
+### New
+- **Early, mid and late seasons.** Pick a season and under it Early, Mid or Late. The phase
+  sets a real date in that part of the season (the map's hemisphere decides which months), so
+  the sun's path, the length of the day, the natural weather's temperatures and snow, the
+  street lamps, the map's dated changes and the timetable all follow it by themselves. "By
+  date" works as before. Also on the command line: `--season autumn-late`.
+- **Trees that turn one by one.** In between two seasons the trees no longer change all
+  together: each tree takes one of the two looks, the same every time and for every LAN
+  player - early autumn is green with the first yellow trees, late autumn mostly bare with a
+  few still in leaf, early spring bare with the first green, late summer partly dry.
+- **Wipers clear the rain and snow only where the blade has passed**, along its sweep, pushing
+  the water ahead of it; drops merge and run off, and in snow the flakes settle on the glass
+  and build up at the edge of the wiped area [#1828](https://github.com/openOMSI-Project/openOMSI/pull/1828).
+- **Collisions with AI vehicles**: a car that is hit recoils by momentum and finds its way back
+  onto its lane, crash energy follows the masses and speeds of both vehicles, both the bus and
+  the AI cars get dents where they were hit, and glass shows cracks, lit like the pane it is in
+  [#1819](https://github.com/openOMSI-Project/openOMSI/pull/1819). Mouse pedal strength is a new
+  setting [#1819](https://github.com/openOMSI-Project/openOMSI/pull/1819).
+- **"ANGLE (DirectX 11)" graphics API on Windows**, for graphics chips whose DirectX 12, Vulkan
+  and OpenGL drivers don't run the game (Intel HD Graphics 2000-4000, Radeon HD 5000/6000). It
+  is tried by itself when the others fail, or chosen in Settings. The DLLs are built from
+  Google's ANGLE source in [angle-openomsi](https://github.com/openOMSI-Project/angle-openomsi)
+  and checked by their SHA-256.
+- **LAN mods are encrypted** on the network and on disk: the files a host sends can't be read
+  off the network, and copying them out of the game's folders gives you scrambled data, while
+  the game reads them normally. (This stops casual copying, not a determined person: the game
+  is open source and decrypts on the player's computer.) Hosts and players need 0.2.17 both.
+- The information bar shows how many passengers fit next to how many are aboard
+  [#1826](https://github.com/openOMSI-Project/openOMSI/pull/1826).
+- Plugins: `omsi.info()` names the stops on either side of the bus with their IDs, the
+  distance to each, and whether the bus stands at a stop
+  [#1588](https://github.com/openOMSI-Project/openOMSI/pull/1588).
+- New option (Settings → Gameplay → Traffic, off by default): timetable buses running ahead
+  of time wait for their departure only at the stops the timetable times itself, instead of
+  at every stop as in OMSI [#1773](https://github.com/openOMSI-Project/openOMSI/pull/1773).
+
+### Fixes
+- Mouse steering reaches full lock both ways: the wheel used to stop as soon as the cursor
+  hit the edge of the screen (on macOS often at a quarter of the lock). The cursor is now
+  held while you steer and comes back when you look around, open a menu or switch windows;
+  the mouse pedals reach full throttle and full brake too.
+- Dedicated server: people walk the pavements and wait at the stops around every player
+  again, and board the timetable buses there
+  [#1817](https://github.com/openOMSI-Project/openOMSI/pull/1817).
+- The offscreen pictures (and so the game's own picture checks) are taken exactly as the
+  window draws the game: the clock goes on, the AI's lights follow the daylight, the
+  collision settings count, the wet roads and the cabin air develop, the lighting is built
+  the same way.
+- No more crashes when the graphics driver fails in some ways it used to take the game down
+  with: running out of video memory while recording, a driver that can't compile a shader,
+  adapter checks that fail, closing an OpenGL context. Shader compile failures now say what
+  the driver said.
+- OpenGL: no more "Could not lock adapter context" crashes while another part of the game
+  waits for the GPU (#843, #898, #1110).
+- The LAN tests no longer fail now and then.
+
+### Under the hood
+- The game's code was reorganised without changing what it does (checked frame by frame
+  against the previous version): the frame is a sequence of named steps shared by the window
+  and the offscreen run; the AI traffic, the people and the timetable simulate in `omsi-sim`
+  with no graphics in them, and one place hands their state to the renderer; the renderer's
+  passes and pipelines each have a module of their own; the game's state is grouped by
+  subsystem; every `OMSI_*` switch is listed in `docs/DEBUG_FLAGS.md` and read through one
+  registry. No function is longer than 500 lines any more (there were ten), and a check on
+  every pull request keeps files and functions from growing past their size again.
+- openOMSI now builds on [wgpu-openomsi](https://github.com/openOMSI-Project/wgpu-openomsi),
+  the project's fork of wgpu 29.0.4 with the graphics fixes above (and a video-memory query,
+  which the log now shows).
+- `docs/ARCHITECTURE.md` describes the architecture; its history moved to `docs/HISTORY.md`.
+
 ## 0.2.16 - 2026-10-07
 
 ### New
