@@ -195,7 +195,7 @@ impl SnowTracks {
                         continue;
                     }
                     ruts_left -= 1;
-                    draw_ruts(s, (tx, ty), net);
+                    draw_ruts(s, (tx, ty), net, fallen);
                     s.ruts_done = true;
                     s.touch(0, 0, TILE_PX, TILE_PX);
                 }
@@ -280,7 +280,15 @@ fn slot_of(tx: i64, ty: i64) -> usize {
 
 /// The ruts of the street lanes over a tile: two wheel tracks along each lane, a bell's
 /// profile across each (`r`, the strongest where lanes overlap).
-fn draw_ruts(s: &mut Slot, (tx, ty): (i64, i64), net: Option<&Network>) {
+///
+/// A rut fills with the snow that falls while no wheel runs in it (road_snow.wgsl): each
+/// texel keeps the moment a tyre last pressed it (`b`, `a`). Where none has yet, it takes
+/// a moment as long ago as the lane's traffic makes likely - a busy street's ruts are
+/// fresh, a quiet lane's half filled already.
+fn draw_ruts(s: &mut Slot, (tx, ty): (i64, i64), net: Option<&Network>, fallen: f64) {
+    // (drawn again - the network has grown - a rut keeps the moment it had: its filling
+    // goes on where it was)
+    let had: Vec<bool> = s.px.chunks_exact(4).map(|p| p[0] > 0).collect();
     for p in s.px.chunks_exact_mut(4) {
         p[0] = 0;
     }
@@ -322,6 +330,12 @@ fn draw_ruts(s: &mut Slot, (tx, ty): (i64, i64), net: Option<&Network>) {
         }
         // (each lane its own wander, so that neighbouring lanes do not wander alike)
         let seed = li as f64 * 1.618;
+        // (snow fallen since a wheel last ran here, thousandths of a cover: the ruts fill
+        // from 150 on and are gone at 520, see the shader - a lane of the medium traffic
+        // fresh, one the random traffic keeps out of (a terminus loop, a bus lane: the
+        // buses still use it) a third filled)
+        let since = 280.0 / (1.0 + 3.0 * lane.density.max(0.0) as f64);
+        let then = (fallen - since).rem_euclid(65536.0) as u16;
         for (k, w) in lane.points.windows(2).enumerate() {
             let (a, b) = (w[0].truncate(), w[1].truncate());
             let (d0, d1) = (
@@ -363,6 +377,12 @@ fn draw_ruts(s: &mut Slot, (tx, ty): (i64, i64), net: Option<&Network>) {
                     let o = (py * TILE_PX + px) * 4;
                     if v > s.px[o] {
                         s.px[o] = v;
+                        // (a texel a tyre has pressed keeps its own moment, as one
+                        // that was a rut before)
+                        if s.px[o + 1] == 0 && !had[py * TILE_PX + px] {
+                            s.px[o + 2] = (then >> 8) as u8;
+                            s.px[o + 3] = then as u8;
+                        }
                     }
                 }
             }

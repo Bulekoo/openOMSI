@@ -6,9 +6,10 @@
 // j modulo its size, so the app only rewrites the tiles the camera moves into. It is kept
 // tile after tile (`TRACK_TILE` texels a side), each row after row, a texel an RGBA8 word:
 //   r: the ruts of the lanes' wheel tracks (0..1)
-//   g: a tyre has pressed the snow here (1)
-//   b, a: how much snow had fallen when it did (16 bits, see `state.y`): the track fills
-//         as more falls on it
+//   g: a tyre has pressed the snow here (how much of the texel it covered)
+//   b, a: how much snow had fallen when a tyre last ran here (16 bits, see `state.y`; for
+//         a rut no tyre has run in yet, a moment as long ago as its lane's traffic makes
+//         likely): the track and the rut fill as more falls
 
 struct SnowTrack {
     // xy: the render origin modulo the field's side (m), z: the side (m), w: 1 while the
@@ -26,7 +27,8 @@ struct SnowTrack {
 const TRACK_TEXELS: i32 = 2048;
 const TRACK_TILE: i32 = 256;
 
-// One texel's rut and fresh track (the track fading as the snow fallen since fills it).
+// One texel's rut and fresh track, each filled by the snow fallen since a tyre last ran
+// over it.
 fn snow_track_texel(p: vec2<i32>) -> vec2<f32> {
     let q = ((p % TRACK_TEXELS) + TRACK_TEXELS) % TRACK_TEXELS;
     let tile = (q.y / TRACK_TILE) * (TRACK_TEXELS / TRACK_TILE) + q.x / TRACK_TILE;
@@ -34,9 +36,13 @@ fn snow_track_texel(p: vec2<i32>) -> vec2<f32> {
     let t = unpack4x8unorm(snow_track_px[i]);
     let then = round(t.b * 255.0) * 256.0 + round(t.a * 255.0);
     let since = (snow_track.state.y - then + 65536.0) % 65536.0;
-    // (some 15 % of a cover fallen on it and a track begins to blur, 40 % and it is gone)
-    let fresh = t.g * (1.0 - smoothstep(150.0, 400.0, since));
-    return vec2<f32>(t.r, fresh);
+    // (a track begins to blur after 8 % of a cover has fallen on it and is gone at 28 %; a
+    // rut, worn deeper by the traffic, begins to fill at 15 % and is gone at 52 % - in a
+    // heavy snowfall (Starker Schneefall) one or two minutes, and four or seven, without a
+    // car: a driver who waits that long at a stop sees it happen)
+    let fresh = t.g * (1.0 - smoothstep(80.0, 280.0, since));
+    let rut = t.r * (1.0 - smoothstep(150.0, 520.0, since));
+    return vec2<f32>(rut, fresh);
 }
 
 // The rut (x) and the fresh track (y) at a point of the render frame, blended between the
