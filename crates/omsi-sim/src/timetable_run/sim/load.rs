@@ -2,19 +2,19 @@
 
 use super::*;
 
-impl Schedule {
+impl ScheduleSim {
     /// `clock` gives the date: tours carry a validity mask (bits 0-6 Monday…Sunday, 7 public
     /// holiday, 8 school holidays, 9 school days) that selects which run today.
-    pub fn new(root: &Path, world: &World, clock: &omsi_sim::SimClock) -> Schedule {
-        let chrono_dirs = world.chrono_dirs.read().clone();
+    pub fn new(root: &Path, world: &dyn TimetableWorld, clock: &crate::SimClock) -> ScheduleSim {
+        let chrono_dirs = world.chrono_dirs();
         let deactivated = omsi_map::chrono_deactivated_lines(&chrono_dirs);
-        let data = TimetableData::load_with_chrono(&world.map_dir, &chrono_dirs, &deactivated);
+        let data = TimetableData::load_with_chrono(world.map_dir(), &chrono_dirs, &deactivated);
         for e in &data.errors {
             log::warn!("timetable: {e}");
         }
         let calendar =
-            omsi_map::Calendar::load(&world.map_dir.join("Holidays.txt")).unwrap_or_default();
-        let car_use = omsi_timetable::CarUse::load_dir(&world.map_dir);
+            omsi_map::Calendar::load(&world.map_dir().join("Holidays.txt")).unwrap_or_default();
+        let car_use = omsi_timetable::CarUse::load_dir(world.map_dir());
         // station link lengths, the first link of a pair counts (as the routes take it)
         let mut links: HashMap<(i64, i64), f64> = HashMap::new();
         for l in &data.stn_links {
@@ -100,10 +100,10 @@ impl Schedule {
         }
         let mut depots = HashMap::new();
         let mut warned: HashSet<String> = HashSet::new();
-        let mut hof_cache: HashMap<(std::path::PathBuf, String), Option<Arc<omsi_vehicle::Hof>>> =
+        let mut hof_cache: HashMap<(PathBuf, String), Option<Arc<omsi_vehicle::Hof>>> =
             HashMap::new();
         // a bus file several depots (or typgroups) list is one type: loaded once
-        let mut loaded: HashMap<std::path::PathBuf, Option<Arc<VehicleType>>> = HashMap::new();
+        let mut loaded: HashMap<PathBuf, Option<Arc<VehicleType>>> = HashMap::new();
         let mut load = |path: &std::path::Path| -> Result<Arc<VehicleType>, String> {
             loaded
                 .entry(path.to_path_buf())
@@ -117,7 +117,7 @@ impl Schedule {
                 .ok_or_else(|| "could not be loaded".to_string())
         };
         {
-            let lists = &world.ailists;
+            let lists = world.ailists();
             for g in lists.groups.iter().filter(|g| g.is_depot) {
                 let mut vehicles = Vec::new();
                 for tg in &g.typgroups {
@@ -144,7 +144,7 @@ impl Schedule {
         // train groups: [aigroup_2] entries pointing at .zug files
         let mut trains: HashMap<String, Vec<Vec<(Arc<VehicleType>, bool)>>> = HashMap::new();
         {
-            let lists = &world.ailists;
+            let lists = world.ailists();
             for g in lists.groups.iter().filter(|g| !g.is_depot) {
                 for v in &g.vehicles {
                     if !v.file.to_ascii_lowercase().ends_with(".zug") {
@@ -195,7 +195,7 @@ impl Schedule {
                 }
             }
         }
-        let tile_coords = world.global.raw_tiles.clone();
+        let tile_coords = world.raw_tiles();
         if omsi_cfg::flags::OMSI_PROFILE.is_set() {
             let mut seen: HashSet<*const VehicleType> = HashSet::new();
             let mut bytes = 0usize;
@@ -222,12 +222,11 @@ impl Schedule {
             .iter()
             .flat_map(|t| trip_stations(t).into_iter().skip(1))
             .collect();
-        let mut s = Schedule {
+        let mut s = ScheduleSim {
             data,
             departures,
             depots,
             tile_coords,
-            next_number: 0,
             trains,
             pools: HashMap::new(),
             pool_hofs: HashMap::new(),
@@ -239,9 +238,6 @@ impl Schedule {
             last_retry: f64::NEG_INFINITY,
             car_departure: HashMap::new(),
             retry_at: HashMap::new(),
-            fleet_reading: HashMap::new(),
-            fleet_ready: Default::default(),
-            fleet_check: f64::NEG_INFINITY,
             times,
             visits,
             trip_departures,
@@ -367,7 +363,7 @@ impl Schedule {
     /// mask has the day (and school day or holiday), or - for a night tour with trips after
     /// 24:00 - the next day's weekday, as the night belongs to both, or the day before's
     /// (its trips after midnight run today, #1576).
-    pub(crate) fn tour_available(&self, tour: &omsi_timetable::Tour) -> bool {
+    pub fn tour_available(&self, tour: &omsi_timetable::Tour) -> bool {
         let m = tour.extra.trim().parse::<i32>().unwrap_or(1023);
         if m & self.day_bits.0 != 0 && m & self.day_bits.1 != 0 {
             return true;
@@ -389,7 +385,7 @@ impl Schedule {
             c.day_of_year -= 1;
         } else {
             c.year -= 1;
-            c.day_of_year = omsi_sim::clock::days_in_year(c.year);
+            c.day_of_year = crate::clock::days_in_year(c.year);
         }
         day_bits(&self.calendar, &c)
     }
@@ -405,7 +401,7 @@ impl Schedule {
     /// made once for the start day and stayed spawned, so after the first midnight only the
     /// early-morning trips before the start time came, and on the old day's tours.
     /// Departures still queued or under way keep their state; the player's tour stays taken.
-    pub(super) fn set_day(&mut self, clock: &omsi_sim::SimClock) {
+    pub(super) fn set_day(&mut self, clock: &crate::SimClock) {
         let date = clock.date_code();
         if date == self.day {
             return;
@@ -444,7 +440,7 @@ impl Schedule {
     /// When departure `i`'s bus is at its trip's stations.
     /// The stations departure `i` serves whoever wants them or not (`[profile_otherstopping]`
     /// 1 or 4), and those it serves when it would be early (3), by object id.
-    pub(super) fn special_stops(&self, i: usize) -> (Vec<i64>, Vec<i64>) {
+    pub fn special_stops(&self, i: usize) -> (Vec<i64>, Vec<i64>) {
         let stations = trip_stations(&self.data.trips[self.departures[i].trip]);
         let kinds = &self.times_of(i).kinds;
         let of = |want: &[u8]| -> Vec<i64> {

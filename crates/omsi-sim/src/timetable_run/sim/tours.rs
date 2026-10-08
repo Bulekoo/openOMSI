@@ -3,7 +3,7 @@
 
 use super::*;
 
-impl Schedule {
+impl ScheduleSim {
     /// The stops of a tour in the order it drives them, over all its trips: (trip number in
     /// the duty, stop number in the trip, name, departure there in seconds). Passing stations
     /// are left out.
@@ -176,7 +176,7 @@ impl Schedule {
     /// leave - as OMSI does when a time is picked for a tour. (The duty used to start with
     /// the tour's first trip whatever the time: Spandau's "Mo-Fr 3" of line 5 at 15:05 began
     /// with the 14:44 depot run, and the IBIS was typed for it.) The AI no longer drives the
-    /// tour: its trips are the player's ([`Schedule::reserve_tour`]).
+    /// tour: its trips are the player's ([`ScheduleSim::reserve_tour`]).
     /// When the line or its tour cannot be driven, the error says why in words a driver can
     /// act on (a line the date's chrono takes off names the chrono and the day it starts);
     /// the callers used to drop that silently and the game started without a duty.
@@ -187,7 +187,7 @@ impl Schedule {
     /// trips from there, as OMSI's does.
     pub fn player_duty(
         &mut self,
-        world: &World,
+        world: &dyn TimetableWorld,
         line: &str,
         tour: &str,
         now: f64,
@@ -220,12 +220,12 @@ impl Schedule {
                     .filter(|d| *d > 0);
                 return Err(format!(
                     "line {name} does not run on {}: the timetable change '{}'{} takes it off. {running} other lines run that day: pick one of them, or an earlier date",
-                    date(world.date),
+                    date(world.date()),
                     dir.file_name().unwrap_or_default().to_string_lossy(),
                     from.map(|d| format!(" of {}", date(d))).unwrap_or_default()
                 ));
             }
-            return Err(format!("line {line} is not in the timetable of this map on {}: {running} lines run that day", date(world.date)));
+            return Err(format!("line {line} is not in the timetable of this map on {}: {running} lines run that day", date(world.date())));
         };
         let t = match l.tours.iter().find(|t| t.number.eq_ignore_ascii_case(tour)) {
             Some(t) => t,
@@ -263,7 +263,7 @@ impl Schedule {
                 .enumerate()
                 .map(|(i, id)| {
                     let name = self.station_name(trip, i, *id);
-                    let position = world.object_positions.lock().get(id).map(|p| p.0);
+                    let position = world.object_positions().get(id).map(|p| p.0);
                     let (arr, dep) = times.stations[i];
                     PlannedStop {
                         object_id: *id,

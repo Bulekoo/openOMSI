@@ -1,10 +1,13 @@
 //! The timetable at run time, as far as it needs no GPU: a trip's times at its stations
-//! (`times`), the destinations and IBIS codes of the buses (`ibis`) and the player's duty
-//! (`duty`). The game's `schedule` puts the buses on the road with them.
+//! (`times`), the destinations and IBIS codes of the buses (`ibis`), the player's duty
+//! (`duty`), and the timetable's state with its decisions (`sim`: `ScheduleSim`, which
+//! departure leaves when, with which vehicle, where on its route). The game's `schedule`
+//! puts the buses on the road with them.
 
 mod duty;
 mod ibis;
 mod route;
+mod sim;
 mod times;
 mod tours;
 #[cfg(test)]
@@ -16,6 +19,7 @@ use hashbrown::{HashMap, HashSet};
 pub use duty::*;
 pub use ibis::*;
 pub use route::*;
+pub use sim::*;
 pub use times::*;
 pub use tours::*;
 

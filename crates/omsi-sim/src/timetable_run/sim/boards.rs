@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl Schedule {
+impl ScheduleSim {
     /// The buses due at one bus stop (map object id) within the next two hours, unsorted, as
     /// (expected arrival, line, terminus, time it stands at the stop), all in seconds of the day:
     /// the timetable buses with the delay they run with, and the player's.
@@ -112,24 +112,28 @@ impl Schedule {
         list
     }
 
-    /// Make the departure boards of the stops whose displays are near
-    /// (`World::timetable_boards`), and hand the scenery the time of day. The boards are
-    /// made at most once a second: the buses due at each stop in the next two hours,
-    /// soonest first - the timetable buses with the delay they run with, and the player's.
-    pub fn update_boards(
+    /// Whether the departure boards were made less than a second before `now` (omsi-app's
+    /// `Schedule::update_boards` makes them at most once a second).
+    pub fn boards_fresh(&self, now: f64) -> bool {
+        (now - self.boards_made).abs() < 1.0
+    }
+
+    /// The departure boards of the stops `wanted` (by map object id): the buses due at each
+    /// stop in the next two hours, soonest first - the timetable buses with the delay they
+    /// run with, and the player's - as (line, terminus, expected arrival); and the
+    /// departures the pages asked for by the stop names `wanted_names`, as (line,
+    /// destination, timestamp). The time they are made is kept (`boards_fresh`).
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    pub fn make_boards(
         &mut self,
-        world: &World,
-        traffic: Option<&Traffic>,
+        traffic: Option<&TrafficSim>,
+        wanted: Vec<i64>,
+        wanted_names: Vec<String>,
         duty: Option<&PlayerDuty>,
         player_hof: Option<&omsi_vehicle::Hof>,
-        clock: &omsi_sim::SimClock,
-    ) {
+        clock: &crate::SimClock,
+    ) -> (HashMap<i64, Vec<(String, String, f64)>>, std::collections::HashMap<String, Vec<(String, String, f64)>>) {
         let now = clock.time;
-        let mut boards = world.timetable_boards.lock();
-        boards.clock = Some(clock.clone());
-        if (now - self.boards_made).abs() < 1.0 || (boards.wanted.is_empty() && boards.wanted_names.is_empty()) {
-            return;
-        }
         self.boards_made = now;
         // the timetable buses on the road: departure -> where they are in their trip (a
         // train runs its track without stops of its own and is taken as on time)
@@ -161,7 +165,6 @@ impl Schedule {
                 );
             }
         }
-        let wanted = boards.wanted.clone();
         let mut made = HashMap::new();
         for stop in wanted {
             let mut list = self.stop_list(stop, now, &on_road, duty, player_hof);
@@ -178,11 +181,10 @@ impl Schedule {
             }
             made.insert(stop, list.into_iter().map(|(t, l, d, _)| (l, d, t)).collect());
         }
-        boards.by_stop = made;
         // the departures the pages asked for by stop name (`omsi.getDepartures`): the next two
         // hours, at most 20, as (line, destination, timestamp)
         let mut departures = std::collections::HashMap::new();
-        for key in boards.wanted_names.clone() {
+        for key in wanted_names {
             let mut ids: Vec<i64> = self
                 .data
                 .bus_stops
@@ -206,12 +208,11 @@ impl Schedule {
             departures.insert(
                 key,
                 list.into_iter()
-                    .map(|(t, l, d)| (l, d, omsi_sim::vehicle_api::timestamp(clock, t)))
+                    .map(|(t, l, d)| (l, d, crate::vehicle_api::timestamp(clock, t)))
                     .collect(),
             );
         }
-        boards.departures = departures;
-        boards.departures_gen = boards.departures_gen.wrapping_add(1);
+        (made, departures)
     }
 
     /// The line a departure's displays show: its trip's own (" 5"), else the timetable
@@ -242,7 +243,7 @@ impl Schedule {
     }
 
     /// The station names of trip `ti`, for picking its route in the depot file.
-    pub(super) fn trip_stop_names(&self, ti: usize) -> Vec<String> {
+    pub fn trip_stop_names(&self, ti: usize) -> Vec<String> {
         let trip = &self.data.trips[ti];
         trip_stations(trip)
             .iter()
@@ -251,7 +252,7 @@ impl Schedule {
             .collect()
     }
 
-    pub(super) fn display_line(&self, i: usize) -> String {
+    pub fn display_line(&self, i: usize) -> String {
         let d = &self.departures[i];
         let own = self.data.trips[d.trip].line.trim();
         if own.is_empty() {

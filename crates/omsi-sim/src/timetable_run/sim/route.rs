@@ -3,7 +3,7 @@
 
 use super::*;
 
-impl Schedule {
+impl ScheduleSim {
     /// The steps of a trip's route: from the trip's own track when it has one (trains,
     /// ferries, planes), else from the station links between its stops. The flag says it is
     /// a track.
@@ -80,8 +80,8 @@ impl Schedule {
     /// before it - sent the route (and the navigator) the wrong way along a two-way street.
     pub(super) fn slots(
         &self,
-        world: &World,
-        traffic: &Traffic,
+        world: &dyn TimetableWorld,
+        traffic: &TrafficSim,
         steps: &[Step],
         prev: Option<usize>,
     ) -> Vec<Slot> {
@@ -181,8 +181,8 @@ impl Schedule {
     /// between its stops, as far as the tiles have brought them - and whether that is all.
     pub fn trip_route(
         &self,
-        world: &World,
-        traffic: &Traffic,
+        world: &dyn TimetableWorld,
+        traffic: &TrafficSim,
         trip_name: &str,
     ) -> (Vec<usize>, bool) {
         let Some(trip) = self
@@ -212,7 +212,7 @@ impl Schedule {
     /// The lanes a trip runs on in `net` - the navigator's network of the whole map, which
     /// has every tile's lanes whether loaded or not - chosen as `slots` chooses them (of a
     /// two-way path the direction that joins the lanes before and after).
-    pub fn trip_route_in(&self, net: &omsi_sim::traffic::Network, trip_name: &str) -> Vec<usize> {
+    pub fn trip_route_in(&self, net: &crate::traffic::Network, trip_name: &str) -> Vec<usize> {
         let Some(trip) = self.data.trips.iter().find(|x| x.name.eq_ignore_ascii_case(trip_name)) else {
             return Vec::new();
         };
@@ -249,7 +249,7 @@ impl Schedule {
     /// consecutive lanes do not join - a gap the bus would jump, or a lane taken the wrong
     /// way round (its end, not its start, lies where the lane before ends), which sends a
     /// bus into the oncoming traffic. Only trips whose route is wholly loaded are judged.
-    pub fn check_routes(&self, world: &World, traffic: &mut Traffic) {
+    pub fn check_routes(&self, world: &dyn TimetableWorld, traffic: &mut TrafficSim) {
         for trip in &self.data.trips {
             let (steps, _) = self.steps_of(&trip.name, &trip_stations(trip));
             add_twins(traffic, &steps);
