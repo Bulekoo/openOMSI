@@ -439,14 +439,22 @@ impl ScheduleSim {
 
     /// When departure `i`'s bus is at its trip's stations.
     /// The stations departure `i` serves whoever wants them or not (`[profile_otherstopping]`
-    /// 1 or 4), and those it serves when it would be early (3), by object id.
-    pub fn special_stops(&self, i: usize) -> (Vec<i64>, Vec<i64>) {
+    /// 1 or 4), those it serves when it would be early (3), and the ones whose time the map
+    /// wrote itself (the bus waits there for its departure), by object id.
+    pub fn special_stops(&self, i: usize) -> (Vec<i64>, Vec<i64>, Vec<i64>) {
         let stations = trip_stations(&self.data.trips[self.departures[i].trip]);
-        let kinds = &self.times_of(i).kinds;
+        let times = self.times_of(i);
+        let kinds = &times.kinds;
         let of = |want: &[u8]| -> Vec<i64> {
             stations.iter().zip(kinds).filter(|(_, k)| want.contains(k)).map(|(id, _)| *id).collect()
         };
-        (of(&[1, 4]), of(&[3]))
+        let holds: Vec<i64> = stations
+            .iter()
+            .zip(&times.holds)
+            .filter(|(_, h)| **h)
+            .map(|(id, _)| *id)
+            .collect();
+        (of(&[1, 4]), of(&[3]), holds)
     }
 
     pub(super) fn times_of(&self, i: usize) -> &TripTimes {

@@ -138,7 +138,7 @@ impl Schedule {
         let terminus = self.sim.trip_of(i).terminus.clone();
         let names = self.sim.trip_stop_names(self.sim.trip_index(i));
         let last_stop = trip_stations(&self.sim.trip_of(i)).last().copied();
-        let (always, early) = self.sim.special_stops(i);
+        let (always, early, holds) = self.sim.special_stops(i);
         let car = &mut traffic.cars[ci];
         if let Some(k) = car.vehicle.ty.program.str_var("Linie") {
             car.vehicle.state.str_vars[k as usize] = line.clone();
@@ -158,6 +158,7 @@ impl Schedule {
             b.last_stop = last_stop;
             b.always = always;
             b.serve_early = early;
+            b.holds = holds;
         }
         let id = car.id;
         self.sim.bus_runs(id, i);
@@ -351,7 +352,7 @@ impl Schedule {
         let names = self.sim.trip_stop_names(self.sim.trip_index(i));
         let names: Vec<&str> = names.iter().map(String::as_str).collect();
         let last_stop = trip_stations(&self.sim.trip_of(i)).last().copied();
-        let (always, early) = self.sim.special_stops(i);
+        let (always, early, holds) = self.sim.special_stops(i);
         let car = &mut traffic.cars[ci];
         // on its layover only when it stands at its first stop now (the trip's first station
         // may lie on a part of the track that is not loaded): it waits there for its departure
@@ -363,6 +364,7 @@ impl Schedule {
             b.last_stop = last_stop;
             b.always = always;
             b.serve_early = early;
+            b.holds = holds;
         }
         // the bus scripts read the line/terminus for their displays
         if let Some(i) = ty.program.str_var("Linie") {
