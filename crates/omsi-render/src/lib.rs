@@ -1655,8 +1655,10 @@ fn sixteen_texture_units() -> bool {
 }
 
 /// The camera group's entries on a device whose arrays take `path`, without the enhanced
-/// path's textures where it has `sixteen` texture units (see `sixteen_texture_units`).
-fn camera_layout_entries(path: ArrayPath, sixteen: bool) -> Vec<wgpu::BindGroupLayoutEntry> {
+/// path's textures where `omit_enhanced`: on the sixteen-texture-unit path (see
+/// `sixteen_texture_units`) and in the launcher's preview, which has no enhanced pipeline
+/// or reflection probe (`RenderOptions::preview_only`).
+fn camera_layout_entries(path: ArrayPath, omit_enhanced: bool) -> Vec<wgpu::BindGroupLayoutEntry> {
     let mut camera_entries = vec![
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
@@ -1787,7 +1789,7 @@ fn camera_layout_entries(path: ArrayPath, sixteen: bool) -> Vec<wgpu::BindGroupL
         camera_entries.push(array_layout_entry_on(path, 3, wgpu::ShaderStages::FRAGMENT, true));
         camera_entries.push(array_layout_entry_on(path, 4, wgpu::ShaderStages::FRAGMENT, false));
     }
-    if sixteen {
+    if omit_enhanced {
         camera_entries.retain(|e| !ENHANCED_CAMERA_TEXTURES.contains(&e.binding));
     }
     camera_entries
@@ -2315,6 +2317,10 @@ pub struct RenderOptions {
     /// Mali and Adreno drivers before the first frame, #364, #333, #316, #371). Asked for,
     /// they are built on every device and graphics API; a computer always builds them.
     pub no_enhanced: bool,
+    /// The launcher's preview (the showroom), which always draws Vanilla+ (see
+    /// `showroom::lighting_for`): no enhanced pipelines, reflection probe or cloud noise
+    /// are made for it, on any device.
+    pub preview_only: bool,
     /// Enhanced+: the enhanced path with ray-traced sun shadows, ambient occlusion and
     /// reflections, where the device can trace rays (hardware ray queries); elsewhere the
     /// enhanced picture as it is.
@@ -2337,6 +2343,7 @@ impl Default for RenderOptions {
             shadow_blobs: true,
             reflections: true,
             no_enhanced: false,
+            preview_only: false,
             ray_tracing: false,
         }
     }
@@ -2909,14 +2916,14 @@ impl Renderer {
         let (msaa, shadow_size) = (options.msaa, options.shadow_size);
         RT_GBUF.store(options.ray_tracing, std::sync::atomic::Ordering::Relaxed);
         let errors = errors::install(&device, format, &options);
-        let scene = scene::SceneBase::new(&device);
+        let scene = scene::SceneBase::new(&device, sixteen_texture_units() || options.preview_only);
         let hdr_format = wgpu::TextureFormat::Rgba16Float;
         let shadows = shadows::build(&device, &scene, shadow_size);
         let defaults = defaults::build(&device, &queue, options.anisotropy);
         let (coronas, corona_texture) = coronas::Coronas::new(&device, &queue, &scene);
         let snow = coronas::Snow::new(&device, &scene.camera_layout);
         drop(corona_texture);
-        let sky = sky::SkyBase::new(&device, &queue, &scene.camera_layout);
+        let sky = sky::SkyBase::new(&device, &queue, &scene.camera_layout, options.preview_only);
         let passes = passes::PassKit { device: &device, scene: &scene, coronas: &coronas, snow: &snow, sky: &sky, msaa }
             .build(format, hdr_format, &options, &adapter_name);
         let (sky_sampler, sky_mesh) = sky::dome(&device, &queue);
@@ -2927,7 +2934,7 @@ impl Renderer {
         let prepass = scene::prepass(&device, &scene, msaa);
         let mip = mip::build(&device);
         let post = post::build(&device, format, hdr_format, &defaults.white_texture);
-        let enhanced = enhanced::build(&device, &queue, hdr_format, &defaults.camera_buf, &sky);
+        let enhanced = enhanced::build(&device, &queue, hdr_format, &defaults.camera_buf, &sky, !options.preview_only);
         let (overlay_pipeline_1x, xr_ui_pipeline) = overlays.single_sampled(&device, format);
         let upscale = upscale::build(&device, format);
         let gpu_timers = [GpuTimers::new(&device), GpuTimers::new(&device)];
@@ -2983,7 +2990,7 @@ impl Renderer {
             sky_lut: enhanced.sky_lut,
             sky_lut_view: enhanced.sky_lut_view,
             lin_sampler: enhanced.lin_sampler,
-            probe: Some(enhanced.probe),
+            probe: enhanced.probe,
             sky_state: None,
             city_glow: None,
             view_lamps: None,
@@ -6033,24 +6040,8 @@ impl Renderer {
                     resource: self.enh_buf.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 12,
-                    resource: wgpu::BindingResource::TextureView(
-                        &self.probe.as_ref().expect("reflection probe").view,
-                    ),
-                },
-                wgpu::BindGroupEntry {
                     binding: 13,
                     resource: wgpu::BindingResource::Sampler(&self.lin_sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 14,
-                    resource: wgpu::BindingResource::TextureView(&self.sky_lut_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 17,
-                    resource: wgpu::BindingResource::TextureView(
-                        &self.probe.as_ref().expect("reflection probe").cube_view,
-                    ),
                 },
                 wgpu::BindGroupEntry {
                     binding: 18,
@@ -6066,8 +6057,14 @@ impl Renderer {
             entries.push(wgpu::BindGroupEntry { binding: 3, resource: light_buf.binding() });
             entries.push(wgpu::BindGroupEntry { binding: 4, resource: grid_buf.binding() });
         }
-        if sixteen_texture_units() {
-            entries.retain(|e| !ENHANCED_CAMERA_TEXTURES.contains(&e.binding));
+        // (the enhanced path's textures: not on the sixteen-texture-unit path, nor in the
+        // launcher's preview, which has no reflection probe - see `camera_layout_entries`)
+        if let (false, Some(probe)) = (sixteen_texture_units(), self.probe.as_ref()) {
+            entries.extend([
+                wgpu::BindGroupEntry { binding: 12, resource: wgpu::BindingResource::TextureView(&probe.view) },
+                wgpu::BindGroupEntry { binding: 14, resource: wgpu::BindingResource::TextureView(&self.sky_lut_view) },
+                wgpu::BindGroupEntry { binding: 17, resource: wgpu::BindingResource::TextureView(&probe.cube_view) },
+            ]);
         }
         let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("camera"),
@@ -8235,13 +8232,19 @@ fn lean_scene(src: String) -> String {
 
 /// The enhanced clouds' noise textures (clouds.rs), made once: the shape map (2-D RGBA8)
 /// and the detail volume (3-D R8), both with their mip chains, and a repeating sampler.
-fn cloud_noise_textures(device: &wgpu::Device, queue: &wgpu::Queue) -> (wgpu::TextureView, wgpu::TextureView, wgpu::Sampler, Vec<u8>) {
+/// Without `enhanced_noise` (the launcher's preview, which draws no enhanced sky) both are
+/// a texel each, and nothing is generated.
+fn cloud_noise_textures(device: &wgpu::Device, queue: &wgpu::Queue, enhanced_noise: bool) -> (wgpu::TextureView, wgpu::TextureView, wgpu::Sampler, Vec<u8>) {
     let t0 = std::time::Instant::now();
-    let (shape, detail) = std::thread::scope(|s| {
-        let a = s.spawn(clouds::shape_map);
-        let b = s.spawn(clouds::detail_volume);
-        (a.join().expect("cloud shape"), b.join().expect("cloud detail"))
-    });
+    let (shape, detail) = if enhanced_noise {
+        std::thread::scope(|s| {
+            let a = s.spawn(clouds::shape_map);
+            let b = s.spawn(clouds::detail_volume);
+            (a.join().expect("cloud shape"), b.join().expect("cloud detail"))
+        })
+    } else {
+        (vec![vec![0, 0, 0, 255]], vec![vec![0]])
+    };
     let make = |label: &str, size: u32, dim: wgpu::TextureDimension, format: wgpu::TextureFormat, bpp: u32, levels: &[Vec<u8>]| {
         let depth = if dim == wgpu::TextureDimension::D3 { size } else { 1 };
         let tex = device.create_texture(&wgpu::TextureDescriptor {
@@ -8266,8 +8269,9 @@ fn cloud_noise_textures(device: &wgpu::Device, queue: &wgpu::Queue) -> (wgpu::Te
         }
         tex.create_view(&wgpu::TextureViewDescriptor::default())
     };
-    let shape_view = make("cloud shape", clouds::SHAPE_SIZE, wgpu::TextureDimension::D2, wgpu::TextureFormat::Rgba8Unorm, 4, &shape);
-    let detail_view = make("cloud detail", clouds::DETAIL_SIZE, wgpu::TextureDimension::D3, wgpu::TextureFormat::R8Unorm, 1, &detail);
+    let (shape_size, detail_size) = if enhanced_noise { (clouds::SHAPE_SIZE, clouds::DETAIL_SIZE) } else { (1, 1) };
+    let shape_view = make("cloud shape", shape_size, wgpu::TextureDimension::D2, wgpu::TextureFormat::Rgba8Unorm, 4, &shape);
+    let detail_view = make("cloud detail", detail_size, wgpu::TextureDimension::D3, wgpu::TextureFormat::R8Unorm, 1, &detail);
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some("cloud noise"),
         address_mode_u: wgpu::AddressMode::Repeat,
@@ -10999,6 +11003,29 @@ mod tests {
         assert!(smoke_sprite(&SmokeParticle { ground: Some(30.0 + 3.5 + 0.91), ..p }, ro).is_none());
         assert!(smoke_sprite(&SmokeParticle { ground: Some(30.0 + 3.5 + 0.89), ..p }, ro).is_some());
         assert!(smoke_sprite(&SmokeParticle { alpha: 0.0, ..p }, ro).is_none());
+    }
+
+    /// The launcher's preview (`RenderOptions::preview_only`) makes no enhanced pipeline,
+    /// reflection probe, ray tracer or cloud noise, its camera group leaves the enhanced
+    /// textures out, and it draws a frame with that group.
+    #[test]
+    fn launcher_preview_initializes_without_enhanced_or_ray_tracing_resources() {
+        let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
+        descriptor.backends = wgpu::Backends::NOOP;
+        descriptor.backend_options.noop = wgpu::NoopBackendOptions { enable: true };
+        let instance = wgpu::Instance::new(descriptor);
+        let mut renderer = pollster::block_on(Renderer::new_with(&instance, None, Some(wgpu::TextureFormat::Rgba8UnormSrgb), RenderOptions { msaa: 1, preview_only: true, no_enhanced: true, ray_tracing: false, ..Default::default() })).unwrap();
+        assert!(renderer.hdr_pass.is_none());
+        assert!(renderer.probe.is_none());
+        assert!(renderer.rt.is_none());
+        assert!(renderer.cloud_shape_cpu.is_empty());
+        let bindings: Vec<u32> = camera_layout_entries(ArrayPath::Storage, true).into_iter().map(|e| e.binding).collect();
+        for binding in ENHANCED_CAMERA_TEXTURES {
+            assert!(!bindings.contains(&binding), "preview camera layout must omit enhanced binding {binding}");
+        }
+        let mut scene = renderer.new_scene();
+        let camera = Camera { position: DVec3::new(0.0, -35.0, 30.0), yaw: 0.0, pitch: -40.0, roll: 0.0, fov_deg: 60.0, near: 0.1, far: 1000.0 };
+        renderer.render_to_image(&mut scene, 16, 16, &camera, &Lighting::default()).unwrap();
     }
 
     #[test]

@@ -21,7 +21,9 @@ pub(crate) struct SceneBase {
 const VERTEX_ATTRIBUTES: [wgpu::VertexAttribute; 3] = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x2];
 
 impl SceneBase {
-    pub(crate) fn new(device: &wgpu::Device) -> SceneBase {
+    /// `omit_enhanced`: the camera group without the enhanced path's textures (see
+    /// `camera_layout_entries`).
+    pub(crate) fn new(device: &wgpu::Device, omit_enhanced: bool) -> SceneBase {
         // One module for both paths: the enhanced fragment shader shares the vertex shader,
         // which the depth prepass relies on to the last bit (see `VsOut::clip`).
         log::info!("renderer: compiling the scene shaders");
@@ -40,7 +42,7 @@ impl SceneBase {
                 array_layout_entry(10, wgpu::ShaderStages::VERTEX, false),
             ],
         });
-        let camera_entries = camera_layout_entries(array_path(), sixteen_texture_units());
+        let camera_entries = camera_layout_entries(array_path(), omit_enhanced);
         let camera_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("camera"),
             entries: &camera_entries,

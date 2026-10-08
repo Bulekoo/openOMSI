@@ -9,7 +9,8 @@ pub(crate) struct Enhanced {
     pub sky_lut: wgpu::Texture,
     pub sky_lut_view: wgpu::TextureView,
     pub lin_sampler: wgpu::Sampler,
-    pub probe: Probe,
+    /// None in the launcher's preview (`RenderOptions::preview_only`)
+    pub probe: Option<Probe>,
 }
 
 /// What the probe's passes read besides the sky.
@@ -20,7 +21,7 @@ struct Lighting<'a> {
     sky_lut_view: &'a wgpu::TextureView,
 }
 
-pub(crate) fn build(device: &wgpu::Device, queue: &wgpu::Queue, hdr_format: wgpu::TextureFormat, camera_buf: &wgpu::Buffer, sky: &SkyBase) -> Enhanced {
+pub(crate) fn build(device: &wgpu::Device, queue: &wgpu::Queue, hdr_format: wgpu::TextureFormat, camera_buf: &wgpu::Buffer, sky: &SkyBase, with_probe: bool) -> Enhanced {
     // --- enhanced lighting: the uniform, the sky table, the reflection probe
     let enh_buf = uniform_buffer(device, "enhanced lighting", std::mem::size_of::<EnhancedUniform>() as u64);
     let sky_lut = device.create_texture(&wgpu::TextureDescriptor {
@@ -59,7 +60,7 @@ pub(crate) fn build(device: &wgpu::Device, queue: &wgpu::Queue, hdr_format: wgpu
         ],
     });
     let lighting = Lighting { camera_buf, enh_buf: &enh_buf, lin_sampler: &lin_sampler, sky_lut_view: &sky_lut_view };
-    let probe = probe(device, queue, hdr_format, &probe_layout, &lighting, sky);
+    let probe = with_probe.then(|| probe(device, queue, hdr_format, &probe_layout, &lighting, sky));
     Enhanced { enh_buf, sky_lut, sky_lut_view, lin_sampler, probe }
 }
 

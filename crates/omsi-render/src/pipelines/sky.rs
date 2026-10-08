@@ -16,7 +16,9 @@ pub(crate) struct SkyBase {
 }
 
 impl SkyBase {
-    pub(crate) fn new(device: &wgpu::Device, queue: &wgpu::Queue, camera_layout: &wgpu::BindGroupLayout) -> SkyBase {
+    /// `preview`: the launcher's preview, which draws only the vanilla sky - no cloud noise,
+    /// and the shader without the enhanced sky.
+    pub(crate) fn new(device: &wgpu::Device, queue: &wgpu::Queue, camera_layout: &wgpu::BindGroupLayout, preview: bool) -> SkyBase {
         // sky dome
         let float_2d = wgpu::TextureSampleType::Float { filterable: true };
         let sky_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -33,11 +35,11 @@ impl SkyBase {
                 sampler_entry(8),
             ],
         });
-        let (cloud_shape_view, cloud_detail_view, cloud_sampler, cloud_shape_cpu) = cloud_noise_textures(device, queue);
+        let (cloud_shape_view, cloud_detail_view, cloud_sampler, cloud_shape_cpu) = cloud_noise_textures(device, queue, !preview);
         log::info!("renderer: compiling the sky and clouds shaders");
         let sky_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("sky"),
-            source: wgpu::ShaderSource::Wgsl(sky_shader_source().into()),
+            source: wgpu::ShaderSource::Wgsl(if preview { [include_str!("../colour.wgsl"), include_str!("../sky.wgsl")].join("\n") } else { sky_shader_source() }.into()),
         });
         let sky_pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("sky"),

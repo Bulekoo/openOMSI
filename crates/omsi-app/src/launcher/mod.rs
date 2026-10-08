@@ -122,6 +122,8 @@ pub struct Launcher {
     exit_after: Option<f32>,
     shot: Option<(f32, std::path::PathBuf)>,
     started: Instant,
+    /// Until the first frame is on the screen: the preview loads no bus before it.
+    first_frame: bool,
     /// `OMSI_LAUNCHER_INPUT="t=2 click 400,300; t=3 type Bauern; t=4 key Enter; t=5 shot a.png;
     /// t=6 wheel -3; t=7 move 900,400"`: the window worked by a script (logical pixels).
     script: Vec<(f32, String)>,
@@ -176,6 +178,7 @@ pub fn run(instance: wgpu::Instance) -> anyhow::Result<()> {
 impl Launcher {
     /// The launcher, not yet in a window (that comes with `resumed`).
     pub fn new(instance: wgpu::Instance) -> Launcher {
+    let started = Instant::now();
     core::cleanup();
     let mut app = Launcher {
         instance,
@@ -202,7 +205,8 @@ impl Launcher {
         // looking at the window without a person at it
         exit_after: omsi_cfg::flags::OMSI_LAUNCHER_EXIT.parse(),
         shot: omsi_cfg::flags::OMSI_LAUNCHER_SHOT.var().and_then(|v| v.split_once(':').map(|(t, f)| (t.parse().unwrap_or(5.0), std::path::PathBuf::from(f)))),
-        started: Instant::now(),
+        started,
+        first_frame: true,
         script: omsi_cfg::flags::OMSI_LAUNCHER_INPUT.var()
             .map(|v| {
                 v.split(';')
@@ -852,8 +856,9 @@ impl Launcher {
         // the preview shows the chosen bus in the chosen light
         let c = &self.state.choice;
         let look = showroom::Look { root: std::path::PathBuf::from(&self.state.config.root), map: c.map.clone(), bus: c.bus.clone(), paint: c.paint.clone(), weather: c.weather.clone(), time: c.time, date: c.date.clone() };
-        // (not while a game runs: the launcher looked at meanwhile loads no bus onto the card)
-        if !look.bus.is_empty() && !look.map.is_empty() && !self.state.in_game() {
+        // (not while a game runs: the launcher looked at meanwhile loads no bus onto the card;
+        // nor before the first frame is shown, which the bus's loading would hold up)
+        if !self.first_frame && !look.bus.is_empty() && !look.map.is_empty() && !self.state.in_game() {
             self.showroom.want(look);
         }
         if let Some(r) = self.renderer.as_ref() {
@@ -963,6 +968,9 @@ impl Launcher {
         }
         window.pre_present_notify();
         frame.present();
+        if std::mem::take(&mut self.first_frame) {
+            log::info!("launcher: first frame presented in {:.2} s", self.started.elapsed().as_secs_f64());
+        }
         self.check_exit(event_loop);
     }
 
@@ -1377,7 +1385,9 @@ impl Launcher {
 
 
 /// The showroom's renderer: a bus on a floor needs none of the game's costly passes - no
-/// ambient occlusion, a small shadow map, 4x MSAA for the edges whatever the game uses.
+/// ambient occlusion, a small shadow map, 4x MSAA for the edges whatever the game uses -
+/// and it draws Vanilla+ whatever the game does (`showroom::lighting_for`): no enhanced
+/// pipelines, reflection probe or cloud noise either (`RenderOptions::preview_only`).
 fn showroom_options(settings: &crate::settings::Settings) -> omsi_render::RenderOptions {
-    omsi_render::RenderOptions { msaa: 4, ssao: false, shadow_size: 1024, render_scale: 1.0, ..settings.render_options() }
+    omsi_render::RenderOptions { msaa: 4, ssao: false, shadow_size: 1024, render_scale: 1.0, preview_only: true, no_enhanced: true, ray_tracing: false, ..settings.render_options() }
 }
