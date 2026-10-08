@@ -2456,7 +2456,9 @@ impl VehicleInstance {
             if !mesh.skin.is_empty()
                 || is_shadow_mesh(&self.ty, i)
                 || is_glass_mesh(&self.ty, mesh)
-                || self.ty.mesh_bounds.get(i).is_none_or(|(_, radius)| *radius <= 0.0)
+                // (an empty mesh has no box; not `mesh_bounds`, which an AI-loaded type -
+                // every AI car - leaves at zero: no AI car ever got a dent)
+                || self.ty.mesh_boxes.get(i).is_none_or(|(lo, hi)| lo == hi)
             {
                 continue;
             }
@@ -2493,7 +2495,9 @@ impl VehicleInstance {
             self.damage_dents.push(VehicleDent {
                 mesh: i,
                 point: transform.inverse().transform_point3(point),
-                push: -transform
+                // (into the body, the way the blow pushed: turned round, the rear of a car
+                // run into from behind bulged out towards the bus)
+                push: transform
                     .inverse()
                     .transform_vector3(direction)
                     .normalize_or_zero(),
@@ -4645,6 +4649,32 @@ mod tests {
         assert_eq!(v.host.coll_energy, 20.0);
         assert_eq!(v.last_impact, 20_000.0);
         assert_eq!(v.crashes, 1);
+    }
+
+    /// An AI car (its type loaded without CPU meshes: no bounding spheres) run into from
+    /// behind gets a dent in its body, pushed in the way the blow went.
+    #[test]
+    fn an_ai_car_hit_from_behind_is_dented_inwards() {
+        let mut ty = coupling_test_type(None);
+        let ty_mut = Arc::get_mut(&mut ty).unwrap();
+        ty_mut.model.meshes.push(omsi_model::MeshDef { file: "body.o3d".into(), ..Default::default() });
+        ty_mut.meshes.push(VehicleMesh {
+            def_index: 0,
+            data: MeshData::default(),
+            file: PathBuf::from("body.o3d"),
+            materials: Vec::new(),
+            overrides: Vec::new(),
+            pivot: Mat4::IDENTITY,
+            viewpoint: 0,
+            skin: Vec::new(),
+            keep_winding: false,
+        });
+        ty_mut.mesh_bounds = vec![(Vec3::ZERO, 0.0)];
+        let mut v = VehicleInstance::new(ty, VehicleHost::new(Default::default()));
+        v.receive_dynamic_impact(Vec3::new(0.0, -6.0, 0.6), Vec3::Y, 10.0, 50_000.0);
+        let dents = v.take_damage_dents();
+        assert_eq!(dents.len(), 1, "{dents:?}");
+        assert!(dents[0].push.y > 0.99, "{:?}", dents[0]);
     }
 
     #[test]
