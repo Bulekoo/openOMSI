@@ -521,8 +521,8 @@ pub(crate) fn apply_weather(
 pub(crate) fn debug_sound_every() -> Option<f32> {
     static EVERY: std::sync::OnceLock<Option<f32>> = std::sync::OnceLock::new();
     *EVERY.get_or_init(|| {
-        omsi_cfg::env::var("OMSI_DEBUG_SOUND")
-            .ok()
+        omsi_cfg::flags::OMSI_DEBUG_SOUND
+            .var()
             .map(|v| v.parse::<f32>().ok().filter(|s| *s > 0.0).unwrap_or(5.0))
     })
 }

@@ -236,7 +236,7 @@ impl Offscreen<'_> {
                 // viewer whenever a car was put inside its frustum (behind something), with
                 // where on the picture it stands - to see that it really is hidden
                 let framed = std::mem::take(&mut t.framed_spawns);
-                if !framed.is_empty() && omsi_cfg::env::var_os("OMSI_POPULATION_SHOTS").is_some() {
+                if !framed.is_empty() && omsi_cfg::flags::OMSI_POPULATION_SHOTS.is_set() {
                     t.sync(world, renderer, scene);
                     if let Some(p) = player.as_mut() {
                         pose_player(p, renderer, scene, args, settings);
@@ -450,7 +450,7 @@ impl Offscreen<'_> {
         // and brake on the speed) - to drive it round a map's roundabouts and bends
         // and see where it falls through or leaves the road; each lane taken is the
         // straightest on
-        if let (Some(kmh), Some(net)) = (omsi_cfg::env::var("OMSI_AUTOPILOT").ok().and_then(|v| v.parse::<f32>().ok()), traffic.as_ref().map(|t| &t.net)) {
+        if let (Some(kmh), Some(net)) = (omsi_cfg::flags::OMSI_AUTOPILOT.parse::<f32>(), traffic.as_ref().map(|t| &t.net)) {
             let v = &player.vehicle;
             let h = v.heading.to_radians();
             let fwd = DVec3::new(h.sin(), h.cos(), 0.0);
@@ -513,7 +513,7 @@ impl Offscreen<'_> {
         } = *self;
         let Some(player) = player.as_mut() else { return };
         // OMSI_DEBUG_VARS with OMSI_DEBUG_VARS_EVERY=<s>: the variables through the drive
-        if let (Ok(list), Some(every)) = (omsi_cfg::env::var("OMSI_DEBUG_VARS"), omsi_cfg::env::var("OMSI_DEBUG_VARS_EVERY").ok().and_then(|v| v.parse::<f32>().ok())) {
+        if let (Some(list), Some(every)) = (omsi_cfg::flags::OMSI_DEBUG_VARS.var(), omsi_cfg::flags::OMSI_DEBUG_VARS_EVERY.parse::<f32>()) {
             if (t_s / every).floor() != ((t_s - dt) / every).floor() {
                 let vals: Vec<String> = list.split(',').map(str::trim).map(|v| format!("{v}={:.2}", player.vehicle.var(v).unwrap_or(f32::NAN))).collect();
                 log::info!("t={t_s:.1}: {}", vals.join(" "));
@@ -521,7 +521,7 @@ impl Offscreen<'_> {
         }
         // OMSI_JOINT_ANGLE=degrees: the rear section held at that angle to the front
         // one (the joint and its bellows seen bent, without driving a curve)
-        if let Some(a) = omsi_cfg::env::var("OMSI_JOINT_ANGLE").ok().and_then(|v| v.trim().parse::<f64>().ok()) {
+        if let Some(a) = omsi_cfg::flags::OMSI_JOINT_ANGLE.var().and_then(|v| v.trim().parse::<f64>().ok()) {
             let v = &mut player.vehicle;
             let (pos, rot, heading) = (v.position, v.body_rotation(), v.heading);
             if let Some(t) = v.trailers.first_mut() {
@@ -533,7 +533,7 @@ impl Offscreen<'_> {
         crate::rail_drive::frame(player, traffic.as_ref().map(|t| &t.net), world, dt);
         // (the autopilot's log: where the bus is against the ground under it, twice a
         // second, and at once when the ground is not under it any more)
-        if omsi_cfg::env::var_os("OMSI_AUTOPILOT").is_some() {
+        if omsi_cfg::flags::OMSI_AUTOPILOT.is_set() {
             let at = player.vehicle.position;
             let under = crate::scene::drive_probe(&world.terrains, &world.surfaces, at.x, at.y, at.z + 1.5).below;
             let lost = under.is_none_or(|g| at.z < g - 0.6);
@@ -548,7 +548,7 @@ impl Offscreen<'_> {
         }
         // OMSI_SUSP_TRACE=<csv>: every frame, the body's height and vertical speed and
         // each wheel's travel, load and the ground under it (bumps and hops)
-        if let Ok(path) = omsi_cfg::env::var("OMSI_SUSP_TRACE") {
+        if let Some(path) = omsi_cfg::flags::OMSI_SUSP_TRACE.var() {
             use std::io::Write;
             static TRACE: std::sync::Mutex<Option<std::fs::File>> = std::sync::Mutex::new(None);
             let mut f = TRACE.lock().unwrap_or_else(|e| e.into_inner());
@@ -571,7 +571,7 @@ impl Offscreen<'_> {
         }
         // OMSI_WHEEL_TRACE: the deepest a drawn tyre goes into the road (or floats
         // over it), once a second while driving
-        if omsi_cfg::env::var_os("OMSI_WHEEL_TRACE").is_some() {
+        if omsi_cfg::flags::OMSI_WHEEL_TRACE.is_set() {
             let lows = tyre_lows(&player.vehicle, world);
             if let Some((p, d)) = lows.iter().min_by(|a, b| a.1.total_cmp(&b.1)) {
                 *wheel_worst = match *wheel_worst {
@@ -622,7 +622,7 @@ impl Offscreen<'_> {
         // `OMSI_TRACE_VARS=a,b,$c`: the listed variables every half second of the run
         // (a leading `$` reads a string variable) - how a start-up sequence unfolds
         if i.is_multiple_of(15) {
-            if let Ok(list) = omsi_cfg::env::var("OMSI_TRACE_VARS") {
+            if let Some(list) = omsi_cfg::flags::OMSI_TRACE_VARS.var() {
                 let vals: Vec<String> = list
                     .split(',')
                     .map(str::trim)
@@ -819,7 +819,7 @@ impl Offscreen<'_> {
         // for its detail: the followed car's, else the player's bus): the puddles and the wet
         // asphalt the renderer draws (none under snow, OMSI_WETNESS as the picture takes it)
         let spray_wet = puddles::road_wetness(*wetness, weather.snow);
-        if (spray_wet > 0.0 || !spray.is_empty()) && omsi_cfg::env::var_os("OMSI_NO_SPRAY").is_none() {
+        if (spray_wet > 0.0 || !spray.is_empty()) && !omsi_cfg::flags::OMSI_NO_SPRAY.is_set() {
             let eye = traffic
                 .as_ref()
                 .and_then(|t| follow_id(args, Some(t)).and_then(|id| follow_camera(Some(t), id)))
@@ -913,7 +913,7 @@ impl Offscreen<'_> {
                     out.file_stem().and_then(|s| s.to_str()).unwrap_or("snap")
                 ));
                 image::save_buffer(&path, &pixels, w, h, image::ColorType::Rgba8)?;
-                if omsi_cfg::env::var_os("OMSI_BLEND_AB").is_some() {
+                if omsi_cfg::flags::OMSI_BLEND_AB.is_set() {
                     // the same moment with the blended draws in the old order (by origin
                     // distance only), for a before/after picture of the draw order
                     renderer.blend_by_origin = true;

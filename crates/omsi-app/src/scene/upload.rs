@@ -421,7 +421,7 @@ impl World {
                 let bump = match slot_ov
                     .iter()
                     .find_map(|o| o.bumpmap.clone())
-                    .filter(|_| envmap.is_some() && omsi_cfg::env::var_os("OMSI_NO_BUMP").is_none())
+                    .filter(|_| envmap.is_some() && !omsi_cfg::flags::OMSI_NO_BUMP.is_set())
                 {
                     Some((name, f)) => {
                         gpu.bump_texture(renderer, scene, &name, &dirs)
@@ -459,7 +459,7 @@ impl World {
                 renderer.address_next.set(address);
                 renderer.light_map_next.set(ot.sco.light_map_mapping);
                 // OMSI_DEBUG_OBJMAT=<part of the object's file name>: how its slots are made
-                if let Ok(f) = omsi_cfg::env::var("OMSI_DEBUG_OBJMAT") {
+                if let Some(f) = omsi_cfg::flags::OMSI_DEBUG_OBJMAT.var() {
                     if ot.sco.path.to_string_lossy().to_ascii_lowercase().contains(&f.to_ascii_lowercase()) {
                         log::info!("{} slot {slot} '{}': tex {} alpha {:?} color {:?} emissive {:?} night {} transmap {:?} envmap {:?} auto_night {}", ot.sco.path.display(), m.texture, tex.is_some(), alpha, color, emissive, night.is_some(), transmap.map(|t| t.1), envmap.map(|e| e.1), t.auto_night);
                     }
@@ -716,7 +716,7 @@ impl World {
         let gpu = &mut *gpu_guard;
         self.ensure_ground(renderer, scene, gpu);
         let ground_mat = gpu.ground.as_ref().unwrap().ground_mat;
-        let slow = omsi_cfg::env::var_os("OMSI_DEBUG_UPLOAD").is_some();
+        let slow = omsi_cfg::flags::OMSI_DEBUG_UPLOAD.is_set();
         loop {
             let t_item = std::time::Instant::now();
             if let Some(path) = u.textures.pop() {

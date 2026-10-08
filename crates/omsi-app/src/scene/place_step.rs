@@ -108,7 +108,7 @@ impl World {
             ..
         } = u;
         let key = (p.tx, p.ty);
-        let only_object = omsi_cfg::env::var("OMSI_ONLY_OBJECT").is_ok();
+        let only_object = omsi_cfg::flags::OMSI_ONLY_OBJECT.var().is_some();
         let decodes_before = (gpu.sync_decodes, gpu.sync_decode_secs);
         let t_start = std::time::Instant::now();
         let out_of_time = |done_some: bool| {
@@ -307,7 +307,7 @@ impl World {
         // tile is the same tile mesh once more, blended in through its own mask - which
         // is how OMSI's car parks get their asphalt, its side streets their cobbles and
         // its meadows their fields.
-        let no_paint = omsi_cfg::env::var_os("OMSI_NO_GROUND_PAINT").is_some();
+        let no_paint = omsi_cfg::flags::OMSI_NO_GROUND_PAINT.is_set();
         for (layer, mask, painted) in p.paint.iter().filter(|_| !no_paint) {
             let Some(gt) = self.global.ground_textures.get(*layer) else {
                 continue;
@@ -352,7 +352,7 @@ impl World {
                 inst.ground_layer = true;
                 inst.render_phase = RenderPhase::Terrain;
             }
-            if omsi_cfg::env::var_os("OMSI_DEBUG_SURFACES").is_some() {
+            if omsi_cfg::flags::OMSI_DEBUG_SURFACES.is_set() {
                 log::info!("tile ({}, {}): ground layer {layer} '{}' painted on {:.1} % of the tile, mask {:?}", p.tx, p.ty, gt.texture, painted * 100.0, mask.format);
             }
         }
@@ -493,7 +493,7 @@ impl World {
         } else {
             sg.materials.clone()
         };
-        if omsi_cfg::env::var_os("OMSI_DEBUG_SPLINES").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_SPLINES.is_set() {
             let mean_nz = mesh.normals.iter().map(|n| n.z).sum::<f32>()
                 / mesh.normals.len().max(1) as f32;
             log::info!("upload spline {} origin={:?} ranges={:?} mats={:?} mean normal z={mean_nz:+.2} verts={} first positions {:?}", st.def.path.display(), p.origin, &mesh.ranges[..mesh.ranges.len().min(3)], mats, mesh.positions.len(), &mesh.positions[..mesh.positions.len().min(3)]);

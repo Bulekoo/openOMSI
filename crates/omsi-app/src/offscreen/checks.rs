@@ -17,7 +17,7 @@ pub(super) fn run_checks(world: &World, traffic: Option<&traffic::Traffic>) {
 
 fn check_entries(world: &World) {
     // OMSI_CHECK_ENTRIES: is there anything to stand on where a player is put down?
-    if omsi_cfg::env::var_os("OMSI_CHECK_ENTRIES").is_some() {
+    if omsi_cfg::flags::OMSI_CHECK_ENTRIES.is_set() {
         let mut bare = 0;
         for ep in &world.global.entry_points {
             let Some((pos, rot)) = world.entry_point_place(ep) else {
@@ -52,7 +52,7 @@ fn check_entries(world: &World) {
 fn check_obstacles(world: &World, traffic: Option<&traffic::Traffic>) {
     // OMSI_CHECK_OBSTACLES: sweep a bus-sized box along every driving lane and list the
     // obstacle boxes it runs into - the "invisible walls" a player meets on an open road
-    if omsi_cfg::env::var_os("OMSI_CHECK_OBSTACLES").is_some() {
+    if omsi_cfg::flags::OMSI_CHECK_OBSTACLES.is_set() {
         if let Some(t) = traffic.as_ref() {
             let boxes = world.collision.lock().clone();
             // (parked cars stand beside the lanes by design; the traffic steers round them)
@@ -89,7 +89,7 @@ fn check_obstacles(world: &World, traffic: Option<&traffic::Traffic>) {
             }
             log::info!("obstacle check: {probes} lane points, {} obstacle boxes stand on a driving lane", hits.len());
             // `OMSI_LANES_NEAR=x,y,r`: the driving lanes passing there (where to put a test bus)
-            if let Ok(v) = omsi_cfg::env::var("OMSI_LANES_NEAR") {
+            if let Some(v) = omsi_cfg::flags::OMSI_LANES_NEAR.var() {
                 let v: Vec<f64> = v.split(',').filter_map(|x| x.trim().parse().ok()).collect();
                 if v.len() == 3 {
                     let c = glam::DVec2::new(v[0], v[1]);
@@ -115,7 +115,7 @@ fn check_wheels(world: &World, traffic: Option<&traffic::Traffic>) {
     // OMSI_CHECK_WHEELS: probe the ground along the wheel tracks of every driving lane as a
     // tyre does - a face a little over the road there is an invisible wall to the wheels, a
     // ground far off the lane's height a hump or a hole
-    if omsi_cfg::env::var_os("OMSI_CHECK_WHEELS").is_some() {
+    if omsi_cfg::flags::OMSI_CHECK_WHEELS.is_set() {
         if let Some(t) = traffic.as_ref() {
             let (mut points, mut walls, mut steps) = (0usize, Vec::new(), Vec::new());
             for l in t.net.lanes.iter().filter(|l| l.kind == omsi_sim::traffic::LaneKind::Street && !l.invisible) {
@@ -165,7 +165,7 @@ fn check_wheels(world: &World, traffic: Option<&traffic::Traffic>) {
 
 fn road_rules(traffic: Option<&traffic::Traffic>) {
     // What the map says about traffic on its roads
-    if omsi_cfg::env::var_os("OMSI_CHECK_ROADS").is_some() {
+    if omsi_cfg::flags::OMSI_CHECK_ROADS.is_set() {
         if let Some(t) = traffic.as_ref() {
             let street: Vec<&omsi_sim::traffic::Lane> = t
                 .net
@@ -190,7 +190,7 @@ fn road_rules(traffic: Option<&traffic::Traffic>) {
 fn check_roads(world: &World, traffic: Option<&traffic::Traffic>) {
     // OMSI_CHECK_ROADS: walk every driving lane and report where no road surface is drawn
     // under it, which is what "the road is missing here" looks like from the driver's seat
-    if omsi_cfg::env::var_os("OMSI_CHECK_ROADS").is_some() {
+    if omsi_cfg::flags::OMSI_CHECK_ROADS.is_set() {
         if let Some(t) = traffic.as_ref() {
             let mut checked = 0usize;
             let mut naked = 0usize;
@@ -255,7 +255,7 @@ fn check_roads(world: &World, traffic: Option<&traffic::Traffic>) {
             runs.sort_by(|a, b| b.1.total_cmp(&a.1));
             log::info!("road check: {naked} of {checked} points along the driving lanes have no road surface under them ({:.1}%)", naked as f32 / checked.max(1) as f32 * 100.0);
             // OMSI_CHECK_SPLINES: chained splines whose ends do not meet in height
-            if omsi_cfg::env::var_os("OMSI_CHECK_SPLINES").is_some() {
+            if omsi_cfg::flags::OMSI_CHECK_SPLINES.is_set() {
                 spline_check();
             }
             log::info!(
@@ -460,7 +460,7 @@ fn probe_grid(world: &World) {
     // OMSI_PROBE_GRID=x,y,half,step: the wheels' ground on a square grid around (x, y), as
     // rows of centimetres relative to the middle ('.' where it is the same, '#' where the
     // ground there is more than 5 cm lower: a gap in the road the wheels fall through)
-    if let Ok(spec) = omsi_cfg::env::var("OMSI_PROBE_GRID") {
+    if let Some(spec) = omsi_cfg::flags::OMSI_PROBE_GRID.var() {
         let v: Vec<f64> = spec.split(',').filter_map(|t| t.trim().parse().ok()).collect();
         if v.len() >= 4 {
             let (cx, cy, half, step) = (v[0], v[1], v[2], v[3].max(0.001));
@@ -487,7 +487,7 @@ fn probe_grid(world: &World) {
 fn probe_line(world: &World) {
     // OMSI_PROBE=x0,y0,x1,y1[,n]: print the terrain height and the road surface height
     // along a line, to see where the ground comes through a road
-    if let Ok(spec) = omsi_cfg::env::var("OMSI_PROBE") {
+    if let Some(spec) = omsi_cfg::flags::OMSI_PROBE.var() {
         let v: Vec<f64> = spec
             .split(',')
             .filter_map(|t| t.trim().parse().ok())
@@ -529,14 +529,14 @@ pub(super) fn road_photo(
     // OMSI_ROAD_PHOTO: photograph the road network from above, point by point, and say
     // where the picture shows grass although the map says there is a carriageway. This is
     // the only check that asks what is actually drawn rather than what the data says.
-    if omsi_cfg::env::var_os("OMSI_ROAD_PHOTO").is_some() {
+    if omsi_cfg::flags::OMSI_ROAD_PHOTO.is_set() {
         if let Some(t) = traffic.as_ref() {
             let mut points: Vec<DVec3> = Vec::new();
             let mut headings: Vec<f64> = Vec::new();
             // OMSI_ROAD_PHOTO_SLANT=<m>: from a driver's eye that far back along the lane
             // (2.6 m up) instead of from above - terrain a few millimetres over the road
             // shows only at a slant
-            let slant: Option<f64> = omsi_cfg::env::var("OMSI_ROAD_PHOTO_SLANT").ok().and_then(|v| v.parse().ok());
+            let slant: Option<f64> = omsi_cfg::flags::OMSI_ROAD_PHOTO_SLANT.parse();
             for l in t
                 .net
                 .lanes
@@ -547,9 +547,7 @@ pub(super) fn road_photo(
                 let mut s = 3.0f32;
                 // the carriageway itself, and the verge a few metres to either side, which
                 // in a city street is paved too
-                let side: f64 = omsi_cfg::env::var("OMSI_ROAD_PHOTO_SIDE")
-                    .ok()
-                    .and_then(|v| v.parse().ok())
+                let side: f64 = omsi_cfg::flags::OMSI_ROAD_PHOTO_SIDE.parse()
                     .unwrap_or(0.0);
                 while s < len {
                     let (p, h) = l.at(s);
@@ -560,7 +558,7 @@ pub(super) fn road_photo(
                 }
             }
             // a spread sample so one long street cannot dominate
-            let cap: usize = omsi_cfg::env::var("OMSI_ROAD_PHOTO_N").ok().and_then(|v| v.parse().ok()).unwrap_or(400);
+            let cap: usize = omsi_cfg::flags::OMSI_ROAD_PHOTO_N.parse().unwrap_or(400);
             let step = (points.len() / cap.max(1)).max(1);
             let sample: Vec<(DVec3, f64)> = points.iter().copied().zip(headings.iter().copied()).step_by(step).collect();
             let (mut green, mut checked) = (0usize, 0usize);
@@ -596,7 +594,7 @@ pub(super) fn road_photo(
                 let (pw, ph) = (48u32, 48u32);
                 // OMSI_HOLE_PHOTO: the same place from above down to 25 m under the lane -
                 // what shows the sky there is a hole through the world
-                if omsi_cfg::env::var_os("OMSI_HOLE_PHOTO").is_some() {
+                if omsi_cfg::flags::OMSI_HOLE_PHOTO.is_set() {
                     // (at a slant: the lower half of the picture only, which is all under the
                     // horizon)
                     let deep = if slant.is_some() { Camera { near: 0.3, far: 400.0, ..cam } } else { Camera { near: 20.0, far: 65.0, ..cam } };
@@ -624,7 +622,7 @@ pub(super) fn road_photo(
                     }
                 }
             }
-            if omsi_cfg::env::var_os("OMSI_HOLE_PHOTO").is_some() {
+            if omsi_cfg::flags::OMSI_HOLE_PHOTO.is_set() {
                 holes.sort_by(|a, b| b.0.cmp(&a.0));
                 log::info!("hole photo: {} of {checked} places show the sky through the ground", holes.len());
                 for (n, p, c) in holes.iter().take(40) {

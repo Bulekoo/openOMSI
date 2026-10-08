@@ -274,7 +274,7 @@ pub(super) fn sync_materials(
         }
         if let Some(inst) = render.instances.get(v.mesh) {
             let m = v.material(|n| vehicle.var(n));
-            if omsi_cfg::env::var("OMSI_DEBUG_VARIANTS").ok().is_some_and(|f| !f.is_empty() && v.var.to_ascii_lowercase().contains(&f.to_ascii_lowercase())) {
+            if omsi_cfg::flags::OMSI_DEBUG_VARIANTS.var().is_some_and(|f| !f.is_empty() && v.var.to_ascii_lowercase().contains(&f.to_ascii_lowercase())) {
                 log::info!("variant mesh {} slot {} var {} = {:?}: material {m} (base {}, item {})", v.mesh, v.slot, v.var, vehicle.var(&v.var), v.base, v.item);
             }
             renderer.set_material(scene, *inst, v.slot, m);
@@ -331,7 +331,7 @@ pub(super) fn sync_interior_lamps(
             }
         }
         let total: u32 = distinct.iter().map(|d| d.len() as u32).sum();
-        if omsi_cfg::env::var_os("OMSI_DEBUG_INTERIOR").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_INTERIOR.is_set() {
             log::info!("interior lamps of {}: {} lamps, {} instances, {} meshes lit by sets {:?}", ty.def.path.display(), n, render.instances.len(), sets.len(), distinct);
         }
         if total == 0 {
@@ -585,7 +585,7 @@ pub(super) fn material_extra(
         // for the raindrops (0x7c32c4 -> 0x7fc58c, ZENABLE 1, blend ZERO/ONE). Taken as "no
         // depth test", the Sprinter's inner window glass (flagged so) was drawn over the
         // body skin round every opening. OMSI_NOZCHECK_BIAS=1: the old reading.
-        no_z_check: ov.iter().any(|o| o.no_z_check) && omsi_cfg::env::var_os("OMSI_NOZCHECK_BIAS").is_some(),
+        no_z_check: ov.iter().any(|o| o.no_z_check) && omsi_cfg::flags::OMSI_NOZCHECK_BIAS.is_set(),
         z_bias: ov.iter().map(|o| o.z_bias).find(|b| *b != 0).unwrap_or(0),
         ambient: None,
         specular,
@@ -646,7 +646,7 @@ pub(crate) fn attach_pbr(renderer: &Renderer, scene: &mut Scene, path: &Path, id
     if is_snow_picture(path) {
         scene.snow_textures.insert(id);
     }
-    if omsi_cfg::env::var_os("OMSI_NO_PBR").is_some() {
+    if omsi_cfg::flags::OMSI_NO_PBR.is_set() {
         return;
     }
     let files = omsi_texture::pbr::find(path);

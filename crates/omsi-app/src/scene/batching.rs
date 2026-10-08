@@ -7,14 +7,14 @@ use super::*;
 pub(super) fn batch_static_splines(
     splines: Vec<(Arc<MeshData>, Arc<SplineType>, bool, DVec3)>,
 ) -> Vec<(Arc<MeshData>, Arc<SplineType>, bool, DVec3)> {
-    if omsi_cfg::env::var_os("OMSI_NO_SPLINE_BATCHING").is_some() {
+    if omsi_cfg::flags::OMSI_NO_SPLINE_BATCHING.is_set() {
         return splines;
     }
     let mut groups: Vec<(Vec<Arc<MeshData>>, Arc<SplineType>, bool, DVec3)> = Vec::new();
     let mut cells = HashMap::new();
     let mut signatures = HashMap::new();
     let mut type_materials = HashMap::new();
-    let material_batching = omsi_cfg::env::var_os("OMSI_NO_MATERIAL_SPLINE_BATCHING").is_none();
+    let material_batching = !omsi_cfg::flags::OMSI_NO_MATERIAL_SPLINE_BATCHING.is_set();
     for (mesh, ty, casts, sort_origin) in splines {
         let (lo, hi) = mesh.positions.iter().fold(
             (glam::Vec3::splat(f32::INFINITY), glam::Vec3::splat(f32::NEG_INFINITY)),
@@ -266,7 +266,7 @@ impl GpuCache {
         let Some(path) = omsi_texture::find_texture(name, &dirs_ref) else {
             if !name.trim().is_empty() && self.misses.insert(name.to_string()) {
                 log::warn!("Did not find texture file \"{name}\"!");
-                if omsi_cfg::env::var_os("OMSI_DEBUG_MISSING").is_some() {
+                if omsi_cfg::flags::OMSI_DEBUG_MISSING.is_set() {
                     log::info!("  texture {name} looked for in {:?}", dirs);
                 }
             }

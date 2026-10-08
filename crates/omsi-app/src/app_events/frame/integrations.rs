@@ -85,7 +85,7 @@ impl App {
             }
         }
         // OMSI_WATCH_VARS=a,b: every change of those variables of the player's bus
-        if let (Some(p), Ok(list)) = (self.player.as_ref(), omsi_cfg::env::var("OMSI_WATCH_VARS")) {
+        if let (Some(p), Some(list)) = (self.player.as_ref(), omsi_cfg::flags::OMSI_WATCH_VARS.var()) {
             thread_local!(static LAST: std::cell::RefCell<std::collections::HashMap<String, f32>> = Default::default());
             LAST.with(|last| {
                 let mut last = last.borrow_mut();

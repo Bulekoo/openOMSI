@@ -1091,7 +1091,7 @@ pub(crate) fn dump_display_textures(vehicle: &omsi_sim::VehicleInstance, dir: &P
 
 /// `OMSI_INPUT="t=3 move 1045,826; t=3.2 press; ..."` → (time, command) pairs.
 pub(crate) fn parse_input_script() -> Vec<(f32, String)> {
-    let Ok(v) = omsi_cfg::env::var("OMSI_INPUT") else {
+    let Some(v) = omsi_cfg::flags::OMSI_INPUT.var() else {
         return Vec::new();
     };
     let mut out: Vec<(f32, String)> = v

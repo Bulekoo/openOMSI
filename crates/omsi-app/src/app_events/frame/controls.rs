@@ -168,7 +168,7 @@ impl App {
             *fade = (*fade - dt).max(0.0);
             analog.steering = Some(*steer);
             // OMSI_TRACE_STEER=<csv>: the mouse steering frame by frame
-            if let Some(path) = omsi_cfg::env::var_os("OMSI_TRACE_STEER") {
+            if let Some(path) = omsi_cfg::flags::OMSI_TRACE_STEER.os() {
                 use std::io::Write;
                 static TRACE: std::sync::Mutex<Option<std::fs::File>> = std::sync::Mutex::new(None);
                 let mut g = TRACE.lock().unwrap_or_else(|e| e.into_inner());

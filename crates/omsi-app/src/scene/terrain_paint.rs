@@ -270,7 +270,7 @@ pub(super) fn tree_quad_mesh() -> MeshData {
 pub(super) fn heightprofile_ground() -> bool {
     // (global: an environment switch read once per process, asked by the staging threads)
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| omsi_cfg::env::var_os("OMSI_HEIGHTPROFILE_GROUND").is_some())
+    *ON.get_or_init(|| omsi_cfg::flags::OMSI_HEIGHTPROFILE_GROUND.is_set())
 }
 
 pub(super) fn surface_flush() -> f32 {
@@ -278,9 +278,7 @@ pub(super) fn surface_flush() -> f32 {
     // and the drive probe, which run without a `World`)
     static V: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
     *V.get_or_init(|| {
-        omsi_cfg::env::var("OMSI_SURFACE_FLUSH")
-            .ok()
-            .and_then(|v| v.parse().ok())
+        omsi_cfg::flags::OMSI_SURFACE_FLUSH.parse()
             .unwrap_or(0.12)
     })
 }
@@ -331,7 +329,7 @@ pub fn surf_map(texture: &str, dirs: &[&Path]) -> Option<Arc<omsi_geometry::Heig
     // is open, so a new `World` reads nothing twice; the tests ask without a `World`)
     static MEMO: std::sync::OnceLock<Mutex<HashMap<PathBuf, Option<Arc<omsi_geometry::HeightMap>>>>> = std::sync::OnceLock::new();
     // OMSI_NO_SURF: every road as smooth as before (A/B)
-    if omsi_cfg::env::var_os("OMSI_NO_SURF").is_some() {
+    if omsi_cfg::flags::OMSI_NO_SURF.is_set() {
         return None;
     }
     let found = omsi_texture::find_texture(texture, dirs)?;

@@ -326,7 +326,7 @@ impl World {
                 }
             }
         }
-        if omsi_cfg::env::var_os("OMSI_PROFILE").is_some() {
+        if omsi_cfg::flags::OMSI_PROFILE.is_set() {
             log::info!(
                 "vehicle sets: {} let go ({textures} textures, {meshes} meshes), {} kept",
                 gone.len(),
@@ -366,7 +366,7 @@ impl World {
                 let id = renderer.add_prepared_texture(scene, t);
                 gpu.take_texture_slot(renderer, scene, id)
             };
-            if omsi_cfg::env::var_os("OMSI_DEBUG_TEXTURES").is_some() {
+            if omsi_cfg::flags::OMSI_DEBUG_TEXTURES.is_set() {
                 log::info!(
                     "vehicle texture {} (made ahead) {:?}, {:.2} MB",
                     path.display(),
@@ -404,7 +404,7 @@ impl World {
             }
             id
         };
-        if omsi_cfg::env::var_os("OMSI_DEBUG_TEXTURES").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_TEXTURES.is_set() {
             log::info!(
                 "vehicle texture {} {}x{} {:?} {} levels, {:.2} MB",
                 path.display(),
@@ -483,7 +483,7 @@ impl World {
                 self.gpu.lock().add_data(renderer, scene, &data)
             }
         };
-        if omsi_cfg::env::var_os("OMSI_DEBUG_TEXTURES").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_TEXTURES.is_set() {
             log::info!(
                 "vehicle bump map {}, {:.2} MB",
                 key.display(),
@@ -776,7 +776,7 @@ impl World {
         // (the Sprinter's, the Mercus's, the Urbino 15's saloon showed through half their
         // panels drawn so while `[matl_noZcheck]` still took their inner glass out of the
         // depth test; OMSI_NO_MODEL_ORDER=1 draws opaque parts first again)
-        if ordered && omsi_cfg::env::var_os("OMSI_NO_MODEL_ORDER").is_none() {
+        if ordered && !omsi_cfg::flags::OMSI_NO_MODEL_ORDER.is_set() {
             log::debug!("{}: drawn in model order (a blended slot writes depth before an opaque one)", vt.def.path.display());
             for &i in &instances {
                 if scene.instances.get(i).is_some_and(|x| !x.blob) {
@@ -843,8 +843,8 @@ impl World {
         let mut mesh_secs = 0.0f64;
         // OMSI_ONLY_MESH=a|b draws only the meshes whose file names contain one of the
         // parts (and logs their materials); OMSI_HIDE_MESH=a|b leaves those out
-        let only = omsi_cfg::env::var("OMSI_ONLY_MESH").ok();
-        let hide = omsi_cfg::env::var("OMSI_HIDE_MESH").ok();
+        let only = omsi_cfg::flags::OMSI_ONLY_MESH.var().map(str::to_string);
+        let hide = omsi_cfg::flags::OMSI_HIDE_MESH.var().map(str::to_string);
         let matches = |list: &str, file: &str| {
             list.split('|').any(|f| {
                 !f.is_empty() && file.to_ascii_lowercase().contains(&f.to_ascii_lowercase())
@@ -912,7 +912,7 @@ impl World {
         }
         materials.sort_unstable();
         materials.dedup();
-        if omsi_cfg::env::var_os("OMSI_PROFILE").is_some() {
+        if omsi_cfg::flags::OMSI_PROFILE.is_set() {
             let (tn, ts) = *tex_time.borrow();
             log::info!("  vehicle set {}: {} meshes ({:.1} ms), {} textures uploaded ({:.1} ms), {} materials, {:.1} ms in all", vt.def.path.file_name().unwrap_or_default().to_string_lossy(), mesh_keys.len(), mesh_secs * 1000.0, tn, ts * 1000.0, materials.len(), t_all.elapsed().as_secs_f64() * 1000.0);
         }
@@ -1046,12 +1046,12 @@ impl World {
         // a separate mask of about 6-10 %; read as the mask, the alpha made them
         // mirrors. The mask and the bump map are shared vehicle textures like the
         // rest (the bump map as a height map under a key of its own).
-        let envmap = ov.iter().find_map(|o| o.envmap.clone()).filter(|_| omsi_cfg::env::var_os("OMSI_NO_ENVMAP").is_none()).and_then(|(t, f)| {
+        let envmap = ov.iter().find_map(|o| o.envmap.clone()).filter(|_| !omsi_cfg::flags::OMSI_NO_ENVMAP.is_set()).and_then(|(t, f)| {
             let id = tex!(&t, &dirs_ref)?;
             Some((id, f))
         });
         let env_mask = ov.iter().find_map(|o| o.envmap_mask.clone()).filter(|t| envmap.is_some() && !t.trim().is_empty()).and_then(|t| tex!(&subst(&t), &dirs_ref));
-        let bump = ov.iter().find_map(|o| o.bumpmap.clone()).filter(|_| envmap.is_some() && omsi_cfg::env::var_os("OMSI_NO_BUMP").is_none()).and_then(|(t, f)| tex!(&subst(&t), &dirs_ref, vehicle_bump_texture).map(|id| (id, f)));
+        let bump = ov.iter().find_map(|o| o.bumpmap.clone()).filter(|_| envmap.is_some() && !omsi_cfg::flags::OMSI_NO_BUMP.is_set()).and_then(|(t, f)| tex!(&subst(&t), &dirs_ref, vehicle_bump_texture).map(|id| (id, f)));
         // a [matl_freetex] slot gets its texture from a string variable at run
         // time, so an empty slot here is not a missing file
         let freetex = ov_all.iter().any(|o| o.freetex.is_some());
@@ -1350,7 +1350,7 @@ fn slot_alpha(cx: &SlotCx, ov: &[&MaterialDef], tex: Option<TextureId>, transmap
     // it, in model order with its depth written - see `Instance::ordered` -
     // instead of being guessed opaque, which drew overlay layers black, #127.
     // `OMSI_REPAIR_BODY_DEPTH=1` brings the old guess back for comparison.)
-    let repair_body_depth = omsi_cfg::env::var_os("OMSI_REPAIR_BODY_DEPTH").is_some() && !layer && is_vehicle_body_material(&def.file, &m.texture, tex.is_some(), transmap.is_some(), ov.iter().any(|o| o.no_z_write), body_hint);
+    let repair_body_depth = omsi_cfg::flags::OMSI_REPAIR_BODY_DEPTH.is_set() && !layer && is_vehicle_body_material(&def.file, &m.texture, tex.is_some(), transmap.is_some(), ov.iter().any(|o| o.no_z_write), body_hint);
     // (only a blended slot: an alpha-tested one - `[matl_alpha] 1`, the EN92's
     // pictograms, a Sprinter's seat covers - is cut out as the model says, and
     // made opaque its cut-out parts were grey boxes; and not a layer made of
@@ -1370,7 +1370,7 @@ fn slot_alpha(cx: &SlotCx, ov: &[&MaterialDef], tex: Option<TextureId>, transmap
     }
     // Keep the material's declared alpha mode: a transmap mask alone must not
     // make a solid body panel translucent.
-    if omsi_cfg::env::var_os("OMSI_FORCE_OPAQUE").is_some() && !dirt_overlay {
+    if omsi_cfg::flags::OMSI_FORCE_OPAQUE.is_set() && !dirt_overlay {
         alpha = AlphaMode::Opaque;
     }
     SlotAlpha { alpha, declared_alpha, dirt_overlay, cover, see_through, transparent_layer_hint, named_body, repair_body_depth }
@@ -1436,7 +1436,7 @@ fn slot_extra(
     // (while it snows the film is the snow-crystal texture, drawn as it is)
     // (all three graphics: OMSI 2's own rain, its texture sliding down the
     // pane, looked like wet paper next to drops that bend the street)
-    extra.rain_film = rain_layer && !snowing() && omsi_cfg::env::var_os("OMSI_TEXTURE_RAIN").is_none();
+    extra.rain_film = rain_layer && !snowing() && !omsi_cfg::flags::OMSI_TEXTURE_RAIN.is_set();
     // Some mod buses put [matl_noZcheck] on the complete body mesh.
     // That flag is for decals; on a body it disables depth writing and
     // lets the cabin bleed through the outside shell. Keep it on genuine

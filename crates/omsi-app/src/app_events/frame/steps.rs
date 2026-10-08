@@ -367,9 +367,7 @@ pub(crate) fn picture_lighting(
         Some(w) => weather_lighting(daylight, w, cloud_drift, wetness, settings.shadows),
         None => lights::lighting_from(daylight, 50000.0),
     };
-    lighting.wetness = omsi_cfg::env::var("OMSI_WETNESS")
-        .ok()
-        .and_then(|v| v.parse().ok())
+    lighting.wetness = omsi_cfg::flags::OMSI_WETNESS.parse()
         .unwrap_or(wetness);
     dress_lighting(&mut lighting, world, inside, settings);
     lighting.glass_wind = driven.map(crate::lights::vehicle_velocity).unwrap_or_default();

@@ -67,7 +67,7 @@ impl App {
         let now = Instant::now();
         let raw_dt = (now - self.last).as_secs_f32();
         self.log_frame(raw_dt);
-        let profiling = omsi_cfg::env::var_os("OMSI_PROFILE").is_some();
+        let profiling = omsi_cfg::flags::OMSI_PROFILE.is_set();
         let waited: f64 = ["acquire", "present", "gpu"].iter()
             .map(|&k| self.profile.get(k).copied().unwrap_or(0.0))
             .sum();
@@ -125,7 +125,7 @@ impl App {
                 self.governor = (0.0, 0, 0.0);
                 let free = self.settings.render_scale <= 0.0
                     && (self.settings.max_fps == 0 || self.settings.max_fps >= 50)
-                    && omsi_cfg::env::var_os("OMSI_FIXED_SCALE").is_none();
+                    && !omsi_cfg::flags::OMSI_FIXED_SCALE.is_set();
                 if let (Some(r), true) = (self.renderer.as_mut(), free) {
                     let s = r.dynamic_scale();
                     let step = render_scale_step(fps, wait_share);
