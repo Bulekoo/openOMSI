@@ -57,7 +57,7 @@ fn the_pool_counts_local_people_and_never_recycles_riders_or_avatars() {
         puppet,
         remote,
     };
-    let mut h = Humans::new(Path::new("/nonexistent"));
+    let mut h = PeopleSim::new(Path::new("/nonexistent"), 200);
     h.max_people = 2;
     h.people = vec![
         person(1, false, None, false),

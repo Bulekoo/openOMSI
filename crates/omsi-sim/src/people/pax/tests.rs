@@ -23,7 +23,7 @@ fn arriving_ai_uses_the_timetable_stop_not_a_neighbour() {
     let cabin =
         Arc::new(Cabin::load_train(&[(&def, Vec3::ZERO, f32::INFINITY)]).expect("cabin"));
     std::fs::remove_dir_all(&dir).unwrap();
-    let mut humans = Humans::new(Path::new("/nonexistent"));
+    let mut humans = PeopleSim::new(Path::new("/nonexistent"), 200);
     humans.stops.insert(42, test_stop("Scheduled", ""));
     let mut neighbour = test_stop("Neighbour", "");
     neighbour.pos = DVec3::Y * 3.0;
@@ -55,7 +55,7 @@ fn arriving_ai_uses_the_timetable_stop_not_a_neighbour() {
         places_off: Vec::new(),
         served: None,
     };
-    let register = |humans: &mut Humans, bus: &BusNow| {
+    let register = |humans: &mut PeopleSim, bus: &BusNow| {
         humans
             .register_buses(std::slice::from_ref(bus), 0.0)
             .remove(&bus.id)
@@ -217,7 +217,7 @@ fn test_stop(name: &str, alias: &str) -> PaxStop {
 fn who_boards_the_players_bus() {
     // line 76 from Bauernhof (stop 10) by Kirche to Endstation; the depot file calls the
     // terminus "Endstation Grundorf", the timetable "Endstation"
-    let trip = |name: &str| crate::schedule::PlannedStop {
+    let trip = |name: &str| StopPlan {
         object_id: match name {
             "Bauernhof" => 10,
             "Kirche" => 11,
@@ -225,18 +225,13 @@ fn who_boards_the_players_bus() {
             _ => 12,
         },
         name: format!("{name} "),
-        arr: 0.0,
-        dep: 0.0,
-        position: None,
-        dir: Default::default(),
         stops: name != "Depot",
     };
-    let planned = crate::schedule::PlannedTrip {
+    let planned = TripPlan {
         name: "76-1".into(),
         line: "76".into(),
         terminus: "Endstation ".into(),
         departure: 8.0 * 3600.0,
-        end: 9.0 * 3600.0,
         stops: ["Bauernhof", "Depot", "Kirche", "Endstation"].into_iter().map(trip).collect(),
     };
     // (named as the timetable's Busstops.cfg names the objects; one it does not know by
@@ -283,7 +278,7 @@ fn who_boards_the_players_bus() {
     assert_eq!(at_stop(12, &test_stop("Endstation Grundorf", ""), Some(shown), &duty(3, false)), AtStop::Empties);
     // a finished trip takes nobody by the duty, nor a works trip from the depot
     assert_eq!(fit(10, &here, Some("Kirche"), &set(&["Endstation"]), shown, &duty(0, true)), None);
-    let works = Takes::Duty { trip: Arc::new(DutyTrip::of(&crate::schedule::PlannedTrip { line: String::new(), ..planned.clone() }, Some(&names))), next: 0, done: false };
+    let works = Takes::Duty { trip: Arc::new(DutyTrip::of(&TripPlan { line: String::new(), ..planned.clone() }, Some(&names))), next: 0, done: false };
     assert_eq!(fit(10, &here, Some("Kirche"), &set(&["Endstation"]), shown, &works), None);
     assert_eq!(fit(10, &here, Some("Kirche"), &set(&["Endstation Grundorf"]), shown, &works), Some(Fit::Terminus));
 
@@ -412,8 +407,8 @@ fn stop_requests_match_the_destination_and_its_timetable_alias() {
 
 #[test]
 fn stop_request_distances_vary_and_repeat_with_the_passenger_seed() {
-    let mut first = Humans::new(Path::new("/nonexistent"));
-    let mut second = Humans::new(Path::new("/nonexistent"));
+    let mut first = PeopleSim::new(Path::new("/nonexistent"), 200);
+    let mut second = PeopleSim::new(Path::new("/nonexistent"), 200);
     first.set_lan_seed(42);
     second.set_lan_seed(42);
     let stop = request_stop();
@@ -436,28 +431,20 @@ fn stop_request_distances_vary_and_repeat_with_the_passenger_seed() {
 
 #[test]
 fn a_timetable_stop_can_be_requested_before_its_tile_loads() {
-    let mut humans = Humans::new(Path::new("/nonexistent"));
-    let planned = crate::schedule::PlannedStop {
-        object_id: 42,
-        name: "Next stop".into(),
-        position: Some(DVec3::Y * 1000.0),
-        arr: 0.0,
-        dep: 0.0,
-        dir: Default::default(),
-        stops: true,
-    };
-    humans.set_player_next_stop(Some(&planned));
+    let mut humans = PeopleSim::new(Path::new("/nonexistent"), 200);
+    let planned = (42, "Next stop".to_string(), Some(DVec3::Y * 1000.0));
+    humans.set_player_next_stop(Some((planned.0, &planned.1, planned.2)));
     assert!(humans.stops.is_empty());
     let target = humans.player_next_stop.as_ref().unwrap();
     let mut passenger = Pax::new(1.1, 1.0);
-    passenger.dest = Some(planned.name);
+    passenger.dest = Some(planned.1);
     assert!(passenger.wants_stop_at(target, DVec3::ZERO, true));
     humans.set_player_next_stop(None);
     assert!(humans.player_next_stop.is_none());
 }
 
 #[test]
-pub(super) fn routes_follow_the_link_order_and_one_way_links() {
+pub fn routes_follow_the_link_order_and_one_way_links() {
     // 0 - 1 - 2, and 2 -> 0 one way
     let r = build_routes(3, &[(0, 1, false), (1, 2, false), (2, 0, true)]);
     // from 0 to 2: through 1 (0 cannot use the one-way link back from 0 to 2)

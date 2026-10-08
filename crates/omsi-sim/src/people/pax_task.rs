@@ -2,9 +2,9 @@
 
 use super::*;
 
-impl Humans {
+impl PeopleSim {
     /// sub_62e42c: a new task and what it starts with.
-    pub(super) fn set_task(&mut self, i: usize, t: Task, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>, world: &World) {
+    pub fn set_task(&mut self, i: usize, t: Task, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>, world: &dyn World) {
         if self.pax(i).is_none_or(|p| p.task == t) {
             return;
         }
@@ -216,7 +216,7 @@ impl Humans {
 
     /// sub_625b98: the entry to walk to, every frame on the way (the nearest open one or
     /// one with a button; one selling tickets for a buyer), and its index for the request.
-    pub(super) fn choose_entry(&mut self, i: usize, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>) {
+    pub fn choose_entry(&mut self, i: usize, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>) {
         let p = self.pax(i).unwrap().clone();
         let Some(bn) = p.bus.and_then(|b| bus_ix.get(&b).map(|k| &buses[*k])) else { return };
         let here = match p.inside {
@@ -238,7 +238,7 @@ impl Humans {
     }
 
     /// sub_62a628: along the paths to the place reserved.
-    pub(super) fn route_to_place(&mut self, i: usize, bn: &BusNow) {
+    pub fn route_to_place(&mut self, i: usize, bn: &BusNow) {
         let all = bn.cabin.all_points();
         let seat = self.pax(i).unwrap().seat.and_then(|k| bn.cabin.seats.get(k)).map(|s| s.pos);
         let p = self.pax_mut(i).unwrap();
@@ -251,11 +251,11 @@ impl Humans {
 
     /// The task part of the tick (sub_62a6a0 from 0x62b984).
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn pax_task(
+    pub fn pax_task(
         &mut self,
         i: usize,
         dt: f32,
-        world: &World,
+        world: &dyn World,
         buses: &[BusNow],
         bus_ix: &HashMap<BusId, usize>,
         at_stops: &HashMap<BusId, BusAtStops>,
@@ -388,7 +388,7 @@ impl Humans {
     }
 
     /// Task 3 (sub_62a6a0 case 3): to the door and in.
-    pub(super) fn task_to_bus(&mut self, i: usize, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>, world: &World) {
+    pub fn task_to_bus(&mut self, i: usize, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>, world: &dyn World) {
         let p = self.pax(i).unwrap().clone();
         let Some(bn) = p.bus.and_then(|b| bus_ix.get(&b).map(|k| &buses[*k])) else {
             self.set_task(i, Task::WalkingToBusstop, buses, bus_ix, world);
@@ -474,13 +474,13 @@ impl Humans {
 
     /// Task 4 (case 4): the validator, the cash desk, and on to the place.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn task_to_place(
+    pub fn task_to_place(
         &mut self,
         i: usize,
         dt: f32,
         buses: &[BusNow],
         bus_ix: &HashMap<BusId, usize>,
-        world: &World,
+        world: &dyn World,
         player_bus: Option<&VehicleInstance>,
         taken_ticket: &mut bool,
     ) {
@@ -539,7 +539,7 @@ impl Humans {
     }
 
     /// Task 5 (case 5): to the exit, out.
-    pub(super) fn task_to_exit(&mut self, i: usize, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>, at_stops: &HashMap<BusId, BusAtStops>, world: &World, remove: &mut Vec<usize>) {
+    pub fn task_to_exit(&mut self, i: usize, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>, at_stops: &HashMap<BusId, BusAtStops>, world: &dyn World, remove: &mut Vec<usize>) {
         let p = self.pax(i).unwrap().clone();
         let Some(b) = p.inside else { return };
         let Some(bn) = bus_ix.get(&b).map(|k| &buses[*k]) else { return };
@@ -617,12 +617,12 @@ impl Humans {
 
     /// sub_626818 / task 8: on as a pedestrian along the pavement from the stop - or gone
     /// when there is none.
-    pub(super) fn walk_street(&mut self, i: usize, at: DVec3, heading: f64, stop: Option<i64>, world: &World, remove: &mut Vec<usize>) {
+    pub fn walk_street(&mut self, i: usize, at: DVec3, heading: f64, stop: Option<i64>, world: &dyn World, remove: &mut Vec<usize>) {
         let _ = world;
         self.walk_street_plain(i, at, heading, stop, remove)
     }
 
-    pub(super) fn walk_street_plain(&mut self, i: usize, at: DVec3, heading: f64, stop: Option<i64>, remove: &mut Vec<usize>) {
+    pub fn walk_street_plain(&mut self, i: usize, at: DVec3, heading: f64, stop: Option<i64>, remove: &mut Vec<usize>) {
         let lane = stop.and_then(|s| self.stops.get(&s)).and_then(|s| s.lane);
         let p = &mut self.people[i];
         p.position = at;

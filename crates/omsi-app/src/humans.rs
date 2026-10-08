@@ -1,126 +1,255 @@
 //! People on foot: passengers and pedestrians as agents with a goal.
 //!
-//! A passenger comes along the pavement (or already stands at the stop when the map
-//! starts), waits at a free waiting place of the stop - the `[passpos]` points of the
-//! map's `people_standing_*` markers and shelters, else places spread along the back of
-//! the platform - and when a bus opens its doors there, queues at the nearest open
-//! `[entry]` (a passenger who still has to buy a ticket only at one with a cash desk),
-//! steps in when the doorway is free, pays or shows a pass at the desk, walks the cabin's
-//! `paths.cfg` network to a free `[passpos]` (a standing place once the seats are gone),
-//! rides, presses the stop button before their stop, walks to the nearest `[exit]` when
-//! the bus stands there, steps out and walks away along the pavement - or waits at the
-//! stop for another bus. Timetable (AI) buses carry their passengers the same way.
-//! Nobody is taken away while the player can see them.
-//!
-//! An articulated bus is one cabin: the sections' path networks, seats and exits are put
-//! together in the front section's frame with the sections straight behind each other, and
-//! the front section's `[linkToPrevVeh]` point is joined to the rear section's
-//! `[linkToNextVeh]` point, so people walk through the bellows to the seats and exits at the
-//! back. Entries and exits are numbered front section first, which is how the stock door
-//! scripts count them (the GN92's rear door is `PAX_Exit2`/`PAX_Exit3`). A point behind a
-//! joint is carried by its own section, whatever the angle of the bend.
-//!
-//! Movement is a crowd: everybody on the same floor (the ground, or one bus) avoids
-//! everybody else with the anticipatory model of `omsi_sim::crowd`, does not push into
-//! somebody standing in front, speeds up, slows down and turns at a human pace, and keeps
-//! to the aisle inside a bus. Doorways and the cash desk are taken one at a time, people
-//! getting off go first, and somebody pressed against another for seconds slips past.
-//! Every waiting state has a way out, and `OMSI_DEBUG_PAX=1` logs every change of state
-//! and why somebody stands still.
-//!
-//! Pedestrians walk the map's pavement paths as one network (path ends that meet are
-//! joined whatever their heading), wait at the kerb for a pedestrian light's green - and
-//! only start across when it lasts long enough - and for approaching cars where there is
-//! no light; nobody stops in the middle of the road.
-//!
-//! The map streams: stops, waiting places and pavements come with their tiles. The
-//! pavement network grows as the traffic network does, a stop is set up again when its
-//! neighbourhood changed and nobody uses it, a stop whose tile went takes its people with
-//! it, and nobody stands or walks where the ground is not loaded.
+//! The simulation is omsi-sim's `people` (`PeopleSim`, which knows nothing of the GPU);
+//! here it gets the loaded world, the traffic and the player's duty, and the people's
+//! pictures (`view`): their meshes, posing and skinning, and the coins on the cash desk.
 
 use crate::ambience;
+use crate::money::TicketBlocks;
 use crate::scene::World;
 use crate::traffic::Traffic;
-use glam::{DVec2, DVec3, Mat4, Vec3};
-use hashbrown::{HashMap, HashSet};
+use glam::{DVec3, Mat4, Vec3};
+use hashbrown::HashMap;
 use omsi_render::{AlphaMode, Camera, MaterialId, MeshId, Renderer, Scene};
-use omsi_sim::crowd::{self, Block, CrowdParams, PathGraph, Walker};
-use omsi_sim::human::{skin, Activity, HumanType};
-use omsi_sim::human_omsi::{AnimInput, OmsiAnim};
-use omsi_sim::traffic::{LaneKind, Network};
+use omsi_sim::human::{skin, HumanType};
+use omsi_sim::people::pax::{StopPlan, TripPlan};
+use omsi_sim::people::{BodyOp, DutyTrip, PeopleSim, Place, State};
 use omsi_sim::VehicleInstance;
-use omsi_vehicle::PassengerCabin;
+use parking_lot::MutexGuard;
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-// The simulation: the people and what they do. Only `view` draws; the public calls that
-// make people (`tick`, `populate`, `avatar`, ...) end by letting it catch up.
-mod model;
-mod cabin;
-mod pednet;
-mod people;
-mod populate;
-mod buses;
-mod tick;
-mod walk;
-mod report;
-mod avatar;
-mod mirror;
-// The passengers, as Omsi.exe runs them.
-mod pax;
-mod pax_stops;
-mod pax_tick;
-mod pax_task;
-mod pax_driver;
 // The renderer's side of the people.
 mod view;
-#[cfg(test)]
-mod tests;
-#[cfg(test)]
-mod population_limit_tests;
 
-use avatar::*;
-use cabin::*;
-use model::*;
-use pax::*;
-use pednet::*;
 use view::*;
 
 // The module's API, at the paths it always had (some only returned, never named outside).
 #[allow(unused_imports)]
-pub use avatar::{AvatarCmd, SeatSpot};
+pub use omsi_sim::people::{AvatarCmd, SeatSpot};
 #[allow(unused_imports)]
-pub use mirror::{placed_bus_id, remote_bus_id, remote_bus_player, LanPerson, MirrorPose};
-pub use model::{BusId, DoorWants, Eye, Humans, Person, VoiceLine};
+pub use omsi_sim::people::{placed_bus_id, remote_bus_id, remote_bus_player, LanPerson, MirrorPose};
+pub use omsi_sim::people::{BusId, DoorWants, Person};
+#[allow(unused_imports)]
+pub use omsi_sim::people::VoiceLine;
 
 /// The map's traffic keeps left (its stops are on the left): see the doors of `Cabin`.
-pub(crate) static LEFT_HAND: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+pub(crate) use omsi_sim::people::LEFT_HAND;
 
-/// How far outside the bus side somebody stands at a door (m).
-const DOOR_OUT: f32 = 0.5;
-/// Entries and exits with door variables of their own in Omsi.exe (`PAX_Entry0..7` ...).
-const OMSI_PAX_DOORS: usize = 8;
-/// Body radius for the crowd outside (m): shoulders and swinging arms. With the cabin's
-/// radius people on the pavement came within 0.46 m, and two walking past each other or a
-/// group crossing the road merged into one another in the picture.
-const BODY_OUTSIDE: f64 = 0.28;
-/// Stops within this distance of the player have their people (Omsi.exe: the stop's tile
-/// and the eight round the camera's, sub_61bf94).
-const STOP_RANGE: f64 = 450.0;
-/// Pedestrians stroll within this distance of the player (m).
-const STROLL_RADIUS: f64 = 200.0;
-/// How far in front of a seat's hip point somebody stands to sit down - where the feet
-/// stay while seated (m).
-const SEAT_FRONT: f32 = 0.34;
-/// Over this distance on either side of a joint (m) a point of an articulated bus's cabin
-/// moves from the frame of the section in front to the one behind.
-const JOINT_BLEND: f32 = 0.5;
+/// The people with what the game makes of them: their pictures. Everything of the
+/// simulation reads through it (`Deref` to `PeopleSim`).
+pub struct Humans {
+    pub sim: PeopleSim,
+    /// The renderer's side: meshes, GPU materials, posing (see `view`).
+    view: Bodies,
+    /// The tear-off ticket blocks of the player's bus (`money::TicketBlocks`).
+    pub ticket_blocks: Option<TicketBlocks>,
+}
 
-fn debug_pax() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| {
-        omsi_cfg::env::var_os("OMSI_DEBUG_PAX").is_some()
-            || omsi_cfg::env::var_os("OMSI_DEBUG_HUMANS").is_some()
-    })
+impl std::ops::Deref for Humans {
+    type Target = PeopleSim;
+    fn deref(&self) -> &PeopleSim {
+        &self.sim
+    }
+}
+
+impl std::ops::DerefMut for Humans {
+    fn deref_mut(&mut self) -> &mut PeopleSim {
+        &mut self.sim
+    }
+}
+
+/// Where the player looks from (`omsi_sim::people::Eye`), made from the camera.
+pub struct Eye;
+
+impl Eye {
+    pub fn of(cam: &Camera, aspect: f32) -> omsi_sim::people::Eye {
+        omsi_sim::people::Eye::looking(cam.position, cam.forward().as_dvec3(), cam.fov_deg as f64, aspect)
+    }
+}
+
+/// What the people need of the loaded world (see `omsi_sim::people::World`).
+impl omsi_sim::people::World for World {
+    fn root(&self) -> &Path {
+        &self.root
+    }
+    fn map_dir(&self) -> &Path {
+        &self.map_dir
+    }
+    fn walk_height(&self, x: f64, y: f64) -> Option<f64> {
+        World::walk_height(self, x, y)
+    }
+    fn walk_height_near(&self, x: f64, y: f64, near: f64) -> Option<f64> {
+        World::walk_height_near(self, x, y, near)
+    }
+    fn has_ground(&self, x: f64, y: f64) -> bool {
+        World::has_ground(self, x, y)
+    }
+    fn stop_exit_weight(&self, id: i64) -> f32 {
+        World::stop_exit_weight(self, id)
+    }
+    fn stop_enter(&self, id: i64) -> (f32, f32) {
+        World::stop_enter(self, id)
+    }
+    fn stop_side(&self, id: i64) -> f32 {
+        World::stop_side(self, id)
+    }
+    fn stop_length(&self, id: i64) -> f32 {
+        World::stop_length(self, id)
+    }
+    fn bus_stops(&self) -> MutexGuard<'_, Vec<(i64, DVec3, f64, String)>> {
+        self.bus_stops.lock()
+    }
+    fn waiting_places(&self) -> MutexGuard<'_, Vec<(i64, DVec3, f64, f32)>> {
+        self.waiting_places.lock()
+    }
+    fn object_positions(&self) -> MutexGuard<'_, HashMap<i64, (DVec3, [f64; 3])>> {
+        self.object_positions.lock()
+    }
+    fn collision(&self) -> MutexGuard<'_, Arc<omsi_sim::collision::CollisionWorld>> {
+        self.collision.lock()
+    }
+    fn parked_boxes(&self) -> MutexGuard<'_, Arc<Vec<omsi_sim::collision::Obb>>> {
+        self.parked_boxes.lock()
+    }
+    fn tiles_generation(&self) -> u64 {
+        self.tiles_generation.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
+impl Humans {
+    pub fn new(root: &Path) -> Humans {
+        let configured_people = crate::settings::Settings::load().ai_max_humans as usize;
+        Humans { sim: PeopleSim::new(root, configured_people), view: Bodies::new(), ticket_blocks: None }
+    }
+
+    /// Advance everybody (see `PeopleSim::tick_inner`), and show the renderer what the step
+    /// did. `bus`: the player's vehicle; `traffic`: the timetable buses, the traffic lights
+    /// and the cars pedestrians wait for. Returns true when a passenger took the printed
+    /// ticket (the caller resets `GivenTicket`).
+    pub fn tick(
+        &mut self,
+        dt: f32,
+        world: &World,
+        bus: Option<&VehicleInstance>,
+        traffic: Option<&Traffic>,
+        renderer: &Renderer,
+        scene: &mut Scene,
+    ) -> bool {
+        let started = std::time::Instant::now();
+        self.sim.tick_stages.clear();
+        let took = self.sim.tick_inner(dt, world, bus, traffic.map(|t| &t.sim));
+        // what the step did, drawn (people who came and went, coins on the desk)
+        let mark = std::time::Instant::now();
+        self.show_bodies(world, renderer, scene);
+        self.sim.tick_stages.push(("bodies", mark.elapsed().as_secs_f64() * 1000.0));
+        let ms = started.elapsed().as_secs_f64() * 1000.0;
+        self.sim.tick_done(dt, world, ms);
+        took
+    }
+
+    /// Put people at the bus stops near `center` (see `PeopleSim::populate`).
+    pub fn populate(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, center: DVec3) {
+        self.sim.populate(world, center);
+        self.show_bodies(world, renderer, scene);
+    }
+
+    /// Put avatar `key` where `cmd` says (see `PeopleSim::avatar`).
+    pub fn avatar(&mut self, key: u32, world: &World, renderer: &Renderer, scene: &mut Scene, cmd: AvatarCmd, kind: u64) {
+        self.sim.avatar(key, world, cmd, kind);
+        self.show_bodies(world, renderer, scene);
+    }
+
+    /// One of the host's people appears here (client; see `PeopleSim::mirror_add`).
+    pub fn mirror_add(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, id: u32, ty: usize, pose: &MirrorPose) -> bool {
+        let added = self.sim.mirror_add(world, id, ty, pose);
+        self.show_bodies(world, renderer, scene);
+        added
+    }
+
+    /// `--riders n` (see `PeopleSim::seed_riders`).
+    pub fn seed_riders(&mut self, n: usize, bus: &VehicleInstance, world: &World, renderer: &Renderer, scene: &mut Scene) {
+        self.sim.seed_riders(n, bus, world);
+        self.show_bodies(world, renderer, scene);
+    }
+
+    /// Bus `bus` is gone (the player removed it; see `PeopleSim::evict`).
+    pub fn evict(&mut self, bus: BusId, world: &World) {
+        self.sim.evict(bus, world);
+    }
+
+    /// The stop the player's duty is due at next (see `PeopleSim::set_player_next_stop`).
+    pub fn set_player_next_stop(&mut self, stop: Option<&crate::schedule::PlannedStop>) {
+        self.sim.set_player_next_stop(stop.map(|s| (s.object_id, s.name.as_str(), s.position)));
+    }
+
+    /// The player's duty this frame; None in free drive, where the bus takes whom its terminus
+    /// shown takes, as a timetable bus. (Set after `stop_names`: the trip's stops are named by it.)
+    pub fn set_duty(&mut self, duty: Option<&crate::schedule::PlayerDuty>) {
+        let Some(d) = duty else {
+            self.sim.duty = None;
+            return;
+        };
+        // the trip the IBIS is given: on a works trip from the depot the next one with a line
+        let (t, next) = d.trip_for_ibis();
+        let done = std::ptr::eq(t, d.trip()) && d.trip_done();
+        let trip = match self.sim.duty.take() {
+            Some((trip, ..)) if trip.name == t.name && trip.departure == t.departure => trip,
+            _ => Arc::new(DutyTrip::of(&trip_plan(t), self.sim.stop_names.as_ref())),
+        };
+        self.sim.duty = Some((trip, next, done));
+    }
+
+    /// The footsteps taken since the last call, for the environment sounds (see
+    /// `PeopleSim::take_footfalls`).
+    pub fn take_footfalls(&mut self) -> Vec<ambience::Footfall> {
+        self.sim
+            .take_footfalls()
+            .into_iter()
+            .map(|f| ambience::Footfall { position: f.position, inside: f.inside, own_bus: f.own_bus, pack: f.pack })
+            .collect()
+    }
+
+    /// `OMSI_TRACE_PAX` is writing a trace.
+    pub fn tracing(&self) -> bool {
+        self.view.trace.is_some()
+    }
+
+    /// Count of people per state, for logs, and the time posing them took.
+    pub fn summary(&self) -> String {
+        let mut out = self.sim.summary();
+        let (frames, posed, ms, up) = self.view.pose_stats;
+        if frames > 0 {
+            out.push_str(&format!(
+                "; posing {:.2} ms a frame ({:.1} people, {:.2} ms of it uploading and placing)",
+                ms / frames as f64,
+                posed as f64 / frames as f64,
+                up / frames as f64
+            ));
+        }
+        out
+    }
+
+    /// The file of a human type relative to its content root (`Humans/…/x.hum`).
+    pub fn type_file(ty: &HumanType) -> String {
+        PeopleSim::type_file(ty)
+    }
+
+    /// Hand a bus's scripts what the passengers want of its doors and places (see
+    /// `PeopleSim::write_door_requests`).
+    pub(crate) fn write_door_requests(b: &mut VehicleInstance, doors: &DoorWants) {
+        PeopleSim::write_door_requests(b, doors)
+    }
+}
+
+/// A trip of the timetable as the passengers need it.
+fn trip_plan(trip: &crate::schedule::PlannedTrip) -> TripPlan {
+    TripPlan {
+        name: trip.name.clone(),
+        line: trip.line.clone(),
+        terminus: trip.terminus.clone(),
+        departure: trip.departure,
+        stops: trip.stops.iter().map(|s| StopPlan { object_id: s.object_id, name: s.name.clone(), stops: s.stops }).collect(),
+    }
 }

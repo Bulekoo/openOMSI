@@ -5,25 +5,25 @@ use super::*;
 
 /// An `[entry]` or `[exit]` of a cabin, in the bus frame.
 #[derive(Debug, Clone)]
-pub(super) struct Door {
+pub struct Door {
     /// The door's path point (the threshold) and its index.
-    pub(super) inside: Vec3,
-    pub(super) point: Option<usize>,
+    pub inside: Vec3,
+    pub point: Option<usize>,
     /// Where somebody stands just outside, at ground level.
-    pub(super) outside: Vec3,
+    pub outside: Vec3,
     /// +1 on the right side of the bus, -1 on the left.
-    pub(super) side: f32,
+    pub side: f32,
     /// Direction along the bus (+1 forwards) in which the queue at this door runs.
-    pub(super) queue_dir: f32,
+    pub queue_dir: f32,
     /// A passenger who still has to buy a ticket may board here (no `{noticketsale}`).
-    pub(super) sells: bool,
+    pub sells: bool,
     /// `{withbutton}`: a door the passenger opens with the request button, worth walking to
     /// while it is still shut.
-    pub(super) button: bool,
+    pub button: bool,
     /// Where people getting off wait for the door to open: the path point next to it.
-    pub(super) wait: Vec3,
+    pub wait: Vec3,
     /// The sections it belongs to that people walk between (see `Cabin::groups`).
-    pub(super) group: usize,
+    pub group: usize,
 }
 
 impl Door {
@@ -33,7 +33,7 @@ impl Door {
     /// barrier sees them. Not the queue waiting outside a shut door, nor the deck above it.
     /// It ends 0.4 m out from the bus side, clear of the line 0.5 m out that the people
     /// walking along a bus keep to (`clamp_x`), so they do not set it as they pass.
-    pub(super) fn in_doorway(&self, p: Vec3) -> bool {
+    pub fn in_doorway(&self, p: Vec3) -> bool {
         const BODY: f32 = 0.3;
         if p.z > self.inside.z + 1.0 {
             return false;
@@ -47,74 +47,74 @@ impl Door {
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct Seat {
+pub struct Seat {
     /// The `[passpos]` point: a seated passenger's hip, a standing one's feet.
-    pub(super) pos: Vec3,
+    pub pos: Vec3,
     /// The floor in front of it, where the feet go (and where a seated passenger stands
     /// before sitting down and after getting up).
-    pub(super) floor: Vec3,
-    pub(super) rot: f32,
-    pub(super) seated: bool,
+    pub floor: Vec3,
+    pub rot: f32,
+    pub seated: bool,
     /// The `[passpos]`'s seat height (+0x20; 0: a standing place).
-    pub(super) height: f32,
+    pub height: f32,
     /// Its number for the scripts (`GetHumanCountOnSeat`): Omsi.exe's place in the file
     /// among the `[passpos]` and `[drivpos]`, the sections behind counted on after those
     /// in front (0x7d39a4 asks the next one for a number past its own places).
-    pub(super) omsi_seat: usize,
+    pub omsi_seat: usize,
     /// openOMSI's variables of the place (#721): the one that switches it on and off, and the
     /// one its occupancy is written into.
-    pub(super) switch_var: Option<String>,
-    pub(super) taken_var: Option<String>,
+    pub switch_var: Option<String>,
+    pub taken_var: Option<String>,
     /// The sections it lies in that people walk between (see `Cabin::groups`).
-    pub(super) group: usize,
+    pub group: usize,
 }
 
 /// What passengers need to know about one vehicle type's cabin.
-pub(super) struct Cabin {
-    pub(super) data: PassengerCabin,
-    pub(super) graph: PathGraph,
-    pub(super) links: Vec<(i32, i32, bool)>,
+pub struct Cabin {
+    pub data: PassengerCabin,
+    pub graph: PathGraph,
+    pub links: Vec<(i32, i32, bool)>,
     /// Each link's footstep sounds: its section's `[stepsoundpack]` named by the link's
     /// `[next_stepsound]` (index into `step_packs`), none where the paths.cfg gives none -
     /// Omsi.exe hears no steps there - and on the joint between two sections.
-    pub(super) link_pack: Vec<Option<usize>>,
-    pub(super) step_packs: Vec<Arc<[String]>>,
-    pub(super) entries: Vec<Door>,
-    pub(super) exits: Vec<Door>,
+    pub link_pack: Vec<Option<usize>>,
+    pub step_packs: Vec<Arc<[String]>>,
+    pub entries: Vec<Door>,
+    pub exits: Vec<Door>,
     /// Where a passenger stands at the cash desk, its path point, and the heading (bus
     /// frame) they face: between the desk top, where the money goes, and the driver.
-    pub(super) desk: Option<(Vec3, Option<usize>, f64)>,
-    pub(super) seats: Vec<Seat>,
+    pub desk: Option<(Vec3, Option<usize>, f64)>,
+    pub seats: Vec<Seat>,
     /// The sections (one for a rigid bus), front first; everything above is in the
     /// unfolded frame of the front section.
-    pub(super) parts: Vec<CabinPart>,
+    pub parts: Vec<CabinPart>,
     /// How many groups of sections people walk between (one but where a trailer hangs on
     /// that nobody walks into from the bus, #718), and each path point's group: a passenger
     /// gets in, rides and gets out within one.
-    pub(super) groups: usize,
-    pub(super) point_group: Vec<usize>,
+    pub groups: usize,
+    pub point_group: Vec<usize>,
     /// Each link's room height (`[next_roomheight]`; 2 m before any).
-    pub(super) link_room: Vec<f32>,
+    pub link_room: Vec<f32>,
     /// The routing tables of the path network (sub_72410c).
-    pub(super) routes: Vec<Vec<RouteLink>>,
+    pub routes: Vec<Vec<RouteLink>>,
     /// The validators and the cash desk: (path point, device). Omsi.exe keeps one of each,
     /// the last of the file (cabin +0x14/+0x18, +0x28/+0x2c); every `[stamper]` of every
     /// section is kept here, and a passenger stamps at the one nearest the door they came
     /// in by (`Cabin::nearest_stamper`, #722) - with one, that one.
-    pub(super) stampers: Vec<(Option<usize>, Vec3)>,
-    pub(super) sale: Option<(Option<usize>, Vec3)>,
+    pub stampers: Vec<(Option<usize>, Vec3)>,
+    pub sale: Option<(Option<usize>, Vec3)>,
     /// Where the money goes (+0x38) and where the change is taken from (+0x58), with the
     /// money point's spread.
-    pub(super) money_point: Option<Vec3>,
-    pub(super) money_var: Option<(Vec3, [f32; 2], Option<String>)>,
-    pub(super) change_point: Option<Vec3>,
+    pub money_point: Option<Vec3>,
+    pub money_var: Option<(Vec3, [f32; 2], Option<String>)>,
+    pub change_point: Option<Vec3>,
 }
 
 /// The people on each seat by the scripts' numbers (`Seat::omsi_seat`, the `[drivpos]`
 /// counted with the `[passpos]`), from the places (indices into `seats`) taken by people
 /// sitting there. (Counted by the `[passpos]` alone, every seat of a cabin with the
 /// driver's place first was one off: a tip-up seat folded down under the next one.)
-pub(super) fn seat_numbers(seats: &[Seat], sitting: impl Iterator<Item = usize>) -> Vec<u32> {
+pub fn seat_numbers(seats: &[Seat], sitting: impl Iterator<Item = usize>) -> Vec<u32> {
     let n = seats.iter().map(|s| s.omsi_seat + 1).max().unwrap_or(0);
     let mut out = vec![0u32; n];
     for k in sitting {
@@ -129,7 +129,7 @@ pub(super) fn seat_numbers(seats: &[Seat], sitting: impl Iterator<Item = usize>)
 /// its own that is 0 now (#721), by index into the cabin's.
 /// (A place in a section of its own without an entry or without an exit is off too: nobody
 /// could get there, or out of it again, #718.)
-pub(super) fn places_off(v: &VehicleInstance, cabin: &Cabin) -> Vec<bool> {
+pub fn places_off(v: &VehicleInstance, cabin: &Cabin) -> Vec<bool> {
     let unreached = |g: usize| cabin.groups > 1 && (!cabin.entries.iter().any(|e| e.group == g) || !cabin.exits.iter().any(|e| e.group == g));
     cabin
         .seats
@@ -140,7 +140,7 @@ pub(super) fn places_off(v: &VehicleInstance, cabin: &Cabin) -> Vec<bool> {
 
 /// The occupancy variables of the places of bus `bn` that name one (#721), and whether
 /// somebody is on each: a rider at that place (`sitting`: the places of its riders there).
-pub(super) fn places_taken(bn: &BusNow, sitting: &[(BusId, usize)]) -> Vec<(String, bool)> {
+pub fn places_taken(bn: &BusNow, sitting: &[(BusId, usize)]) -> Vec<(String, bool)> {
     bn.cabin
         .seats
         .iter()
@@ -152,7 +152,7 @@ pub(super) fn places_taken(bn: &BusNow, sitting: &[(BusId, usize)]) -> Vec<(Stri
 /// Which doorways of bus `bn` somebody stands in (entries, exits; see `Door::in_doorway`):
 /// of the people `at` (inside a bus and where in its frame, or where in the world), its
 /// riders and those outside close enough to it.
-pub(super) fn doorways_taken(bn: &BusNow, at: &[(Option<BusId>, DVec3)]) -> (Vec<bool>, Vec<bool>) {
+pub fn doorways_taken(bn: &BusNow, at: &[(Option<BusId>, DVec3)]) -> (Vec<bool>, Vec<bool>) {
     let mut entries = vec![false; bn.cabin.entries.len()];
     let mut exits = vec![false; bn.cabin.exits.len()];
     // (beyond the bus's own length round its origin nobody outside can be in a doorway)
@@ -176,21 +176,21 @@ pub(super) fn doorways_taken(bn: &BusNow, at: &[(Option<BusId>, DVec3)]) -> (Vec
 
 /// A section of an articulated bus in its cabin's unfolded frame.
 #[derive(Debug, Clone, Copy)]
-pub(super) struct CabinPart {
+pub struct CabinPart {
     /// Where the section's own origin lies.
-    pub(super) offset: Vec3,
+    pub offset: Vec3,
     /// The unfolded y of the joint in front of it (the front section: none, +inf).
-    pub(super) joint_y: f32,
+    pub joint_y: f32,
 }
 
 /// One vehicle of a coupled train as a cabin is put together from it: its definition, its
 /// origin in the front vehicle's unfolded frame, and the unfolded y of its front joint.
-pub(super) type TrainPart<'a> = (&'a omsi_vehicle::Vehicle, Vec3, f32);
+pub type TrainPart<'a> = (&'a omsi_vehicle::Vehicle, Vec3, f32);
 
 /// The sections of `v` passengers can walk through, front first: the vehicle and every
 /// coupled part straight behind it (a part coupled the wrong way round and all behind it
 /// are left out).
-pub(super) fn train_parts(v: &VehicleInstance) -> Vec<TrainPart<'_>> {
+pub fn train_parts(v: &VehicleInstance) -> Vec<TrainPart<'_>> {
     let mut out: Vec<TrainPart<'_>> = vec![(&v.ty.def, Vec3::ZERO, f32::INFINITY)];
     let mut offset = Vec3::ZERO;
     for t in &v.trailers {
@@ -208,7 +208,7 @@ pub(super) fn train_parts(v: &VehicleInstance) -> Vec<TrainPart<'_>> {
 impl Cabin {
     /// The cabin of a train of vehicles (see [`train_parts`]): the front one's, with the
     /// sections behind joined on as far as they have a cabin and a path network.
-    pub(super) fn load_train(parts: &[TrainPart<'_>]) -> Option<Cabin> {
+    pub fn load_train(parts: &[TrainPart<'_>]) -> Option<Cabin> {
         let (lead, _, _) = parts.first()?;
         let load_cabin = |def: &omsi_vehicle::Vehicle| -> Option<PassengerCabin> {
             let rel = def.passenger_cabin.as_ref()?;
@@ -497,7 +497,7 @@ impl Cabin {
     }
 
     /// Every point of the path network (Omsi.exe's list +0xc of the paths).
-    pub(super) fn all_points(&self) -> Vec<Option<usize>> {
+    pub fn all_points(&self) -> Vec<Option<usize>> {
         (0..self.graph.points.len()).map(Some).collect()
     }
 
@@ -515,60 +515,60 @@ impl Cabin {
 
 /// A bus as the passengers see it this frame.
 #[derive(Clone)]
-pub(super) struct BusNow {
-    pub(super) id: BusId,
-    pub(super) next_stop: Option<RequestStop>,
-    pub(super) cabin: Arc<Cabin>,
-    pub(super) pos: DVec3,
-    pub(super) rot: Mat4,
-    pub(super) heading: f64,
+pub struct BusNow {
+    pub id: BusId,
+    pub next_stop: Option<RequestStop>,
+    pub cabin: Arc<Cabin>,
+    pub pos: DVec3,
+    pub rot: Mat4,
+    pub heading: f64,
     /// m/s, forwards.
-    pub(super) speed: f64,
-    pub(super) entry_open: Vec<bool>,
-    pub(super) exit_open: Vec<bool>,
+    pub speed: f64,
+    pub entry_open: Vec<bool>,
+    pub exit_open: Vec<bool>,
     /// The doors a walker may use (another player's bus: its doors as they are, while
     /// `entry_open` stays shut for the passengers here); None: as `entry_open`/`exit_open`.
-    pub(super) walk_open: Option<(Vec<bool>, Vec<bool>)>,
-    pub(super) interior: f32,
+    pub walk_open: Option<(Vec<bool>, Vec<bool>)>,
+    pub interior: f32,
     /// The saloon's air and the light outside, for what boarding passengers say.
-    pub(super) air: CabinAir,
+    pub air: CabinAir,
     /// Half extents across / along and the centre of its bounding box (bus frame).
-    pub(super) half: DVec2,
-    pub(super) centre: DVec2,
+    pub half: DVec2,
+    pub centre: DVec2,
     /// Acceleration of the floor (bus frame: x to the right, y forwards; m/s²).
-    pub(super) accel: DVec2,
+    pub accel: DVec2,
     /// The sections behind the front one (the cabin's parts after the first).
-    pub(super) trailers: Vec<PartFrame>,
+    pub trailers: Vec<PartFrame>,
     /// The terminus it shows, by name (Omsi.exe's bus +0x7bc). None: "$allexit$" - the
     /// scripts' `target_index_int` names a hof terminus added with `[addterminus_allexit]`
     /// ("Nicht einsteigen", a works trip) - or none; no timetable target has it.
-    pub(super) terminus: Option<String>,
+    pub terminus: Option<String>,
     /// Whom it takes on at the stops.
-    pub(super) takes: Takes,
+    pub takes: Takes,
     /// The places its scripts have switched off (see `places_off`; empty: none).
-    pub(super) places_off: Vec<bool>,
+    pub places_off: Vec<bool>,
     /// A timetable bus boarding at a stop the passengers' nearby stops do not have (its
     /// tile is not among theirs): the stop its timetable serves, so that its riders still
     /// get off there.
-    pub(super) served: Option<i64>,
+    pub served: Option<i64>,
 }
 
 /// What passengers feel stepping into a bus (OMSI reads the same fields: the vehicle's
 /// `Cabinair_Temp` and `Cabinair_relHum`, the weather's temperature and the daylight).
 #[derive(Debug, Clone, Copy, Default)]
-pub(super) struct CabinAir {
+pub struct CabinAir {
     /// °C, when the bus keeps its cabin air (every bus does: its script or the engine).
-    pub(super) temp: Option<f32>,
+    pub temp: Option<f32>,
     /// Relative humidity, a fraction.
-    pub(super) rel_hum: f32,
+    pub rel_hum: f32,
     /// The temperature outside (°C).
-    pub(super) outside: f32,
+    pub outside: f32,
     /// `Envir_Brightness`: the daylight, 0 dark .. 1.
-    pub(super) brightness: f32,
+    pub brightness: f32,
 }
 
 impl CabinAir {
-    pub(super) fn of(v: &VehicleInstance) -> CabinAir {
+    pub fn of(v: &VehicleInstance) -> CabinAir {
         CabinAir {
             temp: v.var("Cabinair_Temp").filter(|t| t.is_finite()),
             rel_hum: v.var("Cabinair_relHum").filter(|h| h.is_finite()).unwrap_or(0.0),
@@ -580,19 +580,19 @@ impl CabinAir {
 
 /// Where a rear section of a bus is this frame, with its place in the cabin.
 #[derive(Debug, Clone, Copy)]
-pub(super) struct PartFrame {
-    pub(super) pos: DVec3,
-    pub(super) rot: Mat4,
-    pub(super) heading: f64,
-    pub(super) offset: Vec3,
-    pub(super) joint_y: f32,
+pub struct PartFrame {
+    pub pos: DVec3,
+    pub rot: Mat4,
+    pub heading: f64,
+    pub offset: Vec3,
+    pub joint_y: f32,
     /// Half extents across / along and the centre of its bounding box (own frame).
-    pub(super) half: DVec2,
-    pub(super) centre: DVec2,
+    pub half: DVec2,
+    pub centre: DVec2,
 }
 
 /// The rear sections of `v` that are parts of `cabin`, as they stand now.
-pub(super) fn part_frames(v: &VehicleInstance, cabin: &Cabin) -> Vec<PartFrame> {
+pub fn part_frames(v: &VehicleInstance, cabin: &Cabin) -> Vec<PartFrame> {
     cabin
         .parts
         .iter()
@@ -618,7 +618,7 @@ pub(super) fn part_frames(v: &VehicleInstance, cabin: &Cabin) -> Vec<PartFrame> 
 
 /// How far into the frame of the section behind joint `t` a cabin point `y` lies: 0 in
 /// front of the joint's blend, 1 behind it.
-pub(super) fn behind(t: &PartFrame, y: f32) -> f32 {
+pub fn behind(t: &PartFrame, y: f32) -> f32 {
     ((JOINT_BLEND - (y - t.joint_y)) / (2.0 * JOINT_BLEND)).clamp(0.0, 1.0)
 }
 
@@ -626,7 +626,7 @@ pub(super) fn behind(t: &PartFrame, y: f32) -> f32 {
 /// what lies ahead of the first joint, a rear section what lies behind its joint, and near
 /// a joint the two are blended, so that somebody walking through the bellows moves on
 /// smoothly however far the bus is bent.
-pub(super) fn train_point(pos: DVec3, rot: &Mat4, trailers: &[PartFrame], local: Vec3) -> DVec3 {
+pub fn train_point(pos: DVec3, rot: &Mat4, trailers: &[PartFrame], local: Vec3) -> DVec3 {
     let mut here = pos + rot.transform_point3(local).as_dvec3();
     for t in trailers {
         let w = behind(t, local.y);
@@ -643,7 +643,7 @@ pub(super) fn train_point(pos: DVec3, rot: &Mat4, trailers: &[PartFrame], local:
 }
 
 /// The heading of the floor at a point of a cabin (see [`train_point`]).
-pub(super) fn train_heading(heading: f64, trailers: &[PartFrame], local: Vec3) -> f64 {
+pub fn train_heading(heading: f64, trailers: &[PartFrame], local: Vec3) -> f64 {
     let mut here = heading;
     for t in trailers {
         let w = behind(t, local.y);
@@ -659,12 +659,12 @@ pub(super) fn train_heading(heading: f64, trailers: &[PartFrame], local: Vec3) -
 }
 
 impl BusNow {
-    pub(super) fn world(&self, local: Vec3) -> DVec3 {
+    pub fn world(&self, local: Vec3) -> DVec3 {
         train_point(self.pos, &self.rot, &self.trailers, local)
     }
     /// A world point in the cabin's frame (the inverse of `world`): the front section's,
     /// or a rear section's for a point behind its joint.
-    pub(super) fn to_local(&self, w: DVec3) -> Vec3 {
+    pub fn to_local(&self, w: DVec3) -> Vec3 {
         let mut l = self.rot.inverse().transform_point3((w - self.pos).as_vec3());
         for t in &self.trailers {
             if l.y > t.joint_y {
@@ -676,7 +676,7 @@ impl BusNow {
     }
     /// The tilt (pitch and bank, in the world's axes, no heading) of the section a point of
     /// the cabin is in.
-    pub(super) fn tilt_at(&self, local: Vec3) -> Mat4 {
+    pub fn tilt_at(&self, local: Vec3) -> Mat4 {
         let mut rot = self.rot;
         let mut heading = self.heading;
         for t in &self.trailers {
@@ -689,15 +689,15 @@ impl BusNow {
         rot * Mat4::from_rotation_z(heading.to_radians() as f32)
     }
     /// The heading of the section a point of the cabin is in.
-    pub(super) fn heading_at(&self, local: Vec3) -> f64 {
+    pub fn heading_at(&self, local: Vec3) -> f64 {
         train_heading(self.heading, &self.trailers, local)
     }
-    pub(super) fn fwd(&self) -> DVec2 {
+    pub fn fwd(&self) -> DVec2 {
         let h = self.heading.to_radians();
         DVec2::new(h.sin(), h.cos())
     }
     /// The bodies people on the ground walk round: the bus and its rear sections.
-    pub(super) fn blocks(&self) -> Vec<Block> {
+    pub fn blocks(&self) -> Vec<Block> {
         let block = |pos: DVec3, heading: f64, half: DVec2, centre: DVec2| {
             let h = heading.to_radians();
             let (fwd, right) = (DVec2::new(h.sin(), h.cos()), DVec2::new(h.cos(), -h.sin()));

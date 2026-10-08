@@ -5,15 +5,15 @@
 use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) enum PuppetMode {
+pub enum PuppetMode {
     /// The player on foot (or another player's walker): moved by the game, see `avatar`.
     Avatar,
 }
 
 /// A person the game moves itself (the player on foot).
 #[derive(Debug, Clone, Copy)]
-pub(super) struct Puppet {
-    pub(super) mode: PuppetMode,
+pub struct Puppet {
+    pub mode: PuppetMode,
 }
 
 /// What the game wants of an avatar this frame.
@@ -45,9 +45,9 @@ pub struct SeatSpot {
     pub seat: usize,
 }
 
-impl Humans {
+impl PeopleSim {
     /// Put avatar `key` where `cmd` says (made on its first call, of figure `kind`).
-    pub fn avatar(&mut self, key: u32, world: &World, renderer: &Renderer, scene: &mut Scene, cmd: AvatarCmd, kind: u64) {
+    pub fn avatar(&mut self, key: u32, world: &dyn World, cmd: AvatarCmd, kind: u64) {
         let known = self.avatars.get(&key).copied().filter(|id| self.people.iter().any(|p| p.id == *id));
         if known.is_none() {
             let state = State::Idle;
@@ -69,7 +69,6 @@ impl Humans {
             }
         }
         self.avatar_cmds.insert(key, cmd);
-        self.show_bodies(world, renderer, scene);
     }
 
     /// Take avatar `key` away.
@@ -351,7 +350,7 @@ impl Humans {
 
     /// The player's (or another player's) body on foot, animated as Omsi.exe animates its
     /// people: sitting on a seat (its hip on the `[passpos]`), walking or standing.
-    pub(super) fn animate_avatar(&mut self, i: usize, dt: f32, world: &World, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>) {
+    pub fn animate_avatar(&mut self, i: usize, dt: f32, world: &dyn World, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>) {
         let id = self.people[i].id;
         let Some(key) = self.avatars.iter().find(|(_, v)| **v == id).map(|(k, _)| *k) else { return };
         let Some(cmd) = self.avatar_cmds.get(&key).copied() else { return };

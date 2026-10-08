@@ -3,34 +3,34 @@
 
 use super::*;
 
-impl Humans {
+impl PeopleSim {
     /// Whether the bus script reports `name`: it writes it (`PAX_*` are engine variables every
     /// vehicle has, so stock scripts set them without a varlist entry) or declares it.
-    pub(super) fn script_reports(v: &VehicleInstance, name: &str) -> bool {
+    pub fn script_reports(v: &VehicleInstance, name: &str) -> bool {
         v.has_script_var(name) || v.ty.program.var(name).is_some_and(|id| v.ty.program.stores(id))
     }
 
     /// Whether entry or exit `i` (`kind` "Entry" or "Exit") has variables of its own: one of
     /// Omsi.exe's eight, or one past them whose `PAX_<kind><i>_Open` the script reports (#719).
     /// The others open with the eighth, as in Omsi.exe (0x62d31e reads the open state of door
-    /// min(i, 7)), and ask through its `_Req` ([`Humans::write_door_requests`]).
-    pub(super) fn own_pax_door(v: &VehicleInstance, kind: &str, i: usize) -> bool {
-        i < OMSI_PAX_DOORS || (i < omsi_sim::vehicle::PAX_DOORS && Self::script_reports(v, &format!("PAX_{kind}{i}_Open")))
+    /// min(i, 7)), and ask through its `_Req` ([`PeopleSim::write_door_requests`]).
+    pub fn own_pax_door(v: &VehicleInstance, kind: &str, i: usize) -> bool {
+        i < OMSI_PAX_DOORS || (i < crate::vehicle::PAX_DOORS && Self::script_reports(v, &format!("PAX_{kind}{i}_Open")))
     }
 
     /// The passengers' requests into the bus's `PAX_Entry<n>_Req` / `PAX_Exit<n>_Req`, and
     /// who stands in its doorways into their `_Busy` (#720): an entry or exit without
-    /// variables of its own asks through the eighth's ([`Humans::own_pax_door`]), where
+    /// variables of its own asks through the eighth's ([`PeopleSim::own_pax_door`]), where
     /// Omsi.exe drops them (its request arrays have eight slots). Past the eighth they were
     /// written to no variable at all.
-    pub(crate) fn write_door_requests(v: &mut VehicleInstance, doors: &DoorWants) {
+    pub fn write_door_requests(v: &mut VehicleInstance, doors: &DoorWants) {
         for (kind, flags, what) in [
             ("Entry", &doors.entry_req, "Req"),
             ("Exit", &doors.exit_req, "Req"),
             ("Entry", &doors.entry_busy, "Busy"),
             ("Exit", &doors.exit_busy, "Busy"),
         ] {
-            let mut slots = vec![false; flags.len().min(omsi_sim::vehicle::PAX_DOORS)];
+            let mut slots = vec![false; flags.len().min(crate::vehicle::PAX_DOORS)];
             for (i, r) in flags.iter().enumerate() {
                 let slot = if Self::own_pax_door(v, kind, i) { i } else { OMSI_PAX_DOORS - 1 };
                 if let Some(s) = slots.get_mut(slot) {
@@ -49,8 +49,8 @@ impl Humans {
     /// `PAX_Entry<i>_Open` / `PAX_Exit<i>_Open` as the bus script reports them. A bus whose
     /// script never sets them (or only sets some of them) falls back to its physical `door_<i>`
     /// or `door<i>` animations; an entry or exit past the eighth without variables of its own
-    /// is open with the eighth ([`Humans::own_pax_door`]).
-    pub(super) fn doors_open(v: &VehicleInstance, n_entry: usize, n_exit: usize) -> (Vec<bool>, Vec<bool>) {
+    /// is open with the eighth ([`PeopleSim::own_pax_door`]).
+    pub fn doors_open(v: &VehicleInstance, n_entry: usize, n_exit: usize) -> (Vec<bool>, Vec<bool>) {
         let door_val = |k: usize| -> bool {
             v.var(&format!("door_{k}"))
                 .or_else(|| v.var(&format!("door{k}")))
@@ -82,18 +82,20 @@ impl Humans {
         (entry, exit)
     }
 
-    pub fn set_player_next_stop(&mut self, stop: Option<&crate::schedule::PlannedStop>) {
+    /// The stop the player's duty is due at next: (stop object, its timetable name, where it
+    /// is when the timetable knows it).
+    pub fn set_player_next_stop(&mut self, stop: Option<(i64, &str, Option<DVec3>)>) {
         // (called once a frame: worked out again only when the duty moves on to another stop)
         if let (Some(s), Some(cur)) = (stop, self.player_next_stop.as_ref()) {
-            if cur.id == s.object_id {
+            if cur.id == s.0 {
                 return;
             }
         }
         self.player_next_stop = stop
-            .and_then(|stop| self.request_stop(stop.object_id, Some(&stop.name), stop.position));
+            .and_then(|stop| self.request_stop(stop.0, Some(stop.1), stop.2));
     }
 
-    pub(super) fn request_stop(
+    pub fn request_stop(
         &self,
         id: i64,
         name: Option<&str>,
@@ -122,7 +124,7 @@ impl Humans {
         })
     }
 
-    pub(super) fn vehicle_next_stop(&self, vehicle: &VehicleInstance) -> Option<RequestStop> {
+    pub fn vehicle_next_stop(&self, vehicle: &VehicleInstance) -> Option<RequestStop> {
         if let Ok(index) = usize::try_from(vehicle.host.tt_busstop_index) {
             if let Some(id) = vehicle.host.tt_stop_ids.get(index) {
                 let name = vehicle.host.tt_stops.get(index).map(|stop| stop.0.as_str());
@@ -152,15 +154,15 @@ impl Humans {
     }
 
     /// The buses passengers deal with this frame.
-    pub(super) fn gather_buses(
+    pub fn gather_buses(
         &mut self,
-        world: &World,
+        world: &dyn World,
         bus: Option<&VehicleInstance>,
-        traffic: Option<&Traffic>,
+        traffic: Option<&TrafficSim>,
     ) -> Vec<BusNow> {
         let mut out = Vec::new();
         let stops: Vec<(i64, DVec3, f64)> =
-            world.bus_stops.lock().iter().map(|s| (s.0, s.1, s.2)).collect();
+            world.bus_stops().iter().map(|s| (s.0, s.1, s.2)).collect();
         // The stop a bus serves: the nearest in reach - but one facing the way the bus goes
         // before one facing the other way. The two stops of a street often lie within
         // reach of each other, and the people of the stop across the road then walked over
@@ -375,7 +377,7 @@ impl Humans {
     }
 
     /// A bus people may be in but do not board here (another player's, one the player left).
-    pub(super) fn parked_bus(&mut self, id: BusId, v: &VehicleInstance) -> Option<BusNow> {
+    pub fn parked_bus(&mut self, id: BusId, v: &VehicleInstance) -> Option<BusNow> {
         let cabin = self.cabin_for(v)?;
         let bb = v.ty.def.bounding_box.unwrap_or([2.5, 11.0, 3.0, 0.0, 0.0, 1.5]);
         let trailers = part_frames(v, &cabin);
@@ -430,7 +432,7 @@ impl Humans {
 
     /// Bus `bus` is gone (the player removed it): whoever was in it stands where they were,
     /// on the ground, and walks off.
-    pub fn evict(&mut self, bus: BusId, world: &World) {
+    pub fn evict(&mut self, bus: BusId, world: &dyn World) {
         let _ = world;
         for i in (0..self.people.len()).rev() {
             let p = &self.people[i];
@@ -450,7 +452,7 @@ impl Humans {
     }
 
     /// Everyone and everything that belongs to bus `from` belongs to `to` now.
-    pub(super) fn remap_bus(&mut self, from: BusId, to: BusId) {
+    pub fn remap_bus(&mut self, from: BusId, to: BusId) {
         let fix = |b: &mut BusId| {
             if *b == from {
                 *b = to;
@@ -512,23 +514,6 @@ impl Humans {
             });
         }
         self.remote_now = out;
-    }
-
-    /// The player's duty this frame; None in free drive, where the bus takes whom its terminus
-    /// shown takes, as a timetable bus. (Set after `stop_names`: the trip's stops are named by it.)
-    pub fn set_duty(&mut self, duty: Option<&crate::schedule::PlayerDuty>) {
-        let Some(d) = duty else {
-            self.duty = None;
-            return;
-        };
-        // the trip the IBIS is given: on a works trip from the depot the next one with a line
-        let (t, next) = d.trip_for_ibis();
-        let done = std::ptr::eq(t, d.trip()) && d.trip_done();
-        let trip = match self.duty.take() {
-            Some((trip, ..)) if trip.name == t.name && trip.departure == t.departure => trip,
-            _ => Arc::new(DutyTrip::of(t, self.stop_names.as_ref())),
-        };
-        self.duty = Some((trip, next, done));
     }
 
     /// Is `bus` among the buses people can be in this frame (an AI bus, or another player's)?
