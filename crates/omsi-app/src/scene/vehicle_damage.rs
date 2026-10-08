@@ -325,6 +325,11 @@ pub fn sync_vehicle_damage(
             vehicle.position,
             vehicle.mesh_local_transform(mesh),
         );
+        // shown with the pane it lies on: a bus's inner and outer window meshes (one for the
+        // cab view, one for outside) both crack, and drawn always, both crack stars showed
+        let visible = render.instances.get(mesh).is_none_or(|&i| scene.instances[i].visible);
+        let alpha = scene.instances[instance].slot_alpha.clone();
+        renderer.set_params(scene, instance, &alpha, visible, &[]);
     }
     for glass in vehicle.take_broken_glass() {
         let Some(transform) = vehicle.mesh_transforms.get(glass.mesh) else { continue };
@@ -334,19 +339,21 @@ pub fn sync_vehicle_damage(
         if data.indices.is_empty() {
             continue;
         }
+        // (lit, as the pane they lie on: a crack shows by the light it scatters, and drawn
+        // unlit its pale lines glowed at night)
         let dark = renderer.add_material(
             scene,
             None,
             omsi_render::AlphaMode::Blend,
             [0.025, 0.095, 0.13, 1.0],
-            true,
+            false,
         );
         let bright = renderer.add_material(
             scene,
             None,
             omsi_render::AlphaMode::Blend,
             [0.72, 0.94, 1.0, 1.0],
-            true,
+            false,
         );
         render.own_materials.extend([dark, bright]);
         let mesh = renderer.add_mesh(scene, &data);
