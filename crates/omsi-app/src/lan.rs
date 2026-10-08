@@ -2483,12 +2483,19 @@ fn remote_bus_file(args: &Args, bus: &str) -> Result<PathBuf, String> {
     if !roots.iter().any(|r| path.starts_with(r)) {
         return Err("not inside a content folder".into());
     }
-    let md = std::fs::metadata(&path).map_err(|e| e.to_string())?;
-    if !md.is_file() {
-        return Err("not a file".into());
-    }
-    if md.len() > MAX_VEHICLE_FILE {
-        return Err(format!("{} bytes is too much for a vehicle file", md.len()));
+    // (a file in an archive or among the host's mods has no metadata of its own)
+    let len = match omsi_cfg::vfs::file_size(&path) {
+        Some(len) => len,
+        None => {
+            let md = std::fs::metadata(&path).map_err(|e| e.to_string())?;
+            if !md.is_file() {
+                return Err("not a file".into());
+            }
+            md.len()
+        }
+    };
+    if len > MAX_VEHICLE_FILE {
+        return Err(format!("{len} bytes is too much for a vehicle file"));
     }
     Ok(path)
 }

@@ -13,12 +13,18 @@
 //! * The folder inside the archive that holds OMSI's content folders (`Vehicles`, `maps`,
 //!   `Sceneryobjects` …) becomes the mount's root: archives usually wrap everything in an
 //!   `OMSI 2/` folder next to documentation.
+//!
+//! A *sealed store* (see [`sealed`]) is mounted the same way: files kept on disk only in
+//! encrypted form (the mods a LAN host sent), read decrypted into memory.
 
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::{self, Read};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, RwLock};
+
+mod sealed;
+pub use sealed::{is_sealed, mount_sealed, random_key, seal, sealed_len, unmount_sealed, unseal, SealKey, SealedFile, SEALED_OVERHEAD};
 
 /// One file inside an archive.
 #[derive(Debug, Clone)]
@@ -406,8 +412,11 @@ pub fn archive_of(path: &Path) -> Option<PathBuf> {
     locate(path).map(|(m, _)| m.path.clone())
 }
 
-/// Read a whole file, from a folder or from a mounted archive.
+/// Read a whole file, from a folder, a mounted archive or a sealed store.
 pub fn read(path: &Path) -> io::Result<Vec<u8>> {
+    if let Some((m, key)) = sealed::locate(path) {
+        return m.read(&key);
+    }
     match locate(path) {
         Some((m, key)) => m.read(&key),
         None => std::fs::read(path),
@@ -420,6 +429,9 @@ pub fn read_text(path: &Path) -> io::Result<String> {
 }
 
 pub fn exists(path: &Path) -> bool {
+    if let Some((m, key)) = sealed::locate(path) {
+        return m.is_file(&key) || m.is_dir(&key);
+    }
     match locate(path) {
         Some((m, key)) => key.is_empty() || m.is_file(&key) || m.is_dir(&key),
         None => path.exists(),
@@ -427,6 +439,9 @@ pub fn exists(path: &Path) -> bool {
 }
 
 pub fn is_file(path: &Path) -> bool {
+    if let Some((m, key)) = sealed::locate(path) {
+        return m.is_file(&key);
+    }
     match locate(path) {
         Some((m, key)) => m.is_file(&key),
         None => path.is_file(),
@@ -434,6 +449,9 @@ pub fn is_file(path: &Path) -> bool {
 }
 
 pub fn is_dir(path: &Path) -> bool {
+    if let Some((m, key)) = sealed::locate(path) {
+        return m.is_dir(&key);
+    }
     match locate(path) {
         Some((m, key)) => key.is_empty() || m.is_dir(&key),
         None => path.is_dir(),
@@ -442,6 +460,9 @@ pub fn is_dir(path: &Path) -> bool {
 
 /// Names in a folder with a flag for sub-folders; `None` when it is not a folder.
 pub fn list_dir(path: &Path) -> Option<Vec<(OsString, bool)>> {
+    if let Some((m, key)) = sealed::locate(path) {
+        return m.list(&key);
+    }
     match locate(path) {
         Some((m, key)) => m.dirs.get(&key).map(|l| l.iter().map(|(n, d)| (OsString::from(n), *d)).collect()),
         None => {
@@ -460,6 +481,18 @@ pub fn list_dir(path: &Path) -> Option<Vec<(OsString, bool)>> {
                     .collect(),
             )
         }
+    }
+}
+
+/// The size of a file (a folder's, an archive's or a sealed store's); `None` when it is no
+/// file.
+pub fn file_size(path: &Path) -> Option<u64> {
+    if let Some((m, key)) = sealed::locate(path) {
+        return m.size(&key);
+    }
+    match locate(path) {
+        Some((m, key)) => m.entries.get(&key).map(|e| e.size),
+        None => std::fs::metadata(path).ok().filter(|md| md.is_file()).map(|md| md.len()),
     }
 }
 

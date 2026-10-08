@@ -484,7 +484,7 @@ pub fn cfg_path(requested: &str, found: &Path) -> Option<PathBuf> {
         }
         for n in names {
             let c = d.join(&n);
-            if c.is_file() {
+            if omsi_cfg::vfs::is_file(&c) {
                 return Some(c);
             }
         }

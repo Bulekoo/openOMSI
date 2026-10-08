@@ -727,6 +727,18 @@ takes the host a while after it starts (Novi Sad, 27 000 files: 20 s on a fast c
 for it. Maps installed straight into the OMSI 2 folder are not passed on: both players need
 them.
 
+The host's mods are for playing the session, not for keeping: they travel encrypted (a key
+agreement of every connection's own, bound to the session, then ChaCha20-Poly1305), and the
+joining game never writes them to the disk in plain form. `~/.openomsi/lan-store` holds each
+file sealed with the store's key (a fresh nonce per file) and named by a keyed hash, and the
+game reads them decrypted into memory only; copying them out of the game's folders gives
+noise, and so does listening on the network. Both players need this version (an older game
+is told to update). Honestly, that is all it does: openOMSI is open source and the
+decryption runs on the player's own computer, so a changed build or a dump of the game's
+memory still gets the files, and the store's key lies on the same computer (sealed by
+Windows for the user's account, elsewhere a file only the user can read: obfuscation, not a
+lock). The host's own copy is the host's mod folder, unprotected as ever.
+
 **One world.** The host simulates the AI traffic, the timetable buses, the people on the
 pavements and at the stops, the riders of the timetable buses and the traffic lights for
 everybody, around every player (it loads the ground and fills the streets around the
