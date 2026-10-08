@@ -436,6 +436,23 @@ pub(crate) fn make_app(mut args: Args, server_cfg: Option<server::ServerCfg>) ->
         lan_mods::clean_up();
         return r.map(|_| None);
     }
+    let mut app = assemble_app(args, settings);
+    app.net.lan = lan;
+    app.net.remotes = lan_game;
+    // mouse steering as the player left it (the wheel eases to the cursor for a second)
+    if app.settings.mouse_steering {
+        app.input.mouse_drive = true;
+        app.input.mouse_steer = (0.0, 1.0);
+        app.input.center_cursor = true;
+    }
+    // (the LAN status file stays while the game runs; `exiting` removes it)
+    std::mem::forget(_lan_status);
+    Ok(Some(app))
+}
+
+/// The game's App for `args` and `settings`, every part of it as it starts (the window comes
+/// later).
+fn assemble_app(args: Args, settings: settings::Settings) -> App {
     let view = args.view.clone();
     let args_root_for_keys = args.root.clone();
     let clock_note = args.clock_moved.clone();
@@ -462,7 +479,7 @@ pub(crate) fn make_app(mut args: Args, server_cfg: Option<server::ServerCfg>) ->
     // (a server counts its players by their own games, not itself)
     let presence = if is_server { None } else { crate::presence::Presence::start() };
     let touch = touch::Touch::new();
-    let mut app = App {
+    App {
         args,
         gfx: GfxState {
             instance,
@@ -675,18 +692,7 @@ pub(crate) fn make_app(mut args: Args, server_cfg: Option<server::ServerCfg>) ->
         service_msg: clock_note.map(|m| (m, 10.0)),
         settings,
         exiting: false,
-    };
-    app.net.lan = lan;
-    app.net.remotes = lan_game;
-    // mouse steering as the player left it (the wheel eases to the cursor for a second)
-    if app.settings.mouse_steering {
-        app.input.mouse_drive = true;
-        app.input.mouse_steer = (0.0, 1.0);
-        app.input.center_cursor = true;
     }
-    // (the LAN status file stays while the game runs; `exiting` removes it)
-    std::mem::forget(_lan_status);
-    Ok(Some(app))
 }
 
 #[cfg(test)]
