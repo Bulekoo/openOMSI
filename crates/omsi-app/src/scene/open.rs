@@ -162,13 +162,12 @@ impl World {
     /// that season (`Some(None)`: summer's) - a plant of a season's phase that looks unlike
     /// the map's season (see `season_looks`). None for a look no texture of it has.
     pub(super) fn object_type_look(&self, rel: &str, scheme: Option<usize>, look: Option<&Option<String>>) -> Option<Arc<ObjectType>> {
-        let mut key = rel.to_ascii_lowercase().replace('\\', "/");
-        if let Some(i) = scheme {
-            key = format!("{key}#{i}");
-        }
-        if let Some(l) = look {
-            key = format!("{key}@{}", l.as_deref().unwrap_or("summer").to_ascii_lowercase());
-        }
+        let key = format!(
+            "{}{}{}",
+            rel.to_ascii_lowercase().replace('\\', "/"),
+            scheme.map(|i| format!("#{i}")).unwrap_or_default(),
+            look.map(|l| format!("@{}", l.as_deref().unwrap_or("summer").to_ascii_lowercase())).unwrap_or_default()
+        );
         if let Some(t) = self.object_types.lock().get(&key) {
             return t.clone();
         }
