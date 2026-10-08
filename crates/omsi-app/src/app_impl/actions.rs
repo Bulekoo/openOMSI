@@ -62,16 +62,16 @@ impl App {
     #[cfg(windows)]
     fn vr_action(&mut self, name: &str) -> bool {
         if name == "vr_toggle_mode" {
-            self.vr_zoom_active = false;
+            self.xr.vr_zoom_active = false;
             if !self.settings.vr_requested() { return false; }
-            if self.vr.is_some() {
-                self.vr = None;
+            if self.xr.vr.is_some() {
+                self.xr.vr = None;
                 self.service_msg = Some(("Desktop mode".into(), 2.0));
             } else if let Some(renderer) = self.renderer.as_ref() {
                 match crate::openxr::Vr::new(renderer, self.settings.vr_scale,
                                              self.settings.vr_desktop_mirror) {
                     Ok(vr) => {
-                        self.vr = Some(vr);
+                        self.xr.vr = Some(vr);
                         self.service_msg = Some(("VR mode".into(), 2.0));
                     }
                     Err(e) => {
@@ -86,15 +86,15 @@ impl App {
             }
             return true;
         }
-        if self.vr.is_none() { return false; }
+        if self.xr.vr.is_none() { return false; }
         match name {
             "vr_recenter" => {
-                self.vr.as_mut().unwrap().recenter();
+                self.xr.vr.as_mut().unwrap().recenter();
                 self.look = (0.0, 0.0);
                 self.service_msg = Some(("VR view recentered".into(), 2.0));
             }
             "vr_toggle_desktop_mirror" => {
-                let visible = self.vr.as_mut().unwrap().toggle_desktop_mirror();
+                let visible = self.xr.vr.as_mut().unwrap().toggle_desktop_mirror();
                 self.settings.vr_desktop_mirror = visible;
                 self.service_msg = Some((if visible { "Desktop VR mirror on" }
                                          else { "Desktop VR mirror off" }.into(), 2.0));
@@ -201,7 +201,7 @@ impl App {
                     self.view_zoom.remove(&self.view);
                 }
                 #[cfg(windows)]
-                if let Some(vr) = self.vr.as_mut() { vr.recenter(); }
+                if let Some(vr) = self.xr.vr.as_mut() { vr.recenter(); }
             }
             // (Space in Inputs/keyboard.cfg: every view looks ahead again, and back to the
             // standard camera - "center")

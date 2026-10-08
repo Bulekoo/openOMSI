@@ -39,7 +39,7 @@ impl App {
             self.last_ctl_steer = analog.steering;
         }
         #[cfg(windows)]
-        let vr_on = self.vr.is_some();
+        let vr_on = self.xr.vr.is_some();
         #[cfg(not(windows))]
         let vr_on = false;
         let needs_mouse = self.mouse_drive
@@ -50,7 +50,7 @@ impl App {
             || crate::plugin_ui::focused(&self.plugins)
             || !matches!(self.view.as_str(), "driver" | "outside" | "pax");
         let hide = (moved || actions.iter().any(|a| a.1)) && !needs_mouse && !vr_on;
-        if self.vr_nav_edit.is_none() && hide != self.cursor_hidden.is_some() && (hide || needs_mouse) {
+        if self.xr.vr_nav_edit.is_none() && hide != self.cursor_hidden.is_some() && (hide || needs_mouse) {
             if let Some(win) = self.window.as_ref() {
                 win.set_cursor_visible(!hide);
                 self.cursor_hidden = hide.then_some(self.cursor);

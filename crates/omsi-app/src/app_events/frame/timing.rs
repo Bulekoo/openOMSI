@@ -6,7 +6,7 @@ use super::*;
 impl App {
     /// The frame's time, or none when the session ends (the graphics device is gone).
     pub(super) fn frame_timing(&mut self, event_loop: &ActiveEventLoop) -> Option<FrameTime> {
-        if self.vr_nav_edit.is_some() && (!self.vr_active() || self.view != "driver") {
+        if self.xr.vr_nav_edit.is_some() && (!self.vr_active() || self.view != "driver") {
             self.finish_vr_nav_edit();
         }
         if (!self.vr_active() || self.player.is_none())

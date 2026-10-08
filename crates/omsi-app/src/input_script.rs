@@ -24,7 +24,7 @@ pub(crate) fn is_game_action(name: &str) -> bool {
 impl App {
     /// A key of the window, or of an `OMSI_INPUT` script.
     pub(crate) fn on_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, pressed: bool, repeat: bool) {
-        if self.vr_nav_edit.is_some() {
+        if self.xr.vr_nav_edit.is_some() {
             self.vr_nav_edit_key(code, pressed, repeat);
             return;
         }
@@ -71,7 +71,7 @@ impl App {
                 return;
             }
             #[cfg(windows)]
-            if pressed && !repeat && (self.vr.is_some() || self.settings.vr_requested()) {
+            if pressed && !repeat && (self.xr.vr.is_some() || self.settings.vr_requested()) {
                 let modifier = omsi_content::input::chord(
                     self.keys.contains(&KeyCode::ShiftLeft) || self.keys.contains(&KeyCode::ShiftRight),
                     self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight),

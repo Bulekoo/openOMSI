@@ -45,7 +45,7 @@ impl App {
                 }
                 let tracked = self.headtrack.as_ref().and_then(|h| h.pose()).filter(|_| self.settings.head_tracking && matches!(self.view.as_str(), "driver" | "pax"));
                 #[cfg(windows)]
-                let vr_on = self.vr.is_some();
+                let vr_on = self.xr.vr.is_some();
                 #[cfg(not(windows))]
                 let vr_on = false;
                 // Camera smoothing uses frame time, not the head physics' clamped step.

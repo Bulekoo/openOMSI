@@ -243,10 +243,10 @@ impl App {
         #[cfg(not(windows))]
         let mirrored = false;
         #[cfg(windows)]
-        if let Some(vr) = self.vr.as_mut() {
+        if let Some(vr) = self.xr.vr.as_mut() {
             let menu_range = self.ui.as_ref().map(|u| u.menu_overlay_range.clone()).unwrap_or(0..0);
-            let cursor_overlay = self.ui.as_ref().and_then(|u| u.vr_cursor_overlay).filter(|_| self.vr_nav_edit.is_none());
-            let tooltip_overlay = self.ui.as_ref().and_then(|u| u.vr_tooltip_overlay).filter(|_| self.vr_nav_edit.is_none());
+            let cursor_overlay = self.ui.as_ref().and_then(|u| u.vr_cursor_overlay).filter(|_| self.xr.vr_nav_edit.is_none());
+            let tooltip_overlay = self.ui.as_ref().and_then(|u| u.vr_tooltip_overlay).filter(|_| self.xr.vr_nav_edit.is_none());
             match vr.render(
                 r,
                 scene,
@@ -265,12 +265,12 @@ impl App {
                 self.player.as_ref().map(|p| p.uid),
                 self.settings.vr_head_smoothing_ms,
                 !self.mouse_drive,
-                self.vr_zoom_active,
+                self.xr.vr_zoom_active,
             ) {
                 Ok(visible) => mirrored = visible,
                 Err(e) => {
                     log::error!("OpenXR rendering stopped: {e:#}");
-                    self.vr = None;
+                    self.xr.vr = None;
                 }
             }
         }
@@ -378,7 +378,7 @@ impl App {
         } else {
             let mirrors = self.player.as_ref().map(|p| p.vehicle.ty.def.cameras_reflexion.len()).unwrap_or(0);
             #[cfg(windows)]
-            let vr_active = self.vr.is_some();
+            let vr_active = self.xr.vr.is_some();
             #[cfg(not(windows))]
             let vr_active = false;
             let rate = {
@@ -492,7 +492,7 @@ impl App {
         // (OMSI_RENDER_OCCLUDED, which draws them anyway, keeps its pace)
         let max_fps = if shown_nothing { if max_fps == 0 { 30 } else { max_fps.min(30) } } else { max_fps };
         #[cfg(windows)]
-        let vr_active = self.vr.is_some();
+        let vr_active = self.xr.vr.is_some();
         #[cfg(not(windows))]
         let vr_active = false;
         if max_fps > 0 && !vr_active {

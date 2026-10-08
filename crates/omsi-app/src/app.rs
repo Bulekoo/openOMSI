@@ -13,8 +13,8 @@ pub(crate) struct App {
     pub(crate) window: Option<Arc<Window>>,
     pub(crate) surface: Option<SurfaceState<'static>>,
     pub(crate) renderer: Option<Renderer>,
-    #[cfg(windows)]
-    pub(crate) vr: Option<crate::openxr::Vr>,
+    /// The VR headset and what goes with it (see `VrState`).
+    pub(crate) xr: VrState,
     pub(crate) scene: Option<Scene>,
     pub(crate) camera: Option<Camera>,
     pub(crate) player: Option<Player>,
@@ -47,8 +47,6 @@ pub(crate) struct App {
     pub(crate) hud: Option<hud::Hud>,
     /// The route navigator (ETS2-style map in a corner).
     pub(crate) navigator: Option<navigator::Navigator>,
-    pub(crate) vr_nav_profiles: crate::vr_navigator::Profiles,
-    pub(crate) vr_nav_edit: Option<crate::vr_navigator::Editing>,
     /// The window spans the triple screen's three monitors: fullscreen would shrink it to one.
     pub(crate) spanned: bool,
     /// Chat, mouse-over names and name tags (Roboto).
@@ -88,11 +86,6 @@ pub(crate) struct App {
     pub(crate) hover_key: Option<(i32, i32, i32, i32)>,
     pub(crate) view: String,
     pub(crate) cursor: (f32, f32),
-    /// Last Windows mouse position used for the unbounded VR cockpit pointer.
-    #[cfg_attr(not(windows), allow(dead_code))]
-    pub(crate) vr_cursor_physical: Option<(f32, f32)>,
-    #[cfg_attr(not(windows), allow(dead_code))]
-    pub(crate) vr_cursor_warp_pending: Option<(f32, f32)>,
     pub(crate) window_focused: bool,
     /// The window lost the focus or was minimised or hidden: the keyboard and the mouse
     /// work nothing until it has the focus again (`App::input_lost` / `input_back`).
@@ -114,9 +107,6 @@ pub(crate) struct App {
     /// widens the view in the bus or takes the outside camera further away, by the value at
     /// the press over 500 pixels: (the cursor's height then, the zoom or distance then).
     pub(crate) both_drag: Option<(f32, f32)>,
-    /// Right mouse button toggles the headset picture zoom.
-    #[cfg_attr(not(windows), allow(dead_code))]
-    pub(crate) vr_zoom_active: bool,
     /// The cockpit switch the cursor is over, shown in the HUD.
     pub(crate) hover: Option<String>,
     /// The part under the cursor when it is not a switch, so the HUD can say so.
@@ -389,7 +379,7 @@ pub(crate) struct App {
 
 impl App {
     #[cfg(windows)]
-    pub(crate) fn vr_active(&self) -> bool { self.vr.is_some() }
+    pub(crate) fn vr_active(&self) -> bool { self.xr.vr.is_some() }
 
     #[cfg(not(windows))]
     pub(crate) fn vr_active(&self) -> bool { false }
@@ -516,7 +506,7 @@ impl App {
         #[cfg(windows)]
         if self.settings.vr_requested() {
             match crate::openxr::Vr::new(&renderer, self.settings.vr_scale, self.settings.vr_desktop_mirror) {
-                Ok(vr) => self.vr = Some(vr),
+                Ok(vr) => self.xr.vr = Some(vr),
                 Err(e) => log::error!("OpenXR could not start: {e:#}"),
             }
         }

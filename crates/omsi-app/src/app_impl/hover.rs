@@ -29,7 +29,7 @@ impl App {
 
     pub(crate) fn cockpit_cursor_ray(&self, cam: &Camera, size: (u32, u32)) -> (glam::DVec3, glam::Vec3, f32) {
         #[cfg(windows)]
-        if let Some(ray) = self.vr.as_ref().and_then(|vr| vr.cursor_ray(self.cursor.0, self.cursor.1, size)) {
+        if let Some(ray) = self.xr.vr.as_ref().and_then(|vr| vr.cursor_ray(self.cursor.0, self.cursor.1, size)) {
             return (ray.0, ray.1, ray.2 * 6.0);
         }
         if let Some(rig) = self.triple_rig(size) {
@@ -70,14 +70,14 @@ impl App {
     }
 
     pub(crate) fn update_hover(&mut self) {
-        if self.vr_nav_edit.is_some() || self.cursor_hidden.is_some() {
+        if self.xr.vr_nav_edit.is_some() || self.cursor_hidden.is_some() {
             self.hover = None;
             self.hover_part = None;
             self.hover_hand = false;
             return;
         }
         #[cfg(windows)]
-        if !self.mouse_drive && self.vr.as_ref().is_some_and(|vr| vr.needs_cursor_surface(
+        if !self.mouse_drive && self.xr.vr.as_ref().is_some_and(|vr| vr.needs_cursor_surface(
             self.cursor, self.game_menu.is_some() || self.chooser.is_some())) {
             let surface = self.player.as_ref()
                 .zip(self.camera.as_ref())
@@ -89,7 +89,7 @@ impl App {
                     (player.surface_hit(origin, direction),
                      (player.vehicle.position, player.vehicle.body_rotation()))
                 });
-            if let Some(vr) = self.vr.as_mut() {
+            if let Some(vr) = self.xr.vr.as_mut() {
                 vr.set_cursor_surface(surface.as_ref().and_then(|s| s.0),
                                       surface.map(|s| s.1));
             }

@@ -342,7 +342,7 @@ impl App {
             let map_open = self.navigator.as_ref().is_some_and(|n| n.map_open());
             let covered = self.game_menu.is_some()
                 || plugin_focus
-                || self.vr_nav_edit.is_some()
+                || self.xr.vr_nav_edit.is_some()
                 || self.chooser.is_some()
                 || ui.chat.hovered
                 || map_open
@@ -373,7 +373,7 @@ impl App {
                 height: h,
                 cursor: (self.cursor.0 - hud[0], self.cursor.1),
                 vr: {
-                    #[cfg(windows)] { self.vr.is_some() }
+                    #[cfg(windows)] { self.xr.vr.is_some() }
                     #[cfg(not(windows))] { false }
                 },
                 tooltip: tooltip.filter(|_| self.settings.tooltips && !self.dragging && !covered && self.game_menu.is_none()),

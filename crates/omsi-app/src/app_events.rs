@@ -103,8 +103,8 @@ impl ApplicationHandler for App {
                 }
                 #[cfg(windows)]
                 {
-                    self.vr_cursor_physical = None;
-                    self.vr_cursor_warp_pending = None;
+                    self.xr.vr_cursor_physical = None;
+                    self.xr.vr_cursor_warp_pending = None;
                 }
                 // No key-up reaches us for whatever was held when focus left (alt-tab, a
                 // click outside the window, an OS dialog popping up): without this, a held
@@ -194,7 +194,7 @@ impl ApplicationHandler for App {
                 button: winit::event::MouseButton::Right,
                 ..
             } => {
-                if let Some(edit) = self.vr_nav_edit.as_mut() {
+                if let Some(edit) = self.xr.vr_nav_edit.as_mut() {
                     edit.rotating = state == ElementState::Pressed;
                     return;
                 }
@@ -209,7 +209,7 @@ impl ApplicationHandler for App {
                             self.set_mouse_drive(false);
                             self.service_msg = Some(("Mouse steering off".into(), 3.0));
                         } else {
-                            self.vr_zoom_active = !self.vr_zoom_active;
+                            self.xr.vr_zoom_active = !self.xr.vr_zoom_active;
                         }
                     }
                 } else {
@@ -222,7 +222,7 @@ impl ApplicationHandler for App {
                 button: winit::event::MouseButton::Middle,
                 ..
             } => {
-                if self.vr_nav_edit.is_some() { return; }
+                if self.xr.vr_nav_edit.is_some() { return; }
                 if self.navigator.as_ref().map(|n| n.map_open()).unwrap_or(false) {
                     return;
                 }
@@ -238,7 +238,7 @@ impl ApplicationHandler for App {
                 self.wheel(amount);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                if self.vr_nav_edit.is_some() { return; }
+                if self.xr.vr_nav_edit.is_some() { return; }
                 // (both physical pixels)
                 if let Some((x, y)) = self.cursor_hidden {
                     if (position.x as f32 - x).abs() + (position.y as f32 - y).abs() > 8.0 {
@@ -254,7 +254,7 @@ impl ApplicationHandler for App {
                     self.finger_move(0, glam::Vec2::new(position.x as f32, position.y as f32));
                 }
                 #[cfg(windows)]
-                let vr_cockpit = self.vr.is_some() && self.game_menu.is_none()
+                let vr_cockpit = self.xr.vr.is_some() && self.game_menu.is_none()
                     && matches!(self.view.as_str(), "driver" | "pax");
                 #[cfg(not(windows))]
                 let vr_cockpit = false;
@@ -319,7 +319,7 @@ impl ApplicationHandler for App {
             }
         }
         if let DeviceEvent::MouseMotion { delta } = event {
-            if self.vr_nav_edit.is_some() {
+            if self.xr.vr_nav_edit.is_some() {
                 if self.window_focused { self.vr_nav_drag(delta.0 as f32, delta.1 as f32); }
                 return;
             }
@@ -407,7 +407,7 @@ impl App {
 
     /// The mouse wheel (or a pinch of two fingers): `amount` notches, up positive.
     pub(crate) fn wheel(&mut self, amount: f32) {
-        if self.vr_nav_edit.is_some() { self.vr_nav_scroll(amount); return; }
+        if self.xr.vr_nav_edit.is_some() { self.vr_nav_scroll(amount); return; }
         // over a mirror panel the wheel resizes it (Shift: wider or narrower)
         if let Some(size) = self.mirror_hud_size() {
             let shift =
@@ -495,7 +495,7 @@ impl App {
 
     /// The left mouse button (or a finger's tap) where the cursor is.
     pub(crate) fn left_button(&mut self, event_loop: &ActiveEventLoop, pressed: bool) {
-        if let Some(edit) = self.vr_nav_edit.as_mut() { edit.moving = pressed; return; }
+        if let Some(edit) = self.xr.vr_nav_edit.as_mut() { edit.moving = pressed; return; }
         // a mirror panel is dragged with the left button (a release always ends a drag)
         if let Some(size) = self
             .mirror_hud_size()

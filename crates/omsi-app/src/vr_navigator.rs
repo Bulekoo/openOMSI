@@ -217,7 +217,7 @@ pub(crate) struct Editing {
 
 impl crate::App {
     pub(crate) fn start_vr_nav_edit(&mut self) {
-        if !self.vr_active() || self.player.is_none() || self.vr_nav_edit.is_some() {
+        if !self.vr_active() || self.player.is_none() || self.xr.vr_nav_edit.is_some() {
             return;
         }
         self.on_left(false);
@@ -247,7 +247,7 @@ impl crate::App {
         self.menu_drag = None;
         self.menu_edit = None;
         self.view = "driver".into();
-        self.vr_nav_edit = Some(Editing {
+        self.xr.vr_nav_edit = Some(Editing {
             moving: false,
             rotating: false,
             paused_before: self.paused,
@@ -263,7 +263,7 @@ impl crate::App {
         self.hover_key = None;
         #[cfg(windows)]
         {
-            self.vr_zoom_active = false;
+            self.xr.vr_zoom_active = false;
             self.reset_vr_pointer();
         }
         if let Some(n) = self.navigator.as_mut() {
@@ -273,7 +273,7 @@ impl crate::App {
         }
         if let Some(p) = self.player.as_ref() {
             let key = bus_key(&p.vehicle.ty.def.path, &self.args.root);
-            self.vr_nav_profiles.buses.entry(key).or_default().enabled = true;
+            self.xr.vr_nav_profiles.buses.entry(key).or_default().enabled = true;
         }
         if let Some(window) = self.window.as_ref() {
             let _ = window.set_cursor_grab(winit::window::CursorGrabMode::Confined);
@@ -283,7 +283,7 @@ impl crate::App {
     }
 
     pub(crate) fn finish_vr_nav_edit(&mut self) {
-        let Some(edit) = self.vr_nav_edit.take() else {
+        let Some(edit) = self.xr.vr_nav_edit.take() else {
             return;
         };
         self.paused = edit.paused_before;
@@ -333,7 +333,7 @@ impl crate::App {
     }
 
     pub(crate) fn vr_nav_drag(&mut self, dx: f32, dy: f32) {
-        let Some(edit) = self.vr_nav_edit.as_ref() else {
+        let Some(edit) = self.xr.vr_nav_edit.as_ref() else {
             return;
         };
         if !edit.moving && !edit.rotating {
@@ -347,7 +347,7 @@ impl crate::App {
             &self.player.as_ref().unwrap().vehicle.ty.def.path,
             &self.args.root,
         );
-        let p = self.vr_nav_profiles.buses.entry(key).or_default();
+        let p = self.xr.vr_nav_profiles.buses.entry(key).or_default();
         if moving {
             let distance = (driver + Vec3::from(p.offset) - eye)
                 .length()
@@ -378,7 +378,7 @@ impl crate::App {
             &self.player.as_ref().unwrap().vehicle.ty.def.path,
             &self.args.root,
         );
-        let p = self.vr_nav_profiles.buses.entry(key).or_default();
+        let p = self.xr.vr_nav_profiles.buses.entry(key).or_default();
         use winit::keyboard::KeyCode;
         let resize =
             self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight);
@@ -386,7 +386,7 @@ impl crate::App {
     }
 
     fn save_vr_nav_profiles(&mut self) {
-        if let Err(e) = self.vr_nav_profiles.save() {
+        if let Err(e) = self.xr.vr_nav_profiles.save() {
             log::warn!("VR navigator: saving placement: {e}");
             self.service_msg = Some((
                 format!("{}: {e}", omsi_ui::tr("Could not save navigator position")),
@@ -398,7 +398,7 @@ impl crate::App {
         self.player
             .as_ref()
             .map(|p| {
-                self.vr_nav_profiles
+                self.xr.vr_nav_profiles
                     .get(&bus_key(&p.vehicle.ty.def.path, &self.args.root))
             })
             .unwrap_or_default()
@@ -437,8 +437,8 @@ impl crate::App {
             return;
         };
         let key = bus_key(&player.vehicle.ty.def.path, &self.args.root);
-        update(self.vr_nav_profiles.buses.entry(key).or_default());
-        if self.vr_nav_edit.is_none() {
+        update(self.xr.vr_nav_profiles.buses.entry(key).or_default());
+        if self.xr.vr_nav_edit.is_none() {
             self.save_vr_nav_profiles();
         }
     }

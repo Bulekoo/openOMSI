@@ -128,29 +128,29 @@ impl App {
 
     #[cfg(windows)]
     pub(crate) fn reset_vr_pointer(&mut self) {
-        if let Some(vr) = self.vr.as_mut() {
+        if let Some(vr) = self.xr.vr.as_mut() {
             vr.recenter_pointer();
         }
-        self.vr_cursor_physical = None;
-        self.vr_cursor_warp_pending = None;
+        self.xr.vr_cursor_physical = None;
+        self.xr.vr_cursor_warp_pending = None;
     }
 
     #[cfg(windows)]
     pub(crate) fn on_vr_cursor_moved(&mut self, x: f32, y: f32) {
-        if let Some(target) = self.vr_cursor_warp_pending.take() {
+        if let Some(target) = self.xr.vr_cursor_warp_pending.take() {
             // CursorMoved from set_cursor_position is not hand movement.
-            self.vr_cursor_physical = Some((x, y));
+            self.xr.vr_cursor_physical = Some((x, y));
             if (x - target.0).abs() < 3.0 && (y - target.1).abs() < 3.0 {
                 return;
             }
             // A real move arrived first; use the next event as the new baseline.
             return;
         }
-        if let Some(previous) = self.vr_cursor_physical {
+        if let Some(previous) = self.xr.vr_cursor_physical {
             self.cursor.0 += x - previous.0;
             self.cursor.1 += y - previous.1;
         }
-        self.vr_cursor_physical = Some((x, y));
+        self.xr.vr_cursor_physical = Some((x, y));
         self.html_move();
         let Some((width, height)) = self.surface.as_ref().map(|s|
             (s.config.width as f32, s.config.height as f32)) else { return };
@@ -159,21 +159,21 @@ impl App {
             let center = (width * 0.5, height * 0.5);
             if self.window.as_ref().is_some_and(|window| window.set_cursor_position(
                 winit::dpi::PhysicalPosition::new(center.0 as f64, center.1 as f64)).is_ok()) {
-                self.vr_cursor_physical = Some(center);
-                self.vr_cursor_warp_pending = Some(center);
+                self.xr.vr_cursor_physical = Some(center);
+                self.xr.vr_cursor_warp_pending = Some(center);
             }
         }
     }
 
     #[cfg(windows)]
     pub(crate) fn poll_vr_cursor_position(&mut self) {
-        if self.vr_nav_edit.is_some() { return; }
-        let cockpit = self.vr.is_some() && self.game_menu.is_none()
+        if self.xr.vr_nav_edit.is_some() { return; }
+        let cockpit = self.xr.vr.is_some() && self.game_menu.is_none()
             && self.chooser.is_none() && !self.mouse_drive
             && matches!(self.view.as_str(), "driver" | "pax");
         if !cockpit {
-            self.vr_cursor_physical = None;
-            self.vr_cursor_warp_pending = None;
+            self.xr.vr_cursor_physical = None;
+            self.xr.vr_cursor_warp_pending = None;
             return;
         }
         if !self.window_focused || self.mouse_look { return; }
@@ -349,7 +349,7 @@ impl App {
     }
 
     pub(crate) fn on_left(&mut self, pressed: bool) {
-        if self.vr_nav_edit.is_some() { return; }
+        if self.xr.vr_nav_edit.is_some() { return; }
         // the object editor: the mouse picks and drags
         if self.game_menu.is_none() && self.editor_mouse(pressed) {
             return;
@@ -440,7 +440,7 @@ impl App {
             return;
         }
         #[cfg(windows)]
-        if self.vr.is_some() && self.mouse_drive && self.game_menu.is_none()
+        if self.xr.vr.is_some() && self.mouse_drive && self.game_menu.is_none()
             && matches!(self.view.as_str(), "driver" | "pax") {
             if !pressed {
                 if let Some(player) = self.player.as_mut() { player.release(); }
@@ -515,7 +515,7 @@ impl App {
         }
         // (driving with the VR pointer: the clicks are the bus's)
         #[cfg(windows)]
-        if self.vr.is_some() && self.mouse_drive && self.game_menu.is_none() && matches!(self.view.as_str(), "driver" | "pax") {
+        if self.xr.vr.is_some() && self.mouse_drive && self.game_menu.is_none() && matches!(self.view.as_str(), "driver" | "pax") {
             return false;
         }
         let Some((o, d, _)) = self.cursor_ray_now() else { return false };

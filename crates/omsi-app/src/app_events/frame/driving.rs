@@ -71,7 +71,7 @@ impl App {
             // thrown about by the bus on top of it made the whole cab sway and
             // shift before the eyes)
             #[cfg(windows)]
-            let vr_on = self.vr.is_some();
+            let vr_on = self.xr.vr.is_some();
             #[cfg(not(windows))]
             let vr_on = false;
             p.move_head(dt, self.settings.head_movement && !vr_on);
