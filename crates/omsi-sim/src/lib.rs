@@ -1,6 +1,7 @@
 //! Simulation runtime.
 
 pub mod ai_motion;
+pub mod ai_traffic;
 pub mod anim;
 pub mod clock;
 pub mod collision;

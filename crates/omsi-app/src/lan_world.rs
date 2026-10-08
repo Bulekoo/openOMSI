@@ -1469,12 +1469,9 @@ fn describe_car(args: &Args, c: &crate::traffic::AiCar) -> Desc {
     Desc::Car {
         id: c.id as u32,
         file: relative_file(&c.vehicle.ty.def.path, &args.root),
-        scheme: c
-            .render
-            .set
-            .as_ref()
-            .and_then(|k| k.1)
-            .map(|s| s.min(255) as u8),
+        // (the paint scheme it is drawn with: a host's cars are all its own, never a LAN
+        // mirror's, whose `scheme` is unset)
+        scheme: c.scheme.map(|s| s.min(255) as u8),
         line,
         destination,
     }

@@ -14,7 +14,7 @@ impl Traffic {
         car: usize,
         cars: &[(Arc<VehicleType>, bool)],
     ) {
-        let c = &mut self.cars[car];
+        let c = &mut self.sim.cars[car];
         for (t, rev) in cars {
             self.view.add_trailer(world, renderer, scene, c.id, t);
             c.vehicle.attach_trailer_ex(t.clone(), *rev);
@@ -24,13 +24,13 @@ impl Traffic {
     /// The cars of car `ci`'s train, front to back, each with whether it is turned round
     /// (the first, the one that drives, is not).
     pub(crate) fn consist(&self, ci: usize) -> Vec<(Arc<VehicleType>, bool)> {
-        let v = &self.cars[ci].vehicle;
+        let v = &self.sim.cars[ci].vehicle;
         std::iter::once((v.ty.clone(), false)).chain(v.trailers.iter().map(|t| (t.ty.clone(), t.reversed))).collect()
     }
 
     /// Couple `cars` behind car `ci` instead of the ones it has (a train made up anew).
     pub(crate) fn set_trailers(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, ci: usize, cars: &[(Arc<VehicleType>, bool)]) {
-        let c = &mut self.cars[ci];
+        let c = &mut self.sim.cars[ci];
         self.view.release_trailers(world, renderer, scene, c.id);
         c.vehicle.trailers.clear();
         self.attach_cars(world, renderer, scene, ci, cars);
@@ -48,18 +48,18 @@ impl Traffic {
         let Some((lead, lead_turned)) = cars.first().cloned() else { return };
         if lead_turned {
             // (a lead car turned round is drawn facing the way: none of the stock trains has one)
-            log::debug!("train {}: its last car leads turned round", self.cars[ci].id);
+            log::debug!("train {}: its last car leads turned round", self.sim.cars[ci].id);
         }
-        let (id, seed, scheme) = (self.cars[ci].id, self.cars[ci].seed, self.cars[ci].scheme);
+        let (id, seed, scheme) = (self.sim.cars[ci].id, self.sim.cars[ci].seed, self.sim.cars[ci].scheme);
         // (where its cars stood, front to back: they stand there still, the other way round)
-        let before: Vec<DVec3> = std::iter::once(self.cars[ci].vehicle.position).chain(self.cars[ci].vehicle.trailers.iter().map(|t| t.position)).collect();
-        let center = self.viewer.map(|v| v.pos).unwrap_or_default();
-        let kind = self.net.lanes[lane].kind;
+        let before: Vec<DVec3> = std::iter::once(self.sim.cars[ci].vehicle.position).chain(self.sim.cars[ci].vehicle.trailers.iter().map(|t| t.position)).collect();
+        let center = self.sim.viewer.map(|v| v.pos).unwrap_or_default();
+        let kind = self.sim.net.lanes[lane].kind;
         // (the new car takes the id: the old one's renders are let go once it is replaced)
         let old_render = self.view.take(id);
         self.create_car(world, renderer, scene, center, kind, lane, s, lead, seed, Some(scheme), Some(id), Some(0.0), None);
-        let Some(mut new) = self.cars.pop() else { return };
-        let old = &mut self.cars[ci];
+        let Some(mut new) = self.sim.cars.pop() else { return };
+        let old = &mut self.sim.cars[ci];
         // its service goes with it (its line and destination are set for the trip it takes
         // on); the way it drives, from where it stands
         new.vehicle.host.hof = old.vehicle.host.hof.clone();
@@ -72,16 +72,16 @@ impl Traffic {
         new.state.min_gap = old.state.min_gap;
         new.state.speed = 0.0;
         new.consist_reversed = reversed;
-        let old = std::mem::replace(&mut self.cars[ci], new);
-        self.orphan_sounds.extend(old.sounds);
+        let old = std::mem::replace(&mut self.sim.cars[ci], new);
+        self.drop_sounds(old.id);
         if let Some(r) = old_render {
             release_car_render(world, renderer, scene, r);
         }
         self.set_trailers(world, renderer, scene, ci, &cars[1..]);
         self.seed_rail_trail(ci, behind);
-        let c = &mut self.cars[ci];
+        let c = &mut self.sim.cars[ci];
         let trail = &c.rail_trail;
-        let (state, net) = (&c.state, &self.net);
+        let (state, net) = (&c.state, &self.sim.net);
         c.vehicle.retrail(0.0, &|d| Some(rail_behind(trail, state, net, d)));
         let after: Vec<DVec3> = std::iter::once(c.vehicle.position).chain(c.vehicle.trailers.iter().map(|t| t.position)).collect();
         let moved = before.iter().rev().zip(&after).map(|(a, b)| (*a - *b).truncate().length()).fold(0.0f64, f64::max);
@@ -95,8 +95,8 @@ impl Traffic {
     /// The track behind rail car `ci` as it has just been put on its lane: back along its
     /// lane and then `behind` (the lanes before it, nearest last), for its coupled cars.
     pub(super) fn seed_rail_trail(&mut self, ci: usize, behind: &[usize]) {
-        let c = &mut self.cars[ci];
-        let net = &self.net;
+        let c = &mut self.sim.cars[ci];
+        let net = &self.sim.net;
         let odo = c.state.odometer as f64;
         let mut pts: Vec<(f64, DVec3)> = Vec::new();
         let (mut lane, mut s) = (c.state.lane, c.state.s);
@@ -141,9 +141,9 @@ impl Traffic {
             let Some((path, r)) = crate::spawn::next_coupled(&lead.def, lead_rev, toward_back) else {
                 break;
             };
-            let root = self.root.clone();
+            let root = self.sim.root.clone();
             let t =
-                self.trailer_types.entry(path.clone()).or_insert_with(
+                self.sim.trailer_types.entry(path.clone()).or_insert_with(
                     || match VehicleType::load_ai(&root, &path) {
                         Ok(t) => Some(Arc::new(t)),
                         Err(e) => {

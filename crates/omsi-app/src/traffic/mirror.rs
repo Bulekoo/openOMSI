@@ -6,29 +6,25 @@ use crate::scene::World;
 use omsi_render::{Renderer, Scene};
 
 impl Traffic {
-    pub fn is_mirror(&self) -> bool {
-        self.mirror
-    }
-
     /// Draw the host's traffic from now on (`on`), or simulate our own again: either way
     /// every car there is now goes (ours make room for the host's, the host's copies
     /// cannot drive on by themselves).
     pub fn set_mirror(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, on: bool) {
-        if self.mirror == on {
+        if self.sim.mirror == on {
             return;
         }
-        self.mirror = on;
+        self.sim.mirror = on;
         if !on {
-            let day_time = self.day_time;
-            for ctl in &mut self.lights {
+            let day_time = self.sim.day_time;
+            for ctl in &mut self.sim.lights {
                 reset_light_runtime(ctl, day_time);
             }
         }
-        let ids: Vec<u64> = self.cars.iter().map(|c| c.id).collect();
+        let ids: Vec<u64> = self.sim.cars.iter().map(|c| c.id).collect();
         for id in ids {
             self.remove_car(world, renderer, scene, id);
         }
-        self.initial = !on;
+        self.sim.initial = !on;
         log::info!(
             "traffic: {}",
             if on {
@@ -37,19 +33,6 @@ impl Traffic {
                 "simulating our own traffic again"
             }
         );
-    }
-
-    /// A client's frame: interpolate the host's light clocks, without re-evaluating its
-    /// stop and jump points from the client's incomplete traffic requests.
-    pub(super) fn mirror_tick(&mut self, dt: f32) {
-        self.time += dt;
-        self.day_time += dt as f64 * self.time_scale;
-        self.last_dt = dt;
-        let day_time = self.day_time;
-        for c in self.lights.iter_mut() {
-            mirror_light_tick(c, dt, day_time);
-        }
-        self.log_lights();
     }
 
     /// A car of the host's traffic, standing at `pos` (client). Its id is the host's.
@@ -90,10 +73,9 @@ impl Traffic {
         state.rear = rear;
         state.length = front + rear;
         let body = AiBody::new(&ty.def, MotionKind::Road);
-        self.cars.push(AiCar {
+        self.sim.cars.push(AiCar {
             id,
             state,
-            render: DrawnAs { set: Some((ty.def.path.clone(), scheme)) },
             vehicle,
             body,
             stopped: 0.0,
@@ -102,7 +84,6 @@ impl Traffic {
             crawl: 0.0,
             progress: (0.0, 0.0),
             bus: scheduled.then(|| Box::new(BusService::new(Vec::new()))),
-            sounds: None,
             half_width,
             yielding: false,
             light_hold: false,
@@ -132,16 +113,16 @@ impl Traffic {
             park: None,
         });
         self.view.insert(id, render);
-        self.cars.len() - 1
+        self.sim.cars.len() - 1
     }
 
     /// A vehicle type the traffic has loaded already (the random traffic's types and the
     /// coupled parts), by file.
     pub fn loaded_type(&self, path: &Path) -> Option<Arc<VehicleType>> {
-        self.types
+        self.sim.types
             .iter()
             .map(|t| &t.0)
-            .chain(self.trailer_types.values().flatten())
+            .chain(self.sim.trailer_types.values().flatten())
             .find(|t| t.def.path == path)
             .cloned()
     }

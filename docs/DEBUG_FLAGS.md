@@ -23,12 +23,12 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_DEBUG_ANIM` | text | - | once | sim | Log the animations of the meshes whose file name contains this text. |
 | `OMSI_DEBUG_BOARDS` | bool | off | use | app | Log boarding at bus stops. |
 | `OMSI_DEBUG_CAMERA` | num | 1 | once | app | Camera arm log: 1 the types and what stops the arm, 2 also every frame. |
-| `OMSI_DEBUG_CAR` | num | - | use | app | Log the state of the AI car with this id every step. |
+| `OMSI_DEBUG_CAR` | num | - | use | sim | Log the state of the AI car with this id every step. |
 | `OMSI_DEBUG_CAREER` | bool | off | use | app | Log the jolts the career scoring counts. |
 | `OMSI_DEBUG_COLLISION` | bool | off | use | app | Log the player's collision state. |
 | `OMSI_DEBUG_CONES` | bool | off | use | app, render | Log the light coronas and beams prepared per frame. |
 | `OMSI_DEBUG_CULL` | num | off | frame | render | Log what near and in the picture is left out of the draw list, and why. |
-| `OMSI_DEBUG_DOORS` | bool | off | use | app | Log the door variables of AI buses twice a second. |
+| `OMSI_DEBUG_DOORS` | bool | off | use | sim | Log the door variables of AI buses twice a second. |
 | `OMSI_DEBUG_DRAWS` | bool | off | frame | render | Log how many instances changed per prepare. |
 | `OMSI_DEBUG_DRIVER` | bool | off | use | app | Log the driver figure's settling (grips, wrists, elbows). |
 | `OMSI_DEBUG_ENHANCED` | num | 0 | once | render | Enhanced main pass shows one of its terms alone (n selects it: 1 sun shadow, 2 occlusion, ...). |
@@ -40,12 +40,12 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_DEBUG_HUMANS` | bool | off | use | app | Log the people (passengers, pedestrians) and their placement. |
 | `OMSI_DEBUG_IBIS` | bool | off | use | sim | Log the IBIS typist's reasoning. |
 | `OMSI_DEBUG_INTERIOR` | bool | off | use | app | Log the interior lamps of each vehicle type. |
-| `OMSI_DEBUG_JUNCTION` | bool | off | use | app | Log why AI cars wait at a junction. |
+| `OMSI_DEBUG_JUNCTION` | bool | off | use | sim | Log why AI cars wait at a junction. |
 | `OMSI_DEBUG_LAMPS` | bool | off | use | app | Log traffic lights without a crossing, and the moving lamps (barriers). |
 | `OMSI_DEBUG_LAN` | bool | off | use | app | LAN: every few seconds what we know of every player, counts and bytes a second. |
 | `OMSI_DEBUG_LANES` | text | - | use | app | Log the lanes with these ids (comma-separated). |
 | `OMSI_DEBUG_LIGHT` | bool | off | use | app | Add a test point light above the camera. |
-| `OMSI_DEBUG_LIGHTS` | text | - | use | app | all, near or controller names: log every light change of those traffic light programs. |
+| `OMSI_DEBUG_LIGHTS` | text | - | use | sim | all, near or controller names: log every light change of those traffic light programs. |
 | `OMSI_DEBUG_LIGHT_GRID` | bool | off | use | render | Log lights left out of a full light-grid cell. |
 | `OMSI_DEBUG_MESHES` | text | off | use | app | Log per material slot which part of its texture a mesh shows (display texts). |
 | `OMSI_DEBUG_MIRRORS` | bool | off | use | app | Log each mirror's eye, angles and field of view. |
@@ -55,10 +55,10 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_DEBUG_OBJECTS` | bool | off | use | app | Log objects placed outside their tile. |
 | `OMSI_DEBUG_OBJMAT` | text | - | use | app | Log how the material slots of the objects whose file name contains this text are made. |
 | `OMSI_DEBUG_PARTICLES` | bool | off | use | app | Log the smoke particles. |
-| `OMSI_DEBUG_PASS` | bool | off | use | app | Log twice a second why a car standing behind something does not go round it. |
-| `OMSI_DEBUG_PAX` | bool | off | use | app | Log every change of state of the passengers. |
+| `OMSI_DEBUG_PASS` | bool | off | use | sim | Log twice a second why a car standing behind something does not go round it. |
+| `OMSI_DEBUG_PAX` | bool | off | use | app, sim | Log every change of state of the passengers. |
 | `OMSI_DEBUG_PHYSICS` | num | off | use | app, sim | Log the player's pose, speed, wheel contacts and crashes (offscreen: =secs, the interval). |
-| `OMSI_DEBUG_POPULATION` | bool | off | use | app | Log where cars appear and vanish relative to the view. |
+| `OMSI_DEBUG_POPULATION` | bool | off | use | sim | Log where cars appear and vanish relative to the view. |
 | `OMSI_DEBUG_PROPS` | bool | off | use | app | Log the destination-display (matrix) variables. |
 | `OMSI_DEBUG_PUDDLES` | num | 0 | use | render | Puddle debug view (a number selects it). |
 | `OMSI_DEBUG_RAIN` | bool | off | use | app | Log the tyres' spray and puddles. |
@@ -76,15 +76,15 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_DEBUG_SOUND` | num | 5 | once | app | Log which sounds were heard (number: the interval in seconds). |
 | `OMSI_DEBUG_SPLINES` | bool | off | use | app | Log the splines and lanes built per tile. |
 | `OMSI_DEBUG_STARTUP` | bool | off | use | sim | Log the start-up steps of a vehicle's systems. |
-| `OMSI_DEBUG_STOPS` | bool | off | use | app | Log the bus stops a bus missed. |
-| `OMSI_DEBUG_STUCK` | bool | off | use | app | Log the report of stuck AI cars (also explains junction waits). |
+| `OMSI_DEBUG_STOPS` | bool | off | use | sim | Log the bus stops a bus missed. |
+| `OMSI_DEBUG_STUCK` | bool | off | use | app, sim | Log the report of stuck AI cars (also explains junction waits). |
 | `OMSI_DEBUG_SURFACES` | bool | off | use | app | Log the painted ground layers per tile. |
 | `OMSI_DEBUG_SWITCHES` | bool | off | use | app | Log railway switches thrown for a train. |
 | `OMSI_DEBUG_TEXT` | bool | off | once | sim | Log the scripts' string variable operations. |
 | `OMSI_DEBUG_TEXTURES` | bool | off | use | app | Log all textures by size and format. |
-| `OMSI_DEBUG_TRAFFIC` | bool | off | use | app | Log traffic light programs, cars standing for long and hard bends. |
+| `OMSI_DEBUG_TRAFFIC` | bool | off | use | app, sim | Log traffic light programs, cars standing for long and hard bends. |
 | `OMSI_DEBUG_TRAILER` | bool | off | use | sim | Log a trailer's rest, sag and lift on the ground. |
-| `OMSI_DEBUG_TRAILERS` | bool | off | use | app | Log coupled parts off the level of what pulls them. |
+| `OMSI_DEBUG_TRAILERS` | bool | off | use | sim | Log coupled parts off the level of what pulls them. |
 | `OMSI_DEBUG_TRIGGERS` | bool | off | use | app | Log the variables a mouse trigger changed. |
 | `OMSI_DEBUG_UNLINKED` | bool | off | use | sim | Log lane ends with an untaken lane start near them. |
 | `OMSI_DEBUG_UPLOAD` | bool | off | use | app | Log slow GPU uploads item by item. |
@@ -108,12 +108,12 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_GROUND_LANES` | bool | off | use | app | Along every street lane, every metre, how far the ground lies over or under the lane. |
 | `OMSI_LAN_TRACE` | text | - | use | app | LAN CSV file: where the host's people are drawn. |
 | `OMSI_LIST_ALIGNED` | bool | off | use | app | Log the splines aligned to the terrain. |
-| `OMSI_PROFILE` | bool | off | use | app, render | Time per stage of the frame, logged. |
+| `OMSI_PROFILE` | bool | off | use | app, render, sim | Time per stage of the frame, logged. |
 | `OMSI_PROFILE_GPU` | bool | off | use | app | Profile: wait for the GPU so its time shows as a stage of its own. |
 | `OMSI_SUSP_TRACE` | text | - | use | app | Offscreen CSV: body height and each wheel's travel and load every frame. |
 | `OMSI_SUSP_TRACE_WINDOW` | text | - | use | app | Window CSV: each wheel's travel every frame. |
-| `OMSI_TRACE_AI` | text | - | use | app | CSV: every AI car's pose, steering and speed every frame. |
-| `OMSI_TRACE_AI_BUSES` | bool | off | use | app | With OMSI_TRACE_AI: the timetable buses only. |
+| `OMSI_TRACE_AI` | text | - | use | sim | CSV: every AI car's pose, steering and speed every frame. |
+| `OMSI_TRACE_AI_BUSES` | bool | off | use | sim | With OMSI_TRACE_AI: the timetable buses only. |
 | `OMSI_TRACE_PAX` | text | - | use | app | File: trace the passengers. |
 | `OMSI_TRACE_REMOTE` | text | - | use | app | LAN CSV: where each other player's bus is drawn every frame. |
 | `OMSI_TRACE_STEER` | text | - | use | app | CSV: the mouse steering frame by frame. |
@@ -138,7 +138,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_CHECK_GROUND` | bool | off | use | app | Check: people on foot with a walkable surface above their heads, every two seconds. |
 | `OMSI_CHECK_OBJECTS` | bool | off | use | app | Map check: report placed objects that float or are out of place while loading tiles. |
 | `OMSI_CHECK_OBSTACLES` | bool | off | use | app | Map check: sweep a bus-sized box along every lane and list the obstacle boxes it hits. |
-| `OMSI_CHECK_OVERLAP` | bool | off | use | app | Check: every AI vehicle whose body has got into another's or into an obstacle. |
+| `OMSI_CHECK_OVERLAP` | bool | off | use | sim | Check: every AI vehicle whose body has got into another's or into an obstacle. |
 | `OMSI_CHECK_ROADS` | bool | off | use | app | Map check: lanes with no road surface drawn under them, and road points under the ground. |
 | `OMSI_CHECK_SPIKES` | bool | off | use | app | Map check: road faces standing taller than profile, gradient and cant allow. |
 | `OMSI_CHECK_SPLINES` | bool | off | use | app | Map check: chained splines whose ends do not meet in height. |

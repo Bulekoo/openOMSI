@@ -29,26 +29,26 @@ pub struct Passing {
 impl Passing {
     /// Odometer reading at which the car has moved back far enough to be out of the way of
     /// the oncoming traffic (`half_width` its own half width).
-    pub(super) fn clear_at(&self, half_width: f32) -> f32 {
+    pub fn clear_at(&self, half_width: f32) -> f32 {
         self.until
             + self.back
-                * omsi_sim::traffic::ramp_progress_for(self.side, half_width + ONCOMING_ROOM)
+                * crate::traffic::ramp_progress_for(self.side, half_width + ONCOMING_ROOM)
     }
 }
 
 /// Room an oncoming vehicle needs beside a car (m from the car's side to the middle of the
 /// oncoming lane): its half width and a margin.
-pub(super) const ONCOMING_ROOM: f32 = 1.15;
+pub const ONCOMING_ROOM: f32 = 1.15;
 
 /// What makes a new car a timetable bus (`Traffic::create_car`).
 pub struct BusSetup {
     /// The trip's lanes, as far as the loaded tiles have them.
     pub route: Vec<usize>,
-    pub stops: Vec<crate::bus_service::Stop>,
+    pub stops: Vec<super::bus_service::Stop>,
     /// Fleet number and registration (`number`, `ident` string variables).
     pub number: Option<(String, String)>,
     pub hof: Option<Arc<omsi_vehicle::Hof>>,
-    pub timetable: crate::bus_service::AiTimetable,
+    pub timetable: super::bus_service::AiTimetable,
 }
 
 pub struct AiCar {
@@ -60,8 +60,6 @@ pub struct AiCar {
     pub scheme: Option<usize>,
     pub state: AiState,
     pub vehicle: VehicleInstance,
-    /// What it is drawn as (see `DrawnAs`); the pictures themselves are `TrafficView`'s.
-    pub render: DrawnAs,
     /// The body following the way `state` lays out.
     pub body: AiBody,
     /// Seconds this car has been standing still without a stop of its own: a red light or
@@ -82,8 +80,6 @@ pub struct AiCar {
     /// A timetable bus: its trip's stops, the doors, the layover, the people aboard (see
     /// `bus_service`). Everything else about it is this car's.
     pub bus: Option<Box<BusService>>,
-    /// `[sound_ai]` set, created when the car comes near the listener.
-    pub sounds: Option<omsi_audio::SoundSet>,
     /// Half the vehicle's width (m).
     pub half_width: f32,
     /// Waiting at a junction for someone with the right of way this frame.
@@ -143,14 +139,6 @@ pub struct AiCar {
     /// A train turned round as a whole (its last car leads now): what a trip's
     /// `[trainreverse]` is compared with (Omsi.exe's vehicle +0x4e1).
     pub consist_reversed: bool,
-}
-
-/// What an AI car is drawn as, for whoever describes it to others (a LAN host's cars to
-/// its clients): the vehicle file and the paint scheme of the shared GPU set it is drawn
-/// with (`VehicleRender::set`).
-#[derive(Debug, Clone, Default)]
-pub struct DrawnAs {
-    pub set: Option<(std::path::PathBuf, Option<usize>)>,
 }
 
 /// A free parking space beside a lane that a car means to park in: the space of parked car
@@ -217,20 +205,20 @@ impl AiCar {
 /// the car it belongs to (a trailer or rear section counts as its own footprint), centre,
 /// forward and right unit vectors, half length, half width and speed along its heading.
 #[derive(Debug, Clone, Copy)]
-pub(super) struct Footprint {
-    pub(super) car: usize,
-    pub(super) center: DVec2,
-    pub(super) fwd: DVec2,
-    pub(super) right: DVec2,
-    pub(super) half_len: f64,
-    pub(super) half_w: f64,
-    pub(super) speed: f32,
+pub struct Footprint {
+    pub car: usize,
+    pub center: DVec2,
+    pub fwd: DVec2,
+    pub right: DVec2,
+    pub half_len: f64,
+    pub half_w: f64,
+    pub speed: f32,
     /// Height of the vehicle's origin (an aircraft overhead is not in a car's way).
-    pub(super) z: f64,
+    pub z: f64,
 }
 
 /// A car's own footprint, grown forward by `ahead` metres.
-pub(super) fn car_foot(c: &AiCar, ahead: f32) -> Footprint {
+pub fn car_foot(c: &AiCar, ahead: f32) -> Footprint {
     let st = &c.state;
     let h = c.vehicle.heading.to_radians();
     let (fwd, right) = (DVec2::new(h.sin(), h.cos()), DVec2::new(h.cos(), -h.sin()));
@@ -239,7 +227,7 @@ pub(super) fn car_foot(c: &AiCar, ahead: f32) -> Footprint {
 }
 
 impl Footprint {
-    pub(super) fn from_obb(car: usize, b: &omsi_sim::collision::Obb, speed: f32) -> Footprint {
+    pub fn from_obb(car: usize, b: &crate::collision::Obb, speed: f32) -> Footprint {
         let (sh, ch) = (b.heading.sin(), b.heading.cos());
         Footprint {
             car,
@@ -254,7 +242,7 @@ impl Footprint {
     }
 
     /// The footprint as a collision box (no height range).
-    pub(super) fn obb(&self) -> Obb {
+    pub fn obb(&self) -> Obb {
         Obb {
             center: self.center,
             half: DVec2::new(self.half_w, self.half_len),
@@ -269,7 +257,7 @@ impl Footprint {
     }
 
     /// Does this footprint overlap `o`, both grown by `margin` (separating axes)?
-    pub(super) fn overlaps(&self, o: &Footprint, margin: f64) -> bool {
+    pub fn overlaps(&self, o: &Footprint, margin: f64) -> bool {
         let d = o.center - self.center;
         for axis in [self.fwd, self.right, o.fwd, o.right] {
             let extent = |f: &Footprint| {
@@ -308,17 +296,17 @@ pub struct DormantCar {
 }
 
 /// `[boundingbox]` of a vehicle that gives none.
-pub(super) const DEFAULT_BOX: [f32; 6] = [2.5, 12.0, 3.0, 0.0, 0.0, 1.5];
+pub const DEFAULT_BOX: [f32; 6] = [2.5, 12.0, 3.0, 0.0, 0.0, 1.5];
 
 /// The bodies of a vehicle and of the parts coupled to it, where they stand.
-pub fn vehicle_bodies(v: &VehicleInstance) -> Vec<omsi_sim::collision::Obb> {
-    let mut out = vec![omsi_sim::collision::Obb::from_box(
+pub fn vehicle_bodies(v: &VehicleInstance) -> Vec<crate::collision::Obb> {
+    let mut out = vec![crate::collision::Obb::from_box(
         v.ty.def.bounding_box.unwrap_or(DEFAULT_BOX),
         v.position,
         v.body_heading(),
     )];
     for t in &v.trailers {
-        out.push(omsi_sim::collision::Obb::from_box(
+        out.push(crate::collision::Obb::from_box(
             t.ty.def.bounding_box.unwrap_or(DEFAULT_BOX),
             t.position,
             t.body_heading(),
@@ -332,7 +320,7 @@ pub fn vehicle_bodies(v: &VehicleInstance) -> Vec<omsi_sim::collision::Obb> {
 /// (an index into the depot file's stop list of the route), which nothing moved on an AI
 /// bus - its saloon display stood on the first stop for the whole trip. `remaining` is the
 /// number of stops still to come.
-pub(crate) fn ibis_to_next_stop(v: &mut VehicleInstance, remaining: usize) {
+pub fn ibis_to_next_stop(v: &mut VehicleInstance, remaining: usize) {
     let Some(ri) = v.var("IBIS_RouteIndex").filter(|r| *r >= 0.0) else { return };
     let Some(n) = v.host.hof.as_ref().and_then(|h| h.info_busstop_lists.get(ri as usize)).map(|l| l.len()) else { return };
     if n == 0 || v.var("IBIS_busstop").is_none() {
@@ -343,7 +331,7 @@ pub(crate) fn ibis_to_next_stop(v: &mut VehicleInstance, remaining: usize) {
 }
 
 /// How a vehicle on lanes of `kind` moves.
-pub(super) fn motion_kind(kind: LaneKind) -> MotionKind {
+pub fn motion_kind(kind: LaneKind) -> MotionKind {
     match kind {
         LaneKind::Air => MotionKind::Air,
         LaneKind::Rail => MotionKind::Rail,
@@ -352,11 +340,11 @@ pub(super) fn motion_kind(kind: LaneKind) -> MotionKind {
 }
 
 /// How much track an AI rail vehicle keeps behind it (m): a long train's length.
-pub(super) const RAIL_TRAIL: f64 = 400.0;
+pub const RAIL_TRAIL: f64 = 400.0;
 
 /// Note where an AI rail vehicle is: `odometer` (m) and the point of its way there. A jump
 /// (put somewhere else, turned round at a terminus) starts the trail afresh.
-pub(super) fn record_rail_trail(trail: &mut std::collections::VecDeque<(f64, DVec3)>, odometer: f64, here: DVec3) {
+pub fn record_rail_trail(trail: &mut std::collections::VecDeque<(f64, DVec3)>, odometer: f64, here: DVec3) {
     if let Some(&(u, p)) = trail.back() {
         if (here - p).truncate().length() > (odometer - u).abs() + 2.0 {
             trail.clear();
@@ -378,18 +366,30 @@ pub(super) fn record_rail_trail(trail: &mut std::collections::VecDeque<(f64, DVe
 /// came along. (Its way knows only the lane it came off; farther back it runs straight on,
 /// and a train's last cars stood beside the track after a pair of points.) Where the trail
 /// does not reach - the last half metre, a vehicle just put there - the way.
-pub(super) fn rail_behind(trail: &std::collections::VecDeque<(f64, DVec3)>, state: &AiState, net: &Network, d: f64) -> DVec3 {
+pub fn rail_behind(trail: &std::collections::VecDeque<(f64, DVec3)>, state: &AiState, net: &Network, d: f64) -> DVec3 {
     let u = state.odometer as f64 - d;
     let newest = trail.back().map_or(f64::MIN, |b| b.0);
     if u >= newest {
         return state.way_point(net, -d as f32);
     }
-    crate::rail_drive::point_at(trail, u).unwrap_or_else(|| state.way_point(net, -d as f32))
+    point_at(trail, u).unwrap_or_else(|| state.way_point(net, -d as f32))
+}
+
+/// The trail's point at travelled distance `u` (between its samples; None beyond its ends).
+/// (The same as the player's train's `rail_drive::point_at`.)
+pub fn point_at(trail: &std::collections::VecDeque<(f64, DVec3)>, u: f64) -> Option<DVec3> {
+    let i = trail.iter().position(|(v, _)| *v >= u)?;
+    if i == 0 {
+        return (trail[0].0 - u < 0.01).then_some(trail[0].1);
+    }
+    let (a, b) = (trail[i - 1], trail[i]);
+    let t = ((u - a.0) / (b.0 - a.0).max(1e-6)).clamp(0.0, 1.0);
+    Some(a.1 + (b.1 - a.1) * t)
 }
 
 /// A body for a vehicle that has just been put on the way `state` describes, with the
 /// vehicle posed on it.
-pub(super) fn place_body(
+pub fn place_body(
     net: &Network,
     state: &AiState,
     vehicle: &mut VehicleInstance,
@@ -412,7 +412,7 @@ pub(super) fn place_body(
 
 /// The vehicle's extent from its origin: (to the front bumper, to the rear bumper, half
 /// the width) from its `[boundingbox]`.
-pub(super) fn extents(ty: &VehicleType, length: f32) -> (f32, f32, f32) {
+pub fn extents(ty: &VehicleType, length: f32) -> (f32, f32, f32) {
     let (front, rear, width) = match ty.def.bounding_box {
         Some(bb) if bb[1] > 1.0 => (
             bb[1] * 0.5 + bb[4],
@@ -426,7 +426,7 @@ pub(super) fn extents(ty: &VehicleType, length: f32) -> (f32, f32, f32) {
             _ => (length * 0.5, length * 0.5, 0.9),
         },
     };
-    if omsi_sim::vehicle::body_reversed(&ty.def, false) {
+    if crate::vehicle::body_reversed(&ty.def, false) {
         (rear, front, width)
     } else {
         (front, rear, width)
@@ -434,7 +434,7 @@ pub(super) fn extents(ty: &VehicleType, length: f32) -> (f32, f32, f32) {
 }
 
 /// The driver of a random car: how fast, how close, how patient (see `AiState`).
-pub(super) fn personality(state: &mut AiState, seed: u64, heavy: bool) {
+pub fn personality(state: &mut AiState, seed: u64, heavy: bool) {
     let r = |k: u32| ((seed >> k) & 0xff) as f32 / 255.0;
     state.desire = if heavy {
         0.88 + 0.1 * r(3)
@@ -455,15 +455,15 @@ pub(super) fn personality(state: &mut AiState, seed: u64, heavy: bool) {
 
 /// Cruising speed of an AI aircraft where its flight path sets no limit (km/h): an
 /// airliner on its final approach.
-pub(super) const AIRCRAFT_KMH: f32 = 280.0;
+pub const AIRCRAFT_KMH: f32 = 280.0;
 
-impl Traffic {
+impl TrafficSim {
     /// Put `vehicle` (a random car of type `ty`, or a timetable bus with `bus`) on the road
     /// on `lane` at `s` metres into it and return its id (see `Traffic::create_car`, which
     /// makes the vehicle and its picture): its driver, its way, its body. `id` Some = that
     /// id, `speed` Some = at about that speed.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn place_car(
+    pub fn place_car(
         &mut self,
         mut vehicle: VehicleInstance,
         kind: LaneKind,
@@ -555,7 +555,7 @@ impl Traffic {
             }
         }
         let body = place_body(&self.net, &state, &mut vehicle, motion_kind(kind));
-        if omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_TRAFFIC.is_set() {
             let pos = vehicle.position;
             log::info!(
                 "spawn {} on lane {lane} s={s:.1} at ({:.1}, {:.1}, {:.1}) heading {:.0}",
@@ -582,7 +582,6 @@ impl Traffic {
         self.cars.push(AiCar {
             id,
             state,
-            render: DrawnAs { set: Some((ty.def.path.clone(), scheme)) },
             vehicle,
             body,
             stopped: 0.0,
@@ -591,7 +590,6 @@ impl Traffic {
             crawl: 0.0,
             progress: (0.0, 0.0),
             bus: bus.map(|b| Box::new(BusService::new(b.stops))),
-            sounds: None,
             half_width,
             yielding: false,
             light_hold: false,

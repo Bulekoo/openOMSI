@@ -41,7 +41,7 @@ mod parked_lane_tests {
 #[cfg(test)]
 mod mirror_light_tests {
     use super::{mirror_light_tick, reset_light_runtime, set_mirror_light_clock};
-    use omsi_sim::traffic::TrafficLightController;
+    use crate::traffic::TrafficLightController;
 
     fn program() -> TrafficLightController {
         TrafficLightController::from_program(
@@ -178,7 +178,7 @@ mod mirror_light_tests {
 
 #[cfg(test)]
 mod road_scale_tests {
-    use super::road_scale;
+    use crate::ai_traffic::density::road_scale;
 
     #[test]
     fn path_density_scales_the_street_target() {
@@ -192,7 +192,7 @@ mod road_scale_tests {
 #[cfg(test)]
 mod junction_arrival_tests {
     use super::{crossing_arrival, queued_exit_vehicle};
-    use omsi_sim::traffic::AiState;
+    use crate::traffic::AiState;
 
     #[test]
     fn stopped_queue_does_not_predict_a_restart() {
@@ -283,7 +283,7 @@ mod junction_arrival_tests {
 #[cfg(test)]
 mod group_density_tests {
     use super::player_reach_ahead;
-    use omsi_sim::traffic::pool_density as uvg_density;
+    use crate::traffic::pool_density as uvg_density;
     use glam::DVec2;
 
     /// Berlin-Spandau's `unsched_vehgroups.txt`: NormalCars 1, Trucks 0, Commercials 1,
@@ -344,9 +344,9 @@ mod group_density_tests {
 #[cfg(test)]
 mod way_user_tests {
     use super::*;
-    use omsi_sim::traffic::{Crossing, LaneBuilder};
+    use crate::traffic::{Crossing, LaneBuilder};
 
-    fn street(start: DVec3, heading: f64, length: f64, radius: f64) -> omsi_sim::traffic::Lane {
+    fn street(start: DVec3, heading: f64, length: f64, radius: f64) -> crate::traffic::Lane {
         LaneBuilder::arc(start, heading, length, radius, 0.0, LaneKind::Street, 3.0)
     }
 
@@ -456,9 +456,9 @@ mod way_user_tests {
 #[cfg(test)]
 mod signal_entry_tests {
     use super::*;
-    use omsi_sim::traffic::{LaneBuilder, LaneKey};
+    use crate::traffic::{LaneBuilder, LaneKey};
 
-    fn lane(id: Option<i64>, light: Option<(usize, usize)>) -> omsi_sim::traffic::Lane {
+    fn lane(id: Option<i64>, light: Option<(usize, usize)>) -> crate::traffic::Lane {
         let mut lane = LaneBuilder::arc(DVec3::ZERO, 0.0, 20.0, 0.0, 0.0, LaneKind::Street, 3.0);
         lane.source = 2;
         lane.key = id.map(|id| LaneKey {
@@ -507,7 +507,7 @@ mod signal_entry_tests {
 #[cfg(test)]
 mod lane_permission_tests {
     use super::*;
-    use omsi_sim::traffic::LaneBuilder;
+    use crate::traffic::LaneBuilder;
 
     #[test]
     fn lane_changes_follow_type_and_pool_permissions() {
@@ -542,14 +542,14 @@ mod lane_permission_tests {
 }
 
 /// The traffic simulation on its own: no world, no renderer, a network made up here and a
-/// vehicle type of two small files. `Traffic::assemble` and `Traffic::place_car` are the
+/// vehicle type of two small files. `TrafficSim::assemble` and `TrafficSim::place_car` are the
 /// parts of `Traffic::new` and `Traffic::create_car` that need neither.
 #[cfg(test)]
 mod headless_tests {
     use super::*;
-    use omsi_sim::traffic::LaneBuilder;
+    use crate::traffic::LaneBuilder;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use crate::traffic::setup::RandomTypes;
+    use crate::ai_traffic::setup::RandomTypes;
 
     /// A vehicle type with no model and no scripts, in a folder of its own.
     struct Fixture {
@@ -582,7 +582,7 @@ mod headless_tests {
     /// A straight street north: `lengths` metres of lanes one after the other, ending in a
     /// dead end.
     fn road(lengths: &[f64]) -> Network {
-        let mut lanes: Vec<omsi_sim::traffic::Lane> = Vec::new();
+        let mut lanes: Vec<crate::traffic::Lane> = Vec::new();
         let mut start = DVec3::ZERO;
         for &len in lengths {
             let l = LaneBuilder::arc(start, 0.0, len, 0.0, 0.0, LaneKind::Street, 3.0);
@@ -594,7 +594,7 @@ mod headless_tests {
         net
     }
 
-    fn traffic(f: &Fixture, net: Network) -> Traffic {
+    fn traffic(f: &Fixture, net: Network) -> TrafficSim {
         let random = RandomTypes {
             types: Vec::new(),
             groups: Vec::new(),
@@ -602,17 +602,17 @@ mod headless_tests {
             group_uvg: Vec::new(),
             uvg_defaults: Vec::new(),
         };
-        Traffic::assemble(&f.dir, net, random, Vec::new(), HashMap::new(), (Vec::new(), Vec::new()), Vec::new(), (1.0, 0), 0)
+        TrafficSim::assemble(&f.dir, net, random, Vec::new(), HashMap::new(), (Vec::new(), Vec::new()), Vec::new(), (1.0, 0), 0)
     }
 
     /// A random car of the fixture's type on `lane` at `s` (as `create_car` puts one, without
     /// its picture and the ground under it).
-    fn add_car(t: &mut Traffic, f: &Fixture, lane: usize, s: f32, seed: u64) -> u64 {
-        let vehicle = VehicleInstance::new(f.ty.clone(), omsi_sim::VehicleHost::new(omsi_sim::SimClock::default()));
+    fn add_car(t: &mut TrafficSim, f: &Fixture, lane: usize, s: f32, seed: u64) -> u64 {
+        let vehicle = VehicleInstance::new(f.ty.clone(), crate::VehicleHost::new(crate::SimClock::default()));
         t.place_car(vehicle, LaneKind::Street, lane, s, f.ty.clone(), seed, None, None, None, None)
     }
 
-    fn car(t: &Traffic, id: u64) -> &AiCar {
+    fn car(t: &TrafficSim, id: u64) -> &AiCar {
         t.cars.iter().find(|c| c.id == id).unwrap()
     }
 

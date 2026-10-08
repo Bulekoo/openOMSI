@@ -2,23 +2,23 @@
 
 use super::*;
 
-impl Traffic {
+impl TrafficSim {
     pub fn prime_pull_out_room(&mut self, ty: &VehicleType, bus: bool) {
         let (front, rear, half_width) = extents(ty, if bus { 12.0 } else { 4.5 });
         self.pull_out_room(ty, front, rear, half_width);
     }
 
     /// How far behind something standing a vehicle of `ty` stops so that it can pull out
-    /// round it later (`omsi_sim::ai_motion::pull_out_room` against a standing bus with the
+    /// round it later (`crate::ai_motion::pull_out_room` against a standing bus with the
     /// oncoming lane 3.3 m over; by vehicle file).
-    pub(super) fn pull_out_room(&mut self, ty: &VehicleType, front: f32, rear: f32, half_width: f32) -> f32 {
+    pub fn pull_out_room(&mut self, ty: &VehicleType, front: f32, rear: f32, half_width: f32) -> f32 {
         if let Some(&r) = self.pull_out_rooms.get(&ty.def.path) {
             return r;
         }
         // (a bus 2.5 m wide that stands up to 0.35 m further over than the car: bus and car
         // are rarely both in the middle of the lane)
-        let r = omsi_sim::ai_motion::pull_out_room(&ty.def, (front, rear, half_width), 1.6, 3.3);
-        if omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some() {
+        let r = crate::ai_motion::pull_out_room(&ty.def, (front, rear, half_width), 1.6, 3.3);
+        if omsi_cfg::flags::OMSI_DEBUG_TRAFFIC.is_set() {
             log::info!(
                 "pull-out room of {}: {r:.2} m (front {front:.2}, half width {half_width:.2})",
                 ty.def
@@ -32,7 +32,7 @@ impl Traffic {
         r
     }
 
-    pub(super) fn rand(&mut self) -> u64 {
+    pub fn rand(&mut self) -> u64 {
         let mut x = self.rng;
         x ^= x >> 12;
         x ^= x << 25;
@@ -41,14 +41,14 @@ impl Traffic {
         x.wrapping_mul(0x2545_F491_4F6C_DD1D)
     }
 
-    pub(super) fn rand_f(&mut self) -> f64 {
+    pub fn rand_f(&mut self) -> f64 {
         (self.rand() >> 11) as f64 / (1u64 << 53) as f64
     }
 
     /// How much traffic group `g` makes now: its `unsched_trafficdens.txt` factor times its
     /// curve for this day of the week (+1 Monday to Friday, +2 Saturday, +4 Sunday, 0 every
     /// day).
-    pub(super) fn group_density(&self, g: usize) -> f32 {
+    pub fn group_density(&self, g: usize) -> f32 {
         let Some(gr) = self.groups.get(g) else {
             return 0.0;
         };
@@ -73,11 +73,11 @@ impl Traffic {
 
     /// The street traffic density now, 1 = the map's normal level, times the options' share
     /// of random traffic.
-    pub(super) fn street_density(&self) -> f32 {
+    pub fn street_density(&self) -> f32 {
         self.street_density_map() * self.unsched_factor
     }
 
-    pub(super) fn street_density_map(&self) -> f32 {
+    pub fn street_density_map(&self) -> f32 {
         if !self.group_curves {
             return omsi_map::global::curve_at(
                 &self.density_curve,
@@ -101,7 +101,7 @@ impl Traffic {
 
     /// How much of group `g`'s traffic `lane` carries: the path's `[rule] trafficdensity`
     /// for the group, else the group's default (see `uvg_defaults`).
-    pub(super) fn lane_group_density(&self, lane: &omsi_sim::traffic::Lane, g: usize) -> f32 {
+    pub fn lane_group_density(&self, lane: &crate::traffic::Lane, g: usize) -> f32 {
         match self.group_uvg.get(g).copied().flatten() {
             Some(u) => lane.pool_density(&self.uvg_defaults, u),
             None => lane.density,
@@ -110,7 +110,7 @@ impl Traffic {
 
     /// A random vehicle type for a lane of `kind`: on a street `lane`, of the groups that
     /// lane carries, as much as it carries of each.
-    pub(super) fn pick_type(&mut self, kind: LaneKind, lane: Option<usize>) -> Option<Arc<VehicleType>> {
+    pub fn pick_type(&mut self, kind: LaneKind, lane: Option<usize>) -> Option<Arc<VehicleType>> {
         // a vehicle's share: its weight within its group times what the group makes now
         let group_weight: Vec<f32> = (0..self.groups.len())
             .map(|g| {
@@ -163,7 +163,7 @@ impl Traffic {
         self.types
             .iter()
             .filter(|t| t.2 == kind)
-            .last()
+            .next_back()
             .map(|t| t.0.clone())
     }
 }
@@ -171,7 +171,7 @@ impl Traffic {
 /// How many times the base street target the neighbourhood asks for, from the trafficdensity
 /// of each street lane starting near the player (0 for a no_cars lane): the count of lanes
 /// per about 250 (1 to 4) times their mean density (0 to 2).
-pub(super) fn road_scale(near_density: &[f32]) -> f32 {
+pub fn road_scale(near_density: &[f32]) -> f32 {
     let road = (near_density.len() as f32 / 250.0).clamp(1.0, 4.0);
     if near_density.is_empty() {
         return road;

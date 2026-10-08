@@ -3,52 +3,52 @@
 
 use super::*;
 
-pub(super) const AI_JOB_SECS: f32 = 50e-6;
+pub const AI_JOB_SECS: f32 = 50e-6;
 
 /// Seconds a timetable bus waits where the route it has ends for the rest of its route
 /// (tiles bring it as they load) before it gives the trip up (see `Traffic::tick`).
-pub(super) const ROUTE_WAIT_MAX: f32 = 40.0;
+pub const ROUTE_WAIT_MAX: f32 = 40.0;
 
 /// A car edging out round something standing keeps to `PULL_OUT_ACCEL` until its front is
 /// this far past the obstacle's rear (m).
-pub(super) const CREEP_PAST: f32 = 2.0;
+pub const CREEP_PAST: f32 = 2.0;
 /// How far ahead an emergency vehicle warns what holds it up (`TrafficPriorityWarningNeeded`,
 /// m).
-pub(super) const PRIORITY_WARN_GAP: f32 = 60.0;
+pub const PRIORITY_WARN_GAP: f32 = 60.0;
 
 /// Where every car is (see `Traffic::occupancy`): per lane, (car, distance along the lane,
 /// lateral place, out on that lane passing something).
-pub(super) type ByLane = HashMap<usize, Vec<(usize, f32, f32, bool)>>;
+pub type ByLane = HashMap<usize, Vec<(usize, f32, f32, bool)>>;
 
 /// What a car follows: the gap to it and who it is (a car's index, `usize::MAX` the player's bus or a
 /// LAN player's, None a parked car).
-pub(super) type LeadOf = Option<(Lead, Option<usize>)>;
+pub type LeadOf = Option<(Lead, Option<usize>)>;
 /// The cars coming to each junction lane: (car, distance from its origin to the lane start).
-pub(super) type Coming = HashMap<usize, Vec<(usize, f32)>>;
+pub type Coming = HashMap<usize, Vec<(usize, f32)>>;
 /// The cars that have claimed each junction lane.
-pub(super) type Claims = HashMap<usize, Vec<usize>>;
+pub type Claims = HashMap<usize, Vec<usize>>;
 /// `Traffic::right_of_way`: where the merge holds a car, its way ahead, where a light holds it,
 /// where it gives way.
 type RightOfWay = (Option<f32>, Vec<(usize, f32)>, Option<f32>, Option<f32>);
 
 /// What every car's plan in a tick reads of the tick's start: who is where, the player's
 /// vehicle and the LAN players'.
-pub(super) struct TickScene {
-    pub(super) dt: f32,
-    pub(super) debug: bool,
-    pub(super) player: Option<PlayerBox>,
+pub struct TickScene {
+    pub dt: f32,
+    pub debug: bool,
+    pub player: Option<PlayerBox>,
     /// Seconds the player's vehicle has stood.
-    pub(super) player_standing: f32,
-    pub(super) others: Vec<(u32, PlayerBox)>,
-    pub(super) feet: Vec<Footprint>,
-    pub(super) by_lane: ByLane,
+    pub player_standing: f32,
+    pub others: Vec<(u32, PlayerBox)>,
+    pub feet: Vec<Footprint>,
+    pub by_lane: ByLane,
     /// Cars coming to a junction lane: (car, distance from its origin to the lane start).
-    pub(super) coming: Coming,
+    pub coming: Coming,
     /// Pedestrians on the footpaths by lane (distance along it).
-    pub(super) walkers: HashMap<usize, Vec<f32>>,
+    pub walkers: HashMap<usize, Vec<f32>>,
 }
 
-impl Traffic {
+impl TrafficSim {
     /// Advance all cars.
     /// `player`: (centre, heading in degrees, half length, half width, speed) of the
     /// player's vehicle.
@@ -71,7 +71,7 @@ impl Traffic {
             .enumerate()
             .map(|(i, c)| (c.id, i))
             .collect();
-        let debug = omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some();
+        let debug = omsi_cfg::flags::OMSI_DEBUG_TRAFFIC.is_set();
         let (by_lane, coming, mut reservations) = self.occupancy();
         self.request_lights(player);
         let walkers = self.walker_requests();
@@ -101,9 +101,8 @@ impl Traffic {
         self.debug_tick(debug, player, &others, &frames);
         for i in remove.into_iter().rev() {
             let c = self.cars.swap_remove(i);
-            self.orphan_sounds.extend(c.sounds);
-            // the renders go back to the world at the next sync
-            self.view.retire(c.id);
+            // its sounds stop and the renders go back to the world at the next sync
+            self.retired.push(c.id);
         }
     }
 
@@ -875,7 +874,7 @@ impl Traffic {
                 let wanted = self.stop_wishes.as_ref().map(|(alighting, waiting)| {
                     alighting.contains(&car.id) || service.stops.front().is_some_and(|s| waiting.contains(&s.id))
                 });
-                let ctx = crate::bus_service::Ctx {
+                let ctx = super::bus_service::Ctx {
                     wanted,
                     net: &self.net,
                     way,
@@ -885,7 +884,7 @@ impl Traffic {
                     stopped: car.stopped,
                     passing: car.passing.is_some(),
                     kerb_swerve,
-                    debug: debug || omsi_cfg::env::var_os("OMSI_DEBUG_PAX").is_some(),
+                    debug: debug || omsi_cfg::flags::OMSI_DEBUG_PAX.is_set(),
                 };
                 if let Some(at) = service.step(&mut car.state, &mut car.vehicle, &ctx) {
                     stop_at = Some(stop_at.map(|x| x.min(at)).unwrap_or(at));
@@ -1144,7 +1143,7 @@ impl Traffic {
                 );
             }
         }
-        if omsi_cfg::env::var("OMSI_DEBUG_CAR").ok().and_then(|v| v.parse::<u64>().ok()) == Some(car.id) {
+        if omsi_cfg::flags::OMSI_DEBUG_CAR.parse::<u64>() == Some(car.id) {
             let up: Vec<usize> = car.state.upcoming().take(4).collect();
             log::info!("t={:.2} car {}: v {:.2} lane {} s {:.1}/{:.1} upcoming {:?} bend {:.2} desired {:.2} lead {:?} stop {:?} why {:?}", self.time, car.id, car.state.speed, car.state.lane, car.state.s, self.net.lanes[car.state.lane].length(), up, car.state.curve_speed(&self.net), car.state.desired_accel(&self.net, lead_now, stop_at), lead_now.map(|l| l.gap), stop_at.map(|x| x - car.state.front), car.why);
         }
@@ -1176,7 +1175,7 @@ impl Traffic {
             // waiting at a stop: dark until it is about to pull away
             car.state.blinker = 0;
         }
-        if omsi_cfg::env::var_os("OMSI_DEBUG_DOORS").is_some() && car.is_bus() && (self.time * 2.0).floor() != ((self.time - dt) * 2.0).floor() {
+        if omsi_cfg::flags::OMSI_DEBUG_DOORS.is_set() && car.is_bus() && (self.time * 2.0).floor() != ((self.time - dt) * 2.0).floor() {
             let v = &car.vehicle;
             let g = |n: &str| v.var(n).map(|x| format!("{x:.2}")).unwrap_or("-".into());
             let st = g("AI_Scheduled_AtStation");
@@ -1247,7 +1246,7 @@ impl Traffic {
                     _ => jobs.push(vec![w]),
                 }
             }
-            let profile = omsi_cfg::env::var_os("OMSI_PROFILE").is_some();
+            let profile = omsi_cfg::flags::OMSI_PROFILE.is_set();
             // (a few cars per job: every job handed out wakes a worker, and the waking cost
             // the main thread more than a car's work)
             jobs.into_par_iter().flatten_iter()
@@ -1295,7 +1294,7 @@ impl Traffic {
     /// The debug output of a tick (`OMSI_DEBUG_TRAILERS`, `OMSI_DEBUG_TRAFFIC`,
     /// `OMSI_TRACE_AI`, `OMSI_CHECK_OVERLAP`).
     fn debug_tick(&mut self, debug: bool, player: Option<PlayerBox>, others: &[(u32, PlayerBox)], frames: &[Option<AiFrame>]) {
-        if omsi_cfg::env::var_os("OMSI_DEBUG_TRAILERS").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_TRAILERS.is_set() {
             // coupled parts off the level of what pulls them (#140: trains' and articulated
             // buses' rear parts under bridges)
             for c in &self.cars {
@@ -1343,7 +1342,7 @@ impl Traffic {
                 let _ = writeln!(f, "{:.3},0,player,{:.3},{:.3},{:.3},{:.3},0,0,0,{:.3},-1,0,0,0,0,0,0,0,0,0,0,{hl:.2},{hl:.2},{hw:.2},0,,0,None", self.time, c.x, c.y, c.z, h, v);
             }
             // (`OMSI_TRACE_AI_BUSES=1`: the timetable buses only)
-            let buses_only = omsi_cfg::env::var_os("OMSI_TRACE_AI_BUSES").is_some();
+            let buses_only = omsi_cfg::flags::OMSI_TRACE_AI_BUSES.is_set();
             for (c, fr) in self.cars.iter().zip(frames) {
                 let Some(fr) = fr else { continue };
                 if buses_only && !c.is_bus() {
@@ -1357,7 +1356,7 @@ impl Traffic {
                 let _ = writeln!(f, "{:.3},{},{},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{},{:.2},{},{},{:.2},{:.2},{},{:.2},{},{},{},{:.2},{:.2},{:.2},{},{},{:.1},{:?},{:.3}", self.time, c.id, v.ty.def.path.file_stem().unwrap_or_default().to_string_lossy(), v.position.x, v.position.y, v.position.z, v.heading, v.pitch, v.bank, fr.steer_deg, c.state.speed, c.state.lane, c.state.s, fr.blinker, self.net.lanes[c.state.lane].turn, lane_heading, c.state.lateral, c.at_station() as i32, c.state.acc, c.yielding as i32, c.light_hold as i32, c.passing.is_some() as i32, c.state.front, c.state.rear, c.half_width, c.is_bus() as i32, c.why.0, c.why.1.min(999.0), c.bus.as_ref().map(|b| b.phase), self.net.lanes[c.state.lane].at(c.state.s).0.z);
             }
         }
-        if omsi_cfg::env::var_os("OMSI_CHECK_OVERLAP").is_some() {
+        if omsi_cfg::flags::OMSI_CHECK_OVERLAP.is_set() {
             self.check_overlaps(player, others);
         }
     }
@@ -1411,7 +1410,7 @@ impl Traffic {
 
     /// `OMSI_CHECK_OVERLAP`: every AI vehicle whose body has got into another's or into a
     /// player's bus (by more than 20 cm), once per pair and 10 s, with what each was doing.
-    pub(super) fn check_overlaps(&mut self, player: Option<PlayerBox>, others: &[(u32, PlayerBox)]) {
+    pub fn check_overlaps(&mut self, player: Option<PlayerBox>, others: &[(u32, PlayerBox)]) {
         static SEEN: std::sync::OnceLock<parking_lot::Mutex<HashMap<(u64, u64), f32>>> = std::sync::OnceLock::new();
         let seen = SEEN.get_or_init(|| parking_lot::Mutex::new(HashMap::new()));
         let feet = self.footprints();

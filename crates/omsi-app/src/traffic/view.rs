@@ -157,10 +157,10 @@ impl Traffic {
     /// The drivers of the timetable buses near the camera: made when a bus comes within
     /// `DRIVER_NEAR`, posed every sync, let go when it is twice that far or gone.
     pub(super) fn sync_drivers(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene) {
-        let Some(eye) = self.viewer.map(|v| v.pos) else { return };
-        let dt = self.last_dt.max(1.0 / 120.0);
+        let Some(eye) = self.sim.viewer.map(|v| v.pos) else { return };
+        let dt = self.sim.last_dt.max(1.0 / 120.0);
         let mut keep: Vec<u64> = Vec::new();
-        for c in &self.cars {
+        for c in &self.sim.cars {
             if !c.is_bus() || c.gone {
                 continue;
             }
@@ -207,21 +207,21 @@ impl Traffic {
     pub fn sync(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene) {
         // cars that have parked: the parked object stands in their place from now on
         let mut i = 0;
-        while i < self.cars.len() {
-            match self.cars[i].park {
+        while i < self.sim.cars.len() {
+            match self.sim.cars[i].park {
                 Some(p) if p.done => {
-                    let c = self.cars.swap_remove(i);
+                    let c = self.sim.cars.swap_remove(i);
                     if world.return_parked(renderer, scene, p.key) {
-                        if let Some(list) = self.parked.get_mut(&p.lane) {
+                        if let Some(list) = self.sim.parked.get_mut(&p.lane) {
                             list.push((p.s, p.lat));
                         } else {
-                            self.parked.insert(p.lane, vec![(p.s, p.lat)]);
+                            self.sim.parked.insert(p.lane, vec![(p.s, p.lat)]);
                         }
                     }
-                    if omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some() {
+                    if omsi_cfg::flags::OMSI_DEBUG_TRAFFIC.is_set() {
                         log::info!("car {} has parked (space {})", c.id, p.key);
                     }
-                    self.orphan_sounds.extend(c.sounds);
+                    self.drop_sounds(c.id);
                     self.view.retire(c.id);
                 }
                 _ => i += 1,
@@ -241,9 +241,9 @@ impl Traffic {
         // light into the `[visible] red|yellow|green 1` meshes and the coronas, and moves
         // what it animates (a barrier arm); it runs on the time since the last sync (an
         // offscreen run syncs only for its pictures)
-        let dt = std::mem::take(&mut self.lamp_dt);
-        let near = self.viewer.map(|v| v.pos);
-        let debug_lamps = omsi_cfg::env::var_os("OMSI_DEBUG_LAMPS").is_some();
+        let dt = std::mem::take(&mut self.sim.lamp_dt);
+        let near = self.sim.viewer.map(|v| v.pos);
+        let debug_lamps = omsi_cfg::flags::OMSI_DEBUG_LAMPS.is_set();
         for lamp in world.light_objects.lock().iter_mut() {
             if debug_lamps && lamp.animated {
                 log::info!("moving lamp at ({:.1}, {:.1}), {:.0} m from the viewer", lamp.pos.x, lamp.pos.y, near.map(|p| (lamp.pos - p).length()).unwrap_or(0.0));
@@ -256,7 +256,7 @@ impl Traffic {
             let (state, request) = match self
                 .controller_of_object
                 .get(&lamp.parent)
-                .and_then(|&c| self.lights.get(c))
+                .and_then(|&c| self.sim.lights.get(c))
             {
                 Some(ctl) if lamp.any_light && ctl.lights.len() > 1 => {
                     // the most open of the crossing's lights (see `LightObject::any_light`)
@@ -298,7 +298,7 @@ impl Traffic {
             };
             if let Some(script) = lamp.script.as_ref() {
                 let vars = omsi_sim::scenery::SceneryVars {
-                    nightlight: self.night as i32 as f32,
+                    nightlight: self.sim.night as i32 as f32,
                     in_use: 1.0,
                     traffic_light_phase: state as f32,
                     traffic_light_approach: request as i32 as f32,
@@ -317,7 +317,7 @@ impl Traffic {
                             r.to_axis_angle().1.to_degrees()
                         })
                         .fold(0.0f32, f32::max);
-                    log::info!("lamp at ({:.1}, {:.1}): light state {:?} (crossing {:?}, light {}{}), meshes turned up to {turn:.0} deg", lamp.pos.x, lamp.pos.y, vars.traffic_light_phase, self.controller_of_object.get(&lamp.parent), lamp.index, if lamp.any_light { ", any" } else { "" });
+                    log::info!("lamp at ({:.1}, {:.1}): light state {:?} (crossing {:?}, light {}{}), meshes turned up to {turn:.0} deg", lamp.pos.x, lamp.pos.y, vars.traffic_light_phase, self.sim.controller_of_object.get(&lamp.parent), lamp.index, if lamp.any_light { ", any" } else { "" });
                 }
                 if lamp.animated {
                     for (i, (inst, _)) in lamp.instances.iter().enumerate() {
@@ -421,18 +421,18 @@ impl Traffic {
         // their mean colour beyond 50 m, and every timetable bus coming up the street had
         // a blank sign until it was almost there.) What a far car's scripts redraw goes to
         // the GPU at most every half second, a slice of the cars per frame.
-        let tick = (self.time as f64 * 2.0) as u64;
+        let tick = (self.sim.time as f64 * 2.0) as u64;
         let mut budget = SCRIPT_UPLOAD_BUDGET;
         // `Envir_Brightness`, which Omsi.exe sets for every road vehicle as for the
         // player's: the stock buses fade their windows by it at night (left at the engine's
         // default of 1, an AI bus under the street lamps kept its daytime brown glass)
-        if let Some(d) = self.daylight {
-            for c in self.cars.iter_mut().filter(|c| c.vehicle.ai_visuals) {
+        if let Some(d) = self.sim.daylight {
+            for c in self.sim.cars.iter_mut().filter(|c| c.vehicle.ai_visuals) {
                 let b = d.envir_brightness(world.light_map_light_at(c.vehicle.position));
                 c.vehicle.set_var("Envir_Brightness", b);
             }
         }
-        for c in &mut self.cars {
+        for c in &mut self.sim.cars {
             let Some(r) = self.view.cars.get_mut(&c.id) else { continue };
             let (render, trailer_renders) = (&mut r.body, &mut r.trailers);
             // out of sight (`tick` decided): hidden once, then left alone until it comes
@@ -451,7 +451,7 @@ impl Traffic {
                 continue;
             }
             render.hidden = false;
-            if let Some(cam) = self.camera {
+            if let Some(cam) = self.sim.camera {
                 let far = (c.vehicle.position - cam).length() > crate::scene::DISPLAYS_FAR;
                 let due = render.display_tick != tick;
                 render.displays_far = far && !due;
@@ -479,6 +479,7 @@ impl Traffic {
                 || trailer_renders.iter().any(|r| !r.skinned.is_empty())
             {
                 let near = self
+                    .sim
                     .camera
                     .map(|cam| (c.vehicle.position - cam).length() < SKIN_DISTANCE)
                     .unwrap_or(true);

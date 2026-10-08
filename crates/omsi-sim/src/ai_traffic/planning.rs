@@ -6,7 +6,7 @@ use super::*;
 /// Seconds a car at `st` needs to drive `dist` metres out on the other half of the road:
 /// the first `creep` metres edging out, the rest speeding up to `v_cap` (a driver standing
 /// still first reacts).
-pub(super) fn pass_time(dist: f32, creep: f32, st: &AiState, v_cap: f32) -> f32 {
+pub fn pass_time(dist: f32, creep: f32, st: &AiState, v_cap: f32) -> f32 {
     let wait = if st.speed < 0.1 { st.reaction } else { 0.0 };
     let accel = st.accel * 0.85;
     if creep <= 0.0 || dist <= 0.0 {
@@ -20,13 +20,13 @@ pub(super) fn pass_time(dist: f32, creep: f32, st: &AiState, v_cap: f32) -> f32 
     wait + arrival_time(first, st.speed, a0, v_cap) + arrival_time(dist - first, v1, accel, v_cap)
 }
 
-impl Traffic {
+impl TrafficSim {
     /// Nearest vehicle ahead of position `s` on `lane` (following the lanes `plan` has
     /// chosen after it, else the first `next`, for up to `look` m): (distance from `s` to
     /// its rear, its speed along the lane, its index). A vehicle beside the lane's middle
     /// far enough to be passed (a bus in its bay) does not count; one coming the other way
     /// round an obstacle does, standing.
-    pub(super) fn obstacle_from(
+    pub fn obstacle_from(
         &self,
         i: usize,
         lane: usize,
@@ -99,7 +99,7 @@ impl Traffic {
 
     /// The vehicle car `i` follows: (gap from its front bumper, its speed, its index) along
     /// its lane chain (up to `look` m); during a lane change the target lane counts too.
-    pub(super) fn obstacle_ahead(
+    pub fn obstacle_ahead(
         &self,
         i: usize,
         look: f32,
@@ -216,7 +216,7 @@ impl Traffic {
     }
 
     /// Is the stretch `s - back .. s + ahead` of `lane` free of cars (other than `i`)?
-    pub(super) fn lane_clear(
+    pub fn lane_clear(
         &self,
         i: usize,
         lane: usize,
@@ -246,7 +246,7 @@ impl Traffic {
 
     /// May car `i` move over into `lane` at `s` now? Nothing may be beside it or just ahead,
     /// and every car coming up behind must be able to stop comfortably behind it.
-    pub(super) fn can_merge(
+    pub fn can_merge(
         &self,
         i: usize,
         lane: usize,
@@ -324,7 +324,7 @@ impl Traffic {
 
     /// A timetable vehicle whose route moves over to the next lane: signal, and move as soon
     /// as the lane is free; until then wait before the end of this one. Returns where to stop.
-    pub(super) fn plan_route_change(
+    pub fn plan_route_change(
         &mut self,
         i: usize,
         by_lane: &HashMap<usize, Vec<(usize, f32, f32, bool)>>,
@@ -346,7 +346,7 @@ impl Traffic {
 
     /// Is what car `i` has stopped behind going to stand there for a while (a parked car, a
     /// bus serving its stop, a broken-down or abandoned car, the player's bus waiting)?
-    pub(super) fn standing_obstacle(
+    pub fn standing_obstacle(
         &self,
         i: usize,
         lead: Option<(Lead, Option<usize>)>,
@@ -377,7 +377,7 @@ impl Traffic {
     /// it - a queue that will not move for a while, which the cars behind may pass as a
     /// whole. (Behind a bus on its layover the whole street
     /// used to wait, five buses and a dozen cars for a quarter of an hour.)
-    pub(super) fn standing_queue(&self, j: usize) -> (f32, bool) {
+    pub fn standing_queue(&self, j: usize) -> (f32, bool) {
         let mut k = j;
         let mut len = self.cars[j].state.front + self.cars[j].state.rear;
         let mut long = self.cars[j].standing_for(self.day_time) > 4.0;
@@ -406,7 +406,7 @@ impl Traffic {
     /// gave up, the player standing in the lane): a car held for a few seconds behind a
     /// standing obstacle within 25 m moves to a free neighbouring lane - left first, then
     /// right. With nowhere to go it waits, like everybody else in a jam.
-    pub(super) fn plan_bypass(
+    pub fn plan_bypass(
         &mut self,
         i: usize,
         gap: Option<f32>,
@@ -415,7 +415,7 @@ impl Traffic {
     ) {
         let st = &self.cars[i].state;
         let stuck = self.cars[i].stopped;
-        if stuck > 20.0 && standing && omsi_cfg::env::var_os("OMSI_DEBUG_STUCK").is_some() && (self.time * 0.2).fract() < 0.01 {
+        if stuck > 20.0 && standing && omsi_cfg::flags::OMSI_DEBUG_STUCK.is_set() && (self.time * 0.2).fract() < 0.01 {
             let lane = &self.net.lanes[st.lane];
             log::info!("t={:.1}: car {} behind an obstacle {:.1} m for {stuck:.0} s: change {:?} route {} cooldown {:.1} light {} yielding {} left {:?} right {:?} left clear {:?}", self.time, self.cars[i].id, gap.unwrap_or(-1.0), st.change.map(|c| (c.to, c.t, c.wait, c.bypass, c.length)), st.route.len(), st.change_cooldown, self.cars[i].light_hold, self.cars[i].yielding, lane.left, lane.right, lane.left.map(|l| { let s_side = st.s / lane.length().max(1.0) * self.net.lanes[l].length(); (self.open_to(i, l), self.lane_clear(i, l, s_side, 12.0, 30.0, by_lane), self.can_merge(i, l, s_side, by_lane)) }));
         }
@@ -466,7 +466,7 @@ impl Traffic {
                 let net = &self.net;
                 self.cars[i].state.start_bypass(net, side, dir);
                 self.cars[i].stopped = 0.0;
-                if omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some() {
+                if omsi_cfg::flags::OMSI_DEBUG_TRAFFIC.is_set() {
                     log::info!("t={:.1}: car {} pulls out round an obstacle {d:.0} m ahead after {stuck:.0} s: lane {} -> {}", self.time, self.cars[i].id, lane_idx, side);
                 }
                 return;
@@ -480,7 +480,7 @@ impl Traffic {
     /// `lead` is what it stands behind (`Some(usize::MAX)` the player's bus, `None` a
     /// parked car at `parked_box`).
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn plan_pass(
+    pub fn plan_pass(
         &mut self,
         i: usize,
         lead: Option<(Lead, Option<usize>)>,
@@ -516,7 +516,7 @@ impl Traffic {
         let gap = lead.gap;
         // (`OMSI_DEBUG_PASS`: why a car standing behind something does not go round it,
         // twice a second)
-        let debug_pass = omsi_cfg::env::var_os("OMSI_DEBUG_PASS").is_some()
+        let debug_pass = omsi_cfg::flags::OMSI_DEBUG_PASS.is_set()
             && (self.time * 2.0).floor() != ((self.time - self.last_dt) * 2.0).floor();
         let (id_dbg, t_dbg) = (car.id, self.time);
         let skip = |why: String| {
@@ -694,7 +694,7 @@ impl Traffic {
             skip(format!("car {who_opp} on the oncoming side is there in {t:.1} s, the pass needs {t_need:.1} s"));
             return;
         }
-        let debug = omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some();
+        let debug = omsi_cfg::flags::OMSI_DEBUG_TRAFFIC.is_set();
         let Some(ramp) = self.pull_out_ramp(i, who, real, rolling, side, player, parked_box, feet, debug) else {
             return;
         };
@@ -725,7 +725,7 @@ impl Traffic {
         if debug {
             log::info!("t={:.1}: car {id} passes a standing obstacle {real:.2} m ahead on the oncoming lane {opp} ({side:.1} m to the left, S-curve {ramp:.1} m, {t_need:.1} s out there)", self.time);
         }
-        if omsi_cfg::env::var_os("OMSI_DEBUG_PASS").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_PASS.is_set() {
             // what it saw coming on the oncoming side
             let lanes = self.net.upstream(opp, from, 150.0, 48);
             let seen: Vec<String> = lanes
@@ -874,7 +874,7 @@ impl Traffic {
     /// car waiting at a red light comes once its light changes, one giving way after its
     /// reaction time. Returns (its id, seconds until it is there).
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn oncoming_block(
+    pub fn oncoming_block(
         &self,
         i: usize,
         opp: usize,
@@ -978,7 +978,7 @@ impl Traffic {
     /// still can - back into its lane, stopping short of what it was going round - and
     /// otherwise finishes, with the oncoming traffic stopping short of where it moves back
     /// in (`Traffic::tick` puts it there on their lane).
-    pub(super) fn guard_pass(&mut self, i: usize, by_lane: &HashMap<usize, Vec<(usize, f32, f32, bool)>>) {
+    pub fn guard_pass(&mut self, i: usize, by_lane: &HashMap<usize, Vec<(usize, f32, f32, bool)>>) {
         let car = &self.cars[i];
         let Some(p) = car.passing else { return };
         if p.aborted {
@@ -1014,7 +1014,7 @@ impl Traffic {
         let shallow = st.lateral * self.net.oncoming_sign() < p.side - car.half_width - 1.45;
         let abortable = shallow && st.odometer + stop_d + 0.4 < p.block;
         let id = car.id;
-        let debug = omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some();
+        let debug = omsi_cfg::flags::OMSI_DEBUG_TRAFFIC.is_set();
         if !abortable {
             if debug && (self.time * 2.0).floor() != ((self.time - self.last_dt) * 2.0).floor() {
                 log::info!("t={:.1}: car {id} is out passing with car {who} coming in {t:.1} s, {r:.1} m to go ({t_me:.1} s): finishing", self.time);
@@ -1038,7 +1038,7 @@ impl Traffic {
     }
 
     /// Overtaking and keeping right: start a lane change when it is safe.
-    pub(super) fn plan_lane_change(
+    pub fn plan_lane_change(
         &mut self,
         i: usize,
         by_lane: &HashMap<usize, Vec<(usize, f32, f32, bool)>>,
@@ -1078,7 +1078,7 @@ impl Traffic {
                     let net = &self.net;
                     self.cars[i].state.turn_wish = turn;
                     self.cars[i].state.start_change(net, side, turn);
-                    if omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some() {
+                    if omsi_cfg::flags::OMSI_DEBUG_TRAFFIC.is_set() {
                         log::info!("t={:.1}: car {} takes the {} turn lane: {} -> {} ({:.0} m to the junction)", self.time, self.cars[i].id, if turn == 1 { "left" } else { "right" }, lane_idx, side, to_junction);
                     }
                     return;
@@ -1109,7 +1109,7 @@ impl Traffic {
                     if self.last_overtaker.is_none() {
                         self.last_overtaker = Some((self.cars[i].id, self.time));
                     }
-                    if omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some() {
+                    if omsi_cfg::flags::OMSI_DEBUG_TRAFFIC.is_set() {
                         log::info!("t={:.1}: car {} overtakes: obstacle {d:.0} m at {:.0} km/h, lane {} -> {} ({} {:?}) at ({:.1}, {:.1})", self.time, self.cars[i].id, v * 3.6, lane_idx, left, self.net.lanes[lane_idx].name, self.net.lanes[lane_idx].key, self.cars[i].vehicle.position.x, self.cars[i].vehicle.position.y);
                     }
                     return;
@@ -1126,7 +1126,7 @@ impl Traffic {
             {
                 let net = &self.net;
                 self.cars[i].state.start_change(net, right, keep_dir);
-                if omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some() {
+                if omsi_cfg::flags::OMSI_DEBUG_TRAFFIC.is_set() {
                     log::info!(
                         "t={:.1}: car {} keeps right: lane {} -> {} at ({:.1}, {:.1})",
                         self.time,
@@ -1146,14 +1146,14 @@ impl Traffic {
     /// (`[rule]` densities per group: a path open to bicycles only counted as open to
     /// everybody, and the trucks of Vlietlanden changed onto the cycle paths beside the
     /// road, #327) and to its `[ai_veh_type]` (`Lane::allows`).
-    pub(super) fn open_to(&self, i: usize, lane: usize) -> bool {
+    pub fn open_to(&self, i: usize, lane: usize) -> bool {
         let Some(l) = self.net.lanes.get(lane) else { return false };
         lane_open_to(l, &self.cars[i].state)
     }
 }
 
 /// The same vehicle/group gates used by route planning also apply to lane changes.
-pub(super) fn lane_open_to(lane: &omsi_sim::traffic::Lane, state: &AiState) -> bool {
+pub fn lane_open_to(lane: &crate::traffic::Lane, state: &AiState) -> bool {
     lane.allows(state.veh_type)
         && match state.traffic_pool.as_ref() {
             Some((pool, defaults)) => lane.pool_density(defaults, *pool) > 0.0,
