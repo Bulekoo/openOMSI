@@ -225,11 +225,10 @@ pub(crate) struct InputState {
     /// Mouse steering: the steering it gives (fraction of the full lock) and how long (s)
     /// it still eases in after being switched on (OMSI: a second, see app_events).
     pub(crate) mouse_steer: (f32, f32),
-    /// Mouse steering past the window's edge: the lock the mouse added while the cursor stood
-    /// pinned at the left or right edge (-1..1 of full lock). OMSI divides the width by the
-    /// speed, and at 30 km/h the edge of the screen was a third of the lock, with nowhere
-    /// further to move.
-    pub(crate) mouse_edge: f32,
+    /// Mouse steering's own point, past the window's edges too, and the cursor held while
+    /// the mouse steers. OMSI divides the width by the speed, and at 30 km/h the edge of the
+    /// screen was a third of the lock, with nowhere further to move (app_impl/mouse_grab.rs).
+    pub(crate) mouse_grab: crate::app_impl::MouseGrab,
     /// Where the cursor steered when the right button began to look round: it goes back
     /// there when the button is let go, so the wheel does not jump to where looking left it.
     pub(crate) steer_cursor: Option<(f32, f32)>,

@@ -342,8 +342,10 @@ impl ApplicationHandler for App {
                         self.look_by(delta.0 as f32 * k, delta.1 as f32 * k);
                     }
                 }
-            } else if self.input.mouse_drive && self.menus.game_menu.is_none() {
-                self.mouse_past_edge(delta.0 as f32);
+            } else if self.input.mouse_grab.mode == Some(crate::app_impl::GrabMode::Locked) {
+                // (the locked cursor's raw movement, in points on macOS: window pixels)
+                let s = self.window.as_ref().map(|w| w.scale_factor() as f32).unwrap_or(1.0);
+                self.steer_by(delta.0 as f32 * s, delta.1 as f32 * s);
             }
         }
     }
@@ -356,9 +358,6 @@ impl ApplicationHandler for App {
             return;
         }
         crate::game_lists::flush_settings(false);
-        if self.input.mouse_edge != 0.0 && !self.input.mouse_drive {
-            self.input.mouse_edge = 0.0;
-        }
         if let Some(w) = &self.window {
             w.request_redraw();
         }

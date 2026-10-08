@@ -767,13 +767,12 @@ impl App {
                 }
                 // `weather`: the next weather, as the admin menu's "Next weather"
                 "weather" => self.next_weather(),
-                // `rawmouse dx`: the mouse moved by dx device units (past the window's edge
-                // too, as mouse steering takes it)
+                // `rawmouse dx[,dy]`: the mouse moved by (dx, dy) logical pixels as a locked
+                // cursor's raw movement (past the window's edges too, as mouse steering
+                // takes it)
                 "rawmouse" => {
-                    let (dx, _) = xy();
-                    if self.input.mouse_drive && self.menus.game_menu.is_none() {
-                        self.mouse_past_edge(dx);
-                    }
+                    let (dx, dy) = xy();
+                    self.steer_by(dx * scale, dy * scale);
                 }
                 "drag" => {
                     let (dx, dy) = xy();
@@ -929,13 +928,17 @@ impl App {
                 // `log mouse`: the mouse steering's state
                 "log" if arg == "mouse" => {
                     log::info!(
-                        "input script: mouse steering {} look {} menu {:?} paused {} focused {} steer {:.3}",
+                        "input script: mouse steering {} look {} menu {:?} paused {} focused {} steer {:.3} at {:?} pedals {:.3},{:.3} held {:?}",
                         self.input.mouse_drive,
                         self.input.mouse_look,
                         self.menus.game_menu,
                         self.paused,
                         self.input.window_focused,
-                        self.input.mouse_steer.0
+                        self.input.mouse_steer.0,
+                        self.input.mouse_grab.at,
+                        self.input.mouse_pedals.0,
+                        self.input.mouse_pedals.1,
+                        self.input.mouse_grab.mode
                     );
                 }
                 "log" => {
@@ -1030,6 +1033,8 @@ impl App {
         self.input.mouse_look = false;
         self.input.steer_cursor = None;
         self.input.mouse_pedals.0 = 0.0;
+        // (the cursor held for the mouse steering goes back to the system)
+        self.sync_mouse_grab();
     }
 
     /// The window has the focus again: the mouse steering eases from where the wheel stands

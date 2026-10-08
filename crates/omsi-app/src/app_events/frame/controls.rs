@@ -133,12 +133,15 @@ impl App {
         // (the plugins' panels having the mouse hold the wheel and the pedals as
         // looking round does: the cursor goes to their buttons)
         let panels_mouse = self.plugin_focus();
-        if let (true, Some(s)) = (self.input.mouse_drive && bus_view && !self.input.mouse_look && !self.input.input_away && !panels_mouse
-                                      && self.menus.game_menu.is_none(), self.gfx.surface.as_ref()) {
+        // (the cursor held while the mouse steers, let go when it is wanted: mouse_grab.rs)
+        self.sync_mouse_grab();
+        if let (true, Some(s)) = (self.mouse_steering_now(), self.gfx.surface.as_ref()) {
             let (w, h) = (s.config.width as f32, s.config.height as f32);
             if std::mem::take(&mut self.input.center_cursor) {
                 self.input.cursor = (w * 0.5, h * 0.5);
-                if let Some(win) = self.window.as_ref() {
+                self.input.mouse_grab.at = Some(self.input.cursor);
+                // (a locked cursor stands in the middle already, and moving it unlocks it)
+                if let (Some(win), false) = (self.window.as_ref(), self.input.mouse_grab.mode == Some(crate::app_impl::GrabMode::Locked)) {
                     let _ = win.set_cursor_position(winit::dpi::PhysicalPosition::new((w * 0.5) as f64, (h * 0.5) as f64));
                 }
             }
@@ -149,13 +152,15 @@ impl App {
             let k_v = 1.0 - (-dt / 0.4).exp();
             self.input.mouse_kmh += (raw_kmh - self.input.mouse_kmh) * k_v;
             let kmh = self.input.mouse_kmh;
-            let base = (crate::player::mouse_steering(self.input.cursor.0, w, kmh) * self.settings.mouse_sens).clamp(-1.0, 1.0);
-            // (what the mouse added at the edge, up to the full lock)
-            self.input.mouse_edge = self.input.mouse_edge.clamp((-1.0 - base).min(0.0), (1.0 - base).max(0.0));
-            let target = (base + self.input.mouse_edge).clamp(-1.0, 1.0);
+            // (the mouse's own point, which goes on past the window's edges as far as the
+            // full lock at this speed: the cursor stopped at the edge of the screen, and at
+            // speed the lock lies further out than that)
+            self.input.mouse_grab.clamp((w, h), crate::app_impl::mouse_grab_reach(kmh, self.settings.mouse_sens));
+            let (cx, cy) = self.input.mouse_grab.at.unwrap_or(self.input.cursor);
+            let target = (crate::player::mouse_steering(cx, w, kmh) * self.settings.mouse_sens).clamp(-1.0, 1.0);
             // the pedals as Omsi.exe has them: from the middle of the window to its
             // top edge the throttle, to the bottom one the brake, straight on
-            let y = (2.0 * self.input.cursor.1 / h.max(1.0) - 1.0).clamp(-1.0, 1.0);
+            let y = (2.0 * cy / h.max(1.0) - 1.0).clamp(-1.0, 1.0);
             let (pedal_t, pedal_b) = ((-y).max(0.0), y.max(0.0));
             let (steer, fade) = &mut self.input.mouse_steer;
             // (after the first second the wheel follows the cursor within ~60 ms, or at
@@ -180,7 +185,7 @@ impl App {
                 }
                 let deg = self.player.as_ref().map(|p| p.vehicle.physics.steer_deg).unwrap_or(0.0);
                 if let Some(f) = g.as_mut() {
-                    let _ = writeln!(f, "{:.3},{:.4},{:.1},{:.2},{:.4},{:.4},{:.3}", self.clock.run_time, dt, self.input.cursor.0, kmh, target, self.input.mouse_steer.0, deg);
+                    let _ = writeln!(f, "{:.3},{:.4},{:.1},{:.2},{:.4},{:.4},{:.3}", self.clock.run_time, dt, cx, kmh, target, self.input.mouse_steer.0, deg);
                 }
             }
             // the mouse owns the wheel (OMSI sets the curvature from it every frame):

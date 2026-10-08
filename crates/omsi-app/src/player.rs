@@ -2932,8 +2932,10 @@ pub(crate) fn keep_wheel(p: Option<&mut Player>) {
 /// window is the steering from full left to full right lock, divided by the speed in tens of
 /// km/h once the bus is faster than 10 km/h (going backwards counts as standing). At 50 km/h
 /// the same movement of the hand turns the wheels a fifth as far: the wheel "gets heavier".
+/// The mouse's point may lie past the window's edges (app_impl/mouse_grab.rs): the caller
+/// holds the result at the full lock.
 pub(crate) fn mouse_steering(cursor_x: f32, width: f32, kmh: f32) -> f32 {
-    let x = (2.0 * cursor_x / width.max(1.0) - 1.0).clamp(-1.0, 1.0);
+    let x = 2.0 * cursor_x / width.max(1.0) - 1.0;
     x / (kmh / 10.0).max(1.0)
 }
 
