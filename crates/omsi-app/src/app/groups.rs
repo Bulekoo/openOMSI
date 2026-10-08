@@ -13,7 +13,8 @@ pub(crate) struct SoundState {
     pub(crate) voice: Option<crate::voice::Voice>,
 }
 
-/// The VR headset: its session (Windows), the navigator shown in it, the cockpit pointer and the picture zoom.
+/// The VR headset: its session (Windows), the navigator shown in it, the cockpit pointer
+/// and the picture zoom.
 pub(crate) struct VrState {
     #[cfg(windows)]
     pub(crate) vr: Option<crate::openxr::Vr>,
@@ -43,7 +44,8 @@ pub(crate) struct NetState {
     pub(crate) remotes: lan::LanGame,
 }
 
-/// What the game talks to besides itself: the OMSI and Lua plugins, Discord, Steam, the website's "playing now" and the look for a newer release.
+/// What the game talks to besides itself: the OMSI and Lua plugins, Discord, Steam, the
+/// website's "playing now" and the look for a newer release.
 pub(crate) struct Integrations {
     /// Keys pressed (true) and let go since the Lua plugins' last frame.
     pub(crate) plugin_keys: Vec<(String, bool)>,
@@ -66,7 +68,9 @@ pub(crate) struct Integrations {
     pub(crate) plugins: Option<omsi_plugin::Plugins>,
 }
 
-/// How the frames go and what is measured or scripted about them: the frame rate, the profile, the stutters, the frame-rate governor, the `OMSI_INPUT` script, screenshots and the log.
+/// How the frames go and what is measured or scripted about them: the frame rate, the
+/// profile, the stutters, the frame-rate governor, the `OMSI_INPUT` script, screenshots and
+/// the log.
 pub(crate) struct PerfState {
     pub(crate) fps: f32,
     /// Per-stage frame time accumulators (OMSI_PROFILE), seconds.
@@ -99,7 +103,8 @@ pub(crate) struct PerfState {
     pub(crate) cpu_mark: Option<(f64, Instant, u32)>,
 }
 
-/// The drawing around the renderer: the wgpu instance and surface, the tile streaming, the bus mirrors, the window's visibility and what stands in for it.
+/// The drawing around the renderer: the wgpu instance and surface, the tile streaming, the
+/// bus mirrors, the window's visibility and what stands in for it.
 pub(crate) struct GfxState {
     pub(crate) instance: wgpu::Instance,
     pub(crate) surface: Option<SurfaceState<'static>>,
@@ -120,13 +125,15 @@ pub(crate) struct GfxState {
     pub(crate) window_hidden: bool,
     /// OMSI 2's route arrows over the road (the `nav_arrows` setting).
     pub(crate) route_arrows: crate::route_arrows::RouteArrows,
-    /// Frames the window was hidden for (they are not drawn) and whether the exit is under way.
+    /// Frames the window was hidden for (they are not drawn).
     pub(crate) hidden_frames: u32,
     /// Stand-in for the window's frame while the window is hidden (OMSI_RENDER_OCCLUDED).
     pub(crate) stand_in: Option<wgpu::Texture>,
 }
 
-/// The camera's state besides the camera itself: the head turned and zoomed per view, the switch between cameras, the outside camera's distance, the free camera's speed and the pedestrian view.
+/// The camera's state besides the camera itself: the head turned and zoomed per view, the
+/// switch between cameras, the outside camera's distance, the free camera's speed and the
+/// pedestrian view.
 pub(crate) struct ViewState {
     /// The map is open but the first area is still loading: the view to start with.
     pub(crate) starting: Option<Camera>,
@@ -165,7 +172,9 @@ pub(crate) struct ViewState {
     pub(crate) orbit: f32,
 }
 
-/// What the player's hands and head do: the keys and buttons held, the cursor, mouse and controller driving, head tracking, the phone's touch controls and the switch being dragged.
+/// What the player's hands and head do: the keys and buttons held, the cursor, mouse and
+/// controller driving, head tracking, the phone's touch controls and the switch being
+/// dragged.
 pub(crate) struct InputState {
     pub(crate) cursor: (f32, f32),
     pub(crate) window_focused: bool,
@@ -260,7 +269,9 @@ pub(crate) struct InputState {
     pub(crate) touch: crate::touch::Touch,
 }
 
-/// What is open over the picture and how it is being worked: the start and game menus with their lists and drop-downs, the object editor, the vehicle placer, the tutorial, the hover, the HUD, the navigator and the timetable.
+/// What is open over the picture and how it is being worked: the start and game menus with
+/// their lists and drop-downs, the object editor, the vehicle placer, the tutorial, the
+/// hover, the HUD, the navigator and the timetable.
 pub(crate) struct MenuState {
     /// The game menu's vehicle chooser is open, with this vehicle chosen (index into
     /// `vehicle_list`), and the vehicles it offers (name, path).
@@ -341,7 +352,9 @@ pub(crate) struct MenuState {
     pub(crate) notices: Vec<crate::ui::Notice>,
 }
 
-/// The simulated session besides the map, the player's bus and the clock: the other vehicles, the AI traffic and people, the duty and timetable, the weather and the wet roads, the driver's career and the player on foot.
+/// The simulated session besides the map, the player's bus and the clock: the other
+/// vehicles, the AI traffic and people, the duty and timetable, the weather and the wet
+/// roads, the driver's career and the player on foot.
 pub(crate) struct SessionState {
     /// A situation's further vehicles and those placed from the game menu, standing.
     pub(crate) placed: Vec<Player>,

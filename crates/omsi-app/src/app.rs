@@ -47,6 +47,7 @@ pub(crate) struct App {
     /// Last workshop / fuel pump / wash message, and how long it still shows.
     pub(crate) service_msg: Option<(String, f32)>,
     pub(crate) settings: settings::Settings,
+    /// The exit is under way.
     pub(crate) exiting: bool,
 }
 
