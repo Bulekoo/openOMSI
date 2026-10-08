@@ -75,9 +75,7 @@ impl SceneBase {
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &VERTEX_ATTRIBUTES,
         };
-        let bias: i32 = omsi_cfg::env::var("OMSI_SURFACE_BIAS")
-            .ok()
-            .and_then(|v| v.parse().ok())
+        let bias: i32 = omsi_cfg::flags::OMSI_SURFACE_BIAS.parse()
             .unwrap_or(-24);
         SceneBase { shader, shadow_layout, camera_layout, lm_atlas, lm_uniform, material_layout, corona_layout, layout, vertex_layout, bias }
     }

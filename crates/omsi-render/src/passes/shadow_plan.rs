@@ -158,7 +158,6 @@ impl Renderer {
         let dbg_r: f32 = f
             .env
             .debug_shadow_r
-            .as_deref()
             .and_then(|v| v.trim().parse().ok())
             .unwrap_or(3.0);
         // (a copy: the casters are gathered on the worker pool, the renderer is not shared)

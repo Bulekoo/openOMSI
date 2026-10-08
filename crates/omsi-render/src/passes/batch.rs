@@ -294,7 +294,7 @@ impl Renderer {
         // tested, 2 blended, 3 blended without depth writes, 4 surface depth, 5 terrain
         // paint; 3 includes its specialized terrain variant) - with
         // OMSI_GPU_TIMERS_RAW, what each kind costs the GPU
-        if let Some(skip) = f.env.skip_pipe.as_deref() {
+        if let Some(skip) = f.env.skip_pipe {
             let skip: Vec<u8> = skip.split(',').filter_map(|x| x.trim().parse().ok()).collect();
             let include = |b: &Batch| {
                 let kind = b.pipe / 4;

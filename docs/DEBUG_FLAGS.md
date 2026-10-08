@@ -156,7 +156,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_DRIVER_SHIFTER` | text | - | use | app | Part of a variable or file name: force the shifter the driver's hand uses; off: both hands on the wheel. |
 | `OMSI_DRIVE_PROFILE` | text | - | use | app | Offscreen: "t throttle brake [steer]/..." piecewise constant pedals (crash/kerb tests). |
 | `OMSI_DRIVE_V0` | num | - | use | app | Offscreen: the bus's speed in km/h on the first frame. |
-| `OMSI_FAKE_GPU_ERROR` | text | - | frame | render | Fault injection: open, open-panic, pipeline, lost-build, build, lost, frame - the GPU error to simulate. |
+| `OMSI_FAKE_GPU_ERROR` | text | - | frame | render | Fault injection: open, open-panic, pipeline, lost-build, build, lost, frame - the GPU error to simulate. Only in builds with omsi-render's `test-hooks` feature (on by default). |
 | `OMSI_FLEET_AHEAD` | num | FLEET_AHEAD | use | app | Minutes ahead the timetable fleet is planned (for tests). |
 | `OMSI_FLEET_IDLE` | num | FLEET_IDLE | use | app | Seconds a fleet vehicle idles (shortened for tests). |
 | `OMSI_FOLLOW_CAM` | text | - | use | app | right,ahead,up,yaw,pitch: a camera in the followed car's frame. |
@@ -199,7 +199,6 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_ROAD_PHOTO_N` | num | 400 | use | app | With OMSI_ROAD_PHOTO: number of sample points. |
 | `OMSI_ROAD_PHOTO_SIDE` | num | 0 | use | app | With OMSI_ROAD_PHOTO: metres to either side of the carriageway. |
 | `OMSI_ROAD_PHOTO_SLANT` | num | - | use | app | With OMSI_ROAD_PHOTO: from a driver's eye this far back instead of from above. |
-| `OMSI_RT` | bool | - | test | render | Set by the rt_smoke test before opening the renderer; no code reads it. |
 | `OMSI_SEED` | num | random | use | app | Seed of the scripts' random numbers (repeat a session). |
 | `OMSI_SKIP_OBJECT` | text | - | use | app | Leave out the objects whose file name contains this text. |
 | `OMSI_SKIP_PIPE` | text | - | frame | render | Pipeline kinds to leave out of the main pass (comma-separated numbers). |
