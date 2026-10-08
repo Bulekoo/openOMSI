@@ -83,7 +83,7 @@ impl Traffic {
     /// goes (its space stays empty) and the AI car of the same folder takes its place, in
     /// the parking position, indicating, and pulls out into its lane once the road behind
     /// it is clear. Called with every population pass (about every two seconds).
-    pub fn pull_out_parked(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, center: DVec3) {
+    pub fn pull_out_parked(&mut self, view: &mut TrafficView, world: &World, renderer: &Renderer, scene: &mut Scene, center: DVec3) {
         let forced = omsi_cfg::flags::OMSI_PARKED_PULL_OUT.parse::<f64>();
         // about one car a minute
         if self.rand_f() >= forced.unwrap_or(0.035) {
@@ -160,7 +160,7 @@ impl Traffic {
                 }
             }
             let seed = self.rand();
-            let id = self.create_car(world, renderer, scene, center, LaneKind::Street, l, s, ty.clone(), seed, None, None, Some(0.0), None);
+            let id = self.create_car(view, world, renderer, scene, center, LaneKind::Street, l, s, ty.clone(), seed, None, None, Some(0.0), None);
             let net = &self.sim.net;
             if let Some(car) = self.sim.cars.iter_mut().find(|c| c.id == id) {
                 car.state.lateral = lat;

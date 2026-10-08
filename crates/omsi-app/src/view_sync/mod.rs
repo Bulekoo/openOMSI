@@ -11,12 +11,14 @@
 //! people's step reads), the people at the end of theirs. The offscreen run calls it at the
 //! same points, and before each picture it takes.
 //!
-//! Two kinds of renderer change still happen inside the simulation wrappers' calls, at the
-//! moment the simulation makes them, so that the renderer sees the same calls in the same
-//! order: a car's renders are made or let go as the traffic puts it on the road or takes it
-//! off (`Traffic::view`), and the people who appeared or went are shown at the end of every
-//! `Humans` call that made them (`Humans::show_bodies`). Their state lives in the wrappers
-//! (`Traffic::view`, `Humans::view`) for that reason; its types and code are here.
+//! The view's state is [`SimView`], kept apart from the simulation wrappers (`Traffic`,
+//! `Humans` hold only the simulation's side): the window has it in `GfxState::sim_view`, the
+//! offscreen run in its own struct. Two kinds of renderer change still happen inside the
+//! wrappers' calls, at the moment the simulation makes them, so that the renderer sees the
+//! same calls in the same order: a car's renders are made or let go as the traffic puts it
+//! on the road or takes it off, and the people who appeared or went are shown at the end of
+//! every `Humans` call that made them (`Humans::show_bodies`). Those calls take the part of
+//! the `SimView` they change (`&mut TrafficView`, `&mut PeopleView`) as a parameter.
 
 pub(crate) mod people;
 pub(crate) mod traffic;
@@ -27,6 +29,17 @@ use crate::traffic::Traffic;
 use glam::DVec3;
 use omsi_render::{Renderer, Scene};
 use omsi_sim::VehicleInstance;
+use people::PeopleView;
+use traffic::TrafficView;
+
+/// What the renderer shows of the simulation, kept for the next view sync: the AI traffic's
+/// renders and drivers, and the people's meshes, posing and ticket blocks. Each part starts
+/// afresh with the simulation it shows (`Traffic` put in place, `Humans::new`).
+#[derive(Default)]
+pub(crate) struct SimView {
+    pub(crate) traffic: TrafficView,
+    pub(crate) people: PeopleView,
+}
 
 /// The people to bring up to date in a view sync.
 pub(crate) struct People<'a> {
@@ -63,14 +76,14 @@ impl<'a> ViewSync<'a> {
 /// traffic lamps, the cars' transforms, materials and script textures), then the people
 /// (the coins and ticket blocks of the player's bus, those who went since, the posing and
 /// skinning and their transforms).
-pub(crate) fn sync(what: ViewSync<'_>, world: &World, renderer: &Renderer, scene: &mut Scene) {
+pub(crate) fn sync(what: ViewSync<'_>, view: &mut SimView, world: &World, renderer: &Renderer, scene: &mut Scene) {
     if let Some(t) = what.traffic {
-        t.sync(world, renderer, scene);
+        t.sync(&mut view.traffic, world, renderer, scene);
     }
     if let Some(People { humans, bus, camera }) = what.people {
         if let Some(bus) = bus {
-            humans.sync_money(world, renderer, scene, bus);
+            humans.sync_money(&mut view.people, world, renderer, scene, bus);
         }
-        humans.sync(renderer, scene, camera);
+        humans.sync(&mut view.people, renderer, scene, camera);
     }
 }

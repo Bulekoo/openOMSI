@@ -57,6 +57,7 @@ impl Offscreen<'_> {
             ref world,
             ref renderer,
             ref mut scene,
+            ref mut sim_view,
             ref humans_off,
             ref mut real_time,
             ..
@@ -134,7 +135,7 @@ impl Offscreen<'_> {
                     if let Some(t) = traffic.as_mut() {
                         let ids: Vec<u64> = t.cars.iter().filter(|c| !c.is_bus()).map(|c| c.id).collect();
                         for id in &ids {
-                            t.remove_car(world, renderer, scene, *id);
+                            t.remove_car(&mut sim_view.traffic, world, renderer, scene, *id);
                         }
                         log::info!("server: {} AI vehicles taken off the road", ids.len());
                     }
@@ -205,6 +206,7 @@ impl Offscreen<'_> {
             ref world,
             ref mut renderer,
             ref mut scene,
+            ref mut sim_view,
             ref humans_off,
             ref remotes_off,
             ref run_clock,
@@ -229,16 +231,16 @@ impl Offscreen<'_> {
             if i.is_multiple_of(60) {
                 // (following a car, the population goes with the camera)
                 let pc = if args.follow.is_some() { view_cam.position } else { center };
-                t.populate(world, renderer, scene, pc);
+                t.populate(&mut sim_view.traffic, world, renderer, scene, pc);
                 // (what the window does every frame: cars that parked become parked objects,
                 // released vehicles go back to the world)
-                view_sync::sync(ViewSync::traffic(t), world, renderer, scene);
+                view_sync::sync(ViewSync::traffic(t), sim_view, world, renderer, scene);
                 // `OMSI_POPULATION_SHOTS=1` (with OMSI_DEBUG_POPULATION): a picture from the
                 // viewer whenever a car was put inside its frustum (behind something), with
                 // where on the picture it stands - to see that it really is hidden
                 let framed = std::mem::take(&mut t.framed_spawns);
                 if !framed.is_empty() && omsi_cfg::flags::OMSI_POPULATION_SHOTS.is_set() {
-                    view_sync::sync(ViewSync::traffic(t), world, renderer, scene);
+                    view_sync::sync(ViewSync::traffic(t), sim_view, world, renderer, scene);
                     if let Some(p) = player.as_mut() {
                         pose_player(p, renderer, scene, args, settings);
                     }
@@ -278,14 +280,14 @@ impl Offscreen<'_> {
                 if i.is_multiple_of(60) || s.pending() > 0 {
                     // no timetable vehicle is put into the player's bus or a LAN player's
                     steps::set_keep_clear(t, player.as_ref(), remotes_off);
-                    steps::schedule_tick(s, world, t, renderer, scene, i == 0);
+                    steps::schedule_tick(s, world, t, &mut sim_view.traffic, renderer, scene, i == 0);
                 }
             }
             // the AI's lights by the time of day, and by day in gloomy weather
             let daylight = omsi_sim::Daylight::compute(run_clock, envir.as_ref());
             steps::set_ai_daylight(t, daylight, steps::gloomy_weather(Some(weather)));
             let rail = player.as_ref().and_then(|p| p.rail.as_ref()).map(|r| (r.lane, r.along));
-            steps::traffic_tick(t, world, dt, false, player.as_ref(), remotes_off, &[], rail);
+            steps::traffic_tick(t, &mut sim_view.traffic, world, dt, false, player.as_ref(), remotes_off, &[], rail);
             steps::traffic_boxes(t, player.as_mut(), settings.collision_vehicles);
         }
         Ok(())
@@ -660,6 +662,7 @@ impl Offscreen<'_> {
             ref duty,
             ref renderer,
             ref mut scene,
+            ref mut sim_view,
             ref mut career,
             ..
         } = *self;
@@ -683,7 +686,7 @@ impl Offscreen<'_> {
                     .chain(player.as_ref().map(|p| p.vehicle.position))
                     .collect();
                 for c in &player_centers {
-                    h.populate(world, renderer, scene, *c);
+                    h.populate(&mut sim_view.people, world, renderer, scene, *c);
                 }
                 // also update which stops the LAN players are near
                 h.lan_centers = player_centers;
@@ -694,7 +697,7 @@ impl Offscreen<'_> {
             h.set_remote_buses(remotes_off.remotes.iter().map(|(id, r)| (*id, r.vehicle())));
             h.set_duty(duty.as_ref());
             h.set_player_next_stop(duty.as_ref().and_then(|d| d.trip().stops.get(d.next_stop)));
-            let took = steps::tick_humans(h, dt, world, player.as_mut(), traffic.as_mut(), renderer, scene);
+            let took = steps::tick_humans(h, &mut sim_view.people, dt, world, player.as_mut(), traffic.as_mut(), renderer, scene);
             if let Some(p) = player.as_mut() {
                 if took {
                     p.vehicle.set_var("GivenTicket", -1.0);
@@ -702,9 +705,9 @@ impl Offscreen<'_> {
                 p.vehicle.host.humans_on_path_link = h.path_link_counts();
                 p.vehicle.host.humans_on_seat = h.seat_counts();
             }
-            if h.tracing() {
+            if sim_view.people.tracing() {
                 // OMSI_TRACE_PAX wants every frame as a window would draw it
-                view_sync::sync(ViewSync::people(h, None, eye_cam.position), world, renderer, scene);
+                view_sync::sync(ViewSync::people(h, None, eye_cam.position), sim_view, world, renderer, scene);
             }
             if let Some(m) = h.take_message() {
                 log::info!("HUD: {m}");
@@ -740,6 +743,7 @@ impl Offscreen<'_> {
             ref world,
             ref renderer,
             ref mut scene,
+            ref mut sim_view,
             ref mut traffic,
             ref mut humans_off,
             ref mut schedule,
@@ -783,6 +787,7 @@ impl Offscreen<'_> {
                 Some(scene),
                 traffic.as_mut(),
                 humans_off.as_mut(),
+                sim_view,
                 None,
                 &frame,
             );
@@ -843,6 +848,7 @@ impl Offscreen<'_> {
             ref world,
             ref mut renderer,
             ref mut scene,
+            ref mut sim_view,
             ref camera,
             ref mut player,
             ref settings,
@@ -866,7 +872,7 @@ impl Offscreen<'_> {
             if t_s + dt > ts + base {
                 snapshot_times.remove(0);
                 if let Some(t) = traffic.as_mut() {
-                    view_sync::sync(ViewSync::traffic(t), world, renderer, scene);
+                    view_sync::sync(ViewSync::traffic(t), sim_view, world, renderer, scene);
                 }
                 let mut cam = *camera;
                 if let Some(p) = player.as_mut() {
@@ -883,7 +889,7 @@ impl Offscreen<'_> {
                     }
                 }
                 if let Some(h) = humans_off.as_mut() {
-                    view_sync::sync(ViewSync::people(h, None, cam.position), world, renderer, scene);
+                    view_sync::sync(ViewSync::people(h, None, cam.position), sim_view, world, renderer, scene);
                 }
                 // the time of day of this moment, and its lights: street lamps by night and
                 // the vehicles' own (indicators, brake and tail lights) as they are now -

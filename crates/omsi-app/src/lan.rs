@@ -3178,6 +3178,7 @@ pub fn tick(
     mut scene: Option<&mut Scene>,
     mut traffic: Option<&mut crate::traffic::Traffic>,
     mut humans: Option<&mut crate::humans::Humans>,
+    view: &mut crate::view_sync::SimView,
     duty: Option<(&str, &str)>,
     frame: &Frame,
 ) -> Vec<WorldUpdate> {
@@ -3221,6 +3222,7 @@ pub fn tick(
         scene.as_deref_mut(),
         traffic.as_deref_mut(),
         humans.as_deref_mut(),
+        view,
         player.as_deref().map(|p| p.vehicle.position),
     );
     // the host's world: taken over at a late welcome, the clock kept in step

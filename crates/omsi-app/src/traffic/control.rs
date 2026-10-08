@@ -59,11 +59,11 @@ impl Traffic {
     /// Take all random AI cars off the road now, keeping timetable buses. Returns how many
     /// vehicles were removed. The configured target is unchanged, so random traffic can
     /// populate the roads again normally.
-    pub fn clear_random(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene) -> usize {
+    pub fn clear_random(&mut self, view: &mut TrafficView, world: &World, renderer: &Renderer, scene: &mut Scene) -> usize {
         let ids: Vec<u64> = self.sim.cars.iter().filter(|c| !c.is_bus()).map(|c| c.id).collect();
         let removed = ids.len();
         for id in ids {
-            self.remove_car(world, renderer, scene, id);
+            self.remove_car(view, world, renderer, scene, id);
         }
         removed
     }
@@ -71,6 +71,7 @@ impl Traffic {
     /// Take a car off the road now (the player took over its tour).
     pub fn remove_car(
         &mut self,
+        view: &mut TrafficView,
         world: &World,
         renderer: &Renderer,
         scene: &mut Scene,
@@ -81,7 +82,7 @@ impl Traffic {
         };
         let c = self.sim.cars.swap_remove(i);
         self.drop_sounds(c.id);
-        self.view.release_car(world, renderer, scene, c.id);
+        view.release_car(world, renderer, scene, c.id);
         true
     }
 

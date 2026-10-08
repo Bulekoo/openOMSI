@@ -12,11 +12,12 @@ impl Offscreen<'_> {
             ref world,
             ref renderer,
             ref mut scene,
+            ref mut sim_view,
             ref player_ref,
             ..
         } = *self;
         if let Some(t) = traffic.as_mut() {
-            view_sync::sync(ViewSync::traffic(t), world, renderer, scene);
+            view_sync::sync(ViewSync::traffic(t), sim_view, world, renderer, scene);
             let buses = t
                 .cars
                 .iter()
@@ -501,6 +502,7 @@ impl Offscreen<'_> {
             ref world,
             ref renderer,
             ref mut scene,
+            ref mut sim_view,
             ..
         } = *self;
         if let Some(mut h) = humans_off.take() {
@@ -509,11 +511,11 @@ impl Offscreen<'_> {
                 .map(|p| p.vehicle.position)
                 .unwrap_or(camera.position);
             let bus = player_ref.as_ref().map(|p| &p.vehicle);
-            view_sync::sync(ViewSync::people(&mut h, bus, center), world, renderer, scene);
+            view_sync::sync(ViewSync::people(&mut h, bus, center), sim_view, world, renderer, scene);
             log::info!(
                 "passengers: {} people ({}), request {:?}, paid {:?}, change due {:?}",
                 h.people.len(),
-                h.summary(),
+                h.summary(&sim_view.people),
                 h.request,
                 h.paid,
                 h.change_due
@@ -571,6 +573,8 @@ impl Offscreen<'_> {
                     );
                 }
             }
+            // their view goes with the people (an `OMSI_TRACE_PAX` trace written out now)
+            sim_view.people = Default::default();
         }
     }
 }

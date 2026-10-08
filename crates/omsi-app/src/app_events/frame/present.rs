@@ -546,7 +546,7 @@ impl App {
                         log::info!(
                             "profile people: {} ({})",
                             h.people.len(),
-                            h.summary()
+                            h.summary(&self.gfx.sim_view.people)
                         );
                     }
                     for (k, v) in r.stats.borrow().iter() {

@@ -413,7 +413,7 @@ impl App {
                 }
                 // (and a player who joins another's game sees the host's people)
                 if self.args.passengers || self.args.lan_join.is_some() {
-                    let mut h = humans::Humans::new(&self.args.root);
+                    let mut h = humans::Humans::new(&self.args.root, &mut self.gfx.sim_view.people);
                     if let Some(lan) = self.net.lan.as_ref() {
                         h.set_lan_seed(lan::population_seed(lan));
                     }
@@ -432,8 +432,8 @@ impl App {
                     if let Some(p) = self.player.as_ref() {
                         if self.args.riders > 0 {
                             let centre = p.vehicle.position;
-                            h.populate(&w, &renderer, &mut scene, centre);
-                            h.seed_riders(self.args.riders, &p.vehicle, &w, &renderer, &mut scene);
+                            h.populate(&mut self.gfx.sim_view.people, &w, &renderer, &mut scene, centre);
+                            h.seed_riders(&mut self.gfx.sim_view.people, self.args.riders, &p.vehicle, &w, &renderer, &mut scene);
                         }
                     }
                     self.session.humans = Some(h);
@@ -455,6 +455,7 @@ impl App {
                                 t.precache_random(&w, &renderer, &mut scene);
                             }
                             t.day_time = parse_time(&self.args.time);
+                            self.gfx.sim_view.traffic = Default::default();
                             self.session.traffic = Some(t);
                         }
                         Err(e) => log::error!("traffic: {e:#}"),

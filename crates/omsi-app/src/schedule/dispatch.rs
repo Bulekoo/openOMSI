@@ -22,7 +22,7 @@ impl Schedule {
     /// out where its timetable has it then, as when the game starts - as Omsi.exe does when
     /// the time is changed. They stayed where they were, the whole timetable running hours
     /// early or late: buses queued at stops, waiting there for their time (#1607, #1455).
-    pub fn restart(&mut self, world: &World, traffic: &mut Traffic, renderer: &Renderer, scene: &mut Scene, day_time: f64) {
+    pub fn restart(&mut self, world: &World, traffic: &mut Traffic, view: &mut TrafficView, renderer: &Renderer, scene: &mut Scene, day_time: f64) {
         if traffic.is_mirror() {
             return;
         }
@@ -30,7 +30,7 @@ impl Schedule {
         let mut n = 0;
         for id in gone {
             self.car_departure.remove(&id);
-            if traffic.remove_car(world, renderer, scene, id) {
+            if traffic.remove_car(view, world, renderer, scene, id) {
                 n += 1;
             }
         }
@@ -79,6 +79,7 @@ impl Schedule {
         &mut self,
         world: &World,
         traffic: &mut Traffic,
+        view: &mut TrafficView,
         renderer: &Renderer,
         scene: &mut Scene,
         day_time: f64,
@@ -93,7 +94,7 @@ impl Schedule {
                 let open = self.awaiting.contains(&j) || (!d.spawned && self.runs(j));
                 if open && !self.is_player_tour(j) && self.day_base + d.time - day_time < TOUR_LAYOVER_MAX {
                     if let Placed::Spawned =
-                        self.spawn_departure(j, world, traffic, renderer, scene, day_time, Some(ci))
+                        self.spawn_departure(j, world, traffic, view, renderer, scene, day_time, Some(ci))
                     {
                         taken = true;
                         self.departures[j].spawned = true;
@@ -112,7 +113,7 @@ impl Schedule {
             if !taken && next.is_none() {
                 // the tour's last trip is over: Omsi takes the bus (and what is coupled to
                 // it) off the road at once rather than letting it drive on
-                traffic.remove_car(world, renderer, scene, id);
+                traffic.remove_car(view, world, renderer, scene, id);
                 self.car_departure.remove(&id);
                 if omsi_cfg::flags::OMSI_DEBUG_TRAFFIC.is_set() {
                     log::info!("scheduled bus {id}: the last trip of its tour is over: removed");
@@ -213,10 +214,12 @@ impl Schedule {
 
     /// Spawn buses whose departure time has come (or passed within `window` seconds), and
     /// the layover buses of the next quarter of an hour.
+    #[allow(clippy::too_many_arguments)]
     pub fn tick(
         &mut self,
         world: &World,
         traffic: &mut Traffic,
+        view: &mut TrafficView,
         renderer: &Renderer,
         scene: &mut Scene,
         day_time: f64,
@@ -240,7 +243,7 @@ impl Schedule {
             for id in gone {
                 self.car_departure.remove(&id);
                 self.running.retain(|r| r.car != id);
-                if traffic.remove_car(world, renderer, scene, id) {
+                if traffic.remove_car(view, world, renderer, scene, id) {
                     log::info!("timetable: bus {id} of the player's tour taken off the road");
                 }
             }
@@ -388,7 +391,7 @@ impl Schedule {
             self.carry_on(world, traffic);
         }
         self.fleet(world, traffic, renderer, scene, day_time);
-        self.tour_handover(world, traffic, renderer, scene, day_time);
+        self.tour_handover(world, traffic, view, renderer, scene, day_time);
         // a handful per call: spawning a bus builds its meshes, and a whole rush hour at
         // once is a frame that lasts seconds (a departure that has to wait costs little)
         let (mut spawned, mut tried) = (0, 0);
@@ -397,7 +400,7 @@ impl Schedule {
                 break;
             };
             tried += 1;
-            match self.spawn_departure(i, world, traffic, renderer, scene, day_time, None) {
+            match self.spawn_departure(i, world, traffic, view, renderer, scene, day_time, None) {
                 Placed::Spawned => spawned += 1,
                 Placed::Wait => self.waiting.push(i),
                 Placed::Busy => {

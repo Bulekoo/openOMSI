@@ -36,6 +36,8 @@ struct Offscreen<'a> {
     journey: Option<crate::journey::Journey>,
     career: career::Career,
     humans_off: Option<humans::Humans>,
+    /// what the renderer shows of the traffic and the people (see `view_sync`)
+    sim_view: crate::view_sync::SimView,
     player_ref: Option<Player>,
     envir: Option<omsi_content::Envir>,
     weather: omsi_content::weather::Weather,
