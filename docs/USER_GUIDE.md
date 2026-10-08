@@ -315,10 +315,10 @@ OpenGL ES through Google's ANGLE on the card's DirectX 11 driver: for graphics c
 DirectX 12, Vulkan and OpenGL drivers are missing or broken (Intel HD Graphics 2000-4000, AMD
 Radeon HD 5000/6000). It is tried last, after the other three failed, and only when
 `libEGL.dll` and `libGLESv2.dll` (Google's ANGLE, BSD licence, with its Direct3D 11 renderer)
-are next to `openomsi.exe`; without them it is skipped (the log says so). Windows 7 also needs
-`d3dcompiler_47.dll` next to them (Windows 8.1 and later have it). The Windows package has to
-ship these DLLs for the option to do anything; the log then names the adapter
-`ANGLE (…Direct3D11…)` on the `Gl` backend.
+are next to `openomsi.exe`; without them it is skipped (the log says so). The Windows package
+is to ship them, built from ANGLE's own source by
+[angle-openomsi](https://github.com/openOMSI-Project/angle-openomsi); with them the log names the
+adapter `ANGLE (…Direct3D11…)` on the `Gl` backend.
 
 `drive_keys` is a control preset: `simple` (W/S/A/D and the arrow keys drive; the default),
 `wasd`, `arrows`, or `omsi` ("Custom controls") - only the layout of `Inputs/keyboard.cfg`

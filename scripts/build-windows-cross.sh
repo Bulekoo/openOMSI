@@ -18,7 +18,7 @@ export CARGO_PROFILE_RELEASE_DEBUG=0
 cargo build --locked --release --target x86_64-pc-windows-gnu -p omsi-app -p omsi-launcher-core
 mkdir -p dist/windows   # (the folder is also the content folder: mods stay)
 # TODO: copy Google's ANGLE (BSD licence) here too - libEGL.dll and libGLESv2.dll, x64, with
-# the Direct3D 11 renderer, plus d3dcompiler_47.dll for Windows 7 - so that the "ANGLE
+# the Direct3D 11 renderer (the release of openOMSI-Project/angle-openomsi) - so that the "ANGLE
 # (DirectX 11)" graphics API can be used (startup::backend_order skips it without them)
 cp target/x86_64-pc-windows-gnu/release/openomsi.exe target/x86_64-pc-windows-gnu/release/openomsi-launcher.exe assets/steam_redist/steam_api64.dll dist/windows/
 printf '\nopenOMSI %s built in dist/windows\n' "$OPENOMSI_VERSION"
