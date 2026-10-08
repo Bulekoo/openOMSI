@@ -91,6 +91,7 @@ mod evdev_buttons;
 mod evdev_ff;
 mod cli;
 mod diagnostics;
+mod support_bundle;
 mod duty_start;
 mod input_script;
 mod app_impl;
@@ -193,6 +194,13 @@ pub fn run() -> Result<()> {
         }
     );
     let args = Args::parse();
+    // (before the content and the graphics device are looked for: it must work without them)
+    if let Some(out) = &args.export_diagnostics {
+        let value = support_bundle::snapshot(None, &settings::Settings::load(), None, None, "cli");
+        support_bundle::export(out, &value)?;
+        println!("Support package written to {} - look inside before you attach it to an issue", out.display());
+        return Ok(());
+    }
     // Started by a double click or with no arguments at all: that is the launcher's job.
     // The launcher itself runs the game with a full command line (--no-menu, --map, ...).
     let bare = std::env::args().len() == 1;

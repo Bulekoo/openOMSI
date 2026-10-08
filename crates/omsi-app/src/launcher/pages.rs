@@ -2599,6 +2599,26 @@ pub fn setup(l: &mut Launcher, area: Rect) {
             }
         }
     }
+    support_panel(l, Rect::new(body.x, r.bottom() + 16.0, body.w.min(820.0), 0.0));
+}
+
+/// Setup's support package (see `support_bundle`): what it holds, said before it is made,
+/// and the button that saves it on this computer (nothing is sent).
+fn support_panel(l: &mut Launcher, r: Rect) {
+    const ABOUT: &str = "A ZIP for a bug report: the program and system versions, the graphics card, its driver and the graphics settings, the controllers, and the map and bus of the last game. No folders, names, chat, LAN codes or addresses; of the logs only which events happened. It is saved on this computer and its folder opened, so you can look inside before you attach it to an issue.";
+    // (as high as its text needs: it wraps to more lines on a phone)
+    let r = Rect::new(r.x, r.y, r.w, 120.0 + l.ui.paragraph_height(ABOUT, r.w - 40.0, 12.5, Weight::Regular));
+    l.ui.panel(r);
+    let inner = l.ui.heading(Rect::new(r.x + 20.0, r.y + 16.0, r.w - 40.0, r.h - 32.0), "Support package", Some("help"));
+    let h = l.ui.paragraph(ABOUT, Vec2::new(inner.x, inner.y), inner.w, 12.5, Weight::Regular, TEXT_DIM);
+    if l.ui.button("export-diagnostics", Rect::new(inner.x, inner.y + h + 12.0, 220.0, 42.0), "Export diagnostics", Some("download"), ButtonKind::Normal) {
+        let c = &l.state.choice;
+        let snapshot = crate::support_bundle::snapshot(l.renderer.as_ref(), &crate::settings::Settings::load(),
+            l.pages.pads.io.as_ref().map(|d| d.connected()), Some((&c.map, Some(&c.bus), c.line.as_deref(), c.tour.as_deref())), "launcher_selection");
+        let out = crate::support_bundle::default_output();
+        l.state.spawn(move || super::state::Msg::Diagnostics(
+            crate::support_bundle::export(&out, &snapshot).map(|_| out).map_err(|e| format!("{e:#}"))));
+    }
 }
 
 
