@@ -73,7 +73,7 @@ impl Schedule {
             // a trip not begun leaves on time at the earliest (the bus waits at its
             // first stop), one under way arrives as early or late as it runs
             let delay = duty.delay(now);
-            let lateness = if duty.left_late.is_some() || duty.at_stop {
+            let lateness = if duty.left_late().is_some() || duty.at_stop() {
                 delay
             } else {
                 delay.max(0.0)
@@ -90,10 +90,10 @@ impl Schedule {
                 {
                     let current = ti == duty.trip_index;
                     let expected = if current
-                        && (k < duty.next_stop || duty.done && k + 1 < trip.stops.len())
+                        && (k < duty.next_stop || duty.trip_done() && k + 1 < trip.stops.len())
                     {
                         continue;
-                    } else if current && k == duty.next_stop && duty.at_stop {
+                    } else if current && k == duty.next_stop && duty.at_stop() {
                         now
                     } else if current {
                         (s.arr + lateness).max(now)
@@ -260,13 +260,6 @@ impl Schedule {
             own.to_string()
         }
     }
-}
-
-/// "HH:MM" of a time of day in seconds.
-pub(crate) fn hhmm(t: f64) -> String {
-    // (yesterday's trips of a night tour taken after midnight are before 0:00)
-    let t = if t < 0.0 { t + DAY } else { t };
-    format!("{:02}:{:02}", (t / 3600.0) as i32, ((t % 3600.0) / 60.0) as i32)
 }
 
 /// What a bus's displays call its terminus: the depot file's first string for it (what the

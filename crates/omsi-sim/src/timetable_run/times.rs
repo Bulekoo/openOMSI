@@ -110,7 +110,7 @@ impl TripTimes {
 /// of one station, the first and last stop of a circular line): somebody waiting there who
 /// drew it got in, found the bus at their stop and got straight off again, over and over,
 /// every one of them adding another pedestrian (#795).
-pub(super) fn station_targets(trips: impl Iterator<Item = (Vec<i64>, String)>, name_of: impl Fn(i64) -> String) -> HashMap<i64, Vec<(String, HashSet<String>)>> {
+pub fn station_targets(trips: impl Iterator<Item = (Vec<i64>, String)>, name_of: impl Fn(i64) -> String) -> HashMap<i64, Vec<(String, HashSet<String>)>> {
     let mut named: HashMap<i64, Vec<(String, HashSet<String>)>> = HashMap::new();
     for (stations, terminus) in trips {
         for (k, from) in stations.iter().enumerate() {
@@ -133,7 +133,7 @@ pub(super) fn station_targets(trips: impl Iterator<Item = (Vec<i64>, String)>, n
     named
 }
 
-pub(super) fn trip_stations(trip: &omsi_timetable::Trip) -> Vec<i64> {
+pub fn trip_stations(trip: &omsi_timetable::Trip) -> Vec<i64> {
     if !trip.stations.is_empty() {
         return trip.stations.clone();
     }
@@ -146,7 +146,7 @@ pub(super) fn trip_stations(trip: &omsi_timetable::Trip) -> Vec<i64> {
 /// A type-1 station names its entry in the trip's .ttr, not just a nearby pole.
 /// In Recife, paired boarding/alighting boxes sit on opposite sides of the same
 /// path; a platform-side search across the whole route can move one to another visit.
-pub(super) fn trip_station_steps(
+pub fn trip_station_steps(
     trip: &omsi_timetable::Trip,
     track: bool,
     steps: usize,
@@ -167,7 +167,7 @@ pub(super) fn trip_station_steps(
 
 /// Map the authored entry into a streamed section after absent paths and inserted
 /// connectors. A station beyond this section waits for its own path to load.
-pub(super) fn station_route(step: Option<usize>, first: usize, slots: &[Slot], index: &[usize]) -> StopRoute {
+pub fn station_route(step: Option<usize>, first: usize, slots: &[Slot], index: &[usize]) -> StopRoute {
     let Some(step) = step else {
         return StopRoute::Nearest;
     };

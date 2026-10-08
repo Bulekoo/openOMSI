@@ -346,25 +346,13 @@ impl Schedule {
             current.terminus,
             trips.get(trip_index + 1).map(|t| format!("{} at {}", t.name, hm(t.departure))).unwrap_or_else(|| "the end of the duty".into())
         );
-        Ok(PlayerDuty {
-            line: line_name,
-            tour: tour_name,
+        Ok(PlayerDuty::new(
+            line_name,
+            tour_name,
             trips,
             trip_index,
             first_trip,
-            next_stop: 0,
-            at_stop: false,
-            arrived_late: None,
-            done: false,
-            served_terminus: None,
-            left_late: None,
-            held_back: false,
-            placed: false,
-            trip_changed: false,
-            skipped: None,
-            picked: trip.map(|t| !t.trim().is_empty()).unwrap_or(false),
-            first_update: None,
-            heading: 0.0,
-        })
+            trip.map(|t| !t.trim().is_empty()).unwrap_or(false),
+        ))
     }
 }
