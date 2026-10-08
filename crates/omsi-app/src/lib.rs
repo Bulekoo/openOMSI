@@ -496,6 +496,7 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             route_arrows: Default::default(),
             hidden_frames: 0,
             stand_in: None,
+            sim_view: Default::default(),
         },
         window: None,
         renderer: None,

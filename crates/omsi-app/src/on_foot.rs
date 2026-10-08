@@ -287,7 +287,7 @@ impl App {
         p.axes.release_all();
         // the people's animation carries the walker: without passengers, a crowd of one
         if self.session.humans.is_none() {
-            let mut h = crate::humans::Humans::new(&self.args.root);
+            let mut h = crate::humans::Humans::new(&self.args.root, &mut self.gfx.sim_view.people);
             h.avatar_only = true;
             h.set_cabin(&mut p.vehicle);
             self.session.humans = Some(h);
@@ -424,7 +424,7 @@ impl App {
             let p = self.player.as_ref().unwrap();
             let v = &p.vehicle;
             if self.session.humans.is_none() {
-                let mut h = crate::humans::Humans::new(&self.args.root);
+                let mut h = crate::humans::Humans::new(&self.args.root, &mut self.gfx.sim_view.people);
                 h.avatar_only = true;
                 self.session.humans = Some(h);
             }
@@ -470,7 +470,7 @@ impl App {
     /// started as a pedestrian).
     pub(crate) fn start_on_foot(&mut self, pos: DVec3, heading: f64) {
         if self.session.humans.is_none() {
-            let mut h = crate::humans::Humans::new(&self.args.root);
+            let mut h = crate::humans::Humans::new(&self.args.root, &mut self.gfx.sim_view.people);
             h.avatar_only = true;
             self.session.humans = Some(h);
         }
@@ -1053,7 +1053,7 @@ impl App {
         if let (Some(h), Some(w), Some(r), Some(scene)) = (self.session.humans.as_mut(), self.world.as_ref(), self.renderer.as_ref(), self.scene.as_mut()) {
             // (stepping through a door the feet keep to the step, not to the road under it)
             let cmd = AvatarCmd { pos: f.pos, heading: f.heading, vel: f.vel, lift: f.lift, seat: f.seat, floor: f.inside.map(|_| f.pos.z).or(f.transit.map(|_| f.pos.z)), aboard: f.inside };
-            h.avatar(AVATAR_KEY, w, r, scene, cmd, f.kind);
+            h.avatar(&mut self.gfx.sim_view.people, AVATAR_KEY, w, r, scene, cmd, f.kind);
             h.avatar_show(AVATAR_KEY, show);
         }
         // seated, the walker is where the seat is
@@ -1175,7 +1175,7 @@ impl App {
             return;
         }
         if walkers.iter().any(|w| w.1.is_some()) && self.session.humans.is_none() {
-            let mut h = Humans::new(&self.args.root);
+            let mut h = Humans::new(&self.args.root, &mut self.gfx.sim_view.people);
             h.avatar_only = true;
             self.session.humans = Some(h);
         }
@@ -1208,7 +1208,7 @@ impl App {
                 None if wk.seated => continue,
                 None => AvatarCmd { pos: DVec3::new(wk.x, wk.y, wk.z), heading: wk.heading as f64, vel: DVec2::new(hh.sin(), hh.cos()) * wk.speed as f64, lift: 0.0, seat: None, floor: w.walk_height(wk.x, wk.y).filter(|g| wk.z > g + 0.25).map(|_| wk.z), aboard: None },
             };
-            h.avatar(REMOTE_KEY + id, w, r, scene, cmd, kind);
+            h.avatar(&mut self.gfx.sim_view.people, REMOTE_KEY + id, w, r, scene, cmd, kind);
             if !self.net.remote_walkers.contains(&id) {
                 log::info!("LAN: player {id} got up and walks at ({:.1}, {:.1})", wk.x, wk.y);
             }

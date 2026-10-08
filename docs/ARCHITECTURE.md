@@ -175,7 +175,7 @@ checked against it.
 * **What is already in place.** The window and the offscreen run share the frame's steps
   (`omsi-app/src/app_events/frame/steps.rs`); the AI traffic and the people simulate in
   `omsi-sim`, with `omsi-app::traffic::Traffic` and `omsi-app::humans::Humans` as thin
-  wrappers (simulation + view) that dereference to them; every `OMSI_*` switch goes through
+  wrappers (the simulation, with the cars' sounds) that dereference to them; every `OMSI_*` switch goes through
   `omsi_cfg::flags` (`docs/DEBUG_FLAGS.md`); `App`'s state is grouped by subsystem
   (`omsi-app/src/app/groups.rs`). Still to move: the render-free parts of the timetable
   (`schedule/{times,ibis,duty}.rs` first) into `omsi-sim`.
@@ -184,7 +184,12 @@ checked against it.
   and the people's state into renderer instances is in one module - `traffic.rs` (the AI
   vehicles' renders, their drivers, the traffic lamps), `people.rs` (the people's meshes,
   posing and skinning, the coins and ticket blocks) - with one entry point,
-  `view_sync::sync(ViewSync { traffic, people }, world, renderer, scene)`, traffic first.
+  `view_sync::sync(ViewSync { traffic, people }, sim_view, world, renderer, scene)`,
+  traffic first. Its state, `view_sync::SimView { traffic: TrafficView, people:
+  PeopleView }` (the cars' renders and drivers; the people's meshes, GPU materials, posing
+  and ticket blocks), is held apart from the simulation: by the window in
+  `GfxState::sim_view`, by the offscreen run in its own struct. Each part starts afresh
+  with the simulation it shows (the `Traffic` put in place, `Humans::new`).
   It runs where each part was synced before, so that the renderer sees the same calls in
   the same order:
   * the window: the traffic at the end of `frame_traffic` (after its step and sound,
@@ -198,11 +203,11 @@ checked against it.
 
   Not yet in the phase: renders made or let go inside the wrappers' own calls, at the
   moment the simulation needs them - a car's when the traffic puts it on the road or takes
-  it off (population, timetable departures, trains, the LAN mirror, `Traffic::view`), and
-  the people who appeared or went at the end of every `Humans` call that made them
-  (`BodyOp`s replayed by `Humans::show_bodies`). Their state (`TrafficView`, `Bodies`) is
-  therefore still held by the wrappers, whose calls are used across the app with the
-  renderer passed in. The traffic's sync also still does two pieces of simulation: parked
+  it off (population, timetable departures, trains, the LAN mirror, its step's retired
+  cars), and the people who appeared or went at the end of every `Humans` call that made
+  them (`BodyOp`s replayed by `Humans::show_bodies`). Those calls take the part of the
+  `SimView` they change (`&mut TrafficView`, `&mut PeopleView`) with the renderer, and
+  the timetable's and the LAN world's steps that make them pass it through. The traffic's sync also still does two pieces of simulation: parked
   cars leave the list there, and the AI vehicles get `Envir_Brightness`.
 
 * **Global mutable state.** The introduction's "no global mutable state" is not true today:

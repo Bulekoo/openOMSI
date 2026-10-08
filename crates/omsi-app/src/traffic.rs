@@ -37,14 +37,12 @@ pub(crate) use omsi_sim::ai_traffic::model::{vehicle_bodies, AiCar, BusSetup, Do
 pub(crate) use setup::warm_up;
 pub(crate) use omsi_sim::ai_traffic::viewer::Viewer;
 
-/// The traffic simulation with what the game makes of it: the cars' pictures and sounds.
-/// Everything of the simulation reads through it (`Deref` to `TrafficSim`).
+/// The traffic simulation with what the game makes of it: the cars' sounds. Everything of
+/// the simulation reads through it (`Deref` to `TrafficSim`). The cars' pictures are the
+/// view sync's (`TrafficView`, in `view_sync::SimView`): the traffic's own steps that put a
+/// car on the road or take it off take it, and make or let go the car's renders at once.
 pub struct Traffic {
     pub sim: TrafficSim,
-    /// What the cars look like on the screen (see `crate::view_sync::traffic`; kept here
-    /// because the traffic's own steps make and let go a car's renders as they put it on
-    /// the road or take it off).
-    pub(crate) view: TrafficView,
     /// `[sound_ai]` set of each car near the listener, by car id (see `audio`).
     sounds: HashMap<u64, omsi_audio::SoundSet>,
     /// Sound sets of despawned cars, stopped at the next audio update.
@@ -67,11 +65,11 @@ impl std::ops::DerefMut for Traffic {
 }
 
 impl Traffic {
-    /// The simulation, with no car drawn or heard yet.
+    /// The simulation, with no car heard yet (and none drawn: its `TrafficView` starts
+    /// afresh where it is put in place).
     fn with_sim(sim: TrafficSim) -> Traffic {
         Traffic {
             sim,
-            view: TrafficView::default(),
             sounds: HashMap::new(),
             orphan_sounds: Vec::new(),
             sound_cfgs: HashMap::new(),
@@ -82,11 +80,11 @@ impl Traffic {
     /// and their pictures go back to the world at the next sync.
     /// `player`: (centre, heading in degrees, half length, half width, speed) of the
     /// player's vehicle.
-    pub fn tick(&mut self, dt: f32, player: Option<PlayerBox>) {
+    pub fn tick(&mut self, view: &mut TrafficView, dt: f32, player: Option<PlayerBox>) {
         self.sim.tick(dt, player);
         for id in std::mem::take(&mut self.sim.retired) {
             self.orphan_sounds.extend(self.sounds.remove(&id));
-            self.view.retire(id);
+            view.retire(id);
         }
     }
 

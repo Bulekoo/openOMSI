@@ -2,6 +2,7 @@
 //! player's bus and duty, the people, the weather and the run's settings.
 
 use super::*;
+use crate::view_sync::people::PeopleView;
 
 impl<'a> Offscreen<'a> {
     pub(super) fn setup(
@@ -42,6 +43,8 @@ impl<'a> Offscreen<'a> {
         // traffic" on a server)
         // (and without traffic it still runs the light programs and switches the lamps)
         let mut traffic = new_traffic(args, &world, &renderer, &mut scene, lan_seed)?;
+        // what the renderer shows of the traffic and the people (see `view_sync`)
+        let mut sim_view = crate::view_sync::SimView::default();
         let mut schedule = if args.schedule {
             Some(schedule::Schedule::new(
                 &args.root,
@@ -90,7 +93,7 @@ impl<'a> Offscreen<'a> {
             .as_deref()
             .map(|d| career::Career::load(&args.root, d))
             .unwrap_or_default();
-        let humans_off = new_humans(args, &settings, &world, &renderer, &mut scene, schedule.as_ref(), player.as_mut(), lan_seed, center);
+        let humans_off = new_humans(args, &settings, &world, &renderer, &mut scene, &mut sim_view.people, schedule.as_ref(), player.as_mut(), lan_seed, center);
         let player_ref: Option<Player> = None;
         let envir = omsi_content::Envir::load(&args.root.join("envir.cfg")).ok();
         let weather = load_weather(args);
@@ -186,7 +189,7 @@ impl<'a> Offscreen<'a> {
                     .as_ref(),
             );
             steps::set_ai_daylight(t, daylight, steps::gloomy_weather(Some(&weather)));
-            t.populate(&world, &renderer, &mut scene, center);
+            t.populate(&mut sim_view.traffic, &world, &renderer, &mut scene, center);
         }
         ground_sample(&world, traffic.as_ref(), center)?;
         // LAN in an offscreen run too, so that one game's view of another can be rendered
@@ -256,6 +259,7 @@ impl<'a> Offscreen<'a> {
             journey,
             career,
             humans_off,
+            sim_view,
             player_ref,
             envir,
             weather,
@@ -393,13 +397,14 @@ fn new_humans(
     world: &World,
     renderer: &Renderer,
     scene: &mut Scene,
+    view: &mut PeopleView,
     schedule: Option<&schedule::Schedule>,
     mut player: Option<&mut Player>,
     lan_seed: Option<u64>,
     center: DVec3,
 ) -> Option<humans::Humans> {
     if args.passengers || args.lan_join.is_some() {
-        let mut h = humans::Humans::new(&args.root);
+        let mut h = humans::Humans::new(&args.root, view);
         if let Some(seed) = lan_seed {
             h.set_lan_seed(seed);
         }
@@ -424,10 +429,10 @@ fn new_humans(
         h.stop_names = schedule.as_ref().map(|s| s.stop_names());
         // (the trips due at the stops soon, as in the window: #1415)
         h.due_dests = schedule.as_ref().map(|s| s.due_destinations(parse_time(&args.time)));
-        h.populate(world, renderer, scene, center);
+        h.populate(view, world, renderer, scene, center);
         if let Some(p) = player.as_ref() {
             if args.riders > 0 {
-                h.seed_riders(args.riders, &p.vehicle, world, renderer, scene);
+                h.seed_riders(view, args.riders, &p.vehicle, world, renderer, scene);
             }
         }
         Some(h)

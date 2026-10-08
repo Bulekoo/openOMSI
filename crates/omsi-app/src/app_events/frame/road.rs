@@ -58,13 +58,13 @@ impl App {
                 };
                 let __t5 = Instant::now();
                 let view = self.camera.as_ref().map(|c| c.forward().as_dvec3());
-                t.populate_seen(w, r, scene, center, view);
+                t.populate_seen(&mut self.gfx.sim_view.traffic, w, r, scene, center, view);
                 *self.perf.profile.entry("traffic.populate").or_default() +=
                     __t5.elapsed().as_secs_f64();
                 steps::set_keep_clear(t, self.player.as_ref(), &self.net.remotes);
                 if let Some(s) = self.session.schedule.as_mut() {
                     let __t6 = Instant::now();
-                    steps::schedule_tick(s, w, t, r, scene, self.session.first_populate);
+                    steps::schedule_tick(s, w, t, &mut self.gfx.sim_view.traffic, r, scene, self.session.first_populate);
                     *self.perf.profile.entry("traffic.schedule").or_default() +=
                         __t6.elapsed().as_secs_f64();
                 }
@@ -80,7 +80,7 @@ impl App {
             steps::set_ai_daylight(t, daylight, gloomy);
             let __t2 = Instant::now();
             let rail = self.player.as_ref().and_then(|p| p.rail.as_ref()).map(|r| (r.lane, r.along));
-            steps::traffic_tick(t, w, dt, self.paused, self.player.as_ref(), &self.net.remotes, &self.session.placed, rail);
+            steps::traffic_tick(t, &mut self.gfx.sim_view.traffic, w, dt, self.paused, self.player.as_ref(), &self.net.remotes, &self.session.placed, rail);
             *self.perf.profile.entry("traffic.tick").or_default() +=
                 __t2.elapsed().as_secs_f64();
             for (k, v) in ["traffic.tick.lanes", "traffic.tick.plan", "traffic.tick.ai"]
@@ -110,7 +110,7 @@ impl App {
             t.camera = self.camera.as_ref().map(|c| c.position);
             // the view sync of the traffic: before the player and the people move, as the
             // cars that parked leave the traffic here (see `view_sync`)
-            view_sync::sync(ViewSync::traffic(t), w, r, scene);
+            view_sync::sync(ViewSync::traffic(t), &mut self.gfx.sim_view, w, r, scene);
             *self.perf.profile.entry("traffic.sync").or_default() +=
                 __t4.elapsed().as_secs_f64();
         }

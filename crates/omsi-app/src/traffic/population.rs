@@ -137,30 +137,32 @@ impl Traffic {
     /// Spawn cars until `target` are within `spawn_radius` of `center`; despawn far ones.
     pub fn populate(
         &mut self,
+        view: &mut TrafficView,
         world: &World,
         renderer: &Renderer,
         scene: &mut Scene,
         center: DVec3,
     ) {
-        self.populate_seen(world, renderer, scene, center, None);
+        self.populate_seen(view, world, renderer, scene, center, None);
     }
 
     /// Keep the population around the player: cars are taken off only where nobody sees
     /// it (far away and out of view, or behind a building), and new ones appear only there.
-    /// `view` (a unit vector) stands in for the viewer when none has been set.
+    /// `facing` (a unit vector) stands in for the viewer when none has been set.
     pub fn populate_seen(
         &mut self,
+        view: &mut TrafficView,
         world: &World,
         renderer: &Renderer,
         scene: &mut Scene,
         center: DVec3,
-        view: Option<DVec3>,
+        facing: Option<DVec3>,
     ) {
         if self.sim.mirror {
             return;
         }
         if self.sim.viewer.is_none() {
-            if let Some(f) = view {
+            if let Some(f) = facing {
                 self.sim.viewer = Some(Viewer {
                     pos: center,
                     forward: f,
@@ -270,7 +272,7 @@ impl Traffic {
                     walk: c.seed ^ c.id.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1,
                 });
                 self.drop_sounds(c.id);
-                self.view.release_car(world, renderer, scene, c.id);
+                view.release_car(world, renderer, scene, c.id);
             } else if remove {
                 let c = self.sim.cars.swap_remove(i);
                 if c.is_bus() && (unloaded || at_edge) {
@@ -281,7 +283,7 @@ impl Traffic {
                     log::info!("population t={:.1}: car {} removed at ({:.0}, {:.0}), {:.0} m from the player, in frame {}, behind a building {}, {}", self.sim.time, c.id, p.x, p.y, dist, v.map(|v| v.frames(p, r)).unwrap_or(false), v.map(|v| self.occluded(world, &v, p, r)).unwrap_or(false), if c.gone { "finished" } else { "far away" });
                 }
                 self.drop_sounds(c.id);
-                self.view.release_car(world, renderer, scene, c.id);
+                view.release_car(world, renderer, scene, c.id);
             } else {
                 i += 1;
             }
@@ -325,7 +327,7 @@ impl Traffic {
             .collect();
         let street_target = (self.sim.target as f32 * density * road_scale(&near_density)).round() as usize;
         // the cars that come into range again, where they have got to
-        self.wake_dormant(world, renderer, scene, center, street_target);
+        self.wake_dormant(view, world, renderer, scene, center, street_target);
         // the whole map's population: as dense as around the player, on every street the
         // map has shown so far (sleeping where the player is not)
         self.fill_map(center, street_target);
@@ -339,18 +341,20 @@ impl Traffic {
             if kind == LaneKind::Street && !self.sim.lan_centers.is_empty() {
                 self.sim.count_near = Some((center, self.sim.spawn_radius));
             }
-            self.populate_kind(world, renderer, scene, center, kind, target);
+            self.populate_kind(view, world, renderer, scene, center, kind, target);
         }
-        self.populate_lan_centers(world, renderer, scene, center, street_target);
+        self.populate_lan_centers(view, world, renderer, scene, center, street_target);
         if !self.sim.initial {
-            self.pull_out_parked(world, renderer, scene, center);
+            self.pull_out_parked(view, world, renderer, scene, center);
             self.park_in(world, center);
         }
         self.sim.initial = false;
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn populate_kind(
         &mut self,
+        view: &mut TrafficView,
         world: &World,
         renderer: &Renderer,
         scene: &mut Scene,
@@ -490,14 +494,14 @@ impl Traffic {
                 continue;
             }
             let seed = self.rand();
-            self.create_car(world, renderer, scene, center, kind, lane, s, ty, seed, None, None, None, None);
+            self.create_car(view, world, renderer, scene, center, kind, lane, s, ty, seed, None, None, None, None);
             count += 1;
         }
     }
 
     /// The cars out of range that have come near again take their bodies back - where
     /// nobody sees it happen, up to a little over the number asked for around the player.
-    pub(super) fn wake_dormant(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, center: DVec3, target: usize) {
+    pub(super) fn wake_dormant(&mut self, view: &mut TrafficView, world: &World, renderer: &Renderer, scene: &mut Scene, center: DVec3, target: usize) {
         if self.sim.dormant.is_empty() {
             return;
         }
@@ -524,7 +528,7 @@ impl Traffic {
                 && self.spawn_clear(&ty, p, h);
             if ok {
                 let d = self.sim.dormant.swap_remove(i);
-                self.create_car(world, renderer, scene, center, d.kind, d.lane, d.s, d.ty, d.seed, Some(d.scheme), Some(d.id), Some(d.speed), None);
+                self.create_car(view, world, renderer, scene, center, d.kind, d.lane, d.s, d.ty, d.seed, Some(d.scheme), Some(d.id), Some(d.speed), None);
                 budget -= 1;
             } else {
                 i += 1;
@@ -538,6 +542,7 @@ impl Traffic {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn create_car(
         &mut self,
+        view: &mut TrafficView,
         world: &World,
         renderer: &Renderer,
         scene: &mut Scene,
@@ -641,7 +646,7 @@ impl Traffic {
             }
             log::info!("population t={:.1}: car {id} appears at ({:.0}, {:.0}), {:.0} m from the centre, {:.0} m from the camera, in frame {}, behind a building {}{}", self.sim.time, pos.x, pos.y, (pos - center).length(), v.map(|v| (pos - v.pos).length()).unwrap_or(0.0), v.map(|v| v.frames(pos, 2.5)).unwrap_or(false), v.map(|v| self.occluded(world, &v, pos, 2.5)).unwrap_or(false), if self.sim.initial { " (initial)" } else { "" });
         }
-        self.view.insert(id, render);
+        view.insert(id, render);
         id
     }
 
@@ -666,6 +671,7 @@ impl Traffic {
     #[allow(clippy::too_many_arguments)]
     pub fn spawn_bus(
         &mut self,
+        view: &mut TrafficView,
         world: &World,
         renderer: &Renderer,
         scene: &mut Scene,
@@ -696,7 +702,7 @@ impl Traffic {
             timetable,
         };
         let center = self.sim.viewer.map(|v| v.pos).unwrap_or_default();
-        let id = self.create_car(world, renderer, scene, center, kind, lane, s, ty.clone(), seed, scheme, None, None, Some(setup));
+        let id = self.create_car(view, world, renderer, scene, center, kind, lane, s, ty.clone(), seed, scheme, None, None, Some(setup));
         let ci = self.sim.cars.iter().rposition(|c| c.id == id)?;
         if kind == LaneKind::Air {
             let p = self.sim.cars[ci].vehicle.position;
@@ -713,6 +719,7 @@ impl Traffic {
     /// gets its own share of cars where no other player's share lies already.
     pub(super) fn populate_lan_centers(
         &mut self,
+        view: &mut TrafficView,
         world: &World,
         renderer: &Renderer,
         scene: &mut Scene,
@@ -729,7 +736,7 @@ impl Traffic {
                 continue;
             }
             self.sim.count_near = Some((c, self.sim.spawn_radius));
-            self.populate_kind(world, renderer, scene, c, LaneKind::Street, target);
+            self.populate_kind(view, world, renderer, scene, c, LaneKind::Street, target);
             self.sim.count_near = None;
             done.push(c);
         }

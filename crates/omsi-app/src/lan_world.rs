@@ -20,6 +20,8 @@
 use crate::humans::{Humans, MirrorPose};
 use crate::scene::World;
 use crate::traffic::Traffic;
+use crate::view_sync::people::PeopleView;
+use crate::view_sync::SimView;
 use crate::Args;
 use glam::{DVec2, DVec3, Vec3};
 use hashbrown::{HashMap, HashSet};
@@ -336,6 +338,7 @@ impl LanWorld {
         scene: Option<&mut Scene>,
         traffic: Option<&mut Traffic>,
         humans: Option<&mut Humans>,
+        view: &mut SimView,
         me: Option<DVec3>,
     ) {
         if !self.trace_opened {
@@ -352,12 +355,12 @@ impl LanWorld {
                 self.departed = world.map(|w| w.departed_keys()).unwrap_or_default();
                 self.host(lan, dt, args, traffic, humans.as_deref_mut(), me);
                 if let (Some(w), Some(r), Some(sc), Some(h)) = (world, renderer, scene, humans) {
-                    self.people_from_clients(lan, w, r, sc, h);
+                    self.people_from_clients(lan, w, r, sc, h, &mut view.people);
                 }
             }
             Role::Client => {
                 let mut humans = humans;
-                self.client(lan, dt, args, world, renderer, scene, traffic, humans.as_deref_mut());
+                self.client(lan, dt, args, world, renderer, scene, traffic, humans.as_deref_mut(), view);
                 if let (Some(h), Some(me)) = (humans, me) {
                     self.people_to_host(lan, dt, h, me);
                 }
@@ -480,6 +483,7 @@ impl LanWorld {
         renderer: &Renderer,
         scene: &mut Scene,
         h: &mut Humans,
+        view: &mut PeopleView,
     ) {
         // (claims of our bus for somebody a client sent: not ours to give)
         let _ = h.take_claims();
@@ -559,7 +563,7 @@ impl LanWorld {
                 }
                 let local = self.next_up_id;
                 self.next_up_id += 1;
-                if h.mirror_add(world, renderer, scene, local, ty, &pose) {
+                if h.mirror_add(view, world, renderer, scene, local, ty, &pose) {
                     up.ids.insert(*pid, local);
                 }
             }
@@ -906,6 +910,7 @@ impl LanWorld {
         scene: Option<&mut Scene>,
         mut traffic: Option<&mut Traffic>,
         mut humans: Option<&mut Humans>,
+        view: &mut SimView,
     ) {
         let (Some(world), Some(renderer), Some(scene)) = (world, renderer, scene) else {
             return;
@@ -916,7 +921,7 @@ impl LanWorld {
         if want_on != m.on {
             m.on = want_on;
             if let Some(t) = traffic.as_deref_mut() {
-                t.set_mirror(world, renderer, scene, want_on);
+                t.set_mirror(&mut view.traffic, world, renderer, scene, want_on);
             }
             if let Some(h) = humans.as_deref_mut() {
                 h.set_mirror(want_on);
@@ -1058,7 +1063,7 @@ impl LanWorld {
                 .filter(|id| !m.cars.contains_key(id))
                 .collect();
             for id in gone {
-                t.remove_car(world, renderer, scene, id as u64);
+                t.remove_car(&mut view.traffic, world, renderer, scene, id as u64);
                 m.drawn_cars.remove(&id);
                 m.shown.remove(&id);
                 m.odometer.remove(&id);
@@ -1112,6 +1117,7 @@ impl LanWorld {
                     continue;
                 };
                 t.add_mirror_car(
+                    &mut view.traffic,
                     world,
                     renderer,
                     scene,
@@ -1309,7 +1315,7 @@ impl LanWorld {
                 let Some(ty) = h.type_by_file(file) else {
                     continue;
                 };
-                if h.mirror_add(world, renderer, scene, *id, ty, &pose) {
+                if h.mirror_add(&mut view.people, world, renderer, scene, *id, ty, &pose) {
                     m.drawn_people.insert(*id);
                 }
             }

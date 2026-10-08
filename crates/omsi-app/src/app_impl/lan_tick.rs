@@ -40,6 +40,7 @@ impl App {
             self.scene.as_mut(),
             self.session.traffic.as_mut(),
             self.session.humans.as_mut(),
+            &mut self.gfx.sim_view,
             duty,
             &frame,
         );

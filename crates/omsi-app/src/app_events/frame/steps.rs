@@ -5,6 +5,8 @@
 //! only one of them has (a pause, LAN players, plugins).
 
 use super::*;
+use crate::view_sync::people::PeopleView;
+use crate::view_sync::traffic::TrafficView;
 
 /// The vehicles the AI traffic must see besides its own: the other LAN players' buses, the
 /// player's own and the ones the player placed - and, unless the game is paused, the
@@ -13,6 +15,7 @@ use super::*;
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn traffic_tick(
     t: &mut traffic::Traffic,
+    view: &mut TrafficView,
     world: &World,
     dt: f32,
     paused: bool,
@@ -26,7 +29,7 @@ pub(crate) fn traffic_tick(
     if !paused {
         t.player_priority = player.and_then(|p| p.vehicle.var("TrafficPriority")).is_some_and(|v| v > 0.5);
         t.player_blinker = player.map(|p| lan::indicator(&p.vehicle)).unwrap_or(0);
-        t.tick(dt, player.map(|p| player_outline(p)));
+        t.tick(view, dt, player.map(|p| player_outline(p)));
         world.set_switches(&t.switch_requests());
         world.set_signals(&t.signal_aspects(&world.signal_routes, player_rail));
     }
@@ -75,12 +78,13 @@ pub(crate) fn schedule_tick(
     s: &mut schedule::Schedule,
     world: &World,
     t: &mut traffic::Traffic,
+    view: &mut TrafficView,
     r: &Renderer,
     scene: &mut Scene,
     first: bool,
 ) {
     let window = if first { 20.0 * 60.0 } else { 2.5 };
-    s.tick(world, t, r, scene, t.day_time, window);
+    s.tick(world, t, view, r, scene, t.day_time, window);
 }
 
 /// The street lamps (`lamps`: switched to the daylight's state) and the lit windows of the
@@ -190,8 +194,10 @@ pub(crate) fn spray_wind(weather: &omsi_content::weather::Weather) -> Vec3 {
 /// The people's step, and what it means for the buses: the validators used (the bus's
 /// `ev_Stamper` sound), who wants to get off or on at the stops, the boarding the AI buses
 /// wait for. Whether the player's bus took a ticket (see `Humans::tick`).
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn tick_humans(
     h: &mut humans::Humans,
+    view: &mut PeopleView,
     dt: f32,
     world: &World,
     mut player: Option<&mut Player>,
@@ -201,6 +207,7 @@ pub(crate) fn tick_humans(
 ) -> bool {
     let mut traffic = traffic;
     let took = h.tick(
+        view,
         dt,
         world,
         player.as_deref().map(|p| &p.vehicle),

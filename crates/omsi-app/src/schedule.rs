@@ -18,6 +18,7 @@ pub(crate) mod tests;
 
 use crate::scene::World;
 use crate::traffic::Traffic;
+use crate::view_sync::traffic::TrafficView;
 use hashbrown::{HashMap, HashSet};
 use omsi_sim::traffic::LaneKey;
 use omsi_sim::VehicleType;

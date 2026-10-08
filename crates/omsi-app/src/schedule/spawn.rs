@@ -15,6 +15,7 @@ impl Schedule {
         i: usize,
         world: &World,
         traffic: &mut Traffic,
+        view: &mut TrafficView,
         renderer: &Renderer,
         scene: &mut Scene,
         day_time: f64,
@@ -29,9 +30,9 @@ impl Schedule {
         let p = Self::route_section(world, traffic, on_route);
         let t_route = t_spawn.elapsed();
         if let Some(ci) = onto {
-            return self.take_trip_on(i, ci, p, world, traffic, renderer, scene, day_time);
+            return self.take_trip_on(i, ci, p, world, traffic, view, renderer, scene, day_time);
         }
-        self.spawn_new_bus(i, p, world, traffic, renderer, scene, day_time, profile, t_spawn, t_route)
+        self.spawn_new_bus(i, p, world, traffic, view, renderer, scene, day_time, profile, t_spawn, t_route)
     }
 
     /// Where on its route departure `i` is at `day_time`: the trip's steps, the slots the loaded
@@ -229,6 +230,7 @@ impl Schedule {
         p: Placing,
         world: &World,
         traffic: &mut Traffic,
+        view: &mut TrafficView,
         renderer: &Renderer,
         scene: &mut Scene,
         day_time: f64,
@@ -252,7 +254,7 @@ impl Schedule {
                 .min_by(|a, b| a.3.total_cmp(&b.3));
             match found {
                 Some((k, l, s, d)) if d < 2.5 => {
-                    traffic.turn_train(world, renderer, scene, ci, l, s, &section[..k], reverse);
+                    traffic.turn_train(view, world, renderer, scene, ci, l, s, &section[..k], reverse);
                 }
                 _ => {
                     if omsi_cfg::flags::OMSI_DEBUG_TRAFFIC.is_set() {
@@ -376,6 +378,7 @@ impl Schedule {
         p: Placing,
         world: &World,
         traffic: &mut Traffic,
+        view: &mut TrafficView,
         renderer: &Renderer,
         scene: &mut Scene,
         day_time: f64,
@@ -514,6 +517,7 @@ impl Schedule {
         let tour = self.departures[i].tour.clone();
         let terminus = self.data.trips[self.departures[i].trip].terminus.clone();
         let Some(ci) = traffic.spawn_bus(
+            view,
             world,
             renderer,
             scene,
@@ -530,10 +534,10 @@ impl Schedule {
         };
         self.car_departure.insert(traffic.cars[ci].id, i);
         if let Some(t) = &turned {
-            traffic.set_trailers(world, renderer, scene, ci, &t[1..]);
+            traffic.set_trailers(view, world, renderer, scene, ci, &t[1..]);
             traffic.cars[ci].consist_reversed = true;
         } else if let Some(rest) = &rest {
-            traffic.attach_cars(world, renderer, scene, ci, rest);
+            traffic.attach_cars(view, world, renderer, scene, ci, rest);
         }
         if train.is_some() {
             log::info!("train: {}", std::iter::once(traffic.cars[ci].vehicle.ty.def.path.file_stem().unwrap_or_default().to_string_lossy().to_string()).chain(traffic.cars[ci].vehicle.trailers.iter().map(|t| format!("{}{}", t.ty.def.path.file_stem().unwrap_or_default().to_string_lossy(), if t.reversed { " (turned)" } else { "" }))).collect::<Vec<_>>().join(" + "));

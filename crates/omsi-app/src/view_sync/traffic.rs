@@ -1,9 +1,10 @@
 //! What the traffic shows: the GPU side of the AI vehicles, their drivers and the
 //! traffic lamps.
 //!
-//! The renders live in `Traffic::view`: the traffic's own steps that put a car on the road
-//! or take one off (population, timetable departures, trains, the LAN mirror) make or let
-//! go its renders at once, through `TrafficView` and `Traffic::new_car_render`; everything
+//! The renders live in `TrafficView` (`SimView::traffic`, apart from the `Traffic`): the
+//! traffic's own steps that put a car on the road or take one off (population, timetable
+//! departures, trains, the LAN mirror) take it as a parameter and make or let go the car's
+//! renders at once, through `TrafficView` and `Traffic::new_car_render`; everything
 //! else - parked cars, lamps, drivers, the cars' transforms, materials and script textures
 //! - is brought up to date by the view sync (`view_sync::sync`, `Traffic::sync`).
 
@@ -166,7 +167,7 @@ impl Traffic {
 
     /// The drivers of the timetable buses near the camera: made when a bus comes within
     /// `DRIVER_NEAR`, posed every sync, let go when it is twice that far or gone.
-    pub(super) fn sync_drivers(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene) {
+    pub(super) fn sync_drivers(&mut self, view: &mut TrafficView, world: &World, renderer: &Renderer, scene: &mut Scene) {
         let Some(eye) = self.sim.viewer.map(|v| v.pos) else { return };
         let dt = self.sim.last_dt.max(1.0 / 120.0);
         let mut keep: Vec<u64> = Vec::new();
@@ -179,16 +180,16 @@ impl Traffic {
                 continue;
             }
             keep.push(c.id);
-            if !self.view.drivers.contains_key(&c.id) {
+            if !view.drivers.contains_key(&c.id) {
                 if d > DRIVER_NEAR {
                     continue;
                 }
-                let figure = match self.view.driver_pool.pop() {
+                let figure = match view.driver_pool.pop() {
                     Some(mut f) => {
                         if f.attach(&c.vehicle) {
                             Some(f)
                         } else {
-                            self.view.driver_pool.push(f);
+                            view.driver_pool.push(f);
                             None
                         }
                     }
@@ -196,25 +197,25 @@ impl Traffic {
                 };
                 match figure {
                     Some(f) => {
-                        self.view.drivers.insert(c.id, f);
+                        view.drivers.insert(c.id, f);
                     }
                     None => continue,
                 }
             }
-            if let (Some(f), Some(r)) = (self.view.drivers.get_mut(&c.id), self.view.cars.get(&c.id)) {
+            if let (Some(f), Some(r)) = (view.drivers.get_mut(&c.id), view.cars.get(&c.id)) {
                 f.update(renderer, scene, &c.vehicle, &r.body, dt, true, false);
             }
         }
-        let gone: Vec<u64> = self.view.drivers.keys().copied().filter(|id| !keep.contains(id)).collect();
+        let gone: Vec<u64> = view.drivers.keys().copied().filter(|id| !keep.contains(id)).collect();
         for id in gone {
-            if let Some(mut f) = self.view.drivers.remove(&id) {
+            if let Some(mut f) = view.drivers.remove(&id) {
                 f.hide(renderer, scene);
-                self.view.driver_pool.push(f);
+                view.driver_pool.push(f);
             }
         }
     }
 
-    pub(super) fn sync(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene) {
+    pub(super) fn sync(&mut self, view: &mut TrafficView, world: &World, renderer: &Renderer, scene: &mut Scene) {
         // cars that have parked: the parked object stands in their place from now on
         let mut i = 0;
         while i < self.sim.cars.len() {
@@ -232,17 +233,17 @@ impl Traffic {
                         log::info!("car {} has parked (space {})", c.id, p.key);
                     }
                     self.drop_sounds(c.id);
-                    self.view.retire(c.id);
+                    view.retire(c.id);
                 }
                 _ => i += 1,
             }
         }
-        for r in std::mem::take(&mut self.view.released) {
+        for r in std::mem::take(&mut view.released) {
             world.release_vehicle(renderer, scene, r);
         }
-        self.sync_drivers(world, renderer, scene);
+        self.sync_drivers(view, world, renderer, scene);
         self.sync_lamps(world, renderer, scene);
-        self.sync_cars(world, renderer, scene);
+        self.sync_cars(view, world, renderer, scene);
     }
 
     /// The traffic light lamps (see `sync`).
@@ -425,7 +426,7 @@ impl Traffic {
 
     /// The AI vehicles' pictures: where they stand, their materials, their script
     /// textures (see `sync`).
-    fn sync_cars(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene) {
+    fn sync_cars(&mut self, view: &mut TrafficView, world: &World, renderer: &Renderer, scene: &mut Scene) {
         // A far car's script textures (its destination sign) stay as they are drawn: OMSI
         // shows them at any distance its model level has them. (They were stood in for by
         // their mean colour beyond 50 m, and every timetable bus coming up the street had
@@ -443,7 +444,7 @@ impl Traffic {
             }
         }
         for c in &mut self.sim.cars {
-            let Some(r) = self.view.cars.get_mut(&c.id) else { continue };
+            let Some(r) = view.cars.get_mut(&c.id) else { continue };
             let (render, trailer_renders) = (&mut r.body, &mut r.trailers);
             // out of sight (`tick` decided): hidden once, then left alone until it comes
             // into view again - its many per-mesh updates were a third of this stage

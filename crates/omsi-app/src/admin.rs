@@ -244,7 +244,7 @@ pub(crate) fn clear_ai_traffic(app: &mut App) {
         return;
     }
     if let (Some(t), Some(w), Some(r), Some(scene)) = (app.session.traffic.as_mut(), app.world.as_ref(), app.renderer.as_ref(), app.scene.as_mut()) {
-        let removed = t.clear_random(w, r, scene);
+        let removed = t.clear_random(&mut app.gfx.sim_view.traffic, w, r, scene);
         app.service_msg = Some((format!("{removed} AI vehicles taken off the road"), 3.0));
     }
 }

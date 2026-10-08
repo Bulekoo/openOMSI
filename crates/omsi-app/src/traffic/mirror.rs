@@ -9,7 +9,7 @@ impl Traffic {
     /// Draw the host's traffic from now on (`on`), or simulate our own again: either way
     /// every car there is now goes (ours make room for the host's, the host's copies
     /// cannot drive on by themselves).
-    pub fn set_mirror(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, on: bool) {
+    pub fn set_mirror(&mut self, view: &mut TrafficView, world: &World, renderer: &Renderer, scene: &mut Scene, on: bool) {
         if self.sim.mirror == on {
             return;
         }
@@ -22,7 +22,7 @@ impl Traffic {
         }
         let ids: Vec<u64> = self.sim.cars.iter().map(|c| c.id).collect();
         for id in ids {
-            self.remove_car(world, renderer, scene, id);
+            self.remove_car(view, world, renderer, scene, id);
         }
         self.sim.initial = !on;
         log::info!(
@@ -39,6 +39,7 @@ impl Traffic {
     #[allow(clippy::too_many_arguments)]
     pub fn add_mirror_car(
         &mut self,
+        view: &mut TrafficView,
         world: &World,
         renderer: &Renderer,
         scene: &mut Scene,
@@ -112,7 +113,7 @@ impl Traffic {
             consist_reversed: false,
             park: None,
         });
-        self.view.insert(id, render);
+        view.insert(id, render);
         self.sim.cars.len() - 1
     }
 

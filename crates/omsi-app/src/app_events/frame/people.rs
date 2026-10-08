@@ -55,7 +55,7 @@ impl App {
             self.session.humans_populate_t -= dt;
             if self.session.humans_populate_t <= 0.0 && !self.paused {
                 self.session.humans_populate_t = 2.0;
-                h.populate(w, r, scene, center);
+                h.populate(&mut self.gfx.sim_view.people, w, r, scene, center);
             }
             if let (Some(cam), Some(s)) = (self.camera.as_ref(), self.gfx.surface.as_ref()) {
                 h.eye = Some(humans::Eye::of(
@@ -74,6 +74,7 @@ impl App {
             );
             let took = steps::tick_humans(
                 h,
+                &mut self.gfx.sim_view.people,
                 if self.paused { 0.0 } else { dt },
                 w,
                 self.player.as_mut(),
@@ -108,7 +109,7 @@ impl App {
             // the view sync of the people: the coins and ticket blocks of the player's bus,
             // then everybody's pose (see `view_sync`)
             let bus = self.player.as_ref().map(|p| &p.vehicle);
-            view_sync::sync(ViewSync::people(h, bus, center), w, r, scene);
+            view_sync::sync(ViewSync::people(h, bus, center), &mut self.gfx.sim_view, w, r, scene);
         }
         *self.perf.profile.entry("humans").or_default() += __t.elapsed().as_secs_f64();
         self.foot_after_humans();
