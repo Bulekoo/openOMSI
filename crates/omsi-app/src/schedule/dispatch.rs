@@ -420,7 +420,7 @@ impl Schedule {
                 continue;
             };
             let last = traffic.cars[ci].state.route.last().copied();
-            Self::add_twins(traffic, &run.steps[run.next.saturating_sub(1)..]);
+            add_twins(traffic, &run.steps[run.next.saturating_sub(1)..]);
             let slots = self.slots(world, traffic, &run.steps[run.next..], last);
             let n = slots
                 .iter()
@@ -440,12 +440,12 @@ impl Schedule {
             let (lanes, index) = match last {
                 Some(l) if !lanes.is_empty() => {
                     let with: Vec<usize> = std::iter::once(l).chain(lanes.iter().copied()).collect();
-                    Self::add_connectors(traffic, &with);
+                    add_connectors(traffic, &with);
                     let (b, ix) = bridge_gaps(&traffic.net, &with);
                     (b[1..].to_vec(), ix[1..].iter().map(|k| k.saturating_sub(1)).collect::<Vec<_>>())
                 }
                 _ => {
-                    Self::add_connectors(traffic, &lanes);
+                    add_connectors(traffic, &lanes);
                     bridge_gaps(&traffic.net, &lanes)
                 }
             };

@@ -2,8 +2,9 @@
 //! tour departure times; they follow the track lanes and stop at the trip's stations.
 //!
 //! The timetable itself (`load`, `route`, `tours`, `boards`, and omsi-sim's `timetable_run`:
-//! the trip times, the IBIS, the player's duty) does not touch the GPU; `fleet`, `dispatch`
-//! and `spawn` upload the vehicles and put them on the road.
+//! the trip times, the IBIS, the player's duty, the route on the lanes, the tours' keys and
+//! days) does not touch the GPU; `fleet`, `dispatch` and `spawn` upload the vehicles and put
+//! them on the road.
 
 mod boards;
 mod dispatch;
@@ -14,13 +15,11 @@ mod spawn;
 mod tours;
 #[cfg(test)]
 pub(crate) mod tests;
-#[cfg(test)]
-mod authored_station_tests;
 
 use crate::scene::World;
 use crate::traffic::Traffic;
 use hashbrown::{HashMap, HashSet};
-use omsi_sim::traffic::{LaneKey, Network};
+use omsi_sim::traffic::LaneKey;
 use omsi_sim::VehicleType;
 use omsi_timetable::TimetableData;
 use std::path::Path;
@@ -29,7 +28,6 @@ use std::sync::Arc;
 use dispatch::*;
 use fleet::*;
 use omsi_sim::timetable_run::*;
-use route::*;
 
 pub use omsi_sim::timetable_run::{PlannedStop, PlannedTrip, PlayerDuty, StopDir, TripTimes};
 pub(crate) use omsi_sim::timetable_run::{
@@ -52,16 +50,6 @@ struct Departure {
     /// by the day (`Schedule::runs`), so a session carries on past midnight.
     mask: i32,
     spawned: bool,
-}
-
-/// One step of a trip's route: a lane in map terms (None when the tile index is not in the
-/// map's list) and the leg between two stations it belongs to (0 for a track).
-#[derive(Debug, Clone, Copy)]
-struct Step {
-    key: Option<LaneKey>,
-    leg: usize,
-    /// The path's length as the timetable file has it (m).
-    length: f64,
 }
 
 /// What became of a departure that was due.

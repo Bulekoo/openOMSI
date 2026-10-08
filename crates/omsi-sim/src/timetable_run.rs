@@ -4,15 +4,30 @@
 
 mod duty;
 mod ibis;
+mod route;
 mod times;
+mod tours;
 #[cfg(test)]
 mod tests;
 
+use crate::traffic::LaneKey;
 use hashbrown::{HashMap, HashSet};
 
 pub use duty::*;
 pub use ibis::*;
+pub use route::*;
 pub use times::*;
+pub use tours::*;
+
+/// One step of a trip's route: a lane in map terms (None when the tile index is not in the
+/// map's list) and the leg between two stations it belongs to (0 for a track).
+#[derive(Debug, Clone, Copy)]
+pub struct Step {
+    pub key: Option<LaneKey>,
+    pub leg: usize,
+    /// The path's length as the timetable file has it (m).
+    pub length: f64,
+}
 
 /// A route step as the loaded network has it.
 #[derive(Debug, Clone, Copy, PartialEq)]

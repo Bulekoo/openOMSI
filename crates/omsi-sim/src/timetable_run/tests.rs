@@ -571,4 +571,6 @@ fn an_ai_bus_without_a_destination_still_gets_its_line_and_the_ai_trigger() {
     assert_eq!(v.var("AI_target_index"), Some(0.0));
 }
 
+mod authored_station;
 mod duty;
+mod route;
