@@ -928,6 +928,8 @@ pub struct DynamicImpact {
     pub push: DVec3,
     pub speed: f32,
     pub energy: f32,
+    /// The striking vehicle's mass (kg): what the struck car's recoil is shared with.
+    pub mass: f32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1632,23 +1634,35 @@ impl VehicleInstance {
                 } else {
                     relative_velocity.length() as f32
                 };
+                // out of a moving car that comes on only as far as the bus itself ran into
+                // it this step (as the rigid model has it): a car creeping into the standing
+                // bus does not shove it along; out of one standing or drawing away all the way
+                let approaching = hit.mass > 0.0 && hit.velocity.dot(contact.normal) > 0.0;
+                let out = if approaching {
+                    contact.depth.min((-own_velocity.dot(contact.normal)).max(0.0) * dt as f64 + 0.001)
+                } else {
+                    contact.depth + 0.001
+                };
                 if hit.mass <= 0.0 || closing_speed >= -(crate::rigid::CRASH_SPEED as f64) {
                     if was_overlapping {
-                        let out = if hit.mass > 0.0 && speed > crate::rigid::CRASH_SPEED {
-                            (contact.depth).min(
-                                (-own_velocity.dot(contact.normal)).max(0.0) * dt as f64 + 0.005,
-                            )
-                        } else {
-                            contact.depth + 0.001
-                        };
                         self.position += contact.normal.extend(0.0) * out;
                         if speed > crate::rigid::CRASH_SPEED {
                             self.physics.speed = 0.0;
                         }
                     } else if speed <= crate::rigid::CRASH_SPEED {
-                        self.position += contact.normal.extend(0.0) * (contact.depth + 0.001);
+                        self.position += contact.normal.extend(0.0) * out;
                     } else {
-                        let e = 0.5 * self.physics.mass_kg * speed * speed;
+                        // what the blow takes: the bus's motion into a wall, and between two
+                        // vehicles what the pair loses, 0.5 v² (1 - e²) over their inverse
+                        // mass, as the rigid model counts it: a 1 t car running into the
+                        // standing bus at 10 m/s is some 44 kJ, not the 500 kJ of the bus
+                        // itself at that speed
+                        let e = if hit.mass > 0.0 {
+                            let back = if speed > 1.0 { crate::rigid::RESTITUTION } else { 0.0 };
+                            0.5 * speed * speed * (1.0 - back * back) / (1.0 / self.physics.mass_kg + 1.0 / hit.mass)
+                        } else {
+                            0.5 * self.physics.mass_kg * speed * speed
+                        };
                         let point = glam::DVec3::new(
                             contact.point.x,
                             contact.point.y,
@@ -1676,6 +1690,7 @@ impl VehicleInstance {
                                 push: (-contact.normal).extend(0.0),
                                 speed,
                                 energy: e,
+                                mass: self.physics.mass_kg,
                             });
                         }
                         self.position = prev.0;
@@ -1962,6 +1977,7 @@ impl VehicleInstance {
                         push: hit.push.as_dvec3(),
                         speed: hit.speed,
                         energy: hit.energy,
+                        mass: self.physics.mass_kg,
                     });
                 }
                 energy += hit.energy;
@@ -4839,6 +4855,43 @@ mod tests {
         assert!(impact.push.y < 0.0, "{impact:?}");
         assert!(bus.collided);
         assert_eq!(bus.physics.speed, 0.0);
+    }
+
+    /// A car creeping into the standing bus (below the crash speed) does not shove it along
+    /// at its own pace, and the crash of a car running into it counts the pair's energy.
+    #[test]
+    fn simple_physics_a_creeping_car_does_not_shove_the_standing_bus() {
+        let mut ty = coupling_test_type(None);
+        let def = &mut Arc::get_mut(&mut ty).unwrap().def;
+        def.bounding_box = Some([2.0, 2.0, 2.0, 0.0, 0.0, 1.0]);
+        def.rolling_resistance = 0.0;
+        let mut bus = VehicleInstance::new(ty, VehicleHost::new(Default::default()));
+        bus.physics.mass_kg = 10_000.0;
+        let y0 = bus.position.y;
+        let mut car = crate::collision::Obb::from_box([0.8, 0.4, 2.0, 0.0, 0.0, 1.0], DVec3::new(0.0, -1.19, 0.0), 0.0)
+            .moving(glam::DVec2::new(0.0, 0.3), 1_000.0, 7);
+        for _ in 0..60 {
+            car.center += car.velocity / 30.0;
+            bus.dynamic_boxes = vec![car];
+            bus.step_physics(1.0 / 30.0);
+        }
+        assert!(bus.position.y - y0 < 0.1, "the bus was shoved {:.2} m", bus.position.y - y0);
+        assert!(bus.take_dynamic_impacts().is_empty());
+
+        let mut ty = coupling_test_type(None);
+        let def = &mut Arc::get_mut(&mut ty).unwrap().def;
+        def.bounding_box = Some([2.0, 2.0, 2.0, 0.0, 0.0, 1.0]);
+        let mut bus = VehicleInstance::new(ty, VehicleHost::new(Default::default()));
+        bus.physics.mass_kg = 10_000.0;
+        bus.dynamic_boxes.push(
+            crate::collision::Obb::from_box([0.8, 0.4, 2.0, 0.0, 0.0, 1.0], DVec3::new(0.0, -1.1, 0.0), 0.0)
+                .moving(glam::DVec2::new(0.0, 10.0), 1_000.0, 7),
+        );
+        bus.step_physics(0.1);
+        let impact = bus.take_dynamic_impacts()[0];
+        // 0.5 v² (1 - e²) over the pair's inverse mass, and the bus's mass for the car's recoil
+        assert!((impact.energy - 0.5 * 100.0 * 0.96 / (1.0 / 10_000.0 + 1.0 / 1_000.0)).abs() < 1.0, "{impact:?}");
+        assert_eq!(impact.mass, 10_000.0);
     }
 
     #[test]

@@ -344,26 +344,30 @@ impl AiBody {
 
     /// Give a road vehicle a velocity impulse in world space. Its path-following driver
     /// recovers after the impact rather than teleporting the body back onto the lane.
+    /// `closing_speed` is how fast the two came together along `direction`, `striker` the
+    /// mass (kg) of the vehicle that hit this one, `mass` this one's: the change of speed
+    /// is the impulse of the blow over this mass, (1 + e) m1 / (m1 + m2) v - the rigid
+    /// model's restitution, given back only by a real blow (above 1 m/s).
     pub fn collision_impulse(
         &mut self,
         direction: DVec2,
         closing_speed: f32,
-        energy: f32,
+        striker: f32,
         mass: f32,
     ) {
         if self.kind != MotionKind::Road
             || !direction.is_finite()
             || !closing_speed.is_finite()
-            || !energy.is_finite()
+            || !striker.is_finite()
             || !mass.is_finite()
             || closing_speed <= 0.0
-            || energy < 0.0
+            || striker <= 0.0
             || mass <= 0.0
         {
             return;
         }
-        let energy_speed = (2.0 * energy / mass).sqrt();
-        let recoil_speed = (closing_speed * 0.65).max(energy_speed * 0.65).min(12.0);
+        let e = if closing_speed > 1.0 { crate::rigid::RESTITUTION } else { 0.0 };
+        let recoil_speed = (1.0 + e) * striker / (striker + mass) * closing_speed;
         self.impact_velocity += direction.normalize_or_zero() * recoil_speed as f64;
         self.impact_velocity = self.impact_velocity.clamp_length_max(12.0);
     }
@@ -713,7 +717,7 @@ mod tests {
         let mut body = AiBody::new(&golf(), MotionKind::Road);
         body.place(&|_| DVec3::ZERO, None, None, 0.0);
         let origin = body.position;
-        body.collision_impulse(DVec2::new(0.0, -1.0), 5.0, 20_000.0, 1_000.0);
+        body.collision_impulse(DVec2::new(0.0, -1.0), 5.0, 10_000.0, 1_000.0);
         body.step(0.1, 0.0, &|_| DVec3::ZERO, None, None);
         assert!(body.position.y < origin.y - 0.1, "the collision must move the car backwards");
         for _ in 0..80 {
@@ -723,16 +727,18 @@ mod tests {
     }
 
     #[test]
-    fn a_higher_energy_collision_gives_the_ai_a_stronger_recoil() {
-        let recoil_speed = |energy| {
+    fn a_heavier_striker_gives_the_ai_a_stronger_recoil() {
+        let recoil_speed = |striker| {
             let mut body = AiBody::new(&golf(), MotionKind::Road);
             body.place(&|_| DVec3::ZERO, None, None, 0.0);
-            body.collision_impulse(DVec2::new(0.0, -1.0), 3.0, energy, 1_000.0);
+            body.collision_impulse(DVec2::new(0.0, -1.0), 3.0, striker, 1_000.0);
             body.impact_velocity.length()
         };
-        let light = recoil_speed(5_000.0);
-        let heavy = recoil_speed(80_000.0);
-        assert!(heavy > light * 1.5, "low energy {light:.3} m/s, high energy {heavy:.3} m/s");
+        let light = recoil_speed(1_000.0);
+        let heavy = recoil_speed(12_000.0);
+        assert!(heavy > light * 1.5, "light striker {light:.3} m/s, heavy striker {heavy:.3} m/s");
+        // momentum: a 12 t bus at 3 m/s gives a 1 t car at most (1 + e) 12/13 of it
+        assert!((heavy - 1.2 * 12.0 / 13.0 * 3.0).abs() < 1e-3, "{heavy}");
     }
 
     fn golf() -> Vehicle {

@@ -98,7 +98,7 @@ const WALL_HEIGHT: f64 = 1.5;
 const WALL_K: f32 = 1.5e6;
 const WALL_C: f32 = 6.0e4;
 /// Share of the closing speed an obstacle gives back, and the sliding friction along it.
-const RESTITUTION: f32 = 0.2;
+pub(crate) const RESTITUTION: f32 = 0.2;
 const SCRAPE_FRICTION: f32 = 0.4;
 /// Below this closing speed (m/s) a touch is a push, not a crash.
 pub const CRASH_SPEED: f32 = 0.4;
@@ -1234,18 +1234,17 @@ impl RigidBody {
                     continue;
                 }
             }
+            // (a car leaving the body fast goes out of it by itself)
             if o.mass > 0.0 && vn_full > CRASH_SPEED {
                 continue;
             }
-            let out = if o.mass > 0.0 {
-                if vn_full >= -CRASH_SPEED {
-                    c.depth as f32 + 0.001
-                } else {
-                    (c.depth as f32).min((-vn).max(0.0) * dt + 0.005)
-                }
-            } else {
-                c.depth as f32 + 0.001
-            };
+            // out of the obstacle along the shortest way, a millimetre clear - out of a moving
+            // one that comes on only as far as the body itself ran into it this frame: a
+            // standing car is not ploughed through, and one that drives into the bus does not
+            // drag it along (not even creeping, below the crash speed). Out of a car that
+            // stands or draws away the bus comes all the way: it no longer hangs in it.
+            let approaching = o.mass > 0.0 && v_other.dot(n) > 0.0;
+            let out = if approaching { (c.depth as f32).min((-vn).max(0.0) * dt + 0.001) } else { c.depth as f32 + 0.001 };
             self.position += (n * out).as_dvec3();
             if vn_full >= 0.0 {
                 continue;
@@ -2323,6 +2322,27 @@ mod tests {
         };
         rb.collide(bb, &[receding], &|_| false, 1.0 / 30.0);
         assert!(!rb.body_box(bb).overlaps(&receding));
+    }
+
+    /// An AI car that creeps into the standing bus (below the crash speed, its planner blind
+    /// to the bus) does not shove it along at its own pace: the bus only leaves an overlap
+    /// as far as it moved into it itself, as it did before the moving-car change.
+    #[test]
+    fn a_creeping_car_does_not_shove_the_standing_bus() {
+        let def = bus();
+        let bb = def.bounding_box.unwrap();
+        let mut rb = RigidBody::from_definition(&def, &[]);
+        rb.place(DVec3::ZERO, 0.0);
+        let g = road(1e9, 0.0);
+        run(&mut rb, 1.0, 0.0, 5000.0, &g);
+        let x0 = rb.origin().x;
+        let mut car = Obb::from_box([1.7, 4.2, 1.4, 0.0, 0.0, 0.7], DVec3::new(-3.3, 0.0, 0.0), 90.0)
+            .moving(glam::DVec2::new(0.3, 0.0), 1000.0, 7);
+        for _ in 0..60 {
+            car.center += car.velocity / 30.0;
+            rb.collide(bb, &[car], &|_| false, 1.0 / 30.0);
+        }
+        assert!(rb.origin().x - x0 < 0.1, "the bus was shoved {:.2} m", rb.origin().x - x0);
     }
 
     /// The scripts hear where the bodies meet - low down at the bumpers - not the height of

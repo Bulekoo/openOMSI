@@ -196,7 +196,7 @@ impl TrafficSim {
             car.body.collision_impulse(
                 impact.push.truncate(),
                 impact.speed,
-                impact.energy,
+                impact.mass,
                 car.vehicle.physics.mass_kg,
             );
             let inverse = car.vehicle.body_rotation().inverse();
