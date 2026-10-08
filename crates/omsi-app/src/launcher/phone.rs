@@ -575,9 +575,8 @@ fn start_sheet(l: &mut Launcher, r: Rect) -> bool {
     let mut season = seasons.iter().position(|s| *s == l.state.choice.season).unwrap_or(0);
     l.ui.label(Rect::new(inner.x, y, 112.0, ROW), "Season");
     if l.ui.select("ps-season", Rect::new(inner.x + 112.0, y, inner.w - 112.0, ROW), &mut season, &labels) {
-        l.state.choice.season = seasons[season].to_string();
         // (a season: the date goes to its phase's typical day, see `season_phase`)
-        l.state.season_chosen();
+        l.state.set_season(seasons[season]);
         phone_season_weather_fits(l);
     }
     y += ROW + 14.0;
@@ -849,6 +848,7 @@ fn time_sheet(l: &mut Launcher, r: Rect) -> bool {
     if l.ui.date_field("p-date", Rect::new(left.x, left.y + 106.0, left.w, 48.0), &mut d) {
         l.state.choice.date = d;
         l.state.choice.season = "auto".into();
+        l.state.choice.own_date = None;
         l.state.load_lines();
         l.state.touched();
     }

@@ -113,6 +113,8 @@ pub struct Choice {
     pub season: String,
     /// The season's phase: early, mid, late (with a season chosen).
     pub phase: String,
+    /// The player's own date from before a season moved it ("By date" gives it back).
+    pub own_date: Option<String>,
     pub weather: String,
     pub traffic: f32,
     pub passengers: bool,
@@ -146,6 +148,7 @@ impl Default for Choice {
             date: "1989-05-30".into(),
             season: "auto".into(),
             phase: "mid".into(),
+            own_date: None,
             weather: String::new(),
             traffic: 30.0,
             passengers: true,
@@ -1184,6 +1187,24 @@ impl State {
         self.lines.clear();
         self.load_lines();
         self.touched();
+    }
+
+    /// The season choice changed to `season` ("auto" = by date): a season moves the date
+    /// into its phase, and "By date" gives back the date the player had before.
+    pub fn set_season(&mut self, season: &str) {
+        let was_auto = self.choice.season == "auto";
+        self.choice.season = season.to_string();
+        if season == "auto" {
+            if let Some(d) = self.choice.own_date.take() {
+                self.choice.date = d;
+                self.load_lines();
+            }
+            return;
+        }
+        if was_auto {
+            self.choice.own_date = Some(self.choice.date.clone());
+        }
+        self.season_chosen();
     }
 
     /// A season and its phase chosen: the date moves to the phase's typical day of the

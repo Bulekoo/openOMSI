@@ -1130,6 +1130,7 @@ fn step_time(l: &mut Launcher, r: Rect) {
     if l.ui.date_field("date", Rect::new(r.x + col + 12.0, y, col, 44.0), &mut d) {
         l.state.choice.date = d;
         l.state.choice.season = "auto".into();
+        l.state.choice.own_date = None;
         l.state.load_lines();
         l.state.touched();
     }
@@ -1148,6 +1149,7 @@ fn step_time(l: &mut Launcher, r: Rect) {
         if let Some((yy, mo, d, _, _)) = omsi_launcher_lib::local_now() {
             l.state.choice.date = format!("{yy:04}-{mo:02}-{d:02}");
             l.state.choice.season = "auto".into();
+            l.state.choice.own_date = None;
             l.state.load_lines();
             l.state.touched();
         }
@@ -1158,9 +1160,8 @@ fn step_time(l: &mut Launcher, r: Rect) {
     let seasons = ["auto", "spring", "summer", "autumn", "winter"];
     let mut s = seasons.iter().position(|x| *x == l.state.choice.season).unwrap_or(0);
     if l.ui.segmented("season", Rect::new(r.x, y, r.w, 34.0), &mut s, &["By date", "Spring", "Summer", "Autumn", "Winter"]) {
-        l.state.choice.season = seasons[s].to_string();
         // (a season: the date goes to its phase's typical day, see `season_phase`)
-        l.state.season_chosen();
+        l.state.set_season(seasons[s]);
         season_weather_fits(l);
     }
     y += 46.0;
