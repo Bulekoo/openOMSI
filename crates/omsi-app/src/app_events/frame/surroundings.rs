@@ -28,7 +28,7 @@ impl App {
         self.lamps_on = Some(daylight.lamps_on);
         // the lit windows of the houses by their [NightMapMode] timetable (once a
         // second: tiles come and go, and the hours pass)
-        let night_modes = self.total_frames % 60 == 0;
+        let night_modes = self.perf.total_frames % 60 == 0;
         if let (Some(w), Some(r), Some(scene)) = (
             self.world.as_ref(),
             self.renderer.as_ref(),
@@ -61,7 +61,7 @@ impl App {
         if let (Some(w), Some(r), Some(cam)) = (self.world.as_ref(), self.renderer.as_ref(), self.camera.as_ref()) {
             w.update_light_map_atlas(r, cam.position);
         }
-        *self.profile.entry("lights.atlas").or_default() += __ta.elapsed().as_secs_f64();
+        *self.perf.profile.entry("lights.atlas").or_default() += __ta.elapsed().as_secs_f64();
         if let (Some(w), Some(scene), Some(cam)) = (
             self.world.as_ref(),
             self.scene.as_mut(),
@@ -70,7 +70,7 @@ impl App {
             let vehicles = steps::light_vehicles(self.player.as_ref(), self.traffic.as_ref(), &self.net.remotes);
             let __tc = Instant::now();
             lights::collect(w, scene, &daylight, cam.position, &vehicles);
-            *self.profile.entry("lights.collect").or_default() += __tc.elapsed().as_secs_f64();
+            *self.perf.profile.entry("lights.collect").or_default() += __tc.elapsed().as_secs_f64();
             // the object editor's pick: a magenta glow over it
             if let Some(id) = self.editor.as_ref().and_then(|e| e.selected) {
                 let at = w.edit_objects.lock().get(&id).map(|o| o.pos);
@@ -110,7 +110,7 @@ impl App {
                 if let Some(p) = self.player.as_ref() {
                     steps::cabin_air_step(&mut self.cabin_air, if self.paused { 0.0 } else { dt }, p, wt, self.humans.as_ref());
                 }
-                *self.profile.entry("lights.rain").or_default() += __tr.elapsed().as_secs_f64();
+                *self.perf.profile.entry("lights.rain").or_default() += __tr.elapsed().as_secs_f64();
                 // what every vehicle's tyres throw up from the water on the road: the
                 // puddles and the wet asphalt the renderer draws (the same wetness:
                 // none under snow, OMSI_WETNESS as the picture takes it)
@@ -129,7 +129,7 @@ impl App {
                         wetness,
                     );
                     self.spray.sprites(cam.position, &mut scene.smoke);
-                    *self.profile.entry("lights.spray").or_default() += __ts.elapsed().as_secs_f64();
+                    *self.perf.profile.entry("lights.spray").or_default() += __ts.elapsed().as_secs_f64();
                 }
                 // the rain heard in the street and the footsteps on the pavement
                 if let (Some(amb), Some(a)) = (self.sound.ambience.as_mut(), self.sound.audio.as_ref())
@@ -168,7 +168,7 @@ impl App {
                         cam.position,
                         &steps,
                     );
-                    *self.profile.entry("lights.ambience").or_default() += __tm.elapsed().as_secs_f64();
+                    *self.perf.profile.entry("lights.ambience").or_default() += __tm.elapsed().as_secs_f64();
                     if let Some(every) = debug_sound_every() {
                         static LAST: std::sync::atomic::AtomicU32 =
                             std::sync::atomic::AtomicU32::new(u32::MAX);
@@ -181,7 +181,7 @@ impl App {
                 }
             }
         }
-        *self.profile.entry("lights+rain").or_default() += __t.elapsed().as_secs_f64();
+        *self.perf.profile.entry("lights+rain").or_default() += __t.elapsed().as_secs_f64();
     }
 
     /// The departure boards, the map's route arrows and the scenery's scripts.
@@ -211,7 +211,7 @@ impl App {
                     .and_then(|p| p.vehicle.host.hof.as_deref()),
                 &self.clock,
             );
-            *self.profile.entry("scripted.boards").or_default() += __tb.elapsed().as_secs_f64();
+            *self.perf.profile.entry("scripted.boards").or_default() += __tb.elapsed().as_secs_f64();
             // the map's own route arrows, with OMSI 2's route arrows
             w.show_help_arrows(r, scene, self.settings.nav_arrows);
             w.update_scripted(
@@ -225,6 +225,6 @@ impl App {
                 self.in_cab,
             );
         }
-        *self.profile.entry("scripted").or_default() += __t.elapsed().as_secs_f64();
+        *self.perf.profile.entry("scripted").or_default() += __t.elapsed().as_secs_f64();
     }
 }

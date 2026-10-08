@@ -51,7 +51,8 @@ pub(crate) struct App {
     pub(crate) spanned: bool,
     /// Chat, mouse-over names and name tags (Roboto).
     pub(crate) ui: Option<ui::Ui>,
-    pub(crate) fps: f32,
+    /// Frame timing, profiling and the test hooks (see `PerfState`).
+    pub(crate) perf: PerfState,
     pub(crate) rain: rain::Rain,
     /// The player's bus's cabin air and the condensation on its glass.
     pub(crate) cabin_air: crate::condensation::CabinAir,
@@ -63,16 +64,11 @@ pub(crate) struct App {
     pub(crate) humans_populate_t: f32,
     /// What the game sounds out: the engine, the world around, the radio, the voice chat.
     pub(crate) sound: SoundState,
-    /// Per-stage frame time accumulators (OMSI_PROFILE), seconds.
-    pub(crate) profile: std::collections::BTreeMap<&'static str, f64>,
-    /// `profile` as it was at the start of the last frame: what a slow frame spent where.
-    pub(crate) profile_prev: std::collections::BTreeMap<&'static str, f64>,
     pub(crate) first_populate: bool,
     pub(crate) envir: Option<omsi_content::Envir>,
     pub(crate) weather: Option<omsi_content::weather::Weather>,
     pub(crate) clock: omsi_sim::SimClock,
     pub(crate) started: Instant,
-    pub(crate) total_frames: u32,
     /// Mirror pictures due (see `MIRROR_RATE`), and which mirror is next.
     pub(crate) mirror_budget: f32,
     pub(crate) mirrors_seen: usize,
@@ -116,12 +112,6 @@ pub(crate) struct App {
     /// The idle head sway waiting where it is while the cursor is on a control
     /// (see `head_idle::Hold`).
     pub(crate) head_idle_hold: crate::head_idle::Hold,
-    /// `OMSI_INPUT` script: (seconds after start, command), in order.
-    pub(crate) input_script: Vec<(f32, String)>,
-    /// A pending screenshot: its output path and whether touch controls are composited over it.
-    /// Scripted `shot <file>` captures keep the controls for visual tests; player screenshots
-    /// leave them out so the camera button produces a clean image.
-    pub(crate) shot: Option<(PathBuf, bool)>,
     /// The simulation stands still (OMSI's `sim_pause`, P, or the menu): nothing moves,
     /// the clock stops, the picture and the camera go on.
     pub(crate) paused: bool,
@@ -298,8 +288,6 @@ pub(crate) struct App {
     /// finalized straight ahead instead of keeping a partial angle.
     pub(crate) f1_reset: Option<((f32, f32), f32, f32, String)>,
     pub(crate) orbit: f32,
-    pub(crate) frames: u32,
-    pub(crate) fps_t: Instant,
     /// Last workshop / fuel pump / wash message, and how long it still shows.
     pub(crate) service_msg: Option<(String, f32)>,
     /// The fuel pump or the bus wash running (`run_service`): which, and the seconds the
@@ -307,8 +295,6 @@ pub(crate) struct App {
     pub(crate) pumping: Option<(&'static str, f32)>,
     /// The server's notifications on the screen (`notify`), oldest first.
     pub(crate) notices: Vec<crate::ui::Notice>,
-    /// What the log has said (see applog.rs).
-    pub(crate) log_state: crate::applog::LogState,
     /// The driver's personnel file and this session's statistics.
     pub(crate) career: career::Career,
     /// The duty's stops with their times as driven, kept in a file (`journey`).
@@ -330,24 +316,11 @@ pub(crate) struct App {
     /// The mouse cursor currently shows the hand (it is over a switch).
     pub(crate) cursor_kind: u8,
     pub(crate) settings: settings::Settings,
-    /// Frames longer than 50 ms (stutters) and the worst frame, for the exit summary.
-    pub(crate) spikes: u32,
-    pub(crate) worst_ms: f32,
-    /// The frame-rate governor's two-second window.
-    /// Window seconds, frames, and time waiting on presentation/GPU in that window.
-    pub(crate) governor: (f32, u32, f32),
-    /// Readings in a row at the smallest render scale still waiting for the card.
-    pub(crate) governor_low: u32,
-    /// Cumulative presentation wait at the previous frame, independent of OMSI_PROFILE.
-    pub(crate) governor_wait_prev: f64,
     /// Frames the window was hidden for (they are not drawn) and whether the exit is under way.
     pub(crate) hidden_frames: u32,
     pub(crate) exiting: bool,
     /// Stand-in for the window's frame while the window is hidden (OMSI_RENDER_OCCLUDED).
     pub(crate) stand_in: Option<wgpu::Texture>,
-    /// OMSI_PROFILE: process CPU seconds, time and frame count once the start-up is over,
-    /// for the CPU time a frame costs (the wall time says little on a busy machine).
-    pub(crate) cpu_mark: Option<(f64, Instant, u32)>,
     /// The on-screen controls of a phone (see `touch.rs`).
     pub(crate) touch: crate::touch::Touch,
 }

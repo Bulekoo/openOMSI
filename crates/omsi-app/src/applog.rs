@@ -59,19 +59,19 @@ impl App {
     /// Once a frame: what changed on the screen, and every minute where things stand.
     pub(crate) fn log_frame(&mut self, dt: f32) {
         let msg = self.service_msg.as_ref().map(|m| m.0.clone());
-        if msg.is_some() && msg != self.log_state.last_msg {
+        if msg.is_some() && msg != self.perf.log_state.last_msg {
             log::info!("on screen: {}", msg.as_deref().unwrap_or_default());
         }
-        self.log_state.last_msg = msg;
-        if self.view != self.log_state.last_view {
+        self.perf.log_state.last_msg = msg;
+        if self.view != self.perf.log_state.last_view {
             log::info!("view: {}", self.view);
-            self.log_state.last_view = self.view.clone();
+            self.perf.log_state.last_view = self.view.clone();
         }
-        if self.paused != self.log_state.last_paused {
+        if self.paused != self.perf.log_state.last_paused {
             log::info!("{}", if self.paused { "paused" } else { "resumed" });
-            self.log_state.last_paused = self.paused;
+            self.perf.log_state.last_paused = self.paused;
         }
-        let s = &mut self.log_state;
+        let s = &mut self.perf.log_state;
         s.t += dt;
         s.frames += 1;
         s.worst_dt = s.worst_dt.max(dt);

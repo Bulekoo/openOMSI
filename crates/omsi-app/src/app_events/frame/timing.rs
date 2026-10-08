@@ -69,22 +69,22 @@ impl App {
         self.log_frame(raw_dt);
         let profiling = omsi_cfg::flags::OMSI_PROFILE.is_set();
         let waited: f64 = ["acquire", "present", "gpu"].iter()
-            .map(|&k| self.profile.get(k).copied().unwrap_or(0.0))
+            .map(|&k| self.perf.profile.get(k).copied().unwrap_or(0.0))
             .sum();
-        let wait_this_frame = (waited - self.governor_wait_prev).max(0.0) as f32;
-        self.governor_wait_prev = waited;
-        if self.total_frames > 60 {
+        let wait_this_frame = (waited - self.perf.governor_wait_prev).max(0.0) as f32;
+        self.perf.governor_wait_prev = waited;
+        if self.perf.total_frames > 60 {
             if raw_dt > 0.05 {
-                self.spikes += 1;
+                self.perf.spikes += 1;
                 if profiling {
                     // where the slow frame went: the stages that took more than 2 ms,
                     // and what no stage accounts for (waiting for the window, the
                     // system, other processes)
                     let mut parts: Vec<(&'static str, f64)> = self
-                        .profile
+                        .perf.profile
                         .iter()
                         .map(|(k, v)| {
-                            (*k, v - self.profile_prev.get(k).copied().unwrap_or(0.0))
+                            (*k, v - self.perf.profile_prev.get(k).copied().unwrap_or(0.0))
                         })
                         .collect();
                     let staged: f64 = parts
@@ -100,14 +100,14 @@ impl App {
                         .collect();
                     log::info!(
                         "stutter: frame {} took {:.0} ms ({}; outside the stages {:.0} ms)",
-                        self.total_frames,
+                        self.perf.total_frames,
                         raw_dt * 1000.0,
                         list.join(", "),
                         (raw_dt as f64 - staged).max(0.0) * 1000.0
                     );
                 }
             }
-            self.worst_ms = self.worst_ms.max(raw_dt * 1000.0);
+            self.perf.worst_ms = self.perf.worst_ms.max(raw_dt * 1000.0);
             // Reduce resolution only when slow frames spend substantial time waiting
             // for presentation or the GPU. Traffic, scripts and tile work can drop
             // the frame rate too, but fewer pixels cannot make those stages faster.
@@ -115,14 +115,14 @@ impl App {
             // A fast V-synced frame can wait for the next refresh without being
             // GPU-bound. Count presentation wait only on slow frames.
             if raw_dt > 0.02 {
-                self.governor.2 += wait_this_frame;
+                self.perf.governor.2 += wait_this_frame;
             }
-            self.governor.0 += raw_dt;
-            self.governor.1 += 1;
-            if self.governor.0 >= 5.0 {
-                let fps = self.governor.1 as f32 / self.governor.0;
-                let wait_share = self.governor.2 / self.governor.0;
-                self.governor = (0.0, 0, 0.0);
+            self.perf.governor.0 += raw_dt;
+            self.perf.governor.1 += 1;
+            if self.perf.governor.0 >= 5.0 {
+                let fps = self.perf.governor.1 as f32 / self.perf.governor.0;
+                let wait_share = self.perf.governor.2 / self.perf.governor.0;
+                self.perf.governor = (0.0, 0, 0.0);
                 let free = self.settings.render_scale <= 0.0
                     && (self.settings.max_fps == 0 || self.settings.max_fps >= 50)
                     && !omsi_cfg::flags::OMSI_FIXED_SCALE.is_set();
@@ -132,14 +132,14 @@ impl App {
                     r.set_dynamic_scale(s + step);
                     if (r.dynamic_scale() - s).abs() > 1e-3 {
                         log::info!("frame rate {fps:.0} fps (presentation wait {:.0}%): the 3D picture is drawn at {:.0} % of the window now", wait_share * 100.0, r.dynamic_scale() * 100.0);
-                        self.governor_low = 0;
+                        self.perf.governor_low = 0;
                     } else if step < 0.0 {
                         // at the smallest scale and still waiting for the card: after
                         // two such readings the picture gets lighter itself (a weak or
                         // old graphics chip keeps a playable frame rate)
-                        self.governor_low += 1;
-                        if self.governor_low >= 2 && fps < 30.0 {
-                            self.governor_low = 0;
+                        self.perf.governor_low += 1;
+                        if self.perf.governor_low >= 2 && fps < 30.0 {
+                            self.perf.governor_low = 0;
                             // (SSAO first, then the shadows; for this drive only)
                             let what = r.lighten().or_else(|| {
                                 std::mem::replace(&mut self.settings.shadows, false).then_some("shadows off")
@@ -154,7 +154,7 @@ impl App {
             }
         }
         if profiling {
-            self.profile_prev.clone_from(&self.profile);
+            self.perf.profile_prev.clone_from(&self.perf.profile);
         }
         let dt = raw_dt.min(0.1);
         self.last = now;

@@ -65,3 +65,36 @@ pub(crate) struct Integrations {
     /// The OMSI plugins (`plugins/*.opl`), loaded with the first frame.
     pub(crate) plugins: Option<omsi_plugin::Plugins>,
 }
+
+/// How the frames go and what is measured or scripted about them: the frame rate, the profile, the stutters, the frame-rate governor, the `OMSI_INPUT` script, screenshots and the log.
+pub(crate) struct PerfState {
+    pub(crate) fps: f32,
+    /// Per-stage frame time accumulators (OMSI_PROFILE), seconds.
+    pub(crate) profile: std::collections::BTreeMap<&'static str, f64>,
+    /// `profile` as it was at the start of the last frame: what a slow frame spent where.
+    pub(crate) profile_prev: std::collections::BTreeMap<&'static str, f64>,
+    pub(crate) total_frames: u32,
+    /// `OMSI_INPUT` script: (seconds after start, command), in order.
+    pub(crate) input_script: Vec<(f32, String)>,
+    /// A pending screenshot: its output path and whether touch controls are composited over it.
+    /// Scripted `shot <file>` captures keep the controls for visual tests; player screenshots
+    /// leave them out so the camera button produces a clean image.
+    pub(crate) shot: Option<(PathBuf, bool)>,
+    pub(crate) frames: u32,
+    pub(crate) fps_t: Instant,
+    /// What the log has said (see applog.rs).
+    pub(crate) log_state: crate::applog::LogState,
+    /// Frames longer than 50 ms (stutters) and the worst frame, for the exit summary.
+    pub(crate) spikes: u32,
+    pub(crate) worst_ms: f32,
+    /// The frame-rate governor's two-second window.
+    /// Window seconds, frames, and time waiting on presentation/GPU in that window.
+    pub(crate) governor: (f32, u32, f32),
+    /// Readings in a row at the smallest render scale still waiting for the card.
+    pub(crate) governor_low: u32,
+    /// Cumulative presentation wait at the previous frame, independent of OMSI_PROFILE.
+    pub(crate) governor_wait_prev: f64,
+    /// OMSI_PROFILE: process CPU seconds, time and frame count once the start-up is over,
+    /// for the CPU time a frame costs (the wall time says little on a busy machine).
+    pub(crate) cpu_mark: Option<(f64, Instant, u32)>,
+}

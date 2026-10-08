@@ -10,7 +10,7 @@ impl App {
         self.tick_lan(dt);
         // (a stage of its own: a joining player's bus is loaded here, and that frame
         // was counted as the people's)
-        *self.profile.entry("lan").or_default() += __t.elapsed().as_secs_f64();
+        *self.perf.profile.entry("lan").or_default() += __t.elapsed().as_secs_f64();
         // the player on foot, and the other players walking about
         self.tick_on_foot(if self.paused { 0.0 } else { dt });
         self.sync_remote_walkers();
@@ -108,7 +108,7 @@ impl App {
             }
             h.sync(r, scene, center);
         }
-        *self.profile.entry("humans").or_default() += __t.elapsed().as_secs_f64();
+        *self.perf.profile.entry("humans").or_default() += __t.elapsed().as_secs_f64();
         self.foot_after_humans();
         if !self.paused {
             self.tick_service(dt);

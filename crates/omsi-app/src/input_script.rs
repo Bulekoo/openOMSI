@@ -738,7 +738,7 @@ impl App {
     /// PNG) and `type <text>` (into the LAN chat line that `key V` opened; `key Enter`
     /// sends it).
     pub(crate) fn run_input_script(&mut self, event_loop: &ActiveEventLoop) {
-        if self.input_script.is_empty() {
+        if self.perf.input_script.is_empty() {
             return;
         }
         let t = self.started.elapsed().as_secs_f32();
@@ -747,11 +747,11 @@ impl App {
             .as_ref()
             .map(|w| w.scale_factor() as f32)
             .unwrap_or(1.0);
-        while let Some((at, cmd)) = self.input_script.first().cloned() {
+        while let Some((at, cmd)) = self.perf.input_script.first().cloned() {
             if t < at {
                 break;
             }
-            self.input_script.remove(0);
+            self.perf.input_script.remove(0);
             let mut parts = cmd.split_whitespace();
             let verb = parts.next().unwrap_or("");
             let arg = parts.next().unwrap_or("");
@@ -981,7 +981,7 @@ impl App {
                 }
                 // `shot <file>`: the window's own view into a PNG, drawn from the scene the
                 // window is showing (the only way to see what the window path renders)
-                "shot" => self.shot = Some((PathBuf::from(arg), true)),
+                "shot" => self.perf.shot = Some((PathBuf::from(arg), true)),
                 // `dumptex <folder>`: the player's display pictures as the window has them
                 "dumptex" => {
                     if let Some(p) = self.player.as_ref() {

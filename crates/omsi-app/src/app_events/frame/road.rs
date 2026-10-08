@@ -59,13 +59,13 @@ impl App {
                 let __t5 = Instant::now();
                 let view = self.camera.as_ref().map(|c| c.forward().as_dvec3());
                 t.populate_seen(w, r, scene, center, view);
-                *self.profile.entry("traffic.populate").or_default() +=
+                *self.perf.profile.entry("traffic.populate").or_default() +=
                     __t5.elapsed().as_secs_f64();
                 steps::set_keep_clear(t, self.player.as_ref(), &self.net.remotes);
                 if let Some(s) = self.schedule.as_mut() {
                     let __t6 = Instant::now();
                     steps::schedule_tick(s, w, t, r, scene, self.first_populate);
-                    *self.profile.entry("traffic.schedule").or_default() +=
+                    *self.perf.profile.entry("traffic.schedule").or_default() +=
                         __t6.elapsed().as_secs_f64();
                 }
                 self.first_populate = false;
@@ -81,13 +81,13 @@ impl App {
             let __t2 = Instant::now();
             let rail = self.player.as_ref().and_then(|p| p.rail.as_ref()).map(|r| (r.lane, r.along));
             steps::traffic_tick(t, w, dt, self.paused, self.player.as_ref(), &self.net.remotes, &self.placed, rail);
-            *self.profile.entry("traffic.tick").or_default() +=
+            *self.perf.profile.entry("traffic.tick").or_default() +=
                 __t2.elapsed().as_secs_f64();
             for (k, v) in ["traffic.tick.lanes", "traffic.tick.plan", "traffic.tick.ai"]
                 .into_iter()
                 .zip(t.tick_split)
             {
-                *self.profile.entry(k).or_default() += v;
+                *self.perf.profile.entry(k).or_default() += v;
             }
             // the options' [no_collision_vehToVeh]: the bus drives through the traffic
             steps::traffic_boxes(t, self.player.as_mut(), self.settings.collision_vehicles);
@@ -104,14 +104,14 @@ impl App {
                 let ear = self.camera.as_ref().map(|c| c.position).unwrap_or(center);
                 t.update_audio(a, ear, street, muffled);
             }
-            *self.profile.entry("traffic.audio").or_default() +=
+            *self.perf.profile.entry("traffic.audio").or_default() +=
                 __t3.elapsed().as_secs_f64();
             let __t4 = Instant::now();
             t.camera = self.camera.as_ref().map(|c| c.position);
             t.sync(w, r, scene);
-            *self.profile.entry("traffic.sync").or_default() +=
+            *self.perf.profile.entry("traffic.sync").or_default() +=
                 __t4.elapsed().as_secs_f64();
         }
-        *self.profile.entry("traffic").or_default() += __t.elapsed().as_secs_f64();
+        *self.perf.profile.entry("traffic").or_default() += __t.elapsed().as_secs_f64();
     }
 }

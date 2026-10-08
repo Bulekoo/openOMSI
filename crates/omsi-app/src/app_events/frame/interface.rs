@@ -50,7 +50,7 @@ impl App {
         let plugin_focus = crate::plugin_ui::focused(&self.integrations.plugins);
         self.frame_plugin_panels(dt, hud, vr_active);
         self.frame_ui_draw(dt, hud, vr_active, plugin_focus, &notes, tooltip, menu_lines, menu_tabs);
-        *self.profile.entry("hud").or_default() += __t.elapsed().as_secs_f64();
+        *self.perf.profile.entry("hud").or_default() += __t.elapsed().as_secs_f64();
         vr_nav_display
     }
 
@@ -227,7 +227,7 @@ impl App {
             nav.frame_at(r, scene, &frame, hud[0]);
             nav.enabled = old_enabled;
             nav.opacity = old_opacity;
-            *self.profile.entry("hud.navigator").or_default() += __tn.elapsed().as_secs_f64();
+            *self.perf.profile.entry("hud.navigator").or_default() += __tn.elapsed().as_secs_f64();
             // OMSI 2's dynamic route arrows over the junctions ahead
             if nav.arrows {
                 if let Some(w) = self.world.as_ref() {
@@ -380,7 +380,7 @@ impl App {
                 // (switched off: none, `Settings::notes`; nor over the city map,
                 // whose header they covered once they stood on the timetable's line)
                 notes: if self.settings.notes && !map_open && self.game_menu.is_none() { notes } else { &[] },
-                fps: self.settings.show_fps.then_some(self.fps),
+                fps: self.settings.show_fps.then_some(self.perf.fps),
                 paused: self.paused,
                 menu: match chooser_sel {
                     Some(k) => Some((k, &chooser_items[..])),

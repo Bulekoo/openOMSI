@@ -38,7 +38,7 @@ impl App {
     ) {
         let mut finish = false;
         let mut reconfigure = false;
-        let shot = self.shot.take();
+        let shot = self.perf.shot.take();
         if let Some(s) = self.surface.as_ref() {
             let (w, h) = (s.config.width, s.config.height);
             self.touch_prepare(w, h);
@@ -203,7 +203,7 @@ impl App {
             }
             _ => (None, None),
         };
-        *self.profile.entry("acquire").or_default() += __t.elapsed().as_secs_f64();
+        *self.perf.profile.entry("acquire").or_default() += __t.elapsed().as_secs_f64();
         if frame.is_none() {
             self.hidden_frames += 1;
         }
@@ -313,12 +313,12 @@ impl App {
         }
         // the on-screen controls over the picture (a phone)
         self.touch.render(r, &view, s.config.width, s.config.height);
-        *self.profile.entry("render").or_default() += __t.elapsed().as_secs_f64();
+        *self.perf.profile.entry("render").or_default() += __t.elapsed().as_secs_f64();
         if omsi_cfg::flags::OMSI_PROFILE_GPU.is_set() {
             // wait for the GPU here, so that its time shows as a stage of its own
             let __t = Instant::now();
             let _ = omsi_render::wait_gpu(&r.device, None);
-            *self.profile.entry("gpu").or_default() += __t.elapsed().as_secs_f64();
+            *self.perf.profile.entry("gpu").or_default() += __t.elapsed().as_secs_f64();
         }
         let __t = Instant::now();
         match frame {
@@ -333,7 +333,7 @@ impl App {
                 let _ = omsi_render::wait_gpu(&r.device, None);
             }
         }
-        *self.profile.entry("present").or_default() += __t.elapsed().as_secs_f64();
+        *self.perf.profile.entry("present").or_default() += __t.elapsed().as_secs_f64();
     }
 
     /// The bus's mirrors redrawn, in turn, within their budget.
@@ -447,7 +447,7 @@ impl App {
                 );
             }
         }
-        *self.profile.entry("mirrors").or_default() += __t.elapsed().as_secs_f64();
+        *self.perf.profile.entry("mirrors").or_default() += __t.elapsed().as_secs_f64();
     }
 
     /// Nothing to draw into: what was uploaded let go, the simulation at a display's pace.
@@ -462,7 +462,7 @@ impl App {
         let __t = Instant::now();
         r.queue.submit(std::iter::empty::<wgpu::CommandBuffer>());
         let _ = r.device.poll(wgpu::PollType::Poll);
-        *self.profile.entry("present").or_default() += __t.elapsed().as_secs_f64();
+        *self.perf.profile.entry("present").or_default() += __t.elapsed().as_secs_f64();
         if let Some(rest) =
             std::time::Duration::from_millis(16).checked_sub(now.elapsed())
         {
@@ -502,7 +502,7 @@ impl App {
             {
                 std::thread::sleep(rest);
             }
-            *self.profile.entry("limiter").or_default() += __t.elapsed().as_secs_f64();
+            *self.perf.profile.entry("limiter").or_default() += __t.elapsed().as_secs_f64();
         }
     }
 
@@ -518,19 +518,19 @@ impl App {
             return false;
         };
         let mut finish = false;
-        self.frames += 1;
+        self.perf.frames += 1;
         let profiling = omsi_cfg::flags::OMSI_PROFILE.is_set();
         if profiling
-            && self.cpu_mark.is_none()
+            && self.perf.cpu_mark.is_none()
             && self.started.elapsed().as_secs_f32() > 15.0
         {
-            self.cpu_mark =
-                process_cpu_seconds().map(|c| (c, Instant::now(), self.total_frames));
+            self.perf.cpu_mark =
+                process_cpu_seconds().map(|c| (c, Instant::now(), self.perf.total_frames));
         }
         if let (Some(limit), false) = (self.args.exit_after, self.exiting) {
             if self.started.elapsed().as_secs_f32() > limit {
                 self.exiting = true;
-                log::info!("exit after {limit} s: {} frames total ({} with the window hidden{}), {:.1} fps average, {} frames over 50 ms, worst {:.0} ms", self.total_frames, self.hidden_frames, if omsi_cfg::flags::OMSI_RENDER_OCCLUDED.is_set() { ", drawn off-screen" } else { ", not drawn" }, self.total_frames as f32 / self.started.elapsed().as_secs_f32(), self.spikes, self.worst_ms);
+                log::info!("exit after {limit} s: {} frames total ({} with the window hidden{}), {:.1} fps average, {} frames over 50 ms, worst {:.0} ms", self.perf.total_frames, self.hidden_frames, if omsi_cfg::flags::OMSI_RENDER_OCCLUDED.is_set() { ", drawn off-screen" } else { ", not drawn" }, self.perf.total_frames as f32 / self.started.elapsed().as_secs_f32(), self.perf.spikes, self.perf.worst_ms);
                 if let (Some(st), Some(w)) =
                     (self.streamer.as_ref(), self.world.as_ref())
                 {
@@ -538,8 +538,8 @@ impl App {
                     st.stats.log_ground();
                 }
                 if omsi_cfg::flags::OMSI_PROFILE.is_set() {
-                    let n = self.total_frames.max(1) as f64;
-                    for (k, v) in &self.profile {
+                    let n = self.perf.total_frames.max(1) as f64;
+                    for (k, v) in &self.perf.profile {
                         log::info!("profile {k:10}: {:.1} ms/frame", v / n * 1000.0);
                     }
                     if let Some(h) = self.humans.as_ref() {
@@ -562,9 +562,9 @@ impl App {
                         log::info!("profile gpu pass {pass:12}: {ms:.2} ms ({frames} frames measured)");
                     }
                     if let (Some((c0, t0, f0)), Some(c1)) =
-                        (self.cpu_mark, process_cpu_seconds())
+                        (self.perf.cpu_mark, process_cpu_seconds())
                     {
-                        let frames = self.total_frames.saturating_sub(f0).max(1) as f64;
+                        let frames = self.perf.total_frames.saturating_sub(f0).max(1) as f64;
                         log::info!("profile: since 15 s {:.1} ms wall and {:.1} ms CPU (all threads) per frame, {:.1} cores busy", t0.elapsed().as_secs_f64() / frames * 1000.0, (c1 - c0) / frames * 1000.0, (c1 - c0) / t0.elapsed().as_secs_f64().max(1e-3));
                     }
                     let (sw, sh) = r.scene_size(s.config.width, s.config.height);
@@ -579,28 +579,28 @@ impl App {
                 crate::platform::exit(event_loop);
             }
         }
-        self.total_frames += 1;
-        if self.fps_t.elapsed().as_secs_f32() >= 1.0 {
+        self.perf.total_frames += 1;
+        if self.perf.fps_t.elapsed().as_secs_f32() >= 1.0 {
             if omsi_cfg::flags::OMSI_PROFILE.is_set() {
-                let secs = self.fps_t.elapsed().as_secs_f32();
-                log::info!("profile interval: {:.1} fps over {secs:.2} s", self.frames as f32 / secs);
+                let secs = self.perf.fps_t.elapsed().as_secs_f32();
+                log::info!("profile interval: {:.1} fps over {secs:.2} s", self.perf.frames as f32 / secs);
             }
             let speed = self
                 .player
                 .as_ref()
                 .map(|p| format!(" - {:.0} km/h", p.vehicle.physics.velocity_kmh()))
                 .unwrap_or_default();
-            self.fps = self.frames as f32;
+            self.perf.fps = self.perf.frames as f32;
             win.set_title(&format!(
                 "openOMSI - {} fps{speed} - {:.0},{:.0},{:.0} yaw {:.0}",
-                self.frames,
+                self.perf.frames,
                 cam.position.x,
                 cam.position.y,
                 cam.position.z,
                 cam.yaw.rem_euclid(360.0)
             ));
-            self.frames = 0;
-            self.fps_t = Instant::now();
+            self.perf.frames = 0;
+            self.perf.fps_t = Instant::now();
         }
         finish
     }

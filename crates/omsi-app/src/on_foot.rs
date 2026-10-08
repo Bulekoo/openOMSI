@@ -1107,7 +1107,7 @@ impl App {
             // rest of the glide)
             cam.roll += (0.0 - cam.roll) * k as f32;
         }
-        if omsi_cfg::flags::OMSI_DEBUG_FOOT.is_set() && (self.total_frames % 30 == 0) {
+        if omsi_cfg::flags::OMSI_DEBUG_FOOT.is_set() && (self.perf.total_frames % 30 == 0) {
             let body = self.humans.as_ref().and_then(|h| h.avatar_body(AVATAR_KEY));
             log::info!("foot: inside {:?} eye {:?} pos ({:.2}, {:.2}, {:.2}) heading {:.0} yaw {:.0} vel ({:.2}, {:.2}) lift {:.2} seat {:?} cam {:?} cam_pos {:?} cam_yaw {:.0} body {:?}", f.inside, body.map(|b| b.2), f.pos.x, f.pos.y, f.pos.z, f.heading, f.yaw, f.vel.x, f.vel.y, f.lift, f.seat, f.cam, self.camera.as_ref().map(|c| c.position), self.camera.as_ref().map(|c| c.yaw).unwrap_or(0.0), body);
         }

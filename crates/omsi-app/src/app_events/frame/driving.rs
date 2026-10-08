@@ -21,11 +21,11 @@ impl App {
         let key = self.camera.as_ref().map(|c| (self.cursor.0.round() as i32, self.cursor.1.round() as i32, (c.yaw * 4.0).round() as i32, (c.pitch * 4.0).round() as i32));
         // (the cab sways with the suspension: a view that only turned waits a few frames)
         let cursor_moved = key.map(|k| (k.0, k.1)) != self.hover_key.map(|k| (k.0, k.1));
-        if cursor_moved || (key != self.hover_key && self.total_frames % 6 == 0) || self.total_frames % 12 == 0 {
+        if cursor_moved || (key != self.hover_key && self.perf.total_frames % 6 == 0) || self.perf.total_frames % 12 == 0 {
             self.hover_key = key;
             self.update_hover();
         }
-        *self.profile.entry("player.hover").or_default() +=
+        *self.perf.profile.entry("player.hover").or_default() +=
             __th.elapsed().as_secs_f64();
     }
 
