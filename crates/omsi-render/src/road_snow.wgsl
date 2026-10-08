@@ -85,7 +85,12 @@ fn road_snow(world: vec3<f32>) -> vec3<f32> {
     let rut = tracks.x * snow_track.state.z;
     let slush = rut * smoothstep(0.15, 0.7, base);
     cover = cover * (1.0 - rut * 0.85);
-    // A fresh track: the tread pressed the snow flat and grey, its edges a little raised.
-    cover = cover * (1.0 - tracks.y * 0.55);
-    return vec3<f32>(cover, max(slush, tracks.y * 0.5 * base), tracks.y);
+    // A fresh track: the tread pressed the snow flat and grey. Its edge sharpened from the
+    // texels' blend (a soft ramp over a whole texel read as a blur), and the pressed snow
+    // grainy - the tread's blocks, as fine as the eye can still tell apart.
+    let edge = smoothstep(0.2, 0.75, tracks.y);
+    let grain = 0.75 + 0.25 * vnoise_f(m2, 14.0, vec2<f32>(1.7, 9.3));
+    let track = edge * grain;
+    cover = cover * (1.0 - track * 0.6);
+    return vec3<f32>(cover, max(slush, track * 0.5 * base), track);
 }

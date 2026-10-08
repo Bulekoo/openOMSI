@@ -245,7 +245,11 @@ impl SnowTracks {
             for gx in gx0..gx1 {
                 let p = DVec2::new((gx as f64 + 0.5) * TEXEL, (gy as f64 + 0.5) * TEXEL);
                 let t = ((p - a).dot(ab) / len2).clamp(0.0, 1.0);
-                if (p - (a + ab * t)).length() > TYRE_HALF {
+                // how much of the texel the tyre covers, over a texel's width at its edge:
+                // pressed all or nothing, the track's edge was a staircase of texels
+                let d = (p - (a + ab * t)).length();
+                let cover = ((TYRE_HALF + TEXEL * 0.5 - d) / TEXEL).clamp(0.0, 1.0);
+                if cover <= 0.0 {
                     continue;
                 }
                 let (tx, ty) = (gx.div_euclid(TILE_PX as i64), gy.div_euclid(TILE_PX as i64));
@@ -255,9 +259,14 @@ impl SnowTracks {
                 }
                 let (lx, ly) = (gx.rem_euclid(TILE_PX as i64) as usize, gy.rem_euclid(TILE_PX as i64) as usize);
                 let o = (ly * TILE_PX + lx) * 4;
-                s.px[o + 1] = 255;
-                s.px[o + 2] = (stamp >> 8) as u8;
-                s.px[o + 3] = stamp as u8;
+                let g = (cover * 255.0).round() as u8;
+                // (a texel the tyre crosses mostly takes this moment's snow; its edge texels
+                // keep the older moment of a fuller track under them)
+                if g >= s.px[o + 1] || cover > 0.5 {
+                    s.px[o + 2] = (stamp >> 8) as u8;
+                    s.px[o + 3] = stamp as u8;
+                }
+                s.px[o + 1] = s.px[o + 1].max(g);
                 s.touch(lx, ly, lx + 1, ly + 1);
             }
         }
