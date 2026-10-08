@@ -37,7 +37,7 @@ impl App {
             return;
         }
         let Some(mut old) = self.placed.pop() else { return };
-        if let (Some(a), Some(mut ss)) = (self.audio.as_ref(), old.sounds.take()) {
+        if let (Some(a), Some(mut ss)) = (self.sound.audio.as_ref(), old.sounds.take()) {
             ss.stop_all(a);
         }
         if let (Some(w), Some(r), Some(scene)) = (self.world.clone(), self.renderer.as_ref(), self.scene.as_mut()) {
@@ -126,11 +126,11 @@ impl App {
             self.take_placed(0);
             return;
         };
-        if let (Some(a), Some(mut ss)) = (self.audio.as_ref(), now.sounds.take()) {
+        if let (Some(a), Some(mut ss)) = (self.sound.audio.as_ref(), now.sounds.take()) {
             ss.stop_all(a);
         }
         let mut next = self.placed.remove(0);
-        if let Some(a) = self.audio.as_ref() {
+        if let Some(a) = self.sound.audio.as_ref() {
             next.load_sounds(a);
         }
         // the riders stay in the bus left; the people know the new one's cabin

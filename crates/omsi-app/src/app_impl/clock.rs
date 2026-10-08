@@ -113,9 +113,9 @@ impl App {
             log::info!("season: the textures of {:?} now (were {:?})", season, was_season);
             omsi_texture::set_season_folder(season);
             omsi_cfg::content_changed();
-            st.reload(r, scene, None, self.audio.as_ref());
+            st.reload(r, scene, None, self.sound.audio.as_ref());
         } else if !changed.is_empty() {
-            st.reload(r, scene, Some(&changed), self.audio.as_ref());
+            st.reload(r, scene, Some(&changed), self.sound.audio.as_ref());
         }
     }
 }

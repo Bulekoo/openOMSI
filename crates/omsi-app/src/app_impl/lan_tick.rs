@@ -10,7 +10,7 @@ impl App {
         let radio_keyed = self.voice_radio_held();
         let Some(lan) = self.lan.as_mut() else {
             // (the session is over: the plugin is told so)
-            self.voice = None;
+            self.sound.voice = None;
             return;
         };
         let duty = self
@@ -19,7 +19,7 @@ impl App {
             .map(|d| &d.trips[d.trip_index])
             .map(|t| (t.line.as_str(), t.terminus.as_str()));
         let frame = lan::Frame {
-            audio: self.audio.as_ref(),
+            audio: self.sound.audio.as_ref(),
             listener: self.camera.as_ref().map(|c| c.position),
             muffled: self.in_cab || self.inside_remote.is_some(),
             riders: self.humans.as_ref().map(|h| h.riding()).unwrap_or(0),
@@ -82,7 +82,7 @@ impl App {
         }
         if text.starts_with("voice ") {
             if from == 1 {
-                if let (Some(v), Some(server)) = (self.voice.as_mut(), crate::voice::VoiceServer::parse_command(text)) {
+                if let (Some(v), Some(server)) = (self.sound.voice.as_mut(), crate::voice::VoiceServer::parse_command(text)) {
                     v.set_server(server);
                 }
             }

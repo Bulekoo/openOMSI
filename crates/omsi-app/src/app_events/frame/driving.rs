@@ -55,7 +55,7 @@ impl App {
         if !self.paused && ground_here {
             p.tick(
                 dt,
-                self.audio.as_ref(),
+                self.sound.audio.as_ref(),
                 self.in_cab,
                 !matches!(self.view.as_str(), "free" | "foot"),
             );
@@ -168,10 +168,10 @@ impl App {
                 cam.fov_deg = (base * self.view_zoom.get(&self.view).copied().unwrap_or(1.0)).clamp(8.0, 120.0);
             }
         }
-        if let Some(a) = self.audio.as_ref() {
+        if let Some(a) = self.sound.audio.as_ref() {
             a.follow_device();
         }
-        if let (Some(a), Some(cam)) = (self.audio.as_ref(), self.camera.as_ref()) {
+        if let (Some(a), Some(cam)) = (self.sound.audio.as_ref(), self.camera.as_ref()) {
             let (reverb_time, reverb_mix) = self.world.as_ref().map(|w| w.reverb_at(cam.position)).unwrap_or((0.0, 0.0));
             a.set_listener(omsi_audio::Listener {
                 position: cam.position.as_vec3(),
@@ -194,19 +194,19 @@ impl App {
                 q.sync_transforms(r, scene, false);
             }
         }
-        if let Some(a) = self.audio.as_ref() {
+        if let Some(a) = self.sound.audio.as_ref() {
             match self.player.as_mut() {
                 Some(p) => {
                     let inside = self.in_cab;
-                    self.radio.set_map(&self.args.root, &self.args.map);
-                    if let Some(m) = self.radio.update(a, &p.vehicle, inside) {
+                    self.sound.radio.set_map(&self.args.root, &self.args.map);
+                    if let Some(m) = self.sound.radio.update(a, &p.vehicle, inside) {
                         self.service_msg = Some((m, 6.0));
                     }
                     // (a radio whose display is a text of its script shows the station)
-                    p.vehicle.radio_text = self.radio.display_text();
-                    p.vehicle.radio_frequency = self.radio.frequency(p.vehicle.position.x, p.vehicle.position.y);
+                    p.vehicle.radio_text = self.sound.radio.display_text();
+                    p.vehicle.radio_frequency = self.sound.radio.frequency(p.vehicle.position.x, p.vehicle.position.y);
                 }
-                None => self.radio.stop(a),
+                None => self.sound.radio.stop(a),
             }
         }
     }

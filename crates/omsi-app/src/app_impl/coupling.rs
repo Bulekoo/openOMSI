@@ -31,7 +31,7 @@ impl App {
         };
         let q = self.placed.remove(k);
         let ty = q.vehicle.ty.clone();
-        if let (Some(a), Some(mut ss)) = (self.audio.as_ref(), q.sounds) {
+        if let (Some(a), Some(mut ss)) = (self.sound.audio.as_ref(), q.sounds) {
             ss.stop_all(a);
         }
         w.release_vehicle(r, scene, q.render);

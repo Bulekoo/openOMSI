@@ -132,7 +132,7 @@ impl App {
                     *self.profile.entry("lights.spray").or_default() += __ts.elapsed().as_secs_f64();
                 }
                 // the rain heard in the street and the footsteps on the pavement
-                if let (Some(amb), Some(a)) = (self.ambience.as_mut(), self.audio.as_ref())
+                if let (Some(amb), Some(a)) = (self.sound.ambience.as_mut(), self.sound.audio.as_ref())
                 {
                     let steps = self
                         .humans
@@ -221,7 +221,7 @@ impl App {
                 cam.position,
                 daylight.brightness,
                 &phase,
-                self.audio.as_ref(),
+                self.sound.audio.as_ref(),
                 self.in_cab,
             );
         }

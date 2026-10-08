@@ -105,7 +105,7 @@ impl App {
         self.notices.retain(|n| n.left > 0.0);
         if let Some(lan) = self.lan.as_ref() {
             lines.extend(lan::hud_lines(lan, &self.remotes, self.player.as_ref()));
-            lines.extend(self.voice.as_ref().and_then(|v| v.hud_line()));
+            lines.extend(self.sound.voice.as_ref().and_then(|v| v.hud_line()));
         }
         if let Some(h) = self.humans.as_ref() {
             if let Some(hint) = h.hint() {
@@ -302,7 +302,7 @@ impl App {
             });
             ui.chat.hidden = self.remotes.chat.hidden;
             let mut tags = if self.settings.name_tags {
-                let voice = self.voice.as_ref();
+                let voice = self.sound.voice.as_ref();
                 let speaks = |name: &str, id: u32| voice.is_some_and(|v| v.speaks(name, id));
                 let on_radio = |name: &str, id: u32| voice.is_some_and(|v| v.on_radio(name, id));
                 let rig = (self.settings.triple.enabled

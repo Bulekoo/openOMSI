@@ -2,6 +2,9 @@
 
 use super::*;
 
+mod groups;
+pub(crate) use groups::*;
+
 const SLOW_UPLOAD_MB_S: f64 = 300.0;
 
 pub(crate) struct App {
@@ -60,8 +63,8 @@ pub(crate) struct App {
     pub(crate) menu: Option<menu::Menu>,
     pub(crate) populate_t: f32,
     pub(crate) humans_populate_t: f32,
-    /// The player's bus radio as internet radio.
-    pub(crate) radio: radio::Radio,
+    /// What the game sounds out: the engine, the world around, the radio, the voice chat.
+    pub(crate) sound: SoundState,
     /// Per-stage frame time accumulators (OMSI_PROFILE), seconds.
     pub(crate) profile: std::collections::BTreeMap<&'static str, f64>,
     /// `profile` as it was at the start of the last frame: what a slow frame spent where.
@@ -84,9 +87,6 @@ pub(crate) struct App {
     /// Cursor and view the hover was last worked out for (see the redraw).
     pub(crate) hover_key: Option<(i32, i32, i32, i32)>,
     pub(crate) view: String,
-    pub(crate) audio: Option<omsi_audio::AudioEngine>,
-    /// Sounds of the world around the camera (rain, footsteps).
-    pub(crate) ambience: Option<ambience::Ambience>,
     pub(crate) cursor: (f32, f32),
     /// Last Windows mouse position used for the unbounded VR cockpit pointer.
     #[cfg_attr(not(windows), allow(dead_code))]
@@ -188,8 +188,6 @@ pub(crate) struct App {
     // Steamworks API layer and it's last updated time
     #[cfg(steam)]
     pub(crate) steam: Option<crate::steam::Steam>,
-    /// Positional voice through GreenTeaSpeak in a session (`voice`).
-    pub(crate) voice: Option<crate::voice::Voice>,
     /// Head tracking (Settings → head tracking), started with the first frame that wants it.
     pub(crate) headtrack: Option<crate::headtrack::HeadTracker>,
     /// When head tracking last failed to start (tried again a few seconds later).
@@ -696,8 +694,8 @@ impl App {
                                 });
                             }
                         }
-                        self.ambience = Some(ambience::Ambience::load(&audio, &self.args.root));
-                        self.audio = Some(audio);
+                        self.sound.ambience = Some(ambience::Ambience::load(&audio, &self.args.root));
+                        self.sound.audio = Some(audio);
                         if let Some(p) = &p {
                             if self.args.cam.is_none() && self.args.view != "free" {
                                 self.camera = Some(p.camera(&self.args.view, &cam));
@@ -1045,7 +1043,7 @@ impl App {
             scene,
             &centers,
             std::time::Duration::from_millis(6),
-            self.audio.as_ref(),
+            self.sound.audio.as_ref(),
         );
         // Uploads can temporarily exceed the texture budget before the next frame's
         // housekeeping pass. Recheck immediately after streaming so far textures are

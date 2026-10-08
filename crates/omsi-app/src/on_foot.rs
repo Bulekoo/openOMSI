@@ -446,7 +446,7 @@ impl App {
             let _ = f;
         }
         let mut p = self.player.take().unwrap();
-        if let (Some(a), Some(mut ss)) = (self.audio.as_ref(), p.sounds.take()) {
+        if let (Some(a), Some(mut ss)) = (self.sound.audio.as_ref(), p.sounds.take()) {
             ss.stop_all(a);
         }
         if let (Some(w), Some(r), Some(scene)) = (self.world.clone(), self.renderer.as_ref(), self.scene.as_mut()) {
@@ -523,13 +523,13 @@ impl App {
             return;
         }
         let mut next = self.placed.remove(k);
-        if let Some(a) = self.audio.as_ref() {
+        if let Some(a) = self.sound.audio.as_ref() {
             next.load_sounds(a);
         }
         next.vehicle.host.auto_clutch = if self.settings.auto_clutch { 1.0 } else { 0.0 };
         if let Some(now) = self.player.take() {
             let mut now = now;
-            if let (Some(a), Some(mut ss)) = (self.audio.as_ref(), now.sounds.take()) {
+            if let (Some(a), Some(mut ss)) = (self.sound.audio.as_ref(), now.sounds.take()) {
                 ss.stop_all(a);
             }
             if let Some(h) = self.humans.as_mut() {

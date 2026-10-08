@@ -92,7 +92,7 @@ impl App {
             // the options' [no_collision_vehToVeh]: the bus drives through the traffic
             steps::traffic_boxes(t, self.player.as_mut(), self.settings.collision_vehicles);
             let __t3 = Instant::now();
-            if let Some(a) = self.audio.as_ref() {
+            if let Some(a) = self.sound.audio.as_ref() {
                 let street = self
                     .weather
                     .as_ref()

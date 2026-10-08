@@ -63,7 +63,7 @@ impl App {
                     log::info!("map editor: ground of tiles {tiles:?} at {at:?}");
                     world.forget_staged(&tiles);
                     if let (Some(st), Some(r), Some(scene)) = (self.streamer.as_mut(), self.renderer.as_ref(), self.scene.as_mut()) {
-                        st.reload(r, scene, Some(&tiles), self.audio.as_ref());
+                        st.reload(r, scene, Some(&tiles), self.sound.audio.as_ref());
                     }
                 }
                 msg

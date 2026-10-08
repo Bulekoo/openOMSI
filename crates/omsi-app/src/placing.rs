@@ -194,7 +194,7 @@ impl App {
         self.placing = None;
         let n = self.placed.len();
         for mut q in std::mem::take(&mut self.placed) {
-            if let (Some(a), Some(mut ss)) = (self.audio.as_ref(), q.sounds.take()) {
+            if let (Some(a), Some(mut ss)) = (self.sound.audio.as_ref(), q.sounds.take()) {
                 ss.stop_all(a);
             }
             if let (Some(w), Some(r), Some(scene)) = (self.world.clone(), self.renderer.as_ref(), self.scene.as_mut()) {
@@ -218,7 +218,7 @@ impl App {
         let Some(pl) = self.placing.take() else { return };
         let Some(k) = self.placed.iter().position(|q| q.uid == pl.uid) else { return };
         let mut q = self.placed.remove(k);
-        if let (Some(a), Some(mut ss)) = (self.audio.as_ref(), q.sounds.take()) {
+        if let (Some(a), Some(mut ss)) = (self.sound.audio.as_ref(), q.sounds.take()) {
             ss.stop_all(a);
         }
         if let (Some(w), Some(r), Some(scene)) = (self.world.clone(), self.renderer.as_ref(), self.scene.as_mut()) {

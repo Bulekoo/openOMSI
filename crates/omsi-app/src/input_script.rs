@@ -544,7 +544,7 @@ impl App {
                     || self.keys.contains(&KeyCode::ShiftRight) =>
                     {
                         // Shift+R: the next internet radio station (see radio.rs)
-                        let msg = self.radio.next_station();
+                        let msg = self.sound.radio.next_station();
                         self.service_msg = Some((msg, 4.0));
                     }
                 KeyCode::KeyM

@@ -7,16 +7,16 @@ impl App {
     /// settings allow, the host's voice server asked for, the plugin told who is where.
     pub(super) fn tick_voice(&mut self, dt: f32) {
         let Some(lan) = self.lan.as_mut() else {
-            self.voice = None;
+            self.sound.voice = None;
             return;
         };
         // (a dedicated server has nobody to talk at its place; a joining game that lost
         // its host is in no session to talk in)
         if !self.settings.voice_chat || self.args.server.is_some() || !lan.connected {
-            self.voice = None;
+            self.sound.voice = None;
             return;
         }
-        let v = self.voice.get_or_insert_with(|| crate::voice::Voice::new(crate::voice::DEFAULT_PORT));
+        let v = self.sound.voice.get_or_insert_with(|| crate::voice::Voice::new(crate::voice::DEFAULT_PORT));
         match lan.role {
             omsi_net::Role::Host => {
                 // (once: hosted() reads voice.cfg)
@@ -45,7 +45,7 @@ impl App {
             radio_keyed,
         });
         let me = (lan.my_name.clone(), lan.my_id);
-        if let Some(v) = self.voice.as_mut() {
+        if let Some(v) = self.sound.voice.as_mut() {
             v.tick(dt, (&me.0, me.1), listener, &others);
         }
     }
