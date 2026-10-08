@@ -104,9 +104,11 @@ impl App {
                 p.vehicle.host.humans_on_seat = h.seat_counts();
                 let coins: Vec<usize> = std::mem::take(&mut p.vehicle.host.change_coins);
                 h.give_change(w, r, scene, &coins);
-                h.sync_money(w, r, scene, &p.vehicle);
             }
-            h.sync(r, scene, center);
+            // the view sync of the people: the coins and ticket blocks of the player's bus,
+            // then everybody's pose (see `view_sync`)
+            let bus = self.player.as_ref().map(|p| &p.vehicle);
+            view_sync::sync(ViewSync::people(h, bus, center), w, r, scene);
         }
         *self.perf.profile.entry("humans").or_default() += __t.elapsed().as_secs_f64();
         self.foot_after_humans();

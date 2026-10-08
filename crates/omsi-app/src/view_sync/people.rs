@@ -6,34 +6,48 @@
 //! `BodyOp`s (`PeopleSim::bodies`), and the view replays them in the order they happened
 //! (`show_bodies`), at the end of the same call that made them: the renderer sees the very
 //! calls, in the very order, it saw when the simulation made them itself.
+//!
+//! The replay runs at the end of every `Humans` call that can make or remove people
+//! (`tick`, `populate`, `avatar`, `mirror_add`, `seed_riders`); the coins handed out, the
+//! ticket blocks and the posing are the view sync's (`view_sync::sync`).
 
-use super::*;
+use crate::humans::Humans;
+use crate::scene::World;
+use glam::{DVec3, Mat4, Vec3};
+use hashbrown::HashMap;
+use omsi_render::{AlphaMode, MaterialId, MeshId, Renderer, Scene};
+use omsi_sim::human::{skin, HumanType};
+use omsi_sim::people::{BodyOp, Person, Place, State};
+use omsi_sim::VehicleInstance;
+use rayon::prelude::*;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 /// The renderer's side of the people.
-pub(super) struct Bodies {
-    pub(super) hidden: Vec<usize>,
+pub(crate) struct Bodies {
+    pub(crate) hidden: Vec<usize>,
     /// GPU side of the human types, shared by everyone of a type: textures by file and the
     /// materials of every (type, mesh) - each person used to upload its own copies - and
     /// the meshes and instances of the people who have gone, taken over by the next person
     /// of the same type (the skinned vertices are rewritten anyway). Without that every
     /// passenger who ever appeared kept a mesh, its textures and materials on the GPU.
-    pub(super) gpu_textures: HashMap<PathBuf, Option<omsi_render::TextureId>>,
+    pub(crate) gpu_textures: HashMap<PathBuf, Option<omsi_render::TextureId>>,
     /// Per (type, clothing variant, mesh): its materials, and the meshes and instances of
     /// people who have gone, kept for the next person dressed alike.
-    pub(super) gpu_materials: HashMap<(usize, usize, usize), Vec<MaterialId>>,
-    pub(super) spare: HashMap<(usize, usize, usize), Vec<(MeshId, usize)>>,
-    pub(super) sync_frame: u32,
+    pub(crate) gpu_materials: HashMap<(usize, usize, usize), Vec<MaterialId>>,
+    pub(crate) spare: HashMap<(usize, usize, usize), Vec<(MeshId, usize)>>,
+    pub(crate) sync_frame: u32,
     /// Simulation time of the last `sync`.
-    pub(super) last_sync: f64,
+    pub(crate) last_sync: f64,
     /// Frames synced, people posed and skinned, the time that took and the part of it spent
     /// uploading (ms), in total.
-    pub(super) pose_stats: (u32, usize, f64, f64),
+    pub(crate) pose_stats: (u32, usize, f64, f64),
     /// `OMSI_TRACE_PAX=<csv>`: every person near the eye, every frame (see `sync`).
-    pub(super) trace: Option<std::io::BufWriter<std::fs::File>>,
+    pub(crate) trace: Option<std::io::BufWriter<std::fs::File>>,
 }
 
 impl Bodies {
-    pub(super) fn new() -> Bodies {
+    pub(crate) fn new() -> Bodies {
         Bodies {
             hidden: Vec::new(),
             gpu_textures: HashMap::new(),
@@ -54,7 +68,7 @@ impl Bodies {
 
 impl Humans {
     /// Bring the renderer up to what the simulation did (see [`BodyOp`]).
-    pub(super) fn show_bodies(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene) {
+    pub(crate) fn show_bodies(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene) {
         self.replay_bodies(Some(world), renderer, scene);
     }
 
@@ -180,13 +194,6 @@ impl Humans {
         meshes
     }
 
-    /// OMSI's `change_take`: the driver takes back the coins lying on the change tray.
-    pub fn take_change_tray(&mut self) {
-        if let Some(m) = self.sim.money.as_mut() {
-            m.clear(true);
-        }
-    }
-
     /// Coins the driver handed out (from the host's GiveChangeCoin list) onto the change point.
     pub fn give_change(
         &mut self,
@@ -220,7 +227,7 @@ impl Humans {
         }
     }
 
-    pub fn sync_money(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, bus: &VehicleInstance) {
+    pub(super) fn sync_money(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, bus: &VehicleInstance) {
         if let Some(m) = self.sim.money.as_mut() {
             crate::money::sync(m, renderer, scene, bus);
         }
@@ -238,7 +245,7 @@ impl Humans {
     /// Skin the people due for a new pose and push transforms to the renderer. Near people
     /// are posed every frame, far ones every few frames and people out of view rarely; the
     /// posing and skinning run in parallel.
-    pub fn sync(&mut self, renderer: &Renderer, scene: &mut Scene, camera: DVec3) {
+    pub(super) fn sync(&mut self, renderer: &Renderer, scene: &mut Scene, camera: DVec3) {
         self.catch_up_bodies(renderer, scene);
         for inst in self.view.hidden.drain(..) {
             renderer.set_params(scene, inst, &[], false, &[]);

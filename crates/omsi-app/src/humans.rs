@@ -2,35 +2,35 @@
 //!
 //! The simulation is omsi-sim's `people` (`PeopleSim`, which knows nothing of the GPU);
 //! here it gets the loaded world, the traffic and the player's duty, and the people's
-//! pictures (`view`): their meshes, posing and skinning, and the coins on the cash desk.
+//! pictures (`crate::view_sync::people`): their meshes, posing and skinning, and the coins
+//! on the cash desk.
 
 use crate::ambience;
 use crate::money::TicketBlocks;
 use crate::scene::World;
 use crate::traffic::Traffic;
-use glam::{DVec3, Mat4, Vec3};
+use glam::DVec3;
 use hashbrown::HashMap;
-use omsi_render::{AlphaMode, Camera, MaterialId, MeshId, Renderer, Scene};
-use omsi_sim::human::{skin, HumanType};
+use omsi_render::{Camera, Renderer, Scene};
+use omsi_sim::human::HumanType;
 use omsi_sim::people::pax::{StopPlan, TripPlan};
-use omsi_sim::people::{BodyOp, DutyTrip, PeopleSim, Place, State};
+use omsi_sim::people::{DutyTrip, PeopleSim};
 use omsi_sim::VehicleInstance;
 use parking_lot::MutexGuard;
-use rayon::prelude::*;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 // The renderer's side of the people.
-mod view;
-
-use view::*;
+use crate::view_sync::people::Bodies;
 
 // The module's API, at the paths it always had (some only returned, never named outside).
 #[allow(unused_imports)]
 pub use omsi_sim::people::{AvatarCmd, SeatSpot};
 #[allow(unused_imports)]
 pub use omsi_sim::people::{placed_bus_id, remote_bus_id, remote_bus_player, LanPerson, MirrorPose};
-pub use omsi_sim::people::{BusId, DoorWants, Person};
+pub use omsi_sim::people::{BusId, DoorWants};
+#[allow(unused_imports)]
+pub use omsi_sim::people::Person;
 #[allow(unused_imports)]
 pub use omsi_sim::people::VoiceLine;
 
@@ -41,8 +41,10 @@ pub(crate) use omsi_sim::people::LEFT_HAND;
 /// simulation reads through it (`Deref` to `PeopleSim`).
 pub struct Humans {
     pub sim: PeopleSim,
-    /// The renderer's side: meshes, GPU materials, posing (see `view`).
-    view: Bodies,
+    /// The renderer's side: meshes, GPU materials, posing (see `crate::view_sync::people`;
+    /// kept here because every call that makes or removes people shows them before it
+    /// returns).
+    pub(crate) view: Bodies,
     /// The tear-off ticket blocks of the player's bus (`money::TicketBlocks`).
     pub ticket_blocks: Option<TicketBlocks>,
 }
@@ -172,6 +174,13 @@ impl Humans {
     pub fn seed_riders(&mut self, n: usize, bus: &VehicleInstance, world: &World, renderer: &Renderer, scene: &mut Scene) {
         self.sim.seed_riders(n, bus, world);
         self.show_bodies(world, renderer, scene);
+    }
+
+    /// OMSI's `change_take`: the driver takes back the coins lying on the change tray.
+    pub fn take_change_tray(&mut self) {
+        if let Some(m) = self.sim.money.as_mut() {
+            m.clear(true);
+        }
     }
 
     /// Bus `bus` is gone (the player removed it; see `PeopleSim::evict`).

@@ -68,6 +68,7 @@ mod settings;
 mod threads;
 mod tiles;
 mod traffic;
+mod view_sync;
 mod ui;
 
 // the game itself, split by what each part does

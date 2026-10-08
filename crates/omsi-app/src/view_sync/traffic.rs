@@ -1,8 +1,18 @@
 //! What the traffic shows: the GPU side of the AI vehicles, their drivers and the
 //! traffic lamps.
+//!
+//! The renders live in `Traffic::view`: the traffic's own steps that put a car on the road
+//! or take one off (population, timetable departures, trains, the LAN mirror) make or let
+//! go its renders at once, through `TrafficView` and `Traffic::new_car_render`; everything
+//! else - parked cars, lamps, drivers, the cars' transforms, materials and script textures
+//! - is brought up to date by the view sync (`view_sync::sync`, `Traffic::sync`).
 
-use super::*;
 use crate::scene::{VehicleRender, World};
+use crate::traffic::Traffic;
+use hashbrown::HashMap;
+use omsi_sim::traffic::TrafficLightController;
+use omsi_sim::{VehicleInstance, VehicleType};
+use std::sync::Arc;
 use omsi_render::{Renderer, Scene};
 
 pub(super) const SCRIPT_UPLOAD_BUDGET: usize = 4 << 20;
@@ -17,15 +27,15 @@ pub(super) const SKIN_DISTANCE: f64 = 200.0;
 
 /// What an AI car looks like on the screen: the render of its body and those of its
 /// coupled parts (trailers, rear sections, the cars of a train), in their order.
-pub(super) struct CarRender {
-    pub(super) body: VehicleRender,
-    pub(super) trailers: Vec<VehicleRender>,
+pub(crate) struct CarRender {
+    pub(crate) body: VehicleRender,
+    pub(crate) trailers: Vec<VehicleRender>,
 }
 
 /// The GPU side of the traffic, kept apart from the simulation: the cars' renders by car
 /// id, and the drivers of the timetable buses.
 #[derive(Default)]
-pub(super) struct TrafficView {
+pub(crate) struct TrafficView {
     cars: HashMap<u64, CarRender>,
     /// Renders of cars that have gone, given back at the next `sync`.
     released: Vec<VehicleRender>,
@@ -38,7 +48,7 @@ pub(super) struct TrafficView {
 
 impl TrafficView {
     /// The renders of the car `id` that has just been put on the road.
-    pub(super) fn insert(&mut self, id: u64, render: CarRender) {
+    pub(crate) fn insert(&mut self, id: u64, render: CarRender) {
         if let Some(old) = self.cars.insert(id, render) {
             log::warn!("traffic: two cars with id {id}; the renders of the first are let go");
             self.released.push(old.body);
@@ -47,12 +57,12 @@ impl TrafficView {
     }
 
     /// Take the renders of car `id` out (it is made anew under the same id).
-    pub(super) fn take(&mut self, id: u64) -> Option<CarRender> {
+    pub(crate) fn take(&mut self, id: u64) -> Option<CarRender> {
         self.cars.remove(&id)
     }
 
     /// Car `id` has gone: its renders go back to the world at the next sync.
-    pub(super) fn retire(&mut self, id: u64) {
+    pub(crate) fn retire(&mut self, id: u64) {
         if let Some(r) = self.cars.remove(&id) {
             self.released.push(r.body);
             self.released.extend(r.trailers);
@@ -60,14 +70,14 @@ impl TrafficView {
     }
 
     /// Car `id` has gone: its renders go back to the world now.
-    pub(super) fn release_car(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, id: u64) {
+    pub(crate) fn release_car(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, id: u64) {
         if let Some(r) = self.cars.remove(&id) {
             release_car_render(world, renderer, scene, r);
         }
     }
 
     /// Couple another part of type `t` to car `id`'s picture.
-    pub(super) fn add_trailer(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, id: u64, t: &Arc<VehicleType>) {
+    pub(crate) fn add_trailer(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, id: u64, t: &Arc<VehicleType>) {
         if let Some(r) = self.cars.get_mut(&id) {
             r.trailers
                 .push(world.add_vehicle_shared(renderer, scene, t, None, Some(&r.body)));
@@ -75,7 +85,7 @@ impl TrafficView {
     }
 
     /// Let the renders of car `id`'s coupled parts go now (it gets others).
-    pub(super) fn release_trailers(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, id: u64) {
+    pub(crate) fn release_trailers(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, id: u64) {
         if let Some(r) = self.cars.get_mut(&id) {
             for t in r.trailers.drain(..) {
                 world.release_vehicle(renderer, scene, t);
@@ -85,20 +95,20 @@ impl TrafficView {
 }
 
 /// Give the renders of a car back to the world, its body first.
-pub(super) fn release_car_render(world: &World, renderer: &Renderer, scene: &mut Scene, r: CarRender) {
+pub(crate) fn release_car_render(world: &World, renderer: &Renderer, scene: &mut Scene, r: CarRender) {
     for r in std::iter::once(r.body).chain(r.trailers) {
         world.release_vehicle(renderer, scene, r);
     }
 }
 
 /// A parked car drives off: its object goes from the scene (None when it is not there).
-pub(super) fn depart_parked(world: &World, renderer: &Renderer, scene: &mut Scene, key: i64) -> Option<()> {
+pub(crate) fn depart_parked(world: &World, renderer: &Renderer, scene: &mut Scene, key: i64) -> Option<()> {
     world.depart_parked(renderer, scene, key).map(|_| ())
 }
 
 impl Traffic {
     /// Load and attach the `[couple_back]` chain of `vehicle`; returns the renders.
-    pub(super) fn attach_trailers(
+    pub(crate) fn attach_trailers(
         &mut self,
         world: &World,
         renderer: &Renderer,
@@ -124,7 +134,7 @@ impl Traffic {
 
     /// The renders of a new car of type `ty` (paint `scheme`) and of the parts its
     /// `[couple_back]` chain couples to `vehicle`.
-    pub(super) fn new_car_render(
+    pub(crate) fn new_car_render(
         &mut self,
         world: &World,
         renderer: &Renderer,
@@ -204,7 +214,7 @@ impl Traffic {
         }
     }
 
-    pub fn sync(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene) {
+    pub(super) fn sync(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene) {
         // cars that have parked: the parked object stands in their place from now on
         let mut i = 0;
         while i < self.sim.cars.len() {
