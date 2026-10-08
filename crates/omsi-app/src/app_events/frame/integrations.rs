@@ -99,11 +99,8 @@ impl App {
             });
         }
         if let (Some(h), Some(p)) = (self.humans.as_mut(), self.player.as_ref()) {
-            steps::career_from_humans(&mut self.career, h);
-            // the options' [no_collision_pedastrians]: nobody is knocked down
-            let hurt = if self.settings.collision_pedestrians { h.run_over(&p.vehicle) } else { 0 };
+            let hurt = steps::people_in_career(&mut self.career, h, p, self.settings.collision_pedestrians);
             if hurt > 0 {
-                self.career.crashes[1] += hurt as i32;
                 self.service_msg = Some(("Pedestrian knocked down!".into(), 6.0));
                 crate::plugins::queue_event(&mut self.plugin_events, "pedestrian", vec![omsi_plugin::InfoValue::Num(hurt as f64)]);
             }

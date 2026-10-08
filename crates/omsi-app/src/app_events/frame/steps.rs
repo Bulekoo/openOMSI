@@ -1,15 +1,15 @@
 //! The steps of a frame that the window (`App::frame`) and the offscreen run
 //! (`run_offscreen`) both take. Each one takes what it works on rather than the `App`, so
-//! that the offscreen run can call it with its own locals; where the two still differ, the
-//! difference is a parameter (each caller passes what it did before).
+//! that the offscreen run can call it with its own locals. The offscreen run takes them as
+//! the window does (its clock goes on, the settings count); the parameters left say what
+//! only one of them has (a pause, LAN players, plugins).
 
 use super::*;
 
 /// The vehicles the AI traffic must see besides its own: the other LAN players' buses, the
 /// player's own and the ones the player placed - and, unless the game is paused, the
 /// traffic's step itself with the player's priority, blinker, switches and signals.
-/// `player_rail`: the player's place on a rail line for the signals (the offscreen run
-/// passes none).
+/// `player_rail`: the player's place on a rail line for the signals.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn traffic_tick(
     t: &mut traffic::Traffic,
@@ -103,13 +103,88 @@ pub(crate) fn world_lamps(
 }
 
 /// How many people the map wants about at this time of day (`time`, seconds), with the
-/// passengers setting (OMSI's `AIPassFactor`, in per cent).
-pub(crate) fn humans_by_hour(h: &mut humans::Humans, world: &World, time: f64, pax_density: f32) {
+/// passengers setting (OMSI's `AIPassFactor`, in per cent), and how late the player's duty
+/// runs (the passengers waiting at its stops grow impatient).
+pub(crate) fn humans_by_hour(
+    h: &mut humans::Humans,
+    world: &World,
+    time: f64,
+    pax_density: f32,
+    duty: Option<&schedule::PlayerDuty>,
+) {
     h.density = world
         .global
         .passenger_density((time / 3600.0) as f32)
         * pax_density;
     h.time_of_day = time;
+    h.delay = duty.map(|d| d.delay(time)).unwrap_or(0.0);
+}
+
+/// What the bus's scripts are told of the surroundings: the light around it, the sun's
+/// height and the weather (`wetness`: the roads').
+pub(crate) fn tell_surroundings(
+    p: &mut Player,
+    world: Option<&World>,
+    daylight: &omsi_sim::Daylight,
+    weather: Option<&omsi_content::weather::Weather>,
+    wetness: f32,
+) {
+    let lm = world.and_then(|w| w.light_map_light_at(p.vehicle.position));
+    p.vehicle.set_var("Envir_Brightness", daylight.envir_brightness(lm));
+    p.vehicle.host.sun_alt = daylight.altitude_deg;
+    if let Some(w) = weather {
+        apply_weather(&mut p.vehicle, w, wetness);
+    }
+}
+
+/// The people's counts in the personnel file and the pedestrians the bus knocked down
+/// (none with `collide` off: the options' [no_collision_pedastrians]).
+pub(crate) fn people_in_career(career: &mut career::Career, h: &mut humans::Humans, p: &Player, collide: bool) -> u32 {
+    career_from_humans(career, h);
+    let hurt = if collide { h.run_over(&p.vehicle) } else { 0 };
+    if hurt > 0 {
+        career.crashes[1] += hurt as i32;
+    }
+    hurt
+}
+
+/// The bus's own variables of the people aboard and the duty, the personnel file's step
+/// (`tick`: unless paused or the session was written) and a crash in it: its energy (J,
+/// 0: none).
+pub(crate) fn career_step(career: &mut career::Career, p: &mut Player, riders: usize, on_duty: bool, dt: f32, tick: bool) -> f32 {
+    // the engine's own variables of the bus (see `update_engine_vars`)
+    p.vehicle.host.humans_count = riders as f32;
+    p.vehicle.host.schedule_active = if on_duty { 1.0 } else { 0.0 };
+    let crash = std::mem::take(&mut p.vehicle.last_crash);
+    if tick {
+        career.tick(dt, &p.vehicle, riders);
+    }
+    if crash > 0.0 {
+        career.crashed(crash, p.vehicle.physics.velocity_kmh() / 3.6);
+    }
+    crash
+}
+
+/// The cabin air of the player's bus and the condensation on its glass, `dt` on.
+pub(crate) fn cabin_air_step(
+    cabin: &mut crate::condensation::CabinAir,
+    dt: f32,
+    p: &Player,
+    weather: &omsi_content::weather::Weather,
+    humans: Option<&humans::Humans>,
+) {
+    let (riders, doors) = humans
+        .map(|h| (h.riding(), crate::condensation::open_doors(&h.cabin_doors(crate::humans::BusId::Player))))
+        .unwrap_or((0, 0));
+    let ci = crate::condensation::inputs_for(&p.vehicle, weather, riders, doors);
+    cabin.step(dt, &ci);
+}
+
+/// The [wind] at the height of the tyres' spray: direction (deg) and speed (m/s) in the lee
+/// of the street.
+pub(crate) fn spray_wind(weather: &omsi_content::weather::Weather) -> Vec3 {
+    Vec3::new(weather.wind.0.to_radians().sin() * weather.wind.1, weather.wind.0.to_radians().cos() * weather.wind.1, 0.0)
+        * puddles::GROUND_WIND
 }
 
 /// The people's step, and what it means for the buses: the validators used (the bus's
@@ -271,6 +346,40 @@ pub(crate) fn light_vehicles<'a>(
     }
     vehicles.extend(remotes.remotes.values().map(|r| r.vehicle()));
     vehicles
+}
+
+/// The lighting a picture is drawn with: the weather's (`cloud_drift`, the roads' `wetness`;
+/// `OMSI_WETNESS` in its place), dressed for the bus the camera may be in (`inside`) and the
+/// player's (`driven`: the wind on its glass, `condensation` on it).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn picture_lighting(
+    daylight: &omsi_sim::Daylight,
+    weather: Option<&omsi_content::weather::Weather>,
+    cloud_drift: [f32; 2],
+    wetness: f32,
+    world: Option<&World>,
+    inside: Option<&omsi_sim::VehicleInstance>,
+    driven: Option<&omsi_sim::VehicleInstance>,
+    condensation: [f32; 4],
+    settings: &crate::settings::Settings,
+) -> omsi_render::Lighting {
+    let mut lighting = match weather {
+        Some(w) => weather_lighting(daylight, w, cloud_drift, wetness, settings.shadows),
+        None => lights::lighting_from(daylight, 50000.0),
+    };
+    lighting.wetness = omsi_cfg::env::var("OMSI_WETNESS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(wetness);
+    dress_lighting(&mut lighting, world, inside, settings);
+    lighting.glass_wind = driven.map(crate::lights::vehicle_velocity).unwrap_or_default();
+    lighting.condensation = condensation;
+    // an LED panel's dots burn this much above their own colour (16 levels,
+    // see `Settings::led_glow`); the panel's picture and its mask are held at
+    // this mip level at most (`Settings::led_mips`)
+    lighting.led_glow = settings.led_glow as f32 * 0.25;
+    lighting.led_mips = settings.led_mips;
+    lighting
 }
 
 /// What the lighting needs of the bus the camera may be in (`inside`: its box keeps the

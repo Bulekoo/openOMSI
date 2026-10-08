@@ -6,37 +6,25 @@ use super::*;
 impl App {
     /// The lighting the frame is drawn with.
     pub(super) fn frame_lighting(&mut self, dt: f32, daylight: omsi_sim::Daylight) -> omsi_render::Lighting {
-        let mut lighting = match self.weather.as_ref() {
-            Some(w) => {
-                self.wetness = road_wetness(precip_of(w).1, dt as f64, self.wetness);
-                weather_lighting(
-                    &daylight,
-                    w,
-                    self.cloud_drift,
-                    self.wetness,
-                    self.settings.shadows,
-                )
-            }
-            None => lights::lighting_from(&daylight, 50000.0),
-        };
-        lighting.wetness = omsi_cfg::env::var("OMSI_WETNESS")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(self.wetness);
+        if let Some(w) = self.weather.as_ref() {
+            self.wetness = road_wetness(precip_of(w).1, dt as f64, self.wetness);
+        }
         let inside = match self.inside_remote.and_then(|id| self.remotes.remotes.get(&id)) {
             // (in another player's bus: its box is the one the camera is in)
             Some(rv) => Some(rv.vehicle()),
             None => self.player.as_ref().map(|p| &p.vehicle),
         };
-        steps::dress_lighting(&mut lighting, self.world.as_deref(), inside, &self.settings);
-        lighting.glass_wind = self.player.as_ref().map(|p| crate::lights::vehicle_velocity(&p.vehicle)).unwrap_or_default();
-        lighting.condensation = self.cabin_air.appearance();
-        // an LED panel's dots burn this much above their own colour (16 levels,
-        // see `Settings::led_glow`); the panel's picture and its mask are held at
-        // this mip level at most (`Settings::led_mips`)
-        lighting.led_glow = self.settings.led_glow as f32 * 0.25;
-        lighting.led_mips = self.settings.led_mips;
-        lighting
+        steps::picture_lighting(
+            &daylight,
+            self.weather.as_ref(),
+            self.cloud_drift,
+            self.wetness,
+            self.world.as_deref(),
+            inside,
+            self.player.as_ref().map(|p| &p.vehicle),
+            self.cabin_air.appearance(),
+            &self.settings,
+        )
     }
 
     /// The frame drawn and shown (or, with the window hidden, the simulation kept at a

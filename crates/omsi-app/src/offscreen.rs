@@ -57,7 +57,13 @@ struct Offscreen<'a> {
     lan_audio: Option<omsi_audio::AudioEngine>,
     lan_off: Option<omsi_net::LanSession>,
     remotes_off: lan::LanGame,
+    /// the clock of the moment the run has reached (the start, the workshop's wait and the
+    /// seconds run; a dedicated server's own), as the window's goes on
     run_clock: omsi_sim::SimClock,
+    /// how wet the roads are, rain wetting them and dry weather drying them as in the window
+    wetness: f32,
+    /// the cabin air of the player's bus and the condensation on its glass
+    cabin_air: crate::condensation::CabinAir,
     /// a dedicated server's administration and clock (see `admin`)
     srv_admin: crate::admin::ServerAdmin,
     srv_clock: f64,
@@ -68,8 +74,6 @@ struct Offscreen<'a> {
     srv_weather_name: String,
     ground_gap: Option<crate::ground_gap::GroundGap>,
     spray: puddles::Spray,
-    spray_wet: f32,
-    spray_wind: Vec3,
     real_time: RealTime,
 }
 

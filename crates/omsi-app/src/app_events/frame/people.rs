@@ -51,8 +51,7 @@ impl App {
                 f.seat.map(|s| s.0) != own && f.inside.map(|i| i.0) != own
             });
             // (OMSI's `AIPassFactor`, the passengers setting in per cent)
-            steps::humans_by_hour(h, w, self.clock.time, self.settings.pax_density);
-            h.delay = self.duty.as_ref().map(|d| d.delay(self.clock.time)).unwrap_or(0.0);
+            steps::humans_by_hour(h, w, self.clock.time, self.settings.pax_density, self.duty.as_ref());
             self.humans_populate_t -= dt;
             if self.humans_populate_t <= 0.0 && !self.paused {
                 self.humans_populate_t = 2.0;
@@ -140,16 +139,10 @@ impl App {
         }
         if let Some(p) = self.player.as_mut() {
             let riders = self.humans.as_ref().map(|h| h.riding()).unwrap_or(0);
-            // the engine's own variables of the bus (see `update_engine_vars`)
-            p.vehicle.host.humans_count = riders as f32;
-            p.vehicle.host.schedule_active = if self.duty.is_some() { 1.0 } else { 0.0 };
-            let crash = std::mem::take(&mut p.vehicle.last_crash);
             // (a frame after the session was written must not start another one)
-            if !self.exiting && !self.paused {
-                self.career.tick(dt, &p.vehicle, riders);
-            }
+            let tick = !self.exiting && !self.paused;
+            let crash = steps::career_step(&mut self.career, p, riders, self.duty.is_some(), dt, tick);
             if crash > 0.0 {
-                self.career.crashed(crash, p.vehicle.physics.velocity_kmh() / 3.6);
                 self.service_msg = Some((format!("Crash: {:.0} kJ", crash / 1000.0), 6.0));
                 use omsi_plugin::InfoValue::Num;
                 let args = vec![Num(crash as f64 / 1000.0), Num(p.vehicle.physics.velocity_kmh().abs() as f64)];

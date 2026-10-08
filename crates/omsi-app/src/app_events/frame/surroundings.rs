@@ -40,12 +40,7 @@ impl App {
             self.follow_date();
         }
         if let Some(p) = self.player.as_mut() {
-            let lm = self.world.as_ref().and_then(|w| w.light_map_light_at(p.vehicle.position));
-            p.vehicle.set_var("Envir_Brightness", daylight.envir_brightness(lm));
-            p.vehicle.host.sun_alt = daylight.altitude_deg;
-            if let Some(w) = &self.weather {
-                apply_weather(&mut p.vehicle, w, self.wetness);
-            }
+            steps::tell_surroundings(p, self.world.as_deref(), &daylight, self.weather.as_ref(), self.wetness);
         }
         daylight
     }
@@ -99,6 +94,7 @@ impl App {
                     wt.wind.0.to_radians().cos() * wt.wind.1,
                     0.0,
                 );
+                let spray_wind = steps::spray_wind(wt);
                 // every bus one may ride in keeps the weather out: the own, another
                 // player's, a timetable bus - each part of it: an articulated bus's
                 // rear section is a coupled part with its own [boundingbox] (#777)
@@ -112,9 +108,7 @@ impl App {
                 self.rain.tick(if self.paused { 0.0 } else { dt }, cam.position, wind, scene, &buses);
                 // the player's bus's cabin air and the condensation on its glass
                 if let Some(p) = self.player.as_ref() {
-                    let (riders, doors) = self.humans.as_ref().map(|h| (h.riding(), crate::condensation::open_doors(&h.cabin_doors(crate::humans::BusId::Player)))).unwrap_or((0, 0));
-                    let ci = crate::condensation::inputs_for(&p.vehicle, wt, riders, doors);
-                    self.cabin_air.step(if self.paused { 0.0 } else { dt }, &ci);
+                    steps::cabin_air_step(&mut self.cabin_air, if self.paused { 0.0 } else { dt }, p, wt, self.humans.as_ref());
                 }
                 *self.profile.entry("lights.rain").or_default() += __tr.elapsed().as_secs_f64();
                 // what every vehicle's tyres throw up from the water on the road: the
@@ -130,7 +124,7 @@ impl App {
                         self.traffic.as_ref(),
                         &self.remotes,
                         cam.position,
-                        wind * puddles::GROUND_WIND,
+                        spray_wind,
                         w,
                         wetness,
                     );

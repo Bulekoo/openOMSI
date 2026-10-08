@@ -75,25 +75,30 @@ impl Offscreen<'_> {
             ref settings,
             ref player_ref,
             ref player,
+            ref cabin_air,
+            wetness,
             ..
         } = *self;
         let daylight = omsi_sim::Daylight::compute(clock, envir.as_ref());
         steps::world_lamps(world, renderer, scene, clock, &daylight, true, true);
         // (the physical model at the map's own place and the picture's moment)
         *weather = crate::weather_model::refresh(clock).unwrap_or(std::mem::take(weather));
-        // a run starts with the roads already in the state this weather would leave them
-        let mut wetness = initial_wetness(weather);
-        if let Some(v) = omsi_cfg::env::var("OMSI_WETNESS")
-            .ok()
-            .and_then(|v| v.parse().ok())
-        {
-            wetness = v;
-        }
-        let mut lighting = weather_lighting(&daylight, weather, cloud_drift_at(weather, clock.time), wetness, settings.shadows);
+        // (the roads as wet as the run left them: a run starts with them in the state this
+        // weather would leave them; OMSI_WETNESS in their place)
         // the player's vehicle has moved into `player_ref` by now (after --drive): without
         // this the offscreen picture had no cab box, unlike the window
-        steps::dress_lighting(&mut lighting, Some(world), player_ref.as_ref().or(player.as_ref()).map(|p| &p.vehicle), settings);
-        lighting.glass_wind = player_ref.as_ref().or(player.as_ref()).map(|p| crate::lights::vehicle_velocity(&p.vehicle)).unwrap_or_default();
+        let driven = player_ref.as_ref().or(player.as_ref()).map(|p| &p.vehicle);
+        let mut lighting = steps::picture_lighting(
+            &daylight,
+            Some(weather),
+            cloud_drift_at(weather, clock.time),
+            wetness,
+            Some(world),
+            driven,
+            driven,
+            cabin_air.appearance(),
+            settings,
+        );
         // OMSI_CONDENSATION=<minutes>,<people>[,engine 0/1]: the cabin air and the condensation
         // on the player's glass after that long with that many aboard
         if let (Ok(spec), Some(p)) = (omsi_cfg::env::var("OMSI_CONDENSATION"), player_ref.as_ref().or(player.as_ref())) {

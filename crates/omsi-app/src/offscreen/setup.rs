@@ -189,7 +189,7 @@ impl<'a> Offscreen<'a> {
                     .ok()
                     .as_ref(),
             );
-            steps::set_ai_daylight(t, daylight, false);
+            steps::set_ai_daylight(t, daylight, steps::gloomy_weather(Some(&weather)));
             t.populate(&world, &renderer, &mut scene, center);
         }
         ground_sample(&world, traffic.as_ref(), center)?;
@@ -208,7 +208,8 @@ impl<'a> Offscreen<'a> {
                 lan::WELCOME_WAIT,
             );
         }
-        let run_clock = start_clock(args);
+        let mut run_clock = start_clock(args);
+        run_clock.advance(service_seconds as f32);
         // a dedicated server's administration and clock (see `admin`)
         let mut srv_admin = crate::admin::ServerAdmin::default();
         let srv_clock = 0.0f64;
@@ -233,11 +234,10 @@ impl<'a> Offscreen<'a> {
         if let Some(t) = traffic.as_ref() {
             crate::ground_gap::check_lanes(&world, t);
         }
-        // the tyres' spray (see `puddles`): the roads as wet as the picture draws them, the air
-        // moving with the weather's wind ([wind] direction (deg) speed (m/s))
+        // the tyres' spray (see `puddles`), from roads as wet as the weather left them
         let spray = puddles::Spray::new();
-        let spray_wet = puddles::road_wetness(initial_wetness(&weather), weather.snow);
-        let spray_wind = Vec3::new(weather.wind.0.to_radians().sin(), weather.wind.0.to_radians().cos(), 0.0) * weather.wind.1 * puddles::GROUND_WIND;
+        let wetness = initial_wetness(&weather);
+        let cabin_air = crate::condensation::CabinAir::new();
         let real_time = RealTime::default();
         Ok(Offscreen {
             args,
@@ -280,6 +280,8 @@ impl<'a> Offscreen<'a> {
             lan_off,
             remotes_off,
             run_clock,
+            wetness,
+            cabin_air,
             srv_admin,
             srv_clock,
             srv_metar,
@@ -288,8 +290,6 @@ impl<'a> Offscreen<'a> {
             srv_weather_name,
             ground_gap,
             spray,
-            spray_wet,
-            spray_wind,
             real_time,
         })
     }

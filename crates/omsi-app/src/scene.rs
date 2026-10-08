@@ -52,7 +52,6 @@ pub(crate) use props::*;
 pub(crate) use scripted::*;
 pub(crate) use vehicle_materials::*;
 pub(crate) use vehicle_types::*;
-pub(crate) use vehicles::*;
 use lanes::*;
 use lightmaps::*;
 pub(crate) use stage::*;

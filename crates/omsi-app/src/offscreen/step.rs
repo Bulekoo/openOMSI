@@ -10,16 +10,33 @@ impl Offscreen<'_> {
         if self.server && !self.server_step(i) {
             return Ok(false);
         }
+        self.clock_step(t_s);
         self.traffic_step(i, t_s)?;
-        self.player_step(i, t_s);
+        self.player_step(i);
         if let Some(g) = self.ground_gap.as_mut() {
             g.frame(&self.world, t_s, self.player.as_ref().map(|p| &p.vehicle), self.traffic.as_ref());
         }
         self.humans_step(i);
-        self.lan_step(t_s);
-        self.spray_step();
+        self.lan_step();
+        self.surroundings_step();
         self.snapshot_step(t_s)?;
         Ok(true)
+    }
+
+    /// The clock of this moment (`t_s` into the run; a dedicated server's own), and what the
+    /// bus's scripts are told of it, as the window's `frame_weather` has them.
+    fn clock_step(&mut self, t_s: f32) {
+        let mut clock = start_clock(self.args);
+        if self.server {
+            clock.advance((self.srv_clock + self.srv_admin.shift) as f32);
+        } else {
+            clock.advance(t_s + self.service_seconds as f32);
+        }
+        self.run_clock = clock;
+        let daylight = omsi_sim::Daylight::compute(&self.run_clock, self.envir.as_ref());
+        if let Some(p) = self.player.as_mut() {
+            steps::tell_surroundings(p, Some(&self.world), &daylight, Some(&self.weather), self.wetness);
+        }
     }
 
     /// A dedicated server's clock, its METAR weather, its administration and its status
@@ -263,15 +280,20 @@ impl Offscreen<'_> {
                     steps::schedule_tick(s, world, t, renderer, scene, i == 0);
                 }
             }
-            steps::traffic_tick(t, world, dt, false, player.as_ref(), remotes_off, &[], None);
-            steps::traffic_boxes(t, player.as_mut(), true);
+            // the AI's lights by the time of day, and by day in gloomy weather
+            let daylight = omsi_sim::Daylight::compute(run_clock, envir.as_ref());
+            steps::set_ai_daylight(t, daylight, steps::gloomy_weather(Some(weather)));
+            let rail = player.as_ref().and_then(|p| p.rail.as_ref()).map(|r| (r.lane, r.along));
+            steps::traffic_tick(t, world, dt, false, player.as_ref(), remotes_off, &[], rail);
+            steps::traffic_boxes(t, player.as_mut(), settings.collision_vehicles);
         }
         Ok(())
     }
 
     /// The player's bus: its start-up, its duty, the personnel file, and the `--drive` test.
-    fn player_step(&mut self, i: usize, t_s: f32) {
+    fn player_step(&mut self, i: usize) {
         let (args, dt, drive_frames) = (self.args, self.dt, self.drive_frames);
+        let t_s = i as f32 * dt;
         let Self {
             ref mut player,
             ref mut duty,
@@ -279,11 +301,14 @@ impl Offscreen<'_> {
             ref mut career,
             ref mut journey,
             ref humans_off,
+            ref run_clock,
             ..
         } = *self;
         let Some(player) = player.as_mut() else { return };
         player.tick_startup(dt);
         if let Some(d) = duty.as_mut() {
+            // (no plugins in an offscreen run: what they would be told goes to the log)
+            let mut events = Vec::new();
             steps::duty_step(
                 d,
                 player,
@@ -291,20 +316,19 @@ impl Offscreen<'_> {
                 career,
                 journey,
                 &args.root,
-                parse_time(&args.time) + t_s as f64,
-                None,
-                false,
-                None,
+                run_clock.time,
+                Some(run_clock),
+                true,
+                Some(&mut events),
             );
+            for e in events {
+                log::info!("plugin event: {e:?}");
+            }
         }
-        career.tick(
-            dt,
-            &player.vehicle,
-            humans_off.as_ref().map(|h| h.riding()).unwrap_or(0),
-        );
-        let crash = std::mem::take(&mut player.vehicle.last_crash);
+        let riders = humans_off.as_ref().map(|h| h.riding()).unwrap_or(0);
+        let crash = steps::career_step(career, player, riders, duty.is_some(), dt, true);
         if crash > 0.0 {
-            career.crashed(crash, player.vehicle.physics.velocity_kmh() / 3.6);
+            log::warn!("crash: {:.0} kJ", crash / 1000.0);
         }
         if i < drive_frames {
             self.drive_step(i, t_s);
@@ -644,7 +668,7 @@ impl Offscreen<'_> {
             // (stop_target = enter_mean * density; without this it stays at the startup
             // value and the new formula returns 0 for the whole session when the map has
             // a low hourly density at the start time)
-            steps::humans_by_hour(h, world, run_clock.time, settings.pax_density);
+            steps::humans_by_hour(h, world, run_clock.time, settings.pax_density, duty.as_ref());
             // populate stops near every LAN player every 2 seconds, as app_events.rs
             // does every 2 s near the local player.  At startup `center` is ZERO (no
             // player bus on a headless server), so stops on the actual map – which can
@@ -687,11 +711,9 @@ impl Offscreen<'_> {
             if let Some(p) = player.as_mut() {
                 h.write_pax_vars(&mut p.vehicle);
             }
-            steps::career_from_humans(career, h);
             if let Some(p) = player.as_ref() {
-                let hurt = h.run_over(&p.vehicle);
+                let hurt = steps::people_in_career(career, h, p, settings.collision_pedestrians);
                 if hurt > 0 {
-                    career.crashes[1] += hurt as i32;
                     log::warn!("{hurt} pedestrian(s) knocked down");
                 }
             }
@@ -704,15 +726,14 @@ impl Offscreen<'_> {
     }
 
     /// The LAN session's step (with the clock a host tells the others).
-    fn lan_step(&mut self, t_s: f32) {
-        let (args, dt, server, service_seconds) = (self.args, self.dt, self.server, self.service_seconds);
+    fn lan_step(&mut self) {
+        let (args, dt) = (self.args, self.dt);
         let Self {
             ref mut lan_off,
             ref camera,
             ref mut player,
             ref lan_audio,
-            ref srv_clock,
-            ref srv_admin,
+            ref run_clock,
             ref duty,
             ref mut remotes_off,
             ref world,
@@ -738,13 +759,7 @@ impl Offscreen<'_> {
             }
             // a host tells the others its clock (a client here keeps the one it started with;
             // a server's runs at its speed, moved by its admins)
-            let mut now = start_clock(args);
-            if server {
-                now.advance((srv_clock + srv_admin.shift) as f32);
-            } else {
-                now.advance(t_s + service_seconds as f32);
-            }
-            let clock = (l.role == omsi_net::Role::Host).then_some(&now);
+            let clock = (l.role == omsi_net::Role::Host).then_some(run_clock);
             let frame = lan::Frame {
                 audio: lan_audio.as_ref(),
                 listener,
@@ -780,35 +795,48 @@ impl Offscreen<'_> {
         }
     }
 
-    /// The tyres' spray, frame by frame as the window throws it.
-    fn spray_step(&mut self) {
-        let (args, dt, spray_wet, spray_wind) = (self.args, self.dt, self.spray_wet, self.spray_wind);
+    /// The cabin air, the tyres' spray and the roads' wetness, frame by frame as the window's
+    /// `frame_lights` and `frame_lighting` have them.
+    fn surroundings_step(&mut self) {
+        let (args, dt) = (self.args, self.dt);
         let Self {
             ref mut spray,
+            ref mut cabin_air,
+            ref mut wetness,
             ref traffic,
             ref player,
             ref camera,
             ref remotes_off,
             ref world,
+            ref weather,
+            ref humans_off,
             ..
         } = *self;
+        if let Some(p) = player.as_ref() {
+            steps::cabin_air_step(cabin_air, dt, p, weather, humans_off.as_ref());
+        }
         // the tyres' spray, frame by frame as the window throws it (the camera that matters
-        // for its detail: the followed car's, else the player's bus)
-        if spray_wet > 0.0 && omsi_cfg::env::var_os("OMSI_NO_SPRAY").is_none() {
+        // for its detail: the followed car's, else the player's bus): the puddles and the wet
+        // asphalt the renderer draws (none under snow, OMSI_WETNESS as the picture takes it)
+        let spray_wet = puddles::road_wetness(*wetness, weather.snow);
+        if (spray_wet > 0.0 || !spray.is_empty()) && omsi_cfg::env::var_os("OMSI_NO_SPRAY").is_none() {
             let eye = traffic
                 .as_ref()
                 .and_then(|t| follow_id(args, Some(t)).and_then(|id| follow_camera(Some(t), id)))
                 .map(|c| c.position)
                 .or(player.as_ref().filter(|_| args.cam.is_none()).map(|p| p.vehicle.position))
                 .unwrap_or(camera.position);
-            steps::throw_spray(spray, dt, player.as_ref(), traffic.as_ref(), remotes_off, eye, spray_wind, world, spray_wet);
+            steps::throw_spray(spray, dt, player.as_ref(), traffic.as_ref(), remotes_off, eye, steps::spray_wind(weather), world, spray_wet);
         }
+        *wetness = crate::weather_setup::road_wetness(precip_of(weather).1, dt as f64, *wetness);
     }
 
     /// A snapshot due at `t_s` (`--snapshots`).
     fn snapshot_step(&mut self, t_s: f32) -> Result<()> {
-        let (args, out, w, h, dt, service_seconds) = (self.args, self.out, self.w, self.h, self.dt, self.service_seconds);
+        let (args, out, w, h, dt, wetness) = (self.args, self.out, self.w, self.h, self.dt, self.wetness);
         let Self {
+            ref run_clock,
+            ref cabin_air,
             ref mut snapshot_times,
             ref mut traffic,
             ref world,
@@ -859,31 +887,25 @@ impl Offscreen<'_> {
                 // the time of day of this moment, and its lights: street lamps by night and
                 // the vehicles' own (indicators, brake and tail lights) as they are now -
                 // without them a snapshot showed no vehicle light at all
-                let snap_clock = {
-                    let mut c = start_clock(args);
-                    c.time += t_s as f64 + service_seconds;
-                    c
-                };
-                let daylight = omsi_sim::Daylight::compute(&snap_clock, envir.as_ref());
-                steps::world_lamps(world, renderer, scene, &snap_clock, &daylight, true, true);
+                let daylight = omsi_sim::Daylight::compute(run_clock, envir.as_ref());
+                steps::world_lamps(world, renderer, scene, run_clock, &daylight, true, true);
                 {
                     let vehicles = steps::light_vehicles(player.as_ref(), traffic.as_ref(), remotes_off);
                     world_lights(renderer, world, scene, weather, &daylight, cam.position, &vehicles);
                 }
                 spray.sprites(cam.position, &mut scene.smoke);
-                let rate = precip_of(weather).1;
-                let mut lighting = weather_lighting(
+                let driven = player.as_ref().map(|p| &p.vehicle);
+                let lighting = steps::picture_lighting(
                     &daylight,
-                    weather,
-                    cloud_drift_at(weather, snap_clock.time),
-                    if rate > 0.0 {
-                        (0.4 + rate).min(1.0)
-                    } else {
-                        0.0
-                    },
-                    settings.shadows,
+                    Some(weather),
+                    cloud_drift_at(weather, run_clock.time),
+                    wetness,
+                    Some(world),
+                    driven,
+                    driven,
+                    cabin_air.appearance(),
+                    settings,
                 );
-                steps::dress_lighting(&mut lighting, Some(world), player.as_ref().map(|p| &p.vehicle), settings);
                 world.finish_texture_upgrades(renderer, scene);
                 let pixels = renderer.render_to_image(scene, w, h, &cam, &lighting)?;
                 let path = out.with_file_name(format!(
