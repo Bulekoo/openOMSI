@@ -234,6 +234,8 @@ const TEXEL: f64 = TILE_M / TILE_PX as f64;
 /// Tiles whose ruts are drawn in a frame at most (a jump of the camera fills the field
 /// over a few frames instead of in one long one).
 const RUTS_PER_FRAME: usize = 6;
+/// Frames the lane network must stay as it is before the ruts are drawn again from it.
+const LANES_STEADY: u32 = 30;
 /// Half the gauge of a lane's wheel tracks and how wide each rut is (m): between a car's
 /// and a bus's, so both drive in them.
 const RUT_HALF_GAUGE: f64 = 0.9;
@@ -250,6 +252,8 @@ struct Slot {
     /// Its texels (RGBA, rows along world y).
     px: Vec<u8>,
     ruts_done: bool,
+    /// Its ruts have been drawn since it took this tile (and may be drawn again).
+    drawn: bool,
     /// The texels changed since the last upload (x0, y0, x1, y1, exclusive ends).
     dirty: Option<(usize, usize, usize, usize)>,
 }
@@ -267,8 +271,11 @@ impl Slot {
 #[derive(Default)]
 pub(crate) struct SnowTracks {
     slots: Vec<Slot>,
-    /// The lanes the ruts were drawn from (the network grows as tiles load).
+    /// The lanes the ruts were drawn from (the network grows as tiles load), the count
+    /// last seen and the frames it has stayed so.
+    lanes_drawn: usize,
     lanes_seen: usize,
+    lanes_steady: u32,
     /// Each tyre's contact last frame.
     last: HashMap<u64, DVec3>,
     ready: bool,
@@ -294,10 +301,17 @@ impl SnowTracks {
         if self.slots.is_empty() {
             self.slots = (0..SLOTS * SLOTS).map(|_| Slot::default()).collect();
         }
-        // new lanes: the ruts drawn again (the tracks stay)
+        // new lanes: the ruts drawn again (the tracks stay) - once the network has stopped
+        // growing for a moment: tiles placed in the background bring their lanes a few at
+        // a time, and redrawing at each set kept the field from ever being whole
         let lanes = net.map_or(0, |n| n.lanes.len());
         if lanes != self.lanes_seen {
             self.lanes_seen = lanes;
+            self.lanes_steady = 0;
+        }
+        self.lanes_steady = self.lanes_steady.saturating_add(1);
+        if lanes != self.lanes_drawn && self.lanes_steady >= LANES_STEADY {
+            self.lanes_drawn = lanes;
             for s in &mut self.slots {
                 s.ruts_done = false;
             }
@@ -307,7 +321,7 @@ impl SnowTracks {
         let cy = (eye.y / TILE_M).floor() as i64;
         let half = SLOTS as i64 / 2;
         let mut ruts_left = RUTS_PER_FRAME;
-        let mut all_ruts = true;
+        let mut all_drawn = true;
         for ty in cy - half + 1..=cy + half {
             for tx in cx - half + 1..=cx + half {
                 let s = &mut self.slots[slot_of(tx, ty)];
@@ -316,18 +330,17 @@ impl SnowTracks {
                     s.px.clear();
                     s.px.resize(TILE_PX * TILE_PX * 4, 0);
                     s.ruts_done = false;
+                    s.drawn = false;
                     s.touch(0, 0, TILE_PX, TILE_PX);
                 }
-                if !s.ruts_done {
-                    if ruts_left == 0 {
-                        all_ruts = false;
-                        continue;
-                    }
+                if !s.ruts_done && ruts_left > 0 {
                     ruts_left -= 1;
                     draw_ruts(s, (tx, ty), net, fallen);
                     s.ruts_done = true;
+                    s.drawn = true;
                     s.touch(0, 0, TILE_PX, TILE_PX);
                 }
+                all_drawn &= s.drawn;
             }
         }
         // the tyres' tracks, from where each touched the road last frame
@@ -354,11 +367,11 @@ impl SnowTracks {
             let Some((_, y0, _, y1)) = s.dirty.take() else { continue };
             r.set_snow_track_rows(i as u32, y0 as u32, &s.px[y0 * TILE_PX * 4..y1 * TILE_PX * 4]);
         }
-        if all_ruts && !self.ready {
+        if all_drawn && !self.ready {
             let rutted = self.slots.iter().filter(|s| s.px.chunks_exact(4).any(|p| p[0] > 64)).count();
             log::info!("road snow: track field ready around ({:.0}, {:.0}), {lanes} lanes, ruts on {rutted} of {} tiles", eye.x, eye.y, self.slots.len());
         }
-        self.ready = all_ruts || self.ready;
+        self.ready = all_drawn || self.ready;
     }
 
     /// A tyre's track from `a` to `b` (world), stamped with the snow fallen when it was

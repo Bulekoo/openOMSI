@@ -1851,7 +1851,7 @@ fn camera_layout_entries(path: ArrayPath, omit_enhanced: bool) -> Vec<wgpu::Bind
                 count: None,
             },
     ];
-    if sixteen || snow_track_left_out(gl_backend()) {
+    if sixteen_texture_units() || snow_track_left_out(gl_backend()) {
         camera_entries.retain(|e| e.binding != 20);
     }
     // the point lights and their grid (see `ArrayPath::NoStorage`)
