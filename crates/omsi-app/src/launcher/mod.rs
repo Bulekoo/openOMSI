@@ -532,7 +532,7 @@ impl ApplicationHandler for Launcher {
                     return;
                 }
                 if let PhysicalKey::Code(code) = event.physical_key {
-                    self.ui.input.raw_key = Some(code);
+                    self.ui.input.capture_key(code);
                     let k = match code {
                         KeyCode::ArrowLeft => Some(Key::Left),
                         KeyCode::ArrowRight => Some(Key::Right),
