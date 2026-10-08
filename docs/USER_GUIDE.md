@@ -183,7 +183,8 @@ again only when something changes; drag on it to turn the bus, scroll to zoom. I
   the session summaries the game writes to `~/.openomsi/sessions`.
 * **Settings** - everything in `settings.cfg` below, saved as it changes; keys the page
   does not manage are kept as they are. One tab for each thing one comes to change:
-  *Graphics* (the quality preset first, the screen, distances and memory), *Driving* (keys,
+  *Graphics* (the graphics mode and the quality presets for it first - a preset tunes the
+  mode chosen and keeps it - then the screen, distances and memory), *Driving* (keys,
   mouse, wheel and pedals, with the way to the Controls page), *Camera* (the seat, the views,
   head tracking, VR), *Sound*, *Gameplay* (passengers, traffic, collisions, the clock) and
   *General* (language, the game's interface size, navigator, Discord Rich Presence,
@@ -281,7 +282,10 @@ and `drive_keys`, plus `render_scale` (`auto` or a fraction: the picture is draw
 and upscaled), `post_aa` (`fxaa`, the enhanced renderer's, or `off`), `view_distance` (m,
 how far the tiles are kept loaded), `texture_memory` (MB - OMSI's `texmemlimit` is read
 under that name too; an eighth of the machine's memory when unset), `texture_compression`
-(BC1-BC3 on the GPU, on by default), `reflections` (the materials' reflection maps,
+(loose pictures compressed to BC1-BC3 on loading, on by default), `gpu_texture_compression`
+(DXT/BC textures kept compressed on the GPU, on by default; off decodes them to RGBA, for a
+driver that mishandles block formats, at four to eight times the memory - as
+`OMSI_NO_BC=1`), `reflections` (the materials' reflection maps,
 `[matl_envmap]` - off, paint, chrome and glass mirror nothing), `led_glow` (0..15: how
 bright an LED destination matrix's dots burn in the enhanced picture, 0 = off - they are
 the panel's own light, and the glow draws a halo around them), `led_mips` (0..4, 0.05 steps,

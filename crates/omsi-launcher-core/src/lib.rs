@@ -1697,6 +1697,38 @@ pub fn delete_profile(name: &str) -> Result<()> {
 mod profile_cleanup_tests {
     use super::*;
 
+    /// A quality preset keeps the graphics mode and what is not graphics; Vanilla's leave
+    /// out what OMSI 2 does not draw, Enhanced+'s keep its traced shadows, occlusion and
+    /// reflections; High of Vanilla+ is the defaults.
+    #[test]
+    fn quality_presets_keep_the_mode_and_the_rest() {
+        for mode in ["vanilla", "vanilla_plus", "enhanced", "enhanced_plus"] {
+            for (_, preset) in graphics_presets_for(mode) {
+                let mut v = settings_from_text(Some(&format!("graphics={mode}\ngraphics_api=gl\nlanguage=PTB\nai_unsched_factor=25\n")));
+                apply_graphics_profile(&preset, &mut v);
+                let saved = settings_from_text(Some(&settings_to_text(&v, None)));
+                assert_eq!(saved["graphics"], mode);
+                assert_eq!(saved["graphics_api"], "gl");
+                assert_eq!(saved["language"], "PTB");
+                assert_eq!(saved["ai_unsched_factor"], 25);
+                for key in ["ssao", "shadows", "detail_textures", "reflections", "mirror_refresh", "texture_memory"] {
+                    assert_eq!(saved[key], preset[key], "{mode}: {key}");
+                }
+            }
+        }
+        for (_, p) in graphics_presets_for("OMSI 2") {
+            assert!(p["ssao"] == false && p["shadows"] == false && p["detail_textures"] == false);
+        }
+        for (_, p) in graphics_presets_for("Enhanced+") {
+            assert!(p["ssao"] == true && p["shadows"] == true && p["reflections"] == true);
+        }
+        let defaults = settings_from_text(None);
+        let high = &graphics_presets_for("vanilla_plus")[2].1;
+        for (k, x) in high.as_object().unwrap() {
+            assert_eq!(defaults[k.as_str()].to_string().trim_matches('"'), x.to_string().trim_matches('"'), "{k}");
+        }
+    }
+
     /// The enhanced clouds' quality is saved by the launcher and kept in graphics profiles.
     #[test]
     fn cloud_quality_is_saved_and_kept_in_graphics_profiles() {
@@ -1921,6 +1953,46 @@ pub fn graphics_mode(v: &str) -> &'static str {
     }
 }
 
+/// The Graphics settings' quality presets - Low, Medium, High and Ultra - for the graphics
+/// mode chosen (`graphics_mode`), shared by the launcher and the game's options. A preset
+/// tunes that mode and keeps it: it never switches Enhanced or ray tracing on or off.
+/// Vanilla's leave out what OMSI 2 does not draw (sun shadows, ambient occlusion, detail
+/// texturing); the enhanced modes, whose pixels cost more, take fewer MSAA samples and a
+/// smaller render scale at the lower levels, and Enhanced+ (which traces its shadows,
+/// occlusion and reflections) smaller shadow maps and mirrors too. High is the defaults
+/// of a computer in Vanilla+. The texture memory stays automatic: the renderer sizes it
+/// to the device (a fixed 800 MB blurred a large card's textures and overfilled a phone).
+pub fn graphics_presets_for(mode: &str) -> [(&'static str, Value); 4] {
+    let mode = graphics_mode(mode);
+    let classic = mode == "vanilla";
+    let traced = mode == "enhanced_plus";
+    // per level: Low, Medium, High, Ultra
+    let (msaa, scale) = match mode {
+        "enhanced" => ([1, 1, 2, 4], ["0.67", "0.85", "auto", "auto"]),
+        "enhanced_plus" => ([1, 1, 1, 2], ["0.5", "0.67", "0.85", "auto"]),
+        _ => ([1, 2, 4, 4], ["0.75", "auto", "auto", "auto"]),
+    };
+    let shadow = if traced { [1024, 1024, 2048, 2048] } else { [1024, 1024, 2048, 4096] };
+    let mirror = if traced { [128, 128, 256, 512] } else { [128, 256, 256, 512] };
+    let refresh = if traced { ["eco", "eco", "eco", "full"] } else { ["eco", "eco", "full", "full"] };
+    let anisotropy = [2, 4, 8, 8];
+    let view = ["600", "900", "auto", "2000"];
+    let obj_size = [0.03, 0.02, 0.013, 0.005];
+    let obj_dist = ["500", "750", "auto", "1500"];
+    std::array::from_fn(|i| {
+        let low = i == 0;
+        let preset = json!({
+            "graphics": mode, "msaa": msaa[i], "anisotropy": anisotropy[i], "shadow_size": shadow[i],
+            "ssao": traced || (!classic && i >= 2), "shadows": traced || (!classic && !low),
+            "detail_textures": !classic && !low, "reflections": traced || !low,
+            "clouds": !low, "windy_trees": !low,
+            "view_distance": view[i], "min_obj_size": obj_size[i], "max_obj_dist": obj_dist[i],
+            "mirror_size": mirror[i], "mirror_refresh": refresh[i], "render_scale": scale[i], "texture_memory": 0,
+        });
+        (["Low", "Medium", "High", "Ultra"][i], preset)
+    })
+}
+
 /// The enhanced clouds' quality: `low`, else `high` (as the game's `settings::cloud_quality`).
 fn cloud_quality(x: &str) -> &'static str {
     if x.trim().eq_ignore_ascii_case("low") { "low" } else { "high" }
@@ -1938,7 +2010,7 @@ fn mirror_refresh(x: &str) -> &'static str {
 
 /// The page's view of a `settings.cfg` text (None: no file yet, the game's defaults).
 pub fn settings_from_text(text: Option<&str>) -> Value {
-    let mut v = json!({ "msaa": 4, "anisotropy": 8, "ssao": true, "shadows": true, "shadow_size": 2048, "navigator": true, "ui_opacity": 0.85, "navigator_corner": "bottom-left", "boarding": "auto", "detail_textures": true, "exact_fare": true, "enhanced": false, "graphics": "vanilla_plus", "fullscreen": false, "vsync": true, "volume": 0.6, "drive_keys": "simple", "render_scale": "auto", "view_distance": "auto", "language": "ENG", "texture_memory": 0, "texture_compression": true, "chat": true, "tooltips": true, "name_tags": true, "show_fps": false, "clouds": true, "cloud_quality": "high", "pax_density": 1.0, "vol_ai": 1.0, "vol_scenery": 1.0, "mirror_size": 256, "doppler": true, "driver": true, "max_fps": 0, "min_obj_size": 0.013, "max_obj_dist": "auto" });
+    let mut v = json!({ "msaa": 4, "anisotropy": 8, "ssao": true, "shadows": true, "shadow_size": 2048, "navigator": true, "ui_opacity": 0.85, "navigator_corner": "bottom-left", "boarding": "auto", "detail_textures": true, "exact_fare": true, "enhanced": false, "graphics": "vanilla_plus", "fullscreen": false, "vsync": true, "volume": 0.6, "drive_keys": "simple", "render_scale": "auto", "view_distance": "auto", "language": "ENG", "texture_memory": 0, "texture_compression": true, "gpu_texture_compression": true, "chat": true, "tooltips": true, "name_tags": true, "show_fps": false, "clouds": true, "cloud_quality": "high", "pax_density": 1.0, "vol_ai": 1.0, "vol_scenery": 1.0, "mirror_size": 256, "doppler": true, "driver": true, "max_fps": 0, "min_obj_size": 0.013, "max_obj_dist": "auto" });
     v["triple_screen"] = json!(false);
     v["triple_span"] = json!(true);
     v["triple_hud_center"] = json!(true);
@@ -2022,6 +2094,7 @@ pub fn settings_from_text(text: Option<&str>) -> Value {
             "mirror_size" => v[&k] = json!(val.parse::<i64>().map(|x| if x == 0 { 0 } else { x.clamp(64, 2048) }).unwrap_or(256)),
             "mirror_refresh" => v[&k] = json!(mirror_refresh(val)),
             "cloud_quality" => v[&k] = json!(cloud_quality(val)),
+            "gpu_texture_compression" => v[&k] = json!(!matches!(val.trim().to_ascii_lowercase().as_str(), "0" | "off" | "no" | "false" | "disabled")),
             "max_fps" => v[&k] = json!(val.parse::<f64>().map(|x| x as i64).unwrap_or(0)),
             "max_obj_dist" => v[&k] = if val.eq_ignore_ascii_case("auto") { json!("auto") } else { json!(val.parse::<f64>().map(|m| (m.round() as i64).to_string()).unwrap_or_else(|_| "auto".into())) },
             "ssao" | "shadows" | "shadow_blobs" | "navigator" | "enhanced" | "triple_screen" | "triple_span" | "triple_hud_center" | "vr" | "vr_desktop_mirror" | "fullscreen" | "vsync" | "exact_fare" | "detail_textures" | "texture_compression" | "chat" | "tooltips" | "name_tags" | "show_fps" | "clouds" | "doppler" | "driver" | "use_real_time" | "use_real_date" | "use_real_year" | "collision_vehicles" | "collision_objects" | "collision_pedestrians" | "head_movement" | "driverview_smooth" | "hands_in_cab" | "alt_view" | "precision_zoom" => v[&k] = json!(b(val)),
@@ -2196,9 +2269,9 @@ pub fn save_settings(v: &Value) -> Result<()> {
 
 /// The settings a graphics profile holds: what the Graphics tab shows, except the machine's
 /// own (fullscreen, graphics API).
-pub const GRAPHICS_PROFILE_KEYS: [&str; 23] = [
+pub const GRAPHICS_PROFILE_KEYS: [&str; 24] = [
     "graphics", "msaa", "render_scale", "anisotropy", "shadow_size", "ssao", "shadows", "shadow_casters", "detail_textures", "led_glow", "led_mips", "reflections", "clouds", "cloud_quality", "windy_trees",
-    "vsync", "max_fps", "view_distance", "max_obj_dist", "min_obj_size", "mirror_size", "texture_memory", "texture_compression",
+    "vsync", "max_fps", "view_distance", "max_obj_dist", "min_obj_size", "mirror_size", "mirror_refresh", "texture_memory", "texture_compression",
 ];
 
 fn graphics_profiles_path() -> PathBuf {
@@ -2420,6 +2493,7 @@ pub fn settings_to_text(v: &Value, old: Option<&str>) -> String {
     text.push_str(&format!("pad_steer_linear={}\n", b("pad_steer_linear", false)));
     text.push_str(&format!("arrows_switch_cams={}\n", b("arrows_switch_cams", false)));
     text.push_str(&format!("resolution={}\n", resolution_text(v.get("resolution").and_then(|x| x.as_str()).unwrap_or("auto"))));
+    text.push_str(&format!("gpu_texture_compression={}\n", b("gpu_texture_compression", true)));
     text.push_str(&format!("cloud_quality={}\n", cloud_quality(v.get("cloud_quality").and_then(|x| x.as_str()).unwrap_or("high"))));
     text.push_str(&format!("mirror_refresh={}\n", mirror_refresh(v.get("mirror_refresh").and_then(|x| x.as_str()).unwrap_or("full"))));
     text.push_str(&format!("look_sens={}\nlook_smoothing_ms={}\nsteer_look_angle={}\nsteer_look_response={}\nhead_idle={}\nhead_idle_pace={}\ntime_sync={}\nmetar_sync={}\nmetar_station={}\n", f("look_sens", 1.0).clamp(0.1, 2.0), f("look_smoothing_ms", 0.0).clamp(0.0, 200.0), f("steer_look_angle", 30.0).clamp(0.0, 60.0), f("steer_look_response", 0.25).clamp(0.05, 1.0), f("head_idle", 0.0).clamp(0.0, 1.0), f("head_idle_pace", 1.0).clamp(0.5, 2.0), b("time_sync", false), b("metar_sync", false), v.get("metar_station").and_then(|x| x.as_str()).unwrap_or("").chars().filter(|c| c.is_ascii_alphabetic()).take(4).collect::<String>().to_ascii_uppercase()));

@@ -2305,6 +2305,11 @@ pub struct RenderOptions {
     /// where the device takes block formats and the result is close to the picture
     /// (DXT files always go up as blocks there).
     pub compress_textures: bool,
+    /// DXT/BC textures may stay compressed on the GPU (where it takes them); off, the
+    /// device is opened without block formats and every texture goes up as RGBA, as with
+    /// `OMSI_NO_BC=1` (the settings' `gpu_texture_compression`, for a driver that
+    /// mishandles them).
+    pub gpu_texture_compression: bool,
     /// FXAA over the enhanced path's tone-mapped picture.
     pub fxaa: bool,
     /// The original's `performance_minObjSize` (see `Lighting::min_obj_size`, which may
@@ -2348,6 +2353,7 @@ impl Default for RenderOptions {
             ssao: true,
             render_scale: 0.0,
             compress_textures: true,
+            gpu_texture_compression: true,
             fxaa: true,
             min_obj_size: 0.013,
             max_obj_dist: 0.0,
@@ -2708,9 +2714,12 @@ impl Renderer {
             required_features |= adapter.features() & wgpu::Features::TIMESTAMP_QUERY;
         }
         // DXT textures stay compressed on the GPU where it takes them (Apple silicon does);
-        // OMSI_NO_BC=1 uploads everything as RGBA (the old way, for comparisons)
-        if !omsi_cfg::flags::OMSI_NO_BC.is_set() {
+        // OMSI_NO_BC=1 uploads everything as RGBA (the old way, for comparisons), and so does
+        // the settings' `gpu_texture_compression` off
+        if !omsi_cfg::flags::OMSI_NO_BC.is_set() && options.gpu_texture_compression {
             required_features |= adapter.features() & wgpu::Features::TEXTURE_COMPRESSION_BC;
+        } else if !options.gpu_texture_compression {
+            log::info!("GPU texture compression off in the settings: DXT/BC textures are decoded to RGBA");
         }
         if intel_vulkan_safe {
             // Keep vkCreateDevice entirely free of optional extensions. Compressed source
