@@ -212,6 +212,9 @@ pub struct Ctx<'a> {
     /// nobody knows - no passengers run - and every stop is served).
     pub wanted: Option<bool>,
     pub debug: bool,
+    /// `TrafficSim::timed_waits_only`: an early bus waits only where `waits_here` says so
+    /// (off: at every stop it serves, as Omsi.exe does).
+    pub timed_waits_only: bool,
 }
 
 impl BusService {
@@ -379,6 +382,13 @@ impl BusService {
             })
     }
 
+    /// Whether an early bus stands at its front stop until its departure: at every stop, as
+    /// Omsi.exe does, unless `timed_only` (the `ai_wait_timed_stops_only` setting) has it wait
+    /// only where `waits_here` says so.
+    fn holds_for_departure(&self, timed_only: bool, layover: bool, rail: bool, early: f64) -> bool {
+        !timed_only || self.waits_here(layover, rail, early)
+    }
+
     /// Arrived at the front stop: what now.
     fn arrive(&mut self, ctx: &Ctx, depart: f64, at: (usize, f32)) {
         if omsi_cfg::flags::OMSI_DEBUG_STOPS.is_set() {
@@ -386,9 +396,11 @@ impl BusService {
         }
         let layover = std::mem::take(&mut self.layover);
         let rail = ctx.net.lanes.get(at.0).is_some_and(|l| l.kind == LaneKind::Rail);
-        // only a stop the timetable actually puts a time on holds the bus for it; elsewhere
-        // its time is the running time shared out, and an early bus serves and drives on
-        let wait = if self.waits_here(layover, rail, depart - ctx.day_time) {
+        // with the `ai_wait_timed_stops_only` setting only a stop the timetable actually puts
+        // a time on holds the bus for it; elsewhere its time is the running time shared out,
+        // and an early bus serves and drives on. Without it (the default) the bus waits at
+        // every stop it serves, as in Omsi.exe
+        let wait = if self.holds_for_departure(ctx.timed_waits_only, layover, rail, depart - ctx.day_time) {
             early_wait(depart, ctx.day_time, layover, rail)
         } else {
             0.0
@@ -735,6 +747,24 @@ mod tests {
         assert!(s.waits_here(false, false, 100.0));
         assert!(s.waits_here(true, false, 100.0));
         assert!(s.waits_here(false, true, 100.0));
+    }
+
+    /// The `ai_wait_timed_stops_only` setting off (the default): an early bus waits for its
+    /// departure at every stop it serves, as Omsi.exe does, timed by the map or not.
+    #[test]
+    fn without_the_setting_an_early_bus_waits_at_every_stop_as_in_omsi() {
+        let stop = |id: i64, depart: f64| Stop::from_tuple((0, 0.0, 0.0, depart, id, 0.0));
+        let mut s = BusService::new(vec![stop(2, 200.0), stop(3, 300.0)]);
+        s.last_stop = Some(3);
+        assert!(s.holds_for_departure(false, false, false, 100.0));
+        s.always = vec![2];
+        assert!(s.holds_for_departure(false, false, false, 100.0));
+        // and with it only where the timetable times the stop
+        assert!(!s.holds_for_departure(true, false, false, 100.0));
+        s.holds = vec![2];
+        assert!(s.holds_for_departure(true, false, false, 100.0));
+        // the wait itself is OMSI's: until 20 s before the departure
+        assert_eq!(early_wait(200.0, 100.0, false, false), 80.0);
     }
 
     #[test]
