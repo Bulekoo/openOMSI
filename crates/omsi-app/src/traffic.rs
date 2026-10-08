@@ -3,7 +3,7 @@
 //!
 //! The simulation is omsi-sim's `ai_traffic` (`TrafficSim`, which knows nothing of the
 //! GPU); here it gets the loaded world's lanes and vehicle types, the population around
-//! the player, the cars' pictures (`view`) and their sounds (`audio`).
+//! the player, the cars' pictures (`crate::view_sync::traffic`) and their sounds (`audio`).
 
 mod audio;
 mod control;
@@ -12,7 +12,6 @@ mod parked;
 mod population;
 mod setup;
 mod trains;
-mod view;
 
 use anyhow::Result;
 use glam::DVec3;
@@ -21,7 +20,7 @@ use omsi_sim::ai_motion::{AiBody, MotionKind};
 use omsi_sim::ai_traffic::bus_service::BusService;
 use omsi_sim::ai_traffic::setup::RandomTypes;
 use omsi_sim::ai_traffic::TrafficSim;
-use omsi_sim::traffic::{AiState, LaneKind, Network, TrafficLightController};
+use omsi_sim::traffic::{AiState, LaneKind, Network};
 use omsi_sim::{VehicleInstance, VehicleType};
 use std::path::Path;
 use std::sync::Arc;
@@ -31,7 +30,7 @@ use omsi_sim::ai_traffic::dormant::*;
 use omsi_sim::ai_traffic::lights::*;
 use omsi_sim::ai_traffic::model::*;
 use omsi_sim::ai_traffic::viewer::*;
-use view::{depart_parked, release_car_render, TrafficView};
+use crate::view_sync::traffic::{depart_parked, release_car_render, TrafficView};
 
 pub use omsi_sim::ai_traffic::AI_SCHEMES;
 pub(crate) use omsi_sim::ai_traffic::model::{vehicle_bodies, AiCar, BusSetup, DormantCar, ParkPlan, PlayerBox};
@@ -42,8 +41,10 @@ pub(crate) use omsi_sim::ai_traffic::viewer::Viewer;
 /// Everything of the simulation reads through it (`Deref` to `TrafficSim`).
 pub struct Traffic {
     pub sim: TrafficSim,
-    /// What the cars look like on the screen (see `view`).
-    view: TrafficView,
+    /// What the cars look like on the screen (see `crate::view_sync::traffic`; kept here
+    /// because the traffic's own steps make and let go a car's renders as they put it on
+    /// the road or take it off).
+    pub(crate) view: TrafficView,
     /// `[sound_ai]` set of each car near the listener, by car id (see `audio`).
     sounds: HashMap<u64, omsi_audio::SoundSet>,
     /// Sound sets of despawned cars, stopped at the next audio update.
@@ -90,7 +91,7 @@ impl Traffic {
     }
 
     /// Let go a car's sound set (it is stopped at the next audio update).
-    fn drop_sounds(&mut self, id: u64) {
+    pub(crate) fn drop_sounds(&mut self, id: u64) {
         self.orphan_sounds.extend(self.sounds.remove(&id));
     }
 }

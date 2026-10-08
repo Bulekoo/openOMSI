@@ -2,6 +2,7 @@
 //! clicks into the cab, the people.
 
 use super::*;
+use crate::view_sync::{self, ViewSync};
 
 impl Offscreen<'_> {
     /// The traffic's health and its vehicles.
@@ -15,7 +16,7 @@ impl Offscreen<'_> {
             ..
         } = *self;
         if let Some(t) = traffic.as_mut() {
-            t.sync(world, renderer, scene);
+            view_sync::sync(ViewSync::traffic(t), world, renderer, scene);
             let buses = t
                 .cars
                 .iter()
@@ -507,10 +508,8 @@ impl Offscreen<'_> {
                 .as_ref()
                 .map(|p| p.vehicle.position)
                 .unwrap_or(camera.position);
-            if let Some(p) = player_ref.as_ref() {
-                h.sync_money(world, renderer, scene, &p.vehicle);
-            }
-            h.sync(renderer, scene, center);
+            let bus = player_ref.as_ref().map(|p| &p.vehicle);
+            view_sync::sync(ViewSync::people(&mut h, bus, center), world, renderer, scene);
             log::info!(
                 "passengers: {} people ({}), request {:?}, paid {:?}, change due {:?}",
                 h.people.len(),

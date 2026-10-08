@@ -108,7 +108,9 @@ impl App {
                 __t3.elapsed().as_secs_f64();
             let __t4 = Instant::now();
             t.camera = self.camera.as_ref().map(|c| c.position);
-            t.sync(w, r, scene);
+            // the view sync of the traffic: before the player and the people move, as the
+            // cars that parked leave the traffic here (see `view_sync`)
+            view_sync::sync(ViewSync::traffic(t), w, r, scene);
             *self.perf.profile.entry("traffic.sync").or_default() +=
                 __t4.elapsed().as_secs_f64();
         }

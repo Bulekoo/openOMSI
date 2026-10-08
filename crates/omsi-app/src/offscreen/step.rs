@@ -2,6 +2,7 @@
 //! the people, the LAN, the spray and the snapshots due.
 
 use super::*;
+use crate::view_sync::{self, ViewSync};
 
 impl Offscreen<'_> {
     /// One step, the `i`-th (false: a server was told to stop).
@@ -231,13 +232,13 @@ impl Offscreen<'_> {
                 t.populate(world, renderer, scene, pc);
                 // (what the window does every frame: cars that parked become parked objects,
                 // released vehicles go back to the world)
-                t.sync(world, renderer, scene);
+                view_sync::sync(ViewSync::traffic(t), world, renderer, scene);
                 // `OMSI_POPULATION_SHOTS=1` (with OMSI_DEBUG_POPULATION): a picture from the
                 // viewer whenever a car was put inside its frustum (behind something), with
                 // where on the picture it stands - to see that it really is hidden
                 let framed = std::mem::take(&mut t.framed_spawns);
                 if !framed.is_empty() && omsi_cfg::flags::OMSI_POPULATION_SHOTS.is_set() {
-                    t.sync(world, renderer, scene);
+                    view_sync::sync(ViewSync::traffic(t), world, renderer, scene);
                     if let Some(p) = player.as_mut() {
                         pose_player(p, renderer, scene, args, settings);
                     }
@@ -703,7 +704,7 @@ impl Offscreen<'_> {
             }
             if h.tracing() {
                 // OMSI_TRACE_PAX wants every frame as a window would draw it
-                h.sync(renderer, scene, eye_cam.position);
+                view_sync::sync(ViewSync::people(h, None, eye_cam.position), world, renderer, scene);
             }
             if let Some(m) = h.take_message() {
                 log::info!("HUD: {m}");
@@ -865,7 +866,7 @@ impl Offscreen<'_> {
             if t_s + dt > ts + base {
                 snapshot_times.remove(0);
                 if let Some(t) = traffic.as_mut() {
-                    t.sync(world, renderer, scene);
+                    view_sync::sync(ViewSync::traffic(t), world, renderer, scene);
                 }
                 let mut cam = *camera;
                 if let Some(p) = player.as_mut() {
@@ -882,7 +883,7 @@ impl Offscreen<'_> {
                     }
                 }
                 if let Some(h) = humans_off.as_mut() {
-                    h.sync(renderer, scene, cam.position);
+                    view_sync::sync(ViewSync::people(h, None, cam.position), world, renderer, scene);
                 }
                 // the time of day of this moment, and its lights: street lamps by night and
                 // the vehicles' own (indicators, brake and tail lights) as they are now -
