@@ -56,7 +56,7 @@ impl World {
                 omsi_geometry::compute_normals_d3d(&mut m);
                 meshes.push(m);
             }
-            if biggest > 1.0 && omsi_cfg::env::var_os("OMSI_DEBUG_WARP").is_some() {
+            if biggest > 1.0 && omsi_cfg::flags::OMSI_DEBUG_WARP.is_set() {
                 let (lo, hi) = base.positions.iter().fold((f32::MAX, f32::MIN), |a, p| (a.0.min(p.z), a.1.max(p.z)));
                 log::info!("crossing {} at ({:.1}, {:.1}, {:.1}) moved up to {biggest:.2} m (field {lo:.2}..{hi:.2}, {} points)", ot.sco.path.display(), pos.x, pos.y, pos.z, base.positions.len());
             }
@@ -102,7 +102,7 @@ impl World {
         // ground's triangles cut through the camber and past the kerbs: a piece of road
         // gone under the grass, while beside it the ground stood lifted over the verge.
         // `OMSI_TERRAIN_ALIGN=1` still does it.)
-        if omsi_cfg::env::var_os("OMSI_TERRAIN_ALIGN").is_some() {
+        if omsi_cfg::flags::OMSI_TERRAIN_ALIGN.is_set() {
             let mut ts = TileSurface::new(SURFACE_RASTER);
             let mut reach = 0.0f32;
             let mut any = false;
@@ -188,7 +188,7 @@ impl World {
         // ground - every pole, sign and tree there - floated over the pavement with it (#860).
         // `OMSI_CROSSING_DEFORM=1` still does it.)
         let mut deformed = false;
-        if omsi_cfg::env::var_os("OMSI_CROSSING_DEFORM").is_some() {
+        if omsi_cfg::flags::OMSI_CROSSING_DEFORM.is_set() {
             let mut ds = TileSurface::new(SURFACE_RASTER);
             let mut any = false;
             for q in &order {
@@ -251,9 +251,9 @@ impl World {
         let mut parked_cars: Vec<(DVec3, f64)> = Vec::new();
         let mut objects: Vec<PlacedObject> = Vec::new();
         let mut trees = Vec::new();
-        let debug_objects = omsi_cfg::env::var_os("OMSI_DEBUG_OBJECTS").is_some();
-        let check_objects = omsi_cfg::env::var_os("OMSI_CHECK_OBJECTS").is_some();
-        let debug_float = omsi_cfg::env::var_os("OMSI_DEBUG_FLOAT").is_some();
+        let debug_objects = omsi_cfg::flags::OMSI_DEBUG_OBJECTS.is_set();
+        let check_objects = omsi_cfg::flags::OMSI_CHECK_OBJECTS.is_set();
+        let debug_float = omsi_cfg::flags::OMSI_DEBUG_FLOAT.is_set();
         let index = self.index();
         for (oi, (o, fp)) in st.objects.iter().zip(res.poses.iter()).enumerate() {
             let Some(Pose { pos, rot: xf }) = *fp else {
@@ -493,7 +493,7 @@ impl World {
                 list.push(c);
                 let idx = list.len() - 1;
                 self.controller_of_object.lock().insert(o.id, idx);
-                if omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some() {
+                if omsi_cfg::flags::OMSI_DEBUG_TRAFFIC.is_set() {
                     log::info!("traffic light program {idx}: object {} {} at ({:.1}, {:.1}) cycle {:?} lights {}", o.id, ot.sco.path.display(), pos.x, pos.y, ot.sco.traffic_lights_group, ot.sco.traffic_lights.len());
                 }
                 idx
@@ -563,7 +563,7 @@ impl World {
                 ))
             };
             if !shape.parts.is_empty() {
-                if omsi_cfg::env::var_os("OMSI_DEBUG_COLLISION").is_some() {
+                if omsi_cfg::flags::OMSI_DEBUG_COLLISION.is_set() {
                     log::info!("obstacle {} key {} at ({:.1}, {:.1}) z {:.1} rot {:.0}: collision mesh of {} triangles as {} parts{}", ot.sco.path.display(), o.key, pos.x, pos.y, pos.z, heading, c.indices.len() / 3, shape.parts.len(), if upright { "" } else { " (tilted)" });
                 }
                 state
@@ -591,7 +591,7 @@ impl World {
                         d.dot(r).abs() <= probe.half.x && d.dot(f).abs() <= probe.half.y && w.z >= probe.z0 - 1.0 && w.z <= probe.z1 - 0.5
                     })
                 };
-                if road_through && omsi_cfg::env::var_os("OMSI_DEBUG_COLLISION").is_some() {
+                if road_through && omsi_cfg::flags::OMSI_DEBUG_COLLISION.is_set() {
                     log::info!("no wall: {} key {} - a road runs through its [boundingbox]", ot.sco.path.display(), o.key);
                 }
                 if bb[2] > 0.4
@@ -613,7 +613,7 @@ impl World {
                     if o.parked && !gone {
                         state.parked_boxes.push(obb);
                     }
-                    if omsi_cfg::env::var_os("OMSI_DEBUG_COLLISION").is_some() {
+                    if omsi_cfg::flags::OMSI_DEBUG_COLLISION.is_set() {
                         log::info!("obstacle {} key {} at ({:.1}, {:.1}) z {:.1}..{:.1} size {:.1}x{:.1}x{:.1} centre offset ({:.1}, {:.1}) rot {:.0}{}{}", ot.sco.path.display(), o.key, pos.x, pos.y, obb.z0, obb.z1, bb[0], bb[1], bb[2], bb[3], bb[4], heading, if obb.pole.is_some() { " pole" } else { "" }, " [boundingbox]");
                     }
                 }
@@ -685,8 +685,8 @@ impl World {
             .zip(st.splines.iter())
             .map(|(m, sp)| (m, sp.ty.clone(), sp.casts_shadow, sp.sort_origin))
             .collect();
-        let (splines, ground_splines) = if omsi_cfg::env::var_os("OMSI_NO_GROUND_SPLINE_BATCHING").is_some()
-            || omsi_cfg::env::var_os("OMSI_NO_SPLINE_BATCHING").is_some()
+        let (splines, ground_splines) = if omsi_cfg::flags::OMSI_NO_GROUND_SPLINE_BATCHING.is_set()
+            || omsi_cfg::flags::OMSI_NO_SPLINE_BATCHING.is_set()
         {
             (splines, Vec::new())
         } else {
@@ -812,7 +812,7 @@ fn object_lamp(ot: &ObjectType, o: &StagedObject, pos: DVec3, index: &MapIndex) 
     if ot.sco.is_traffic_light || child_lamp {
         let named = o.extra.first().map(|s| s.trim()).filter(|s| !s.is_empty());
         let index = named.map(|s| omsi_cfg::parse_f64(s) as usize).unwrap_or(0);
-        if omsi_cfg::env::var_os("OMSI_DEBUG_LAMPS").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_LAMPS.is_set() {
             match o.lamp_parent {
                 None => log::info!("traffic light {} (id {}) names no crossing ([varparent]); extra {:?}", ot.sco.path.display(), o.id, o.extra),
                 Some(p) => log::info!("traffic light {} (id {}) at ({:.0}, {:.0}): crossing {p}, light {:?}", ot.sco.path.display(), o.id, pos.x, pos.y, o.extra),

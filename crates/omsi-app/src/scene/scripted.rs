@@ -145,7 +145,7 @@ impl World {
             let a = aspects.get(&o.map_id).copied().unwrap_or(0.0);
             if o.inst.var("Signal") != Some(a) {
                 o.inst.set_var("Signal", a);
-                if omsi_cfg::env::var_os("OMSI_DEBUG_SIGNALS").is_some() {
+                if omsi_cfg::flags::OMSI_DEBUG_SIGNALS.is_set() {
                     log::info!("signal {} at ({:.0}, {:.0}) shows {a}", o.map_id, o.pos.x, o.pos.y);
                 }
             }
@@ -254,7 +254,7 @@ impl World {
     /// at night as the terrain is.
     pub fn update_light_map_atlas(&self, renderer: &Renderer, eye: DVec3) {
         // (`OMSI_NO_LIGHT_MAP=1`: the tiles' night light maps left out, for an A/B)
-        if omsi_cfg::env::var_os("OMSI_NO_LIGHT_MAP").is_some() {
+        if omsi_cfg::flags::OMSI_NO_LIGHT_MAP.is_set() {
             return;
         }
         let ts = tile_size();
@@ -290,7 +290,7 @@ impl World {
             let Some(o) = scripted.iter_mut().find(|o| o.map_id == id) else { continue };
             if let Some(Some(d)) = o.ty.sco.path_switch_dir.get(path as usize) {
                 let was = o.inst.var("Switch");
-                if o.inst.set_var("Switch", *d as f32) && was != Some(*d as f32) && omsi_cfg::env::var_os("OMSI_DEBUG_SWITCHES").is_some() {
+                if o.inst.set_var("Switch", *d as f32) && was != Some(*d as f32) && omsi_cfg::flags::OMSI_DEBUG_SWITCHES.is_set() {
                     log::info!("switch {} ({}) at ({:.0}, {:.0}) thrown to {d} for a train", id, o.ty.sco.path.display(), o.pos.x, o.pos.y);
                 }
             }
@@ -307,7 +307,7 @@ impl World {
         let scripted = self.scripted.lock();
         // (an environment switch read once per process)
         static DEBUG: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-        if *DEBUG.get_or_init(|| omsi_cfg::env::var_os("OMSI_DEBUG_PARTICLES").is_some()) {
+        if *DEBUG.get_or_init(|| omsi_cfg::flags::OMSI_DEBUG_PARTICLES.is_set()) {
             let mut near: Vec<(f64, &ParticleObject)> = objs.values().flatten().map(|po| ((po.pos - center).length(), po)).collect();
             near.sort_by(|a, b| a.0.total_cmp(&b.0));
             for (d, po) in near.iter().take(3) {
@@ -481,7 +481,7 @@ impl World {
                         let (w, h) = (st.def.width.max(1) as u32, st.def.height.max(1) as u32);
                         if let Some(rgba) = st.pending.take() {
                             // OMSI_DUMP_SCENERY_TEXT=<dir>: the pictures as drawn
-                            if let Some(dir) = omsi_cfg::env::var_os("OMSI_DUMP_SCENERY_TEXT") {
+                            if let Some(dir) = omsi_cfg::flags::OMSI_DUMP_SCENERY_TEXT.os() {
                                 let path = std::path::Path::new(&dir)
                                     .join(format!("text_{}.png", o.map_id));
                                 log::info!(

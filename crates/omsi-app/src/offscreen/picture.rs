@@ -101,7 +101,7 @@ impl Offscreen<'_> {
         );
         // OMSI_CONDENSATION=<minutes>,<people>[,engine 0/1]: the cabin air and the condensation
         // on the player's glass after that long with that many aboard
-        if let (Ok(spec), Some(p)) = (omsi_cfg::env::var("OMSI_CONDENSATION"), player_ref.as_ref().or(player.as_ref())) {
+        if let (Some(spec), Some(p)) = (omsi_cfg::flags::OMSI_CONDENSATION.var(), player_ref.as_ref().or(player.as_ref())) {
             let mut it = spec.split(',').map(|x| x.trim().parse::<f32>().unwrap_or(0.0));
             let (minutes, people, engine) = (it.next().unwrap_or(15.0), it.next().unwrap_or(30.0) as usize, it.next().unwrap_or(1.0) > 0.5);
             let mut ci = crate::condensation::inputs_for(&p.vehicle, weather, people, 0);
@@ -114,7 +114,7 @@ impl Offscreen<'_> {
             lighting.condensation = cabin.appearance();
         }
         // OMSI_GLASS_WIND=<m/s>: the rain on the glass as the bus would meet it at that speed
-        if let (Some(v), Some(p)) = (omsi_cfg::env::var("OMSI_GLASS_WIND").ok().and_then(|v| v.parse::<f32>().ok()), player_ref.as_ref().or(player.as_ref())) {
+        if let (Some(v), Some(p)) = (omsi_cfg::flags::OMSI_GLASS_WIND.parse::<f32>(), player_ref.as_ref().or(player.as_ref())) {
             let h = p.vehicle.heading.to_radians();
             lighting.glass_wind = glam::Vec3::new(h.sin() as f32, h.cos() as f32, 0.0) * v;
         }
@@ -314,9 +314,9 @@ impl Offscreen<'_> {
             // the navigator, as the window shows it (its camera settled first)
             if settings.navigator {
                 let mut nav = navigator::Navigator::new(true, settings.ui_opacity, &settings.navigator_corner);
-                nav.schedule = omsi_cfg::env::var_os("OMSI_NAV_SCHEDULE").is_some();
+                nav.schedule = omsi_cfg::flags::OMSI_NAV_SCHEDULE.is_set();
                 nav.show_ai = settings.nav_ai;
-                if omsi_cfg::env::var_os("OMSI_NAV_MAP").is_some() {
+                if omsi_cfg::flags::OMSI_NAV_MAP.is_set() {
                     nav.toggle_map();
                 }
                 if traffic.is_none() {
@@ -376,9 +376,7 @@ impl Offscreen<'_> {
         // OMSI_BENCH=n: the final picture drawn n more times as a window frame would be (one
         // mirror, then the view), with the median CPU time of the drawing calls and of the wait
         // for the GPU - medians shrug off what else the machine is doing
-        if let Some(n) = omsi_cfg::env::var("OMSI_BENCH")
-            .ok()
-            .and_then(|v| v.parse::<usize>().ok())
+        if let Some(n) = omsi_cfg::flags::OMSI_BENCH.parse::<usize>()
         {
             let target = renderer.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("bench"),
@@ -407,7 +405,7 @@ impl Offscreen<'_> {
                 let _ = omsi_render::wait_gpu(&renderer.device, None);
                 cpu.push(drawn * 1000.0);
                 gpu.push(t.elapsed().as_secs_f64() * 1000.0);
-                if omsi_cfg::env::var_os("OMSI_BENCH_FRAMES").is_some() {
+                if omsi_cfg::flags::OMSI_BENCH_FRAMES.is_set() {
                     log::info!("bench frame {k}: drawing {:.2} ms, GPU wait {:.2} ms", drawn * 1000.0, gpu[k]);
                 }
             }
@@ -453,9 +451,9 @@ impl Offscreen<'_> {
         // (OMSI_BUDGET_FROM=x,y[,MB]: the budget is met from there first, as if the camera had
         // been there, then - with the budget raised to MB - the textures that come near again
         // with the camera are read back)
-        if omsi_cfg::env::var_os("OMSI_TEXTURE_MEMORY").is_some() {
+        if omsi_cfg::flags::OMSI_TEXTURE_MEMORY.is_set() {
             world.set_texture_budget(texture_budget(settings));
-            let from: Vec<f64> = omsi_cfg::env::var("OMSI_BUDGET_FROM")
+            let from: Vec<f64> = omsi_cfg::flags::OMSI_BUDGET_FROM.var()
                 .unwrap_or_default()
                 .split(',')
                 .filter_map(|v| v.trim().parse::<f64>().ok())
@@ -475,7 +473,7 @@ impl Offscreen<'_> {
         world.finish_texture_upgrades(renderer, scene);
         // OMSI_WARM_FRAMES=n: n frames drawn before the picture, for what reads the frame
         // before it (the rain on the glass looks through the last picture)
-        for _ in 0..omsi_cfg::env::var("OMSI_WARM_FRAMES").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(0) {
+        for _ in 0..omsi_cfg::flags::OMSI_WARM_FRAMES.parse::<usize>().unwrap_or(0) {
             let _ = renderer.render_to_image(scene, w, h, camera, lighting)?;
         }
         Ok(())
@@ -498,7 +496,7 @@ impl Offscreen<'_> {
             render_mirrors(renderer, scene, world, p, lighting, None, None);
         }
         if let Some(p) = player_ref.as_ref() {
-            let mode = omsi_cfg::env::var("OMSI_MIRROR_HUD").ok().and_then(|v| v.parse::<u8>().ok()).unwrap_or(settings.mirror_hud);
+            let mode = omsi_cfg::flags::OMSI_MIRROR_HUD.parse::<u8>().unwrap_or(settings.mirror_hud);
             let mut panels = crate::mirror_hud::MirrorHud::default();
             steps::mirror_hud_sync(&mut panels, world, p, mode);
             if mode != 0 {

@@ -137,9 +137,7 @@ impl App {
         }
         static EVERY: std::sync::OnceLock<Option<f32>> = std::sync::OnceLock::new();
         if let Some(every) = *EVERY.get_or_init(|| {
-            omsi_cfg::env::var("OMSI_DEBUG_PHYSICS")
-                .ok()
-                .and_then(|v| v.parse::<f32>().ok())
+            omsi_cfg::flags::OMSI_DEBUG_PHYSICS.parse::<f32>()
                 .filter(|v| *v > 0.0)
         }) {
             static LAST: std::sync::atomic::AtomicU32 =

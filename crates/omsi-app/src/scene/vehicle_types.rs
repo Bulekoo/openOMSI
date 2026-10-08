@@ -647,7 +647,7 @@ pub(super) fn vehicle_bump_names(
     vt: &omsi_sim::VehicleType,
     scheme: Option<usize>,
 ) -> Vec<(String, Vec<PathBuf>)> {
-    if omsi_cfg::env::var_os("OMSI_NO_BUMP").is_some() || omsi_cfg::env::var_os("OMSI_NO_ENVMAP").is_some() {
+    if omsi_cfg::flags::OMSI_NO_BUMP.is_set() || omsi_cfg::flags::OMSI_NO_ENVMAP.is_set() {
         return Vec::new();
     }
     let mut dirs = vt.texture_dirs(root);

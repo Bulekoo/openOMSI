@@ -61,7 +61,7 @@ impl<'a> Offscreen<'a> {
                     parse_time(&args.time),
                 )
             });
-            if let (Some(t), true) = (traffic.as_mut(), omsi_cfg::env::var_os("OMSI_CHECK_TRIPS").is_some()) {
+            if let (Some(t), true) = (traffic.as_mut(), omsi_cfg::flags::OMSI_CHECK_TRIPS.is_set()) {
                 s.check_routes(&world, t);
             }
         }
@@ -70,7 +70,7 @@ impl<'a> Offscreen<'a> {
         if let Some(p) = player.as_mut() {
             p.vehicle.host.auto_clutch = if settings.auto_clutch { 1.0 } else { 0.0 };
             // OMSI_PAX_CAM=n: `--view pax` from the bus's n-th passenger camera
-            if let Some(k) = omsi_cfg::env::var("OMSI_PAX_CAM").ok().and_then(|v| v.parse().ok()) {
+            if let Some(k) = omsi_cfg::flags::OMSI_PAX_CAM.parse() {
                 p.cam_choice.1 = k;
             }
         }
@@ -152,7 +152,7 @@ impl<'a> Offscreen<'a> {
         // test harness for crashes, kerbs and reversing: OMSI_DRIVE_PROFILE="t throttle brake
         // [steer]/ …" holds piecewise constant pedals from each t on, OMSI_DRIVE_V0 gives the
         // bus a speed (km/h) on the first frame, OMSI_DEBUG_PHYSICS=secs logs the pose
-        let drive_profile: Vec<[f32; 4]> = omsi_cfg::env::var("OMSI_DRIVE_PROFILE")
+        let drive_profile: Vec<[f32; 4]> = omsi_cfg::flags::OMSI_DRIVE_PROFILE.var()
             .unwrap_or_default()
             .split(['/', ';'])
             .filter_map(|s| {
@@ -163,12 +163,8 @@ impl<'a> Offscreen<'a> {
                 (v.len() >= 3).then(|| [v[0], v[1], v[2], v.get(3).copied().unwrap_or(0.0)])
             })
             .collect();
-        let drive_v0: Option<f32> = omsi_cfg::env::var("OMSI_DRIVE_V0")
-            .ok()
-            .and_then(|v| v.parse().ok());
-        let physics_log: f32 = omsi_cfg::env::var("OMSI_DEBUG_PHYSICS")
-            .ok()
-            .and_then(|v| v.parse().ok())
+        let drive_v0: Option<f32> = omsi_cfg::flags::OMSI_DRIVE_V0.parse();
+        let physics_log: f32 = omsi_cfg::flags::OMSI_DEBUG_PHYSICS.parse()
             .unwrap_or(0.0);
         let last_reasons: Vec<String> = Vec::new();
         if args.autostart && !args.is_resuming() {
@@ -195,7 +191,7 @@ impl<'a> Offscreen<'a> {
         ground_sample(&world, traffic.as_ref(), center)?;
         // LAN in an offscreen run too, so that one game's view of another can be rendered
         // (`OMSI_LAN_AUDIO=1`: with the other buses' sounds, heard at the camera - for the logs)
-        let lan_audio = (lan_off.is_some() && omsi_cfg::env::var_os("OMSI_LAN_AUDIO").is_some())
+        let lan_audio = (lan_off.is_some() && omsi_cfg::flags::OMSI_LAN_AUDIO.is_set())
             .then(omsi_audio::AudioEngine::new);
         if let (Some(l), Some(p)) = (lan_off.as_mut(), player.as_mut()) {
             lan::settle_spawn(
@@ -445,7 +441,7 @@ fn new_humans(
     // collision mesh stands in the way there) - two builds compared on
     // the same map show where a change of the ground rules adds or removes a bump
 fn ground_sample(world: &World, traffic: Option<&traffic::Traffic>, center: DVec3) -> Result<()> {
-    if let (Ok(path), Some(t)) = (omsi_cfg::env::var("OMSI_GROUND_SAMPLE"), traffic.as_ref()) {
+    if let (Some(path), Some(t)) = (omsi_cfg::flags::OMSI_GROUND_SAMPLE.var(), traffic.as_ref()) {
         use std::io::Write;
         let Ok(mut f) = std::fs::File::create(&path) else { return Err(anyhow::anyhow!("OMSI_GROUND_SAMPLE: cannot write {path}")) };
         let collision = world.collision.lock().clone();

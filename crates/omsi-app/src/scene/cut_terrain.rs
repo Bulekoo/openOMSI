@@ -16,13 +16,13 @@ impl World {
         staged: &HashMap<(i32, i32), Arc<StagedTile>>,
         layout: &TileLayout,
     ) {
-        let debug_raster = omsi_cfg::env::var("OMSI_DEBUG_RASTER").ok().and_then(|q| {
+        let debug_raster = omsi_cfg::flags::OMSI_DEBUG_RASTER.var().and_then(|q| {
             q.split_once(',')
                 .and_then(|(a, b)| Some((a.parse::<f64>().ok()?, b.parse::<f64>().ok()?)))
         });
-        let check_roads = omsi_cfg::env::var_os("OMSI_CHECK_ROADS").is_some();
-        let debug = omsi_cfg::env::var_os("OMSI_DEBUG_SPLINES").is_some();
-        let debug_physics = omsi_cfg::env::var_os("OMSI_DEBUG_PHYSICS").is_some();
+        let check_roads = omsi_cfg::flags::OMSI_CHECK_ROADS.is_set();
+        let debug = omsi_cfg::flags::OMSI_DEBUG_SPLINES.is_set();
+        let debug_physics = omsi_cfg::flags::OMSI_DEBUG_PHYSICS.is_set();
         let results: Vec<(Arc<TileSurface>, Option<Image>, Check, usize)> = prepared
             .par_iter_mut()
             .map(|p| {
@@ -33,7 +33,7 @@ impl World {
         let mut where_: Vec<(f64, f64, f32)> = Vec::new();
         let (mut tris, mut wheel_meshes) = (0usize, 0usize);
         for (p, (ts, cut, check, wheels)) in prepared.iter_mut().zip(results) {
-            p.cut = cut.map(|c| if omsi_cfg::env::var_os("OMSI_CUT_PLAIN").is_some() { omsi_texture::gpu::TextureData { gpu_mips: false, ..omsi_texture::gpu::TextureData::from_image(c) } } else { tile_texture(c, true) });
+            p.cut = cut.map(|c| if omsi_cfg::flags::OMSI_CUT_PLAIN.is_set() { omsi_texture::gpu::TextureData { gpu_mips: false, ..omsi_texture::gpu::TextureData::from_image(c) } } else { tile_texture(c, true) });
             tris += ts.drive.tris.len();
             wheel_meshes += wheels;
             // the wheel surfaces come and go with the tile (World::unload_tile)
@@ -100,7 +100,7 @@ impl World {
                 log::info!("tile ({tx}, {ty}): terrain cut under flush surfaces");
             }
             let rgba = ts.mask_image(&terrain_at, surface_flush());
-            if let Some(dir) = omsi_cfg::env::var("OMSI_DUMP_CUT").ok() {
+            if let Some(dir) = omsi_cfg::flags::OMSI_DUMP_CUT.var() {
                 let a: Vec<u8> = rgba.chunks_exact(4).map(|p| p[3]).collect();
                 if let Some(img) = image::GrayImage::from_raw(ts.size as u32, ts.size as u32, a) {
                     let _ = image::imageops::flip_vertical(&img).save(format!("{dir}/cut_{tx}_{ty}.png"));
@@ -216,7 +216,7 @@ impl World {
             else {
                 continue;
             };
-            if omsi_cfg::env::var_os("OMSI_NO_SPLINE_HOLES").is_none() {
+            if !omsi_cfg::flags::OMSI_NO_SPLINE_HOLES.is_set() {
                 for rim in &q.hole_rims {
                     let ring: Vec<_> = rim.iter().map(|v| v.truncate()).collect();
                     ts.add_outline(&ring, tx, ty);

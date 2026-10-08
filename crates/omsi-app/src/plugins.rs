@@ -8,7 +8,7 @@ use omsi_script::SysVar;
 
 /// Load every plugin of every content root (`OMSI_NO_PLUGINS=1` leaves them out).
 pub(crate) fn load() -> Plugins {
-    if omsi_cfg::env::var_os("OMSI_NO_PLUGINS").is_some() {
+    if omsi_cfg::flags::OMSI_NO_PLUGINS.is_set() {
         return Plugins::default();
     }
     // (never from content another machine sent: a LAN host's mods are data only)

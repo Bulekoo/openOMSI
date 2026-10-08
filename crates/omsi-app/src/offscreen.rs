@@ -256,7 +256,7 @@ fn triple_extent(settings: &crate::settings::Settings, cam: &Camera, w: u32, h: 
 }
 
 fn vehicle_camera(player: &Player, camera: &mut Camera) {
-    let Ok(spec) = omsi_cfg::env::var("OMSI_CAM_VEHICLE") else { return };
+    let Some(spec) = omsi_cfg::flags::OMSI_CAM_VEHICLE.var() else { return };
     let v: Vec<f32> = spec
         .split(',')
         .filter_map(|s| s.trim().parse().ok())

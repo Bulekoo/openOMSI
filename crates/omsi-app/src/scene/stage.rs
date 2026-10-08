@@ -45,9 +45,7 @@ impl World {
     ) -> Result<LoadStats> {
         let t0 = std::time::Instant::now();
         // OMSI_BATCH=n: prepare the tiles a few at a time, as the window's streaming does
-        let batch = omsi_cfg::env::var("OMSI_BATCH")
-            .ok()
-            .and_then(|v| v.parse::<usize>().ok())
+        let batch = omsi_cfg::flags::OMSI_BATCH.parse::<usize>()
             .filter(|n| *n > 0)
             .unwrap_or(tiles.len().max(1));
         let mut stats = LoadStats {
@@ -69,7 +67,7 @@ impl World {
         self.staged.lock().clear();
         self.refresh_tile_lists();
         stats.log_ground();
-        if omsi_cfg::env::var_os("OMSI_PROFILE").is_some() {
+        if omsi_cfg::flags::OMSI_PROFILE.is_set() {
             log::info!(
                 "build_scene: prepared in {:.2} s, uploaded in {:.2} s",
                 (t1 - t0).as_secs_f64(),
@@ -78,7 +76,7 @@ impl World {
         }
         // OMSI_DUMP_GROUND=file: every loaded tile's final terrain and how much of it the
         // roads cut away, as text (to compare a whole-map load with a streamed one)
-        if let Some(path) = omsi_cfg::env::var_os("OMSI_DUMP_GROUND") {
+        if let Some(path) = omsi_cfg::flags::OMSI_DUMP_GROUND.os() {
             let mut out = String::new();
             let terrains = self.terrains.read();
             let surfaces = self.surfaces.read();
@@ -217,7 +215,7 @@ impl World {
         if files > 0 {
             let records: usize = groups.iter().flat_map(|g| g.1.iter().map(|m| m.1)).sum();
             log::warn!("{} object and spline files named by the map are not installed ({} records, in {} add-on folders; OMSI_CHECK_TYPES=1 lists them)", files, records, groups.len());
-            if omsi_cfg::env::var_os("OMSI_CHECK_TYPES").is_some() {
+            if omsi_cfg::flags::OMSI_CHECK_TYPES.is_set() {
                 for (folder, list) in &groups {
                     log::info!(
                         "  missing from {folder}: {} files, {} records",
@@ -262,7 +260,7 @@ impl World {
     }
 
     pub(super) fn prepare_tiles_impl(&self, tiles: &[(i32, i32, PathBuf)], initial_diag: bool) -> (Vec<Prepared>, LoadStats) {
-        let profile = omsi_cfg::env::var_os("OMSI_PROFILE").is_some();
+        let profile = omsi_cfg::flags::OMSI_PROFILE.is_set();
         let t0 = std::time::Instant::now();
         let index = self.index();
         let layout = self.layout();
@@ -612,7 +610,7 @@ impl World {
     /// lanes, with their shapes, ground and holes in `out`.
     fn stage_splines(&self, out: &mut StagedTile, tile: &omsi_map::Tile, origin2: DVec2) -> (Vec<Lane>, Vec<Arc<MeshData>>) {
         let (tx, ty, origin) = (out.tx, out.ty, out.origin);
-        let debug_splines = omsi_cfg::env::var_os("OMSI_DEBUG_SPLINES").is_some();
+        let debug_splines = omsi_cfg::flags::OMSI_DEBUG_SPLINES.is_set();
         let mut lanes: Vec<Lane> = Vec::new();
         let mut meshes: Vec<Arc<MeshData>> = Vec::new();
         for s in tile
@@ -625,7 +623,7 @@ impl World {
                 continue;
             };
             let curve = SplineCurve::from_map(s, origin2);
-            if omsi_cfg::env::var_os("OMSI_CHECK_SPLINES").is_some() {
+            if omsi_cfg::flags::OMSI_CHECK_SPLINES.is_set() {
                 SPLINE_ENDS.lock().insert(s.id, (curve.point_at(0.0), curve.end_point(), s.prev_id, s.next_id, s.file.clone()));
             }
             // editor-only splines (invisible streets, flight paths) still carry lanes
@@ -660,7 +658,7 @@ impl World {
             let mesh = build_spline_mesh(&st.def, &curve, s.mirror, origin);
             // OMSI_CHECK_SPIKES: a face standing taller than the profile, the gradient and
             // the cant allow (a spike out of the road)
-            if omsi_cfg::env::var_os("OMSI_CHECK_SPIKES").is_some() && !mesh.is_empty() {
+            if omsi_cfg::flags::OMSI_CHECK_SPIKES.is_set() && !mesh.is_empty() {
                 let (zlo, zhi) = st.def.profiles.iter().flat_map(|p| p.points.iter().map(|q| q.z)).fold((f32::MAX, f32::MIN), |(a, b), z| (a.min(z), b.max(z)));
                 let n = omsi_geometry::spline_station_count(&st.def, &curve).max(1);
                 let step = curve.length / n as f64;
@@ -708,7 +706,7 @@ impl World {
                     // makes the outline from it; the terrain takes it with the `[terrainhole]`
                     // meshes, "Terrain hole cutting: Spline")
                     let mode = s.terrain_align.map(|v| v.clamp(0.0, 255.0) as u8).unwrap_or(1);
-                    if omsi_cfg::env::var_os("OMSI_LIST_ALIGNED").is_some() {
+                    if omsi_cfg::flags::OMSI_LIST_ALIGNED.is_set() {
                         let p = curve.point_at(curve.length * 0.5);
                         log::info!("aligned spline {} {} mode {mode} mid ({:.1}, {:.1}, {:.1}) heading {:.0}", s.id, s.file, p.x, p.y, p.z, curve.heading_at(curve.length * 0.5));
                     }
@@ -771,11 +769,11 @@ impl World {
         counts: &Mutex<LoadStats>,
     ) -> usize {
         let (tx, ty) = (out.tx, out.ty);
-        let only_object = omsi_cfg::env::var("OMSI_ONLY_OBJECT")
-            .ok()
+        let only_object = omsi_cfg::flags::OMSI_ONLY_OBJECT
+            .var()
             .map(|f| f.to_ascii_lowercase());
-        let skip_object = omsi_cfg::env::var("OMSI_SKIP_OBJECT")
-            .ok()
+        let skip_object = omsi_cfg::flags::OMSI_SKIP_OBJECT
+            .var()
             .map(|f| f.to_ascii_lowercase());
         let wanted = |file: &str| {
             let f = file.to_ascii_lowercase();
@@ -789,7 +787,7 @@ impl World {
                     .unwrap_or(false)
         };
         // [object]
-        let debug_outside = omsi_cfg::env::var_os("OMSI_DEBUG_OBJECTS").is_some();
+        let debug_outside = omsi_cfg::flags::OMSI_DEBUG_OBJECTS.is_set();
         let mut outside = 0usize;
         for o in &tile.objects {
             if !wanted(&o.file) {
@@ -964,7 +962,7 @@ impl World {
         let Some(ot) = self.object_type(file) else {
             self.note_missing(file, "scenery object", tx, ty, key);
             stats.lock().failed_objects += 1;
-            if omsi_cfg::env::var_os("OMSI_DEBUG_MISSING").is_some() {
+            if omsi_cfg::flags::OMSI_DEBUG_MISSING.is_set() {
                 log::info!("object not placed: {file} (tile {tx},{ty}, id {key})");
             }
             return None;
@@ -1170,10 +1168,10 @@ impl World {
                     .unwrap_or(glam::Mat4::IDENTITY);
                 if *index >= pt.sco.attachments.len() {
                     // `OMSI_NO_ATTACH_FALLBACK=1` drops them instead, for an A/B
-                    if omsi_cfg::env::var_os("OMSI_NO_ATTACH_FALLBACK").is_some() {
+                    if omsi_cfg::flags::OMSI_NO_ATTACH_FALLBACK.is_set() {
                         continue;
                     }
-                    if omsi_cfg::env::var_os("OMSI_DEBUG_MISSING").is_some() {
+                    if omsi_cfg::flags::OMSI_DEBUG_MISSING.is_set() {
                         log::info!("attached object {} (id {}) on point index {index} of {parent} ({} has {}): at the parent's origin ({:.1}, {:.1}, {:.1})", o.ot.sco.path.display(), o.id, pt.sco.path.display(), pt.sco.attachments.len(), pp.pos.x, pp.pos.y, pp.pos.z);
                     }
                 }
@@ -1190,7 +1188,7 @@ impl World {
         for (o, fp) in st.objects.iter().zip(&final_poses) {
             if let (Placement::Attached { parent, .. }, None) = (&o.place, fp) {
                 unattached += 1;
-                if omsi_cfg::env::var_os("OMSI_DEBUG_MISSING").is_some() {
+                if omsi_cfg::flags::OMSI_DEBUG_MISSING.is_set() {
                     log::info!("attached object {} (id {}) on {parent} not placed: the parent is not in the tile", o.ot.sco.path.display(), o.id);
                 }
             }

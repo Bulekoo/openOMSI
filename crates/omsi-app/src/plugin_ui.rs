@@ -1445,7 +1445,7 @@ mod tests {
                 img.put_pixel(x, y, image::Rgba([px(0), px(1), px(2), 255]));
             }
         }
-        let out = std::env::var("OMSI_UI_PREVIEW")
+        let out = omsi_cfg::flags::OMSI_UI_PREVIEW.live_var()
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|_| {
                 std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ui-preview.png")

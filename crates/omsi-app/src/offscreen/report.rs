@@ -42,7 +42,7 @@ impl Offscreen<'_> {
                     log::info!("nearest AI vehicle to the player: {near:.1} m");
                 }
             }
-            if omsi_cfg::env::var_os("OMSI_DEBUG_STUCK").is_some() {
+            if omsi_cfg::flags::OMSI_DEBUG_STUCK.is_set() {
                 for l in t.stuck_report() {
                     log::info!("stuck: {l}");
                 }
@@ -51,7 +51,7 @@ impl Offscreen<'_> {
                 log::info!(
                     "traffic health: {stuck} stuck for over a minute, {overlapping} pairs overlapping"
                 );
-                if omsi_cfg::env::var_os("OMSI_DEBUG_STUCK").is_some() {
+                if omsi_cfg::flags::OMSI_DEBUG_STUCK.is_set() {
                     for c in t.cars.iter().filter(|c| c.stopped > 30.0) {
                         log::info!("  waiting {:.0} s: car {} ({}) lane {} at ({:.1}, {:.1}) lead {:?} why {:?} {:.1} junction {}", c.stopped, c.id, c.vehicle.ty.def.type_name, c.state.lane, c.vehicle.position.x, c.vehicle.position.y, c.lead_car, c.why.0, c.why.1, c.junction_why);
                     }
@@ -72,7 +72,7 @@ impl Offscreen<'_> {
             log::info!("traffic: {} vehicles ({buses} of them buses), {} waiting at red lights, mean speed {:.1} km/h", t.cars.len(), t.held_at_red, t.cars.iter().map(|c| c.state.speed).sum::<f32>() / t.cars.len().max(1) as f32 * 3.6);
             for c in t.cars.iter().filter(|c| c.is_bus()) {
                 log::info!("scheduled {} at ({:.1}, {:.1}, {:.1}) heading {:.0} speed {:.1} km/h, {} stops left, at_station={} dwell={:.1} delay={:+.0} s", c.vehicle.ty.def.type_name, c.vehicle.position.x, c.vehicle.position.y, c.vehicle.position.z, c.vehicle.heading, c.state.speed * 3.6, c.bus.as_ref().map(|b| b.stops.len()).unwrap_or(0), c.at_station(), c.standing_for(t.day_time), c.bus.as_ref().map(|b| b.delay).unwrap_or(0.0));
-                if omsi_cfg::env::var_os("OMSI_DEBUG_PROPS").is_some() {
+                if omsi_cfg::flags::OMSI_DEBUG_PROPS.is_set() {
                     for v in [
                         "Matrix_Nr",
                         "Matrix_TerminusL1",
@@ -147,7 +147,7 @@ impl Offscreen<'_> {
         }
         // OMSI_DEBUG_REST: where the bus came to rest against the ground under it (a
         // bus sunk into the road, or hanging over it, after spawning)
-        if omsi_cfg::env::var_os("OMSI_DEBUG_REST").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_REST.is_set() {
             let p = player.vehicle.position;
             log::info!(
                 "rest: entry {} bus at ({:.1}, {:.1}, {:.2}) heading {:.0}; road/ground there {:?}, walk {:?}, spawned at z {:.2}",
@@ -164,13 +164,13 @@ impl Offscreen<'_> {
             let wheels: Vec<String> = tyre_lows(v, world).iter().map(|(_, d)| format!("{d:+.3}")).collect();
             log::info!("rest wheels: {} lowest tyre points against the road: [{}]", v.ty.def.type_name, wheels.join(", "));
         }
-        if omsi_cfg::env::var_os("OMSI_DEBUG_HUMANS").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_HUMANS.is_set() {
             log::info!(
                 "people per cabin path link: {:?}",
                 player.vehicle.host.humans_on_path_link
             );
         }
-        if omsi_cfg::env::var_os("OMSI_DEBUG_PROPS").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_PROPS.is_set() {
             if let Some(probe) = player.vehicle.host.ground_probe.clone() {
                 log::info!(
                     "ground probe: at the origin {:+.2} m, 1 m up {:+.2}, 1 m down {:+.2}",
@@ -184,7 +184,7 @@ impl Offscreen<'_> {
             let e = DRIVE_EXTREMES.lock();
             log::info!("drive extremes: pitch {:.1} (at ({:.1}, {:.1}, {:.1}), {:.1} s) bank {:.1}, origin {:+.2}..{:+.2} m over the ground", e.0, e.4 .0.x, e.4 .0.y, e.4 .0.z, e.4 .1, e.1, e.3, e.2);
         }
-        if let Ok(list) = omsi_cfg::env::var("OMSI_DEBUG_VARS") {
+        if let Some(list) = omsi_cfg::flags::OMSI_DEBUG_VARS.var() {
             for v in list.split(',').map(str::trim).filter(|v| !v.is_empty()) {
                 log::info!(
                     "after drive: {v} = {:?} / {:?}",
@@ -193,7 +193,7 @@ impl Offscreen<'_> {
                 );
             }
         }
-        if omsi_cfg::env::var_os("OMSI_DEBUG_PROPS").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_PROPS.is_set() {
             for v in [
                 "IBIS_mode",
                 "IBIS_RouteIndex",
@@ -244,7 +244,7 @@ impl Offscreen<'_> {
                     st.mipmaps
                 );
             }
-            if let Ok(dir) = omsi_cfg::env::var("OMSI_DUMP_SCRIPTTEX") {
+            if let Some(dir) = omsi_cfg::flags::OMSI_DUMP_SCRIPTTEX.var() {
                 dump_display_textures(&player.vehicle, Path::new(&dir));
             }
             log::info!(
@@ -266,7 +266,7 @@ impl Offscreen<'_> {
             player.vehicle.host.coll_energy,
             player.vehicle.host.coll_pos
         );
-        if omsi_cfg::env::var_os("OMSI_DEBUG_COLLISION").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_COLLISION.is_set() {
             if let Some(cw) = player.vehicle.collision.as_ref() {
                 let p = player.vehicle.position;
                 let mut near: Vec<(f64, &omsi_sim::collision::Obb)> = cw
@@ -287,7 +287,7 @@ impl Offscreen<'_> {
                 );
             }
         }
-        if omsi_cfg::env::var_os("OMSI_DEBUG_PHYSICS").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_PHYSICS.is_set() {
             let gaps = |v: &omsi_sim::VehicleInstance| {
                 v.wheel_ground_gaps()
                     .iter()
@@ -436,7 +436,7 @@ impl Offscreen<'_> {
             // Aim at each of them in turn and say which one would actually be operated:
             // a switch that cannot be hit where it is drawn, or that hands the click to
             // its neighbour, is unusable with the mouse however good the rest is.
-            if omsi_cfg::env::var_os("OMSI_CLICK_ALL").is_some() {
+            if omsi_cfg::flags::OMSI_CLICK_ALL.is_set() {
                 let spread = pixel_angle(&cam, h as f32) * 6.0;
                 let (mut hit, mut wrong, mut missed) = (0, 0, 0);
                 for (ev, sx, sy) in &switches {
@@ -467,7 +467,7 @@ impl Offscreen<'_> {
             // compared before and after: a switch whose trigger the script does not
             // define, or that changes nothing, is a switch that does nothing when
             // clicked.
-            if omsi_cfg::env::var_os("OMSI_TRIGGER_ALL").is_some() {
+            if omsi_cfg::flags::OMSI_TRIGGER_ALL.is_set() {
                 trigger_test(player);
             }
             // and a drag, so the offscreen test can turn a knob too
@@ -482,7 +482,7 @@ impl Offscreen<'_> {
                 player.vehicle.update(0.05);
             }
             pose_player(player, renderer, scene, args, settings);
-            if let Ok(names) = omsi_cfg::env::var("OMSI_DEBUG_VARS") {
+            if let Some(names) = omsi_cfg::flags::OMSI_DEBUG_VARS.var() {
                 for n in names.split(',') {
                     log::info!("after click: {n} = {:?}", player.vehicle.var(n.trim()));
                 }
@@ -519,7 +519,7 @@ impl Offscreen<'_> {
                 h.paid,
                 h.change_due
             );
-            if omsi_cfg::env::var_os("OMSI_DEBUG_HUMANS").is_some() {
+            if omsi_cfg::flags::OMSI_DEBUG_HUMANS.is_set() {
                 let centre = player_ref
                     .as_ref()
                     .map(|p| p.vehicle.position)
@@ -532,7 +532,7 @@ impl Offscreen<'_> {
                     log::info!("  {k} at ({:.1}, {:.1}, {:.1})", p.x, p.y, p.z);
                 }
             }
-            if omsi_cfg::env::var_os("OMSI_DEBUG_HUMANS").is_some() {
+            if omsi_cfg::flags::OMSI_DEBUG_HUMANS.is_set() {
                 for p in &h.people {
                     log::info!(
                         "  {:?} at ({:.1}, {:.1}, {:.1})",
@@ -554,7 +554,7 @@ impl Offscreen<'_> {
                     p.vehicle.var("haltewunsch"),
                     p.vehicle.physics.velocity_kmh()
                 );
-                if omsi_cfg::env::var_os("OMSI_DEBUG_HUMANS").is_some() {
+                if omsi_cfg::flags::OMSI_DEBUG_HUMANS.is_set() {
                     for (id, pos, rot, name) in world.bus_stops.lock().iter() {
                         log::info!(
                             "  bus stop {id} '{name}' at ({:.1}, {:.1}) heading {rot:.0}",
@@ -692,7 +692,7 @@ fn trigger_test(player: &mut Player) {
             silent.push(name.clone());
         } else {
             ok += 1;
-            if omsi_cfg::env::var_os("OMSI_DEBUG_TRIGGERS").is_some() {
+            if omsi_cfg::flags::OMSI_DEBUG_TRIGGERS.is_set() {
                 let names: Vec<&str> = changed
                     .iter()
                     .take(6)

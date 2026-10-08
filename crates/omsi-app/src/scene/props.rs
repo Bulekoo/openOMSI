@@ -588,7 +588,7 @@ impl World {
                     .join(", ")
             )
         };
-        if omsi_cfg::env::var_os("OMSI_DEBUG_TEXTURES").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_TEXTURES.is_set() {
             log::info!("all textures by size: {all_formats}");
         }
         let gpu = self.gpu.lock();
@@ -792,7 +792,7 @@ impl World {
         if n > 0 {
             let t = std::time::Instant::now();
             let rebound = renderer.rebind_textures(scene, &swapped);
-            if omsi_cfg::env::var_os("OMSI_PROFILE").is_some() {
+            if omsi_cfg::flags::OMSI_PROFILE.is_set() {
                 log::info!("textures: {n} compressed ones swapped in, {rebound} materials rebound in {:.1} ms", t.elapsed().as_secs_f64() * 1000.0);
             }
         }
@@ -1015,7 +1015,7 @@ impl World {
         }
         drop(gpu);
         let rebound = renderer.rebind_textures(scene, &shrunk);
-        if (!shrunk.is_empty() || restoring > 0) && omsi_cfg::env::var_os("OMSI_PROFILE").is_some() {
+        if (!shrunk.is_empty() || restoring > 0) && omsi_cfg::flags::OMSI_PROFILE.is_set() {
             log::info!("texture budget: {:.0} of {:.0} MB in use, {} textures lost a level ({} materials rebound), {} coming back, in {:.1} ms", usage as f64 / 1e6, limit as f64 / 1e6, shrunk.len(), rebound, restoring, t0.elapsed().as_secs_f64() * 1000.0);
         }
         shrunk.len() + restoring
@@ -1072,7 +1072,7 @@ impl World {
             lens[2] - keep[2],
             lens[3] - keep[3],
         ];
-        if omsi_cfg::env::var_os("OMSI_PROFILE").is_some() {
+        if omsi_cfg::flags::OMSI_PROFILE.is_set() {
             log::info!("scene slots: cut {} meshes, {} textures, {} materials, {} instances off the end in {:.1} ms", cut[0], cut[1], cut[2], cut[3], t.elapsed().as_secs_f64() * 1000.0);
         }
         cut

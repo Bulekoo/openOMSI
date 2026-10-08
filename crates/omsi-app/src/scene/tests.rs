@@ -226,7 +226,7 @@ fn only_a_white_light_map_makes_an_led_panel() {
 #[ignore = "requires the installed SOR NB content in OMSI_TEST_CONTENT"]
 fn installed_sor_ois_retains_powered_freetex() {
     let root = PathBuf::from(
-        std::env::var_os("OMSI_TEST_CONTENT")
+        omsi_cfg::flags::OMSI_TEST_CONTENT.live_os()
             .expect("set OMSI_TEST_CONTENT to the OMSI content root"),
     );
     let model =

@@ -115,7 +115,7 @@ impl App {
                 // puddles and the wet asphalt the renderer draws (the same wetness:
                 // none under snow, OMSI_WETNESS as the picture takes it)
                 let wetness = puddles::road_wetness(self.wetness, wt.snow);
-                if (wetness > 0.0 || !self.spray.is_empty()) && omsi_cfg::env::var_os("OMSI_NO_SPRAY").is_none() {
+                if (wetness > 0.0 || !self.spray.is_empty()) && !omsi_cfg::flags::OMSI_NO_SPRAY.is_set() {
                     let __ts = Instant::now();
                     steps::throw_spray(
                         &mut self.spray,

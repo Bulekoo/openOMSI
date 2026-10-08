@@ -218,7 +218,7 @@ pub(super) fn place_water(renderer: &Renderer, scene: &mut Scene, gpu: &mut GpuC
         wm.ranges.push((0, 6, 0));
         let wid = gpu.add_mesh(renderer, scene, &wm);
         tg.meshes.push(wid);
-        if omsi_cfg::env::var_os("OMSI_DEBUG_SURFACES").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_SURFACES.is_set() {
             log::info!("tile ({}, {}): water at {:.1}..{:.1} m, centred ({:.0}, {:.0})", p.tx, p.ty, h.iter().cloned().fold(f32::MAX, f32::min), h.iter().cloned().fold(f32::MIN, f32::max), p.origin.x + tile_size() / 2.0, p.origin.y + tile_size() / 2.0);
         }
         // an ordinary instance, not a surface: the surface depth bias would let a
@@ -244,7 +244,7 @@ pub(super) fn log_place_step(
     lock_wait: f64,
     done: bool,
 ) {
-    if omsi_cfg::env::var_os("OMSI_PROFILE").is_some() {
+    if omsi_cfg::flags::OMSI_PROFILE.is_set() {
         let took = t_start.elapsed().as_secs_f64();
         let decodes = (
             gpu.sync_decodes - decodes_before.0,
