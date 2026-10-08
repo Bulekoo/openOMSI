@@ -1706,9 +1706,11 @@ fn rain_glass(world: vec3<f32>, uv: vec2<f32>, n: vec3<f32>, water: f32, t: f32,
     // Connected water bends the view between visible beads, rather than greying
     // otherwise sharp glass. Runoff clears this film along with the fine drops.
     let film = smoothstep(0.2, 1.0, wet) * 0.7 * (1.0 - track);
-    // Unresolved beads contribute partial coverage, not an opaque sheet of water.
-    let film_cover = film * mix(0.35, 1.0, 1.0 - smoothstep(0.0015, 0.006, px));
-    g.mist = clamp(film_cover + mist * (1.0 - track), 0.0, 1.0);
+    // (The film only bends the view, through the slope below: it covers nothing. A thin
+    // even sheet of water on glass lets nearly all the light through; drawn as a cover of
+    // up to 70 % over the picture behind it, it laid a milky veil over every wet pane: a
+    // third of the street's contrast left, and darker still in the classic picture.)
+    g.mist = clamp(mist * (1.0 - track), 0.0, 1.0);
     // Unresolved water must soften the view, not retain large, sharp lens ripples.
     let facing = abs(dot(out, eye));
     let film_detail = (1.0 - smoothstep(0.003, 0.012, footprint)) * facing * facing;
