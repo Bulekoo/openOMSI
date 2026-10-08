@@ -30,7 +30,6 @@ fn 370 crates/omsi-app::draw crates/omsi-app/src/navigator.rs
 fn 424 crates/omsi-app::draw_menu crates/omsi-app/src/ui.rs
 fn 349 crates/omsi-app::game_controllers crates/omsi-app/src/launcher/pages.rs
 fn 321 crates/omsi-app::host crates/omsi-app/src/lan_world.rs
-fn 323 crates/omsi-app::make_app crates/omsi-app/src/lib.rs
 fn 454 crates/omsi-app::render crates/omsi-app/src/openxr.rs
 fn 489 crates/omsi-app::spawn_player crates/omsi-app/src/spawn.rs
 fn 315 crates/omsi-app::toggle_set crates/omsi-app/src/game_lists.rs
