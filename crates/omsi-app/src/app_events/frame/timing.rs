@@ -56,7 +56,7 @@ impl App {
         }
         // in the own bus's cab: at the wheel, a passenger's view, or sitting in a
         // seat of it after getting up (its inside is drawn and heard from inside)
-        self.in_cab = matches!(self.view.as_str(), "driver" | "pax")
+        self.cam.in_cab = matches!(self.view.as_str(), "driver" | "pax")
             || (self.view == "foot" && self.foot_bus() == Some(crate::humans::BusId::Player));
         // standing or sitting in another player's bus: that bus is drawn and heard
         // from inside (its interior meshes, not the outside ones over them)

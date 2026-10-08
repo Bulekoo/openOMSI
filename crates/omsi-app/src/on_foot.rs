@@ -550,7 +550,7 @@ impl App {
         }
         self.view = "driver".into();
         self.sync_view_look();
-        self.look = (0.0, 0.0);
+        self.cam.look = (0.0, 0.0);
         if let (Some(cam), Some(p)) = (self.camera.as_ref(), self.player.as_ref()) {
             self.camera = Some(p.camera("driver", cam));
         }
@@ -597,10 +597,10 @@ impl App {
         self.view = if f.view_before == "outside" || f.view_before == "driver" { f.view_before } else { "driver".into() };
         // (the eyes glide from where the walker's were into the cab camera)
         if self.view == "driver" {
-            self.cam_blend.entering = true;
+            self.cam.cam_blend.entering = true;
         }
         self.sync_view_look();
-        self.look = (0.0, 0.0);
+        self.cam.look = (0.0, 0.0);
         // (the walking keys' help goes with the walking: it stood over the cab view)
         if self.service_msg.as_ref().is_some_and(|m| m.0.starts_with("On foot")) {
             self.service_msg = None;
@@ -762,7 +762,7 @@ impl App {
                         f.vel = DVec2::ZERO;
                     }
                     self.view = "free".into();
-                    self.ego = false;
+                    self.cam.ego = false;
                 }
                 true
             }

@@ -274,7 +274,7 @@ impl App {
                 }
             }
         }
-        if self.in_cab {
+        if self.cam.in_cab {
             if let Some(w) = self.world.as_ref() {
                 self.gfx.mirror_hud.ensure_frame(r, scene);
                 let hud = self
@@ -290,7 +290,7 @@ impl App {
             let rig = self.settings.triple.zoomed(
                 s.config.width,
                 s.config.height,
-                self.view_zoom.get(&self.view).copied().unwrap_or(1.0),
+                self.cam.view_zoom.get(&self.view).copied().unwrap_or(1.0),
             );
             r.render_triple(
                 scene,
@@ -399,7 +399,7 @@ impl App {
             // within the configured budget; keep desktop visibility culling.
             let mirror_view = if vr_active
                 || self.settings.triple.enabled
-                || (self.gfx.mirror_hud.active() && self.in_cab)
+                || (self.gfx.mirror_hud.active() && self.cam.in_cab)
             {
                 None
             } else {
@@ -409,7 +409,7 @@ impl App {
             // mirrors are seen from the pavement and stood frozen)
             let near = self.player.as_ref().zip(self.camera.as_ref()).is_some_and(|(p, c)| (p.vehicle.position - c.position).length() < 12.0);
             let draw_limit = if vr_active {
-                if self.in_cab || near {
+                if self.cam.in_cab || near {
                     vr_mirror_updates(&mut self.gfx.mirror_budget, raw_dt, rate, mirrors)
                 } else {
                     self.gfx.mirror_budget = 0.0;
@@ -429,7 +429,7 @@ impl App {
                     drawn = draw_limit;
                 }
             }
-            while (self.in_cab || near) && drawn < (if vr_active { draw_limit } else { self.gfx.mirrors_seen.clamp(1, 2) }) && (vr_active || self.gfx.mirror_budget >= 1.0) {
+            while (self.cam.in_cab || near) && drawn < (if vr_active { draw_limit } else { self.gfx.mirrors_seen.clamp(1, 2) }) && (vr_active || self.gfx.mirror_budget >= 1.0) {
                 let (Some(w), Some(p)) = (self.world.as_ref(), self.player.as_ref()) else { break };
                 if !vr_active {
                     self.gfx.mirror_budget -= 1.0;

@@ -777,7 +777,7 @@ impl App {
             }
             Btn::LookReset => {
                 self.game_action("view_reset_direction");
-                self.orbit = ORBIT_DEFAULT;
+                self.cam.orbit = ORBIT_DEFAULT;
             }
             Btn::Map => {
                 if let Some(n) = self.navigator.as_mut() {

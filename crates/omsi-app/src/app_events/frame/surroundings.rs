@@ -157,7 +157,7 @@ impl App {
                             );
                         }
                     }
-                    let inside = self.in_cab;
+                    let inside = self.cam.in_cab;
                     let __tm = Instant::now();
                     amb.update(
                         a,
@@ -222,7 +222,7 @@ impl App {
                 daylight.brightness,
                 &phase,
                 self.sound.audio.as_ref(),
-                self.in_cab,
+                self.cam.in_cab,
             );
         }
         *self.perf.profile.entry("scripted").or_default() += __t.elapsed().as_secs_f64();

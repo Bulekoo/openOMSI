@@ -56,7 +56,7 @@ impl App {
             p.tick(
                 dt,
                 self.sound.audio.as_ref(),
-                self.in_cab,
+                self.cam.in_cab,
                 !matches!(self.view.as_str(), "free" | "foot"),
             );
             // After scripts: zero-movement `_drag` for a held switch. Running this
@@ -89,7 +89,7 @@ impl App {
             // reaching for. Held, not reset: the camera stays where it is, which is
             // where any camera is while the player is busy with something)
             let reaching = idle > 0.0 && (self.hover.is_some() || self.hover_hand);
-            if !self.head_idle_hold.step(dt, reaching) {
+            if !self.cam.head_idle_hold.step(dt, reaching) {
                 p.move_head_idle(dt, idle, self.settings.head_idle_pace);
             }
             if let Some(w) = self.world.as_ref() {
@@ -148,7 +148,7 @@ impl App {
                 log_physics(&p.vehicle, t);
             }
         }
-        let inside = self.in_cab;
+        let inside = self.cam.in_cab;
         p.sync_transforms(r, scene, inside);
         // from the driver's seat the figure stays in the mirrors
         // (from the driver's seat only the mirrors show him)
@@ -165,7 +165,7 @@ impl App {
         if self.player.is_none() && matches!(self.view.as_str(), "free" | "foot") {
             if let Some(cam) = self.camera.as_mut() {
                 let base = if self.settings.fov >= 20.0 { self.settings.fov.min(120.0) } else { 60.0 };
-                cam.fov_deg = (base * self.view_zoom.get(&self.view).copied().unwrap_or(1.0)).clamp(8.0, 120.0);
+                cam.fov_deg = (base * self.cam.view_zoom.get(&self.view).copied().unwrap_or(1.0)).clamp(8.0, 120.0);
             }
         }
         if let Some(a) = self.sound.audio.as_ref() {
@@ -197,7 +197,7 @@ impl App {
         if let Some(a) = self.sound.audio.as_ref() {
             match self.player.as_mut() {
                 Some(p) => {
-                    let inside = self.in_cab;
+                    let inside = self.cam.in_cab;
                     self.sound.radio.set_map(&self.args.root, &self.args.map);
                     if let Some(m) = self.sound.radio.update(a, &p.vehicle, inside) {
                         self.service_msg = Some((m, 6.0));

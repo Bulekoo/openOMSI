@@ -147,7 +147,7 @@ impl App {
 
     /// `on_key` for the mirror panels in the cab; true when the key was theirs.
     fn mirror_hud_key(&mut self, code: KeyCode, pressed: bool, repeat: bool) -> bool {
-        if self.in_cab && self.game_menu.is_none() && self.player.is_some() {
+        if self.cam.in_cab && self.game_menu.is_none() && self.player.is_some() {
             let ctrl = self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight);
             let shift = self.keys.contains(&KeyCode::ShiftLeft) || self.keys.contains(&KeyCode::ShiftRight);
             if pressed && !repeat && code == KeyCode::KeyM && ctrl {
@@ -520,7 +520,7 @@ impl App {
                 KeyCode::F4 if self.key_left_free(code, "view_set_map") => {
                     // the free camera starts where the current view is looking
                     self.view = "free".into();
-                    self.ego = false;
+                    self.cam.ego = false;
                 }
                 KeyCode::KeyU
                 if self.keys.contains(&KeyCode::ShiftLeft)
@@ -790,9 +790,9 @@ impl App {
                     let id = it.next().unwrap_or(0.0) as u64;
                     self.script_touch(event_loop, arg, x * scale, y * scale, id);
                 }
-                "look" => self.look = xy(),
+                "look" => self.cam.look = xy(),
                 // `orbit <m>`: how far the outside camera stands off, as the mouse wheel sets it
-                "orbit" => self.orbit = xy().0.clamp(ORBIT_MIN, ORBIT_MAX),
+                "orbit" => self.cam.orbit = xy().0.clamp(ORBIT_MIN, ORBIT_MAX),
                 // `set name=value`: put a script variable somewhere (a switch half way)
                 "set" => {
                     if let (Some((k, v)), Some(p)) = (arg.split_once('='), self.player.as_mut()) {
@@ -853,13 +853,13 @@ impl App {
                     } else {
                         self.buttons_held = (false, false);
                         self.both_drag = None;
-                        log::info!("input script: both buttons up: zoom {:?}, orbit {:.1}", self.view_zoom.get(&self.view), self.orbit);
+                        log::info!("input script: both buttons up: zoom {:?}, orbit {:.1}", self.cam.view_zoom.get(&self.view), self.cam.orbit);
                     }
                 }
                 // `right down|up`: the right mouse button, through the window's own path
                 "right" => {
                     self.on_right(arg == "down");
-                    log::info!("input script: right button {arg}: zoom drag {}, look {}, zoom {:?}, orbit {:.1}", self.both_drag.is_some(), self.mouse_look, self.view_zoom.get(&self.view), self.orbit);
+                    log::info!("input script: right button {arg}: zoom drag {}, look {}, zoom {:?}, orbit {:.1}", self.both_drag.is_some(), self.mouse_look, self.cam.view_zoom.get(&self.view), self.cam.orbit);
                 }
                 "press" => self.on_left(true),
                 "release" => self.on_left(false),

@@ -144,7 +144,7 @@ impl App {
             self.camera = Some(next.camera(&self.view, cam));
         }
         self.player = Some(next);
-        self.look = (0.0, 0.0);
+        self.cam.look = (0.0, 0.0);
         self.service_msg = Some((format!("Now driving: {}", name.trim()), 4.0));
     }
 

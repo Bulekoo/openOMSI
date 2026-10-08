@@ -125,3 +125,42 @@ pub(crate) struct GfxState {
     /// Stand-in for the window's frame while the window is hidden (OMSI_RENDER_OCCLUDED).
     pub(crate) stand_in: Option<wgpu::Texture>,
 }
+
+/// The camera's state besides the camera itself: the head turned and zoomed per view, the switch between cameras, the outside camera's distance, the free camera's speed and the pedestrian view.
+pub(crate) struct ViewState {
+    /// The map is open but the first area is still loading: the view to start with.
+    pub(crate) starting: Option<Camera>,
+    pub(crate) speed: f32,
+    /// The idle head sway waiting where it is while the cursor is on a control
+    /// (see `head_idle::Hold`).
+    pub(crate) head_idle_hold: crate::head_idle::Hold,
+    /// OMSI's pedestrian ("ego") view: the free camera walking at eye height on whatever
+    /// people stand on (`view_set_ego`, F11).
+    pub(crate) ego: bool,
+    /// The camera is in the own bus's cab this frame (see RedrawRequested).
+    pub(crate) in_cab: bool,
+    /// How far the player has turned the head (driver, passenger) or swung the outside
+    /// camera around the bus, and how far that camera sits from it.
+    pub(crate) look: (f32, f32),
+    /// Where the view is drawn between that angle and the one of the frame before: the way
+    /// the mouse (or the stick, or the keys) went is eased in, so the head glides to the
+    /// angle asked for rather than jumping to it (`look_smoothing_ms`; 0 keeps it equal to
+    /// `look`). Only the camera reads this - everything that turns the view writes `look`.
+    pub(crate) look_smooth: (f32, f32),
+    /// Each view keeps its own `look` (as OMSI's cameras do): turning the outside camera
+    /// (F3) leaves the driver's head (F1) where it was. `look_view` is the view `look`
+    /// belongs to now; see `App::sync_view_look`.
+    pub(crate) view_looks: std::collections::HashMap<String, (f32, f32)>,
+    pub(crate) look_view: String,
+    /// Smooth switch between two cockpit cameras (arrow keys), see `CamBlend`.
+    pub(crate) cam_blend: CamBlend,
+    /// The zoom of the views inside the bus (driver, passenger): their field of view is
+    /// the camera's times this (the mouse wheel, + and -, a pinch), per view.
+    pub(crate) view_zoom: std::collections::HashMap<String, f32>,
+    /// Eased Space return in flight (F1 only): ((look from), (zoom from), seconds in,
+    /// look key it started from). A hand on the view cancels it; other views reset
+    /// instantly. If the camera changes mid-glide, the originating camera is
+    /// finalized straight ahead instead of keeping a partial angle.
+    pub(crate) f1_reset: Option<((f32, f32), f32, f32, String)>,
+    pub(crate) orbit: f32,
+}

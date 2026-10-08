@@ -19,8 +19,8 @@ impl App {
             return false;
         }
         let value = match self.view.as_str() {
-            "outside" => self.orbit,
-            "driver" | "pax" => *self.view_zoom.get(&self.view).unwrap_or(&1.0),
+            "outside" => self.cam.orbit,
+            "driver" | "pax" => *self.cam.view_zoom.get(&self.view).unwrap_or(&1.0),
             _ => return false,
         };
         self.both_drag = Some((self.cursor.1, value));
@@ -32,7 +32,7 @@ impl App {
     /// Whether the mouse steering (when on) steers in the view shown: every view of the
     /// player's bus, the map camera (F4) included, but not walking.
     pub(crate) fn mouse_steers_in_view(&self) -> bool {
-        self.player.is_some() && (matches!(self.view.as_str(), "driver" | "outside" | "pax") || (self.view == "free" && !self.ego))
+        self.player.is_some() && (matches!(self.view.as_str(), "driver" | "outside" | "pax") || (self.view == "free" && !self.cam.ego))
     }
 
     /// Looking round with the mouse goes by the cursor's way in the window (a view of the
@@ -241,14 +241,14 @@ impl App {
         }
         if let Some((y0, v0)) = self.both_drag {
             // a hand on the zoom cancels an eased Space return.
-            self.f1_reset = None;
+            self.cam.f1_reset = None;
             // (0x82c5f8: outside, the distance at the press times 1 + the way up over 500
             // pixels; in the bus the field of view at the press plus the way up over 500
             // pixels times the camera's own, which is also its widest (+0x31c, 0x7edde4):
             // moving up widens the view as it backs the outside camera away)
             if self.view == "outside" {
                 let k = (1.0 + (y0 - y) / 500.0).max(0.05);
-                self.orbit = (v0 * k).clamp(ORBIT_MIN, ORBIT_MAX);
+                self.cam.orbit = (v0 * k).clamp(ORBIT_MIN, ORBIT_MAX);
             } else if self.settings.precision_zoom {
                 // precision zoom from the press anchor (drag down zooms in):
                 // the FOV-multiplier curve instead of the linear way, same
@@ -260,9 +260,9 @@ impl App {
                 } else {
                     precision_zoom_step(v0, dy, intent).clamp(0.2, 1.0)
                 };
-                self.view_zoom.insert(self.view.clone(), m);
+                self.cam.view_zoom.insert(self.view.clone(), m);
             } else {
-                self.view_zoom.insert(self.view.clone(), (v0 + (y0 - y) / 500.0).clamp(0.2, 1.0_f32.max(v0)));
+                self.cam.view_zoom.insert(self.view.clone(), (v0 + (y0 - y) / 500.0).clamp(0.2, 1.0_f32.max(v0)));
             }
             return false;
         }

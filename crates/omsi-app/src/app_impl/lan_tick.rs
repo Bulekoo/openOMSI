@@ -21,7 +21,7 @@ impl App {
         let frame = lan::Frame {
             audio: self.sound.audio.as_ref(),
             listener: self.camera.as_ref().map(|c| c.position),
-            muffled: self.in_cab || self.net.inside_remote.is_some(),
+            muffled: self.cam.in_cab || self.net.inside_remote.is_some(),
             riders: self.humans.as_ref().map(|h| h.riding()).unwrap_or(0),
             clock: Some(&self.clock),
             tour: self.duty.as_ref().map(|d| format!("{}/{}", d.line, d.tour)),

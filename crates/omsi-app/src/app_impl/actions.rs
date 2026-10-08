@@ -90,7 +90,7 @@ impl App {
         match name {
             "vr_recenter" => {
                 self.xr.vr.as_mut().unwrap().recenter();
-                self.look = (0.0, 0.0);
+                self.cam.look = (0.0, 0.0);
                 self.service_msg = Some(("VR view recentered".into(), 2.0));
             }
             "vr_toggle_desktop_mirror" => {
@@ -125,7 +125,7 @@ impl App {
                     }
                 }
                 self.view = "free".into();
-                self.ego = true;
+                self.cam.ego = true;
                 self.service_msg = Some(("On foot: W A S D walk, Shift runs, right mouse button looks (F1 back to the bus)".into(), 5.0));
             }
             "view_set_driver" => self.view = "driver".into(),
@@ -135,7 +135,7 @@ impl App {
             // what a single button on a controller wants. `view_toggle_viewpoint` is the
             // four-mode cycle, with the map in it, and stays where it is.
             "view_toggle_interior" => {
-                if !self.ego {
+                if !self.cam.ego {
                     self.view = if self.view == "outside" { "driver".into() } else { "outside".into() };
                 }
             }
@@ -152,7 +152,7 @@ impl App {
                     }
                 }
                 self.view = "free".into();
-                self.ego = false;
+                self.cam.ego = false;
             }
             // the timetable and the ticket desk each have a camera of their own in the bus
             // (`[view_schedule]`, `[view_ticketselling]`): the key switches the driver's view
@@ -190,15 +190,15 @@ impl App {
                 // zeroing them first would flash a frame of the destination.
                 if self.view == "driver"
                     && self.settings.driverview_smooth
-                    && (self.look != (0.0, 0.0) || self.view_zoom.contains_key(&self.view))
+                    && (self.cam.look != (0.0, 0.0) || self.cam.view_zoom.contains_key(&self.view))
                 {
-                    let zoom = self.view_zoom.get(&self.view).copied().unwrap_or(1.0);
+                    let zoom = self.cam.view_zoom.get(&self.view).copied().unwrap_or(1.0);
                     let key = self.look_key();
-                    self.f1_reset = Some((self.look, zoom, 0.0, key));
+                    self.cam.f1_reset = Some((self.cam.look, zoom, 0.0, key));
                 } else {
-                    self.f1_reset = None;
-                    self.look = (0.0, 0.0);
-                    self.view_zoom.remove(&self.view);
+                    self.cam.f1_reset = None;
+                    self.cam.look = (0.0, 0.0);
+                    self.cam.view_zoom.remove(&self.view);
                 }
                 #[cfg(windows)]
                 if let Some(vr) = self.xr.vr.as_mut() { vr.recenter(); }
@@ -210,35 +210,35 @@ impl App {
                 // zeroing them first would flash a frame of the destination.
                 // Everything else snaps. The glide belongs to the standard
                 // camera (cam reset first), so a mid-glide switch finalizes it.
-                let zoom = self.view_zoom.get(&self.view).copied().unwrap_or(1.0);
+                let zoom = self.cam.view_zoom.get(&self.view).copied().unwrap_or(1.0);
                 let eyed = self.view == "driver"
                     && self.settings.driverview_smooth
-                    && (self.look != (0.0, 0.0) || self.view_zoom.contains_key(&self.view));
+                    && (self.cam.look != (0.0, 0.0) || self.cam.view_zoom.contains_key(&self.view));
                 if let Some(p) = self.player.as_mut() {
                     p.cam_choice = (0, 0);
                 }
-                self.orbit = ORBIT_DEFAULT;
+                self.cam.orbit = ORBIT_DEFAULT;
                 if eyed {
-                    self.view_looks.clear();
-                    self.view_zoom.retain(|k, _| k == "driver");
+                    self.cam.view_looks.clear();
+                    self.cam.view_zoom.retain(|k, _| k == "driver");
                     let key = self.look_key();
-                    self.f1_reset = Some((self.look, zoom, 0.0, key));
+                    self.cam.f1_reset = Some((self.cam.look, zoom, 0.0, key));
                     // the bookkeeping follows the camera change at once: left
                     // stale, the next swap would write the old look straight
                     // back into the previous camera's slot.
-                    self.look_view = self.look_key();
+                    self.cam.look_view = self.look_key();
                 } else {
-                    self.f1_reset = None;
-                    self.look = (0.0, 0.0);
-                    self.view_looks.clear();
-                    self.view_zoom.clear();
+                    self.cam.f1_reset = None;
+                    self.cam.look = (0.0, 0.0);
+                    self.cam.view_looks.clear();
+                    self.cam.view_zoom.clear();
                 }
             }
             // the next (or the previous) view mode, driver - passenger - outside - map and
             // round again; nothing on foot (Omsi.exe 0x706278 @0x70634a: (mode + 1) and 3,
             // @0x706392 the inverse)
             "view_toggle_viewpoint" | "view_toggle_viewpoint_inverse" => {
-                if self.ego {
+                if self.cam.ego {
                     return true;
                 }
                 let mode = match self.view.as_str() {

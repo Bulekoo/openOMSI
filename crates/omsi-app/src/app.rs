@@ -34,8 +34,8 @@ pub(crate) struct App {
     /// The sim date and the season's texture folder the loaded world shows (see
     /// `follow_date`).
     pub(crate) world_day: Option<(i32, Option<String>)>,
-    /// The map is open but the first area is still loading: the view to start with.
-    pub(crate) starting: Option<Camera>,
+    /// Where the camera looks from and to, per view (see `ViewState`).
+    pub(crate) cam: ViewState,
     pub(crate) traffic: Option<traffic::Traffic>,
     pub(crate) schedule: Option<schedule::Schedule>,
     pub(crate) humans: Option<humans::Humans>,
@@ -78,7 +78,6 @@ pub(crate) struct App {
     /// release until physical key-up prevents latched button states and door chatter.
     pub(crate) door_key_triggers: hashbrown::HashMap<KeyCode, Vec<String>>,
     pub(crate) last: Instant,
-    pub(crate) speed: f32,
     pub(crate) mouse_look: bool,
     /// The left and right mouse buttons held.
     pub(crate) buttons_held: (bool, bool),
@@ -94,9 +93,6 @@ pub(crate) struct App {
     pub(crate) hover_part: Option<String>,
     /// A `[mouseevent]` mesh is under the cursor (named in `hover` or not): the hand cursor.
     pub(crate) hover_hand: bool,
-    /// The idle head sway waiting where it is while the cursor is on a control
-    /// (see `head_idle::Hold`).
-    pub(crate) head_idle_hold: crate::head_idle::Hold,
     /// The simulation stands still (OMSI's `sim_pause`, P, or the menu): nothing moves,
     /// the clock stops, the picture and the camera go on.
     pub(crate) paused: bool,
@@ -187,15 +183,10 @@ pub(crate) struct App {
     pub(crate) pad_steer_target: f32,
     /// The tutorial being run (`--tutorial`), loaded on the first frame.
     pub(crate) tutorial: Option<crate::tutorial::Tutorial>,
-    /// OMSI's pedestrian ("ego") view: the free camera walking at eye height on whatever
-    /// people stand on (`view_set_ego`, F11).
-    pub(crate) ego: bool,
     /// The player out of the seat, walking about (`on_foot`).
     pub(crate) on_foot: Option<crate::on_foot::OnFoot>,
     /// The multiplayer session and the other players (see `NetState`).
     pub(crate) net: NetState,
-    /// The camera is in the own bus's cab this frame (see RedrawRequested).
-    pub(crate) in_cab: bool,
     /// Where the bus last stood on the ground (and facing where): it is put back there when
     /// it falls through the world (see `admin::guard_fall`).
     pub(crate) safe_pose: Option<(glam::DVec3, f64)>,
@@ -247,30 +238,6 @@ pub(crate) struct App {
     /// Cursor movement (logical pixels) while dragging a switch, not yet handed to the
     /// script: `<event>_drag` fires once a frame with it (see `Player::drag`).
     pub(crate) drag_delta: (f32, f32),
-    /// How far the player has turned the head (driver, passenger) or swung the outside
-    /// camera around the bus, and how far that camera sits from it.
-    pub(crate) look: (f32, f32),
-    /// Where the view is drawn between that angle and the one of the frame before: the way
-    /// the mouse (or the stick, or the keys) went is eased in, so the head glides to the
-    /// angle asked for rather than jumping to it (`look_smoothing_ms`; 0 keeps it equal to
-    /// `look`). Only the camera reads this - everything that turns the view writes `look`.
-    pub(crate) look_smooth: (f32, f32),
-    /// Each view keeps its own `look` (as OMSI's cameras do): turning the outside camera
-    /// (F3) leaves the driver's head (F1) where it was. `look_view` is the view `look`
-    /// belongs to now; see `App::sync_view_look`.
-    pub(crate) view_looks: std::collections::HashMap<String, (f32, f32)>,
-    pub(crate) look_view: String,
-    /// Smooth switch between two cockpit cameras (arrow keys), see `CamBlend`.
-    pub(crate) cam_blend: CamBlend,
-    /// The zoom of the views inside the bus (driver, passenger): their field of view is
-    /// the camera's times this (the mouse wheel, + and -, a pinch), per view.
-    pub(crate) view_zoom: std::collections::HashMap<String, f32>,
-    /// Eased Space return in flight (F1 only): ((look from), (zoom from), seconds in,
-    /// look key it started from). A hand on the view cancels it; other views reset
-    /// instantly. If the camera changes mid-glide, the originating camera is
-    /// finalized straight ahead instead of keeping a partial angle.
-    pub(crate) f1_reset: Option<((f32, f32), f32, f32, String)>,
-    pub(crate) orbit: f32,
     /// Last workshop / fuel pump / wash message, and how long it still shows.
     pub(crate) service_msg: Option<(String, f32)>,
     /// The fuel pump or the bus wash running (`run_service`): which, and the seconds the
@@ -535,7 +502,7 @@ impl App {
                         700.0,
                     ));
                     self.world = Some(w);
-                    self.starting = Some(cam);
+                    self.cam.starting = Some(cam);
                 }
                 Err(e) => {
                     log::error!("{e:#}");
@@ -802,11 +769,11 @@ impl App {
     /// The first area of a streamed map is loading: show how far it got, and start the rest
     /// of the world once it is there. Returns false while the loading screen is up.
     pub(crate) fn drive_start(&mut self, event_loop: &ActiveEventLoop) -> bool {
-        let Some(cam) = self.starting.take() else {
+        let Some(cam) = self.cam.starting.take() else {
             return true;
         };
         let (Some(renderer), Some(mut scene)) = (self.renderer.take(), self.scene.take()) else {
-            self.starting = Some(cam);
+            self.cam.starting = Some(cam);
             return true;
         };
         let centers = start_centers(&self.args, &cam, self.world.as_deref());
@@ -915,7 +882,7 @@ impl App {
             }
         }
         self.scene = Some(scene);
-        self.starting = Some(cam);
+        self.cam.starting = Some(cam);
         if let Some(limit) = self.args.exit_after {
             if self.started.elapsed().as_secs_f32() > limit {
                 log::info!("exit after {limit} s while loading: {done} of {total} tiles");

@@ -13,8 +13,8 @@ impl App {
         // A change of view is not a turn of the head: the direction of the view entered is
         // where the head already is, so the angle the camera is drawn at starts there as
         // well (a glide belongs between angles of one and the same view).
-        if swap_view_look(&mut self.look, &mut self.view_looks, &mut self.look_view, &key) {
-            self.look_smooth = self.look;
+        if swap_view_look(&mut self.cam.look, &mut self.cam.view_looks, &mut self.cam.look_view, &key) {
+            self.cam.look_smooth = self.cam.look;
         }
     }
 
@@ -29,15 +29,15 @@ impl App {
     /// Zoom the view inside the bus by `notches` of the mouse wheel (in: positive).
     pub(crate) fn zoom_by(&mut self, notches: f32) {
         // a hand on the zoom cancels an eased Space return.
-        self.f1_reset = None;
-        let z = self.view_zoom.entry(self.view.clone()).or_insert(1.0);
+        self.cam.f1_reset = None;
+        let z = self.cam.view_zoom.entry(self.view.clone()).or_insert(1.0);
         *z = (*z * (1.0 - 0.08 * notches.clamp(-5.0, 5.0))).clamp(0.2, 1.6);
     }
 
     pub(crate) fn look_by(&mut self, dx: f32, dy: f32) {
         self.sync_view_look();
         // a hand on the view cancels an eased Space return.
-        self.f1_reset = None;
+        self.cam.f1_reset = None;
         if self.view == "foot" {
             self.foot_look(dx, dy);
             return;
@@ -51,11 +51,11 @@ impl App {
             // F3 chase orbit: full turn in yaw; pitch stops between near
             // top-down and just below eye level so the camera never swings
             // under the bus (see `chase_orbit_step` for the mouse gain).
-            self.look.0 = (self.look.0 + dx).rem_euclid(360.0);
-            self.look.1 = (self.look.1 - dy).clamp(-60.0, 25.0);
+            self.cam.look.0 = (self.cam.look.0 + dx).rem_euclid(360.0);
+            self.cam.look.1 = (self.cam.look.1 - dy).clamp(-60.0, 25.0);
         } else {
-            self.look.0 = cab_look_yaw(self.look.0 + dx);
-            self.look.1 = (self.look.1 - dy).clamp(-85.0, 85.0);
+            self.cam.look.0 = cab_look_yaw(self.cam.look.0 + dx);
+            self.cam.look.1 = (self.cam.look.1 - dy).clamp(-85.0, 85.0);
         }
     }
 }

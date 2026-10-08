@@ -33,9 +33,9 @@ impl App {
         let lan = self.net.lan.as_ref().unwrap();
         let my_bus = self.player.as_ref().map(|p| p.vehicle.position);
         let others = crate::voice::speakers(lan, &self.net.remotes, my_bus);
-        let inside = if self.in_cab { Some(lan.my_id) } else { self.net.inside_remote };
+        let inside = if self.cam.in_cab { Some(lan.my_id) } else { self.net.inside_remote };
         // driving a bus (not on foot): on the company radio automatically
-        let on_radio = self.player.is_some() && !self.ego;
+        let on_radio = self.player.is_some() && !self.cam.ego;
         let radio_keyed = on_radio && self.voice_radio_held();
         let listener = self.camera.as_ref().map(|c| crate::voice::Listener {
             at: c.position,

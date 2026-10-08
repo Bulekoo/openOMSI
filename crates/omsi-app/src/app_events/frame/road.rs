@@ -98,7 +98,7 @@ impl App {
                     .as_ref()
                     .map(|w| street_condition(w, self.wetness))
                     .unwrap_or(0.0);
-                let muffled = self.in_cab;
+                let muffled = self.cam.in_cab;
                 // heard round the camera (the ear), not round the player's bus: a
                 // free camera following an AI bus lost its sound 250 m from the bus
                 let ear = self.camera.as_ref().map(|c| c.position).unwrap_or(center);

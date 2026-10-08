@@ -330,13 +330,13 @@ impl ApplicationHandler for App {
                         // F3 chase orbits at its own gain, not the head's.
                         self.sync_view_look();
                         let (y, p) = crate::input_script::chase_orbit_step(
-                            self.look.0,
-                            self.look.1,
+                            self.cam.look.0,
+                            self.cam.look.1,
                             delta.0 as f32,
                             delta.1 as f32,
                         );
-                        self.look.0 = y;
-                        self.look.1 = p;
+                        self.cam.look.0 = y;
+                        self.cam.look.1 = p;
                     } else {
                         let k = 0.15 * self.settings.look_sens;
                         self.look_by(delta.0 as f32 * k, delta.1 as f32 * k);
@@ -399,7 +399,7 @@ impl ApplicationHandler for App {
 impl App {
     /// The window's size in pixels, while the mirror panels can be worked (in the cab, no menu).
     pub(crate) fn mirror_hud_size(&self) -> Option<(f32, f32)> {
-        if !self.in_cab || self.game_menu.is_some() || !self.gfx.mirror_hud.editing() {
+        if !self.cam.in_cab || self.game_menu.is_some() || !self.gfx.mirror_hud.editing() {
             return None;
         }
         Some(self.hud_size())
@@ -479,7 +479,7 @@ impl App {
             // (a telephoto; OMSI's own zoom there only moves the camera, as the wheel does)
             self.zoom_by(amount);
         } else if self.view == "outside" && self.player.is_some() {
-            self.orbit = (self.orbit - amount * 1.5).clamp(ORBIT_MIN, ORBIT_MAX);
+            self.cam.orbit = (self.cam.orbit - amount * 1.5).clamp(ORBIT_MIN, ORBIT_MAX);
         } else if matches!(self.view.as_str(), "driver" | "pax") && self.player.is_some() {
             // inside the bus the wheel zooms, as in OMSI (the camera itself stays in the seat)
             self.zoom_by(amount);
