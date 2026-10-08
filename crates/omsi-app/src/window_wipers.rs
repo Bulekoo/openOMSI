@@ -7,6 +7,7 @@ use omsi_geometry::MeshData;
 use omsi_render::{MaterialId, Renderer, Scene, TextureId};
 use omsi_sim::VehicleInstance;
 
+// (the shader reads the mask at this size: `WIPE_MASK_SIZE` in shader.wgsl)
 const SIZE: usize = 128;
 const WIPED_FILM: f32 = -0.04;
 // Snow settles more slowly than rain wets: a heavy snowfall closes a pane in about half

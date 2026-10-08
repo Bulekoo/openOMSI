@@ -1259,6 +1259,12 @@ fn finite_or(v: vec3<f32>, fallback: vec3<f32>) -> vec3<f32> {
     return select(fallback, v, all_finite(v));
 }
 
+// The side of a tracked pane's wetness mask (`window_wipers::SIZE`). A constant, not the
+// texture's own size: with `textureDimensions(t_trans)` in these functions Apple's Metal
+// compiler crashed on the scene shader (the pipelines failed and the renderer fell back to
+// 1x MSAA without snowfall and lamp shadows).
+const WIPE_MASK_SIZE: i32 = 128;
+
 fn window_wetness(in: FsIn) -> f32 {
     if (material.wipe_bounds.z != 0.0) {
         // The mask packs the pane depth into R/G (high and low byte) and the wetness into
@@ -1267,7 +1273,7 @@ fn window_wetness(in: FsIn) -> f32 {
         // the pane test flickered between A and B from texel to texel: a staircase along
         // every texel row where the raked glass changes depth. Read the four texels
         // unfiltered, test each by its own depth, and blend the results bilinearly.
-        let dims = vec2<i32>(textureDimensions(t_trans));
+        let dims = vec2<i32>(WIPE_MASK_SIZE);
         let inside = all(in.wipe_uv.xy >= vec2<f32>(0.0)) && all(in.wipe_uv.xy <= vec2<f32>(1.0));
         let p = in.wipe_uv.xy * vec2<f32>(dims) - 0.5;
         let base = vec2<i32>(floor(p));
@@ -1295,8 +1301,7 @@ fn is_snow_pane() -> bool {
     return material.wipe_bounds.z != 0.0 && material.wipe_bounds.w < 0.0;
 }
 
-fn snow_on_pane(in: FsIn) -> vec4<f32> {
-    let cover = window_wetness(in);
+fn snow_on_pane(in: FsIn, cover: f32) -> vec4<f32> {
     if (cover <= 0.0) {
         return vec4<f32>(1.0, 1.0, 1.0, 0.0);
     }
@@ -1436,7 +1441,7 @@ fn rain_glass(world: vec3<f32>, uv: vec2<f32>, n: vec3<f32>, water: f32, t: f32,
     if (material.wipe_bounds.z != 0.0) {
         // the nearest texel's own depth: a filtered sample mixes the packed depth bytes of
         // neighbouring texels into a depth of neither (see `window_wetness`)
-        let dims = vec2<i32>(textureDimensions(t_trans));
+        let dims = vec2<i32>(WIPE_MASK_SIZE);
         let texel = textureLoad(t_trans, clamp(vec2<i32>(pane.xy * vec2<f32>(dims)), vec2<i32>(0), dims - 1), 0);
         let depth = dot(texel.rg, vec2<f32>(256.0, 1.0)) * (64.0 / 257.0) - 32.0;
         tracked = abs(depth - pane.z) <= 0.1 && all(pane.xy >= vec2<f32>(0.0)) && all(pane.xy <= vec2<f32>(1.0));
@@ -1845,11 +1850,13 @@ fn fs_vanilla_reflections(in: FsIn) -> EnhancedOut {
 }
 
 fn shade_vanilla(in: FsIn, puddle_weight: ptr<function, f32>, eye: vec3<f32>) -> vec4<f32> {
+    // (the pane's water, read once for the uses below)
+    let film_water = window_wetness(in);
     if (material.emissive.w > 1.5) {
         // a pane's film of water: drops, not the sliding texture
         let v = normalize(camera.cam_pos.xyz - in.world);
         let in_cab = inside_vehicle(camera.cam_pos.xyz) * near_player_vehicle(in.world) > 0.5;
-        let g = rain_glass(in.world, in.uv - in.params.zw, in.normal, window_wetness(in), camera.post.y, in_cab, in.wipe_uv);
+        let g = rain_glass(in.world, in.uv - in.params.zw, in.normal, film_water, camera.post.y, in_cab, in.wipe_uv);
         if (g.cover <= 0.001 && g.mist <= 0.001) { return vec4<f32>(0.0); }
         let through = rain_through(g, v);
         let seen = select(rain_behind(in.world, through, rain_env_vanilla(normalize(through)), 1.0, g.mist), vec3<f32>(0.0), dot(through, through) < 1e-4);
@@ -1865,7 +1872,7 @@ fn shade_vanilla(in: FsIn, puddle_weight: ptr<function, f32>, eye: vec3<f32>) ->
     }
     var tex = diffuse_border(textureSample(t_diffuse, s_diffuse, duv), duv);
     if (is_snow_pane()) {
-        tex = snow_on_pane(in);
+        tex = snow_on_pane(in, film_water);
     }
     // The texture coordinates without the [texcoordtransX/Y] offset: in Omsi.exe's
     // fixed-function pipeline the texture transform is the diffuse stage's alone, the
@@ -2158,7 +2165,7 @@ fn shade_vanilla(in: FsIn, puddle_weight: ptr<function, f32>, eye: vec3<f32>) ->
         a = 1.0;
     }
     if (!is_snow_pane()) {
-        a = a * clamp(window_wetness(in), 0.0, 1.0);
+        a = a * clamp(film_water, 0.0, 1.0);
     }
     return vec4<f32>(rgb, a);
 }

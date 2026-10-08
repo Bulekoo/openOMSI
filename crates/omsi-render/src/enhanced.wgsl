@@ -457,13 +457,15 @@ fn pane_condensation(world: vec3<f32>) -> f32 {
 }
 
 fn shade_enhanced(in: FsIn, puddle_weight: ptr<function, vec2<f32>>, capture: bool, eye: vec3<f32>) -> vec4<f32> {
+    // (the pane's water, read once for the uses below)
+    let film_water = window_wetness(in);
     if (material.emissive.w > 1.5) {
         // a pane's film of water: drops, not the sliding texture (see `rain_glass`), each a
         // lens that mirrors the sky probe and shows it upside down through itself
         let v = camera.cam_pos.xyz - in.world;
         let vn = normalize(v);
         let in_cab = inside_vehicle(camera.cam_pos.xyz) * near_player_vehicle(in.world) > 0.5;
-        let g = rain_glass(in.world, in.uv - in.params.zw, in.normal, window_wetness(in), camera.post.y, in_cab, in.wipe_uv);
+        let g = rain_glass(in.world, in.uv - in.params.zw, in.normal, film_water, camera.post.y, in_cab, in.wipe_uv);
         if (g.cover <= 0.001 && g.mist <= 0.001) { return vec4<f32>(0.0); }
         let through = rain_through(g, vn);
         let valid = dot(through, through) > 1e-4;
@@ -513,7 +515,7 @@ fn shade_enhanced(in: FsIn, puddle_weight: ptr<function, vec2<f32>>, capture: bo
     let led_pic = material.emissive.w < -1.5 && enh.led.y < pic_lod;
     var tex = diffuse_border(textureSample(t_diffuse, s_diffuse, duv), duv);
     if (is_snow_pane()) {
-        tex = snow_on_pane(in);
+        tex = snow_on_pane(in, film_water);
     }
     if (led_pic) {
         tex = diffuse_border(textureSampleLevel(t_diffuse, s_diffuse, duv, enh.led.y), duv);
@@ -558,7 +560,7 @@ fn shade_enhanced(in: FsIn, puddle_weight: ptr<function, vec2<f32>>, capture: bo
         alpha = 1.0;
     }
     if (!is_snow_pane()) {
-        alpha = alpha * clamp(window_wetness(in), 0.0, 1.0);
+        alpha = alpha * clamp(film_water, 0.0, 1.0);
     }
     // Sparse brush masks still cover the whole tile mesh. Empty pixels contribute
     // neither colour nor reflection coverage, so avoid lighting them. Keep fractional
