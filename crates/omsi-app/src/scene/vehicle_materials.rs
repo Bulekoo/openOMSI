@@ -610,7 +610,35 @@ pub(super) fn material_extra(
             .filter(|o| o.tex_address == omsi_model::TexAddress::Border)
             .map(|o| o.border_color.map(|c| (c / 255.0).clamp(0.0, 1.0))),
         metal_ok: false,
+        glow: glow_strength(ov),
     }
+}
+
+/// `[matl_glow] <texture> <value>` (an openOMSI extension, see `MaterialExtra::glow`): the
+/// mask a slot's commands bind in the light map's slot. A `[matl_lightmap]` of the slot keeps
+/// that slot, and the glow is left out; the last `[matl_glow]` of the slot counts, as the
+/// other `[matl_*]` commands do.
+pub(super) fn glow_mask<'a>(ov: &[&'a MaterialDef]) -> Option<&'a str> {
+    if ov.iter().any(|o| o.lightmap.is_some()) {
+        return None;
+    }
+    ov.iter().rev().find_map(|o| o.glow.as_ref()).map(|g| g.0.as_str())
+}
+
+/// The strength of `glow_mask`'s glow in the shader's terms: the .cfg value x0.25, the
+/// `Led glow` setting's own levels (6 its default); 0 without one, and for a negative value
+/// (a light that would be taken away).
+fn glow_strength(ov: &[&MaterialDef]) -> f32 {
+    if glow_mask(ov).is_none() {
+        return 0.0;
+    }
+    ov.iter().rev().find_map(|o| o.glow.as_ref()).map_or(0.0, |g| (g.1 * 0.25).max(0.0))
+}
+
+/// Whether a `[matl_item]`'s commands give it a light map's slot of its own (a light map or
+/// a glow); without one it keeps its base material's.
+pub(super) fn own_light_slot(ov: &[&MaterialDef]) -> bool {
+    ov.iter().any(|o| o.lightmap.is_some() || o.glow.is_some())
 }
 
 /// The addressing of a slot's textures: its last `[matl_texadress_*]` command decides (the

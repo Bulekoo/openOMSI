@@ -358,6 +358,10 @@ struct MaterialParams {
     sway: vec4<f32>,
     // Window wetness mask in mesh X/Z: origin, inverse size; zero disables it.
     wipe_bounds: vec4<f32>,
+    // x: [matl_glow] strength (0 = the keyword is not there; the material is its own light -
+    // its `t_light` is a greyscale mask of how much shines where, its colour is its own, see
+    // the enhanced pass), y/z/w free
+    glow: vec4<f32>,
 };
 @group(1) @binding(2) var<uniform> material: MaterialParams;
 @group(1) @binding(3) var t_trans: texture_2d<f32>;

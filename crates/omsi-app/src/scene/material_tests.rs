@@ -296,3 +296,29 @@ fn scenery_freetex_name_resolution() {
         Some("zero.bmp")
     );
 }
+
+/// `[matl_glow] <texture> <value>`: the material is its own light - the strength the
+/// shader reads is the .cfg value x0.25 (the `Led glow` setting's own levels), the mask is
+/// bound in the light map's slot, and the last command of the slot wins, as the other
+/// `[matl_*]` commands do. A `[matl_lightmap]` keeps the slot: no glow then.
+#[test]
+fn matl_glow_gives_a_material_its_own_light() {
+    let plain = MaterialDef { texture: "body.dds".into(), ..Default::default() };
+    assert_eq!(material_extra(&[&plain], None, None, [0.0; 4]).glow, 0.0);
+    assert_eq!(glow_mask(&[&plain]), None);
+    let lit = MaterialDef { texture: "body.dds".into(), glow: Some(("mask.png".into(), 20.0)), ..Default::default() };
+    assert_eq!(material_extra(&[&lit], None, None, [0.0; 4]).glow, 5.0);
+    assert_eq!(glow_mask(&[&lit]), Some("mask.png"));
+    // 6 is the `Led glow` slider's own default level
+    let softer = MaterialDef { texture: "body.dds".into(), glow: Some(("soft.png".into(), 6.0)), ..Default::default() };
+    assert_eq!(material_extra(&[&lit, &softer], None, None, [0.0; 4]).glow, 1.5);
+    assert_eq!(glow_mask(&[&lit, &softer]), Some("soft.png"));
+    // a negative value lights nothing (it is not a light that can be subtracted)
+    let odd = MaterialDef { texture: "body.dds".into(), glow: Some(("m.png".into(), -3.0)), ..Default::default() };
+    assert_eq!(material_extra(&[&odd], None, None, [0.0; 4]).glow, 0.0);
+    // the light map keeps its slot
+    let mapped = MaterialDef { lightmap: Some(("l.bmp".into(), "lights".into())), ..lit.clone() };
+    assert_eq!(material_extra(&[&mapped], None, None, [0.0; 4]).glow, 0.0);
+    assert_eq!(glow_mask(&[&mapped]), None);
+    assert!(own_light_slot(&[&mapped]) && own_light_slot(&[&lit]) && !own_light_slot(&[&plain]));
+}

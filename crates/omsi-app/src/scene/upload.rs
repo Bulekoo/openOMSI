@@ -468,9 +468,11 @@ impl World {
                 // shelter or advertising pillar); switched by its variable per placement
                 // (`LampSlots`), on where nothing switches it. (Left out, a signal whose
                 // lenses are lit by their light maps stayed dark, #826.)
+                // ([matl_glow]: the material is its own light - its mask is bound here, in the
+                // light map's slot, see `MaterialExtra::glow`)
                 let light = match slot_ov.iter().find_map(|o| o.lightmap.clone()) {
                     Some((name, _)) => tex_of(gpu, scene, &name, &mut t),
-                    None => None,
+                    None => glow_mask(&slot_ov).and_then(|name| tex_of(gpu, scene, name, &mut t)),
                 };
                 let base = renderer.add_material_extra(
                     scene, tex, alpha, color, false, transmap, night, light, envmap, emissive, extra,
@@ -512,8 +514,15 @@ impl World {
                     renderer.light_map_next.set(ot.sco.light_map_mapping);
                     let it_light = match items.iter().find_map(|o| o.lightmap.clone()) {
                         Some((name, _)) => tex_of(gpu, scene, &name, &mut t).or(light),
-                        None => light,
+                        None => match glow_mask(&items) {
+                            Some(name) => tex_of(gpu, scene, name, &mut t).or(light),
+                            None => light,
+                        },
                     };
+                    // (an item with no light map or glow of its own keeps its base's)
+                    if !own_light_slot(&items) {
+                        it_extra.glow = extra.glow;
+                    }
                     let item = renderer.add_material_extra(
                         scene, tex, it_alpha, ic, false, transmap, it_night, it_light, envmap, ie,
                         it_extra,

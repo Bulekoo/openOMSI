@@ -1045,9 +1045,11 @@ impl World {
         let night = ov.iter().find_map(|o| o.nightmap.clone()).and_then(|t| {
             tex!(&subst(&t), &dirs_ref)
         });
+        // ([matl_glow]: the material is its own light - its mask rides in the light map's
+        // slot, see `MaterialExtra::glow`)
         let lightmap = ov.iter().find_map(|o| o.lightmap.clone()).and_then(|(t, _)| {
             tex!(&subst(&t), &dirs_ref)
-        });
+        }).or_else(|| glow_mask(&ov).and_then(|t| tex!(&subst(t), &dirs_ref)));
         // (a `\S:n` panel lit all over by its light map is an LED panel; one
         // whose light map is a picture is a flipdot: see `is_white_lightmap`)
         let lm_white = |ov: &[&MaterialDef]| -> bool {
@@ -1120,7 +1122,7 @@ impl World {
         let mut item_look = |ov_item: &Vec<&MaterialDef>| -> Look {
             let mut find_tex = |t: &str| -> Option<TextureId> { tex!(t, &dirs_ref) };
             let it_night = ov_item.iter().find_map(|o| o.nightmap.clone()).and_then(|t| find_tex(&subst(&t))).or(night);
-            let it_light = ov_item.iter().find_map(|o| o.lightmap.clone()).and_then(|(t, _)| find_tex(&subst(&t))).or(lightmap);
+            let it_light = ov_item.iter().find_map(|o| o.lightmap.clone()).and_then(|(t, _)| find_tex(&subst(&t))).or_else(|| glow_mask(ov_item).and_then(|t| find_tex(&subst(t)))).or(lightmap);
             // the item's own transparency map, else the plain material's
             let it_script_trans = match ov_item.iter().find_map(|o| o.transmap.clone()) {
                 Some(t) => t.trim().strip_prefix("\\S:").and_then(|n| n.trim().parse::<usize>().ok()),
@@ -1142,6 +1144,8 @@ impl World {
             let (it_color, it_emissive, it_specular, it_ambient) = d3d_material(m, ov_item.iter().find_map(|o| o.allcolor).or(ov.iter().find_map(|o| o.allcolor)), textured);
             let mut it_extra = material_extra(&ov_item, env_mask, bump, it_specular);
             it_extra.ambient = Some(it_ambient);
+            // (an item with no light map or glow of its own keeps its base's)
+            it_extra.glow = if own_light_slot(ov_item) { it_extra.glow } else { extra.glow };
             // (an item without a night map of its own keeps the plain one, lit
             // the same way)
             it_extra.night_switched = it_night.is_some();

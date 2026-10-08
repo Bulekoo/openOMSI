@@ -528,6 +528,9 @@ struct MaterialUniform {
     sway: [f32; 4],
     /// Window mask: mesh X/Z origin and inverse size; zero disables it.
     wipe_bounds: [f32; 4],
+    /// x: `[matl_glow]` strength (`MaterialExtra::glow`); 0 = the keyword is not there.
+    /// y/z/w free.
+    glow: [f32; 4],
 }
 
 /// The maps of a PBR set found beside a diffuse texture (`foo_n.png` and the rest, see
@@ -907,7 +910,9 @@ impl GpuTexture {
 struct BindKey {
     textures: [(usize, u64); 7],
     address: TexAddressing,
-    uniform: [u32; 48],
+    // 13 vec4: the MaterialUniform's own fields (see the count in
+    // `shaders_validate_and_match_the_uniforms`)
+    uniform: [u32; 52],
 }
 
 /// Bytes of a texture of `format` with `levels` mip levels.
@@ -1062,6 +1067,15 @@ pub struct MaterialExtra {
     /// crown leaves the trunk (nothing below it moves), of the crown's top, and how much the
     /// tree gives to the wind (1 a broadleaf). `None`: not foliage.
     pub sway: Option<[f32; 3]>,
+    /// `[matl_glow] <texture> <value>` (an openOMSI extension): the material is its own
+    /// light. The named picture - a greyscale mask of how much shines where - is bound in
+    /// the light map's slot (the shaders sample it as `t_light`) and the light is the
+    /// material's own colour; this is its strength in the shader's terms (the .cfg value
+    /// x0.25, the LED panels' `Lighting::led_glow` scale; 0 = the keyword is not there).
+    /// Only the enhanced picture draws it, as an emission like an LED panel's dots; its
+    /// halo comes from its brightness as any light's does. `params2.x` is left off, so the
+    /// classic picture draws the material as if the keyword were not there.
+    pub glow: f32,
 }
 
 /// The textures a material's bind group samples.
@@ -4229,7 +4243,10 @@ impl Renderer {
                 },
             ],
             params2: [
-                if lightmap.is_some() { 1.0 } else { 0.0 },
+                // ([matl_glow]'s mask rides in the light map's slot, but the material is
+                // not a light-mapped one: `params2.x` stays off so the classic picture is as
+                // it was - the enhanced one draws the glow, see `MaterialExtra::glow`)
+                if lightmap.is_some() && extra.glow <= 0.0 { 1.0 } else { 0.0 },
                 envmap.map(|e| e.1).unwrap_or(0.0),
                 moisture,
                 // bit 1: a [matl_envmap_mask]; bit 2: a [matl_transmap]; bit 4: a vehicle's
@@ -4268,6 +4285,8 @@ impl Renderer {
                 [a[0], a[1], a[2], if extra.water { 2.0 } else if texture.is_none() { -1.0 } else { snow_texture_flag(scene, texture) }]
             },
             sway: extra.sway.map_or([0.0; 4], |s| [1.0, s[0], s[1], s[2]]),
+            // (no mask bound - its file missing - no glow: the slot would shine all over)
+            glow: [if lightmap.is_some() { extra.glow.max(0.0) } else { 0.0 }, 0.0, 0.0, 0.0],
         };
         let slot = |t: Option<TextureId>| {
             t.and_then(|t| scene.textures.get(t).map(|g| (t, g.gen)))
