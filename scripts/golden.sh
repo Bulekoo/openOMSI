@@ -30,7 +30,7 @@ SCENES=(
   "grundorf_night|--time 23:30|"
   "grundorf_rain|--time 14:00 --weather Weather/Schmuddelwetter.owt|"
   "grundorf_fog_dusk|--time 20:45 --weather Weather/Daemmerungsnebel.owt|"
-  "grundorf_enhanced|--time 18:30 --enhanced|"
+  "grundorf_enhanced|--time 18:30 --enhanced||0.01"
   "grundorf_bus_outside|--time 10:00 --bus Vehicles/MAN_SD200/MAN_SD80.bus --view outside|"
   # (a dozen pixels of an instrument below the speedometer change from run to run)
   "grundorf_cockpit|--time 10:00 --bus Vehicles/MAN_SD202/MAN_D86.bus --view driver||0.01"

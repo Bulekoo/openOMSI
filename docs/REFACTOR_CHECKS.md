@@ -39,7 +39,7 @@ spawned.
 | `grundorf_night` | `--time 23:30` | night maps, lamps, coronas | none |
 | `grundorf_rain` | `--time 14:00 --weather Weather/Schmuddelwetter.owt` | rain, wet ground, puddles | none |
 | `grundorf_fog_dusk` | `--time 20:45 --weather Weather/Daemmerungsnebel.owt` | fog, dusk light | none |
-| `grundorf_enhanced` | `--time 18:30 --enhanced` | the Enhanced (physically based) renderer | none |
+| `grundorf_enhanced` | `--time 18:30 --enhanced` | the Enhanced (physically based) renderer | 0.01 % |
 | `grundorf_bus_outside` | `--time 10:00 --bus Vehicles/MAN_SD200/MAN_SD80.bus --view outside` | a bus from outside: model, materials, reflections | none |
 | `grundorf_cockpit` | `--time 10:00 --bus Vehicles/MAN_SD202/MAN_D86.bus --view driver` | the cab: interior, gauges, mirrors, HUD | 0.01 % |
 | `grundorf_drive_traffic` | SD202 at stop Bauernhof (`--spawn 500,748,339`), started by its switches (`--triggers ...`), `--drive 12 --traffic 15 --view driver` | engine start, gearbox, driving physics, AI traffic, script state after 12 s | 1 % |
@@ -54,7 +54,7 @@ spawned.
   real time since start-up, so swaying trees never come out twice alike.
 * What else is animated by that clock is covered by the scene allowances (share of pixels
   allowed to differ): the drive scene's exhaust smoke in the left mirror (about 0.3 % of the
-  pixels), a dozen pixels of an instrument in the cab, and once in a while a single pixel off
+  pixels), a dozen pixels of an instrument in the cab, a few pixels off by one in the Enhanced scene, and once in a while a single pixel off
   by one on Spandau. Everything else matched byte for byte.
 * The simulation itself is repeatable: two runs of the drive scene log the same distance,
   speed, engine revolutions and traffic figures.
