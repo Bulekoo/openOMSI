@@ -39,11 +39,11 @@ impl App {
         let mut finish = false;
         let mut reconfigure = false;
         let shot = self.perf.shot.take();
-        if let Some(s) = self.surface.as_ref() {
+        if let Some(s) = self.gfx.surface.as_ref() {
             let (w, h) = (s.config.width, s.config.height);
             self.touch_prepare(w, h);
         }
-        if self.surface.is_some()
+        if self.gfx.surface.is_some()
             && self.renderer.is_some()
             && self.scene.is_some()
             && self.camera.is_some()
@@ -66,7 +66,7 @@ impl App {
         if reconfigure {
             // the drawable went away under us (display change, lost surface)
             if let (Some(s), Some(r), Some(win)) = (
-                self.surface.as_mut(),
+                self.gfx.surface.as_mut(),
                 self.renderer.as_ref(),
                 self.window.as_ref(),
             ) {
@@ -82,7 +82,7 @@ impl App {
     /// `shot <file>` from the input script.
     fn frame_shot(&mut self, shot: (PathBuf, bool), lighting: &omsi_render::Lighting) {
         let (Some(s), Some(r), Some(scene), Some(cam)) = (
-            self.surface.as_ref(),
+            self.gfx.surface.as_ref(),
             self.renderer.as_mut(),
             self.scene.as_mut(),
             self.camera.as_ref(),
@@ -133,7 +133,7 @@ impl App {
     /// The window's picture to draw into (none: the window is hidden; `reconfigure`: the
     /// drawable went away), and whether nothing is shown this frame.
     fn frame_acquire(&mut self, reconfigure: &mut bool) -> (Option<wgpu::SurfaceTexture>, Option<wgpu::TextureView>, bool) {
-        let (Some(s), Some(r)) = (self.surface.as_ref(), self.renderer.as_ref()) else {
+        let (Some(s), Some(r)) = (self.gfx.surface.as_ref(), self.renderer.as_ref()) else {
             return (None, None, true);
         };
         // A window that is hidden (another app covers it, another Space) gets
@@ -168,12 +168,12 @@ impl App {
                 {
                     let (w, h) = (s.config.width, s.config.height);
                     if self
-                        .stand_in
+                        .gfx.stand_in
                         .as_ref()
                         .map(|t| (t.width(), t.height()) != (w, h))
                         .unwrap_or(true)
                     {
-                        self.stand_in =
+                        self.gfx.stand_in =
                             Some(r.device.create_texture(&wgpu::TextureDescriptor {
                                 label: Some("hidden window"),
                                 size: wgpu::Extent3d {
@@ -191,7 +191,7 @@ impl App {
                     }
                     (
                         None,
-                        self.stand_in
+                        self.gfx.stand_in
                             .as_ref()
                             .map(|t| t.create_view(&Default::default())),
                     )
@@ -205,7 +205,7 @@ impl App {
         };
         *self.perf.profile.entry("acquire").or_default() += __t.elapsed().as_secs_f64();
         if frame.is_none() {
-            self.hidden_frames += 1;
+            self.gfx.hidden_frames += 1;
         }
         let shown_nothing = frame.is_none() && stand_in.is_none();
         let view = frame
@@ -229,7 +229,7 @@ impl App {
         let _ = vr_nav_display;
         self.frame_mirrors(raw_dt, lighting);
         let (Some(s), Some(r), Some(scene), Some(cam), Some(win)) = (
-            self.surface.as_ref(),
+            self.gfx.surface.as_ref(),
             self.renderer.as_mut(),
             self.scene.as_mut(),
             self.camera.as_ref(),
@@ -276,11 +276,11 @@ impl App {
         }
         if self.in_cab {
             if let Some(w) = self.world.as_ref() {
-                self.mirror_hud.ensure_frame(r, scene);
+                self.gfx.mirror_hud.ensure_frame(r, scene);
                 let hud = self
                     .settings
                     .hud_viewport((s.config.width, s.config.height));
-                steps::push_mirror_hud(&self.mirror_hud, scene, w, hud, (self.cursor.0 - hud[0], self.cursor.1));
+                steps::push_mirror_hud(&self.gfx.mirror_hud, scene, w, hud, (self.cursor.0 - hud[0], self.cursor.1));
             }
         }
         if !mirrored
@@ -339,7 +339,7 @@ impl App {
     /// The bus's mirrors redrawn, in turn, within their budget.
     fn frame_mirrors(&mut self, raw_dt: f32, lighting: &omsi_render::Lighting) {
         let (Some(s), Some(r), Some(scene), Some(cam)) = (
-            self.surface.as_ref(),
+            self.gfx.surface.as_ref(),
             self.renderer.as_mut(),
             self.scene.as_mut(),
             self.camera.as_ref(),
@@ -356,24 +356,24 @@ impl App {
         // street jerked past in them - up to two a frame then (each costs a
         // few milliseconds of the frame).
         if let (Some(p), Some(w)) = (self.player.as_ref(), self.world.as_ref()) {
-            steps::mirror_hud_sync(&mut self.mirror_hud, w, p, self.settings.mirror_hud);
+            steps::mirror_hud_sync(&mut self.gfx.mirror_hud, w, p, self.settings.mirror_hud);
         }
         if self.settings.mirror_size == 0 {
-            self.mirror_budget = 0.0;
-            self.mirrors_seen = 0;
+            self.gfx.mirror_budget = 0.0;
+            self.gfx.mirrors_seen = 0;
         } else if self.settings.mirror_refresh == "off" {
-            self.mirror_budget = 0.0;
+            self.gfx.mirror_budget = 0.0;
             if let (Some(w), Some(p)) = (self.world.as_ref(), self.player.as_ref()) {
-                let since = match &self.frozen_mirrors {
+                let since = match &self.gfx.frozen_mirrors {
                     Some(m) if m.bus == p.uid => m.since,
                     _ => -1.0,
                 };
                 let next = since.max(0.0) + raw_dt.min(0.1);
                 // (and while the driver turns a mirror, so it can be aimed)
                 if since < 0.0 || (since < MIRROR_FREEZE_REDRAW && next >= MIRROR_FREEZE_REDRAW) || p.mirrors_dirty {
-                    self.mirrors_seen = render_mirrors(r, scene, w, p, lighting, None, None);
+                    self.gfx.mirrors_seen = render_mirrors(r, scene, w, p, lighting, None, None);
                 }
-                self.frozen_mirrors = Some(FrozenMirrors { bus: p.uid, since: next });
+                self.gfx.frozen_mirrors = Some(FrozenMirrors { bus: p.uid, since: next });
             }
         } else {
             let mirrors = self.player.as_ref().map(|p| p.vehicle.ty.def.cameras_reflexion.len()).unwrap_or(0);
@@ -390,7 +390,7 @@ impl App {
                         .unwrap_or(self.settings.vr_mirror_rate)
                 } else {
                     let max_hz = if self.settings.mirror_refresh == "full" { MIRROR_MAX_HZ_FULL } else { MIRROR_MAX_HZ_ECO };
-                    MIRROR_RATE.max(mirrors as f32 * MIRROR_MIN_HZ).min(max_hz * self.mirrors_seen.max(1) as f32)
+                    MIRROR_RATE.max(mirrors as f32 * MIRROR_MIN_HZ).min(max_hz * self.gfx.mirrors_seen.max(1) as f32)
                 }
             };
             // The desktop camera does not follow the headset. Culling by
@@ -399,7 +399,7 @@ impl App {
             // within the configured budget; keep desktop visibility culling.
             let mirror_view = if vr_active
                 || self.settings.triple.enabled
-                || (self.mirror_hud.active() && self.in_cab)
+                || (self.gfx.mirror_hud.active() && self.in_cab)
             {
                 None
             } else {
@@ -410,39 +410,39 @@ impl App {
             let near = self.player.as_ref().zip(self.camera.as_ref()).is_some_and(|(p, c)| (p.vehicle.position - c.position).length() < 12.0);
             let draw_limit = if vr_active {
                 if self.in_cab || near {
-                    vr_mirror_updates(&mut self.mirror_budget, raw_dt, rate, mirrors)
+                    vr_mirror_updates(&mut self.gfx.mirror_budget, raw_dt, rate, mirrors)
                 } else {
-                    self.mirror_budget = 0.0;
+                    self.gfx.mirror_budget = 0.0;
                     0
                 }
             } else {
-                self.mirror_budget = (self.mirror_budget + raw_dt.min(0.1) * rate).min(2.5);
-                self.mirrors_seen.clamp(1, 2)
+                self.gfx.mirror_budget = (self.gfx.mirror_budget + raw_dt.min(0.1) * rate).min(2.5);
+                self.gfx.mirrors_seen.clamp(1, 2)
             };
             let mut drawn = 0;
             if vr_active && draw_limit > 0 && draw_limit == mirrors {
                 // Prepare the cameras and textures only once when all
                 // mirrors are due, including the Every frame mode.
                 if let (Some(w), Some(p)) = (self.world.as_ref(), self.player.as_ref()) {
-                    self.mirror_turn = self.mirror_turn.wrapping_add(draw_limit);
-                    self.mirrors_seen = render_mirrors(r, scene, w, p, lighting, None, mirror_view);
+                    self.gfx.mirror_turn = self.gfx.mirror_turn.wrapping_add(draw_limit);
+                    self.gfx.mirrors_seen = render_mirrors(r, scene, w, p, lighting, None, mirror_view);
                     drawn = draw_limit;
                 }
             }
-            while (self.in_cab || near) && drawn < (if vr_active { draw_limit } else { self.mirrors_seen.clamp(1, 2) }) && (vr_active || self.mirror_budget >= 1.0) {
+            while (self.in_cab || near) && drawn < (if vr_active { draw_limit } else { self.gfx.mirrors_seen.clamp(1, 2) }) && (vr_active || self.gfx.mirror_budget >= 1.0) {
                 let (Some(w), Some(p)) = (self.world.as_ref(), self.player.as_ref()) else { break };
                 if !vr_active {
-                    self.mirror_budget -= 1.0;
+                    self.gfx.mirror_budget -= 1.0;
                 }
                 drawn += 1;
-                self.mirror_turn = self.mirror_turn.wrapping_add(1);
-                self.mirrors_seen = render_mirrors(
+                self.gfx.mirror_turn = self.gfx.mirror_turn.wrapping_add(1);
+                self.gfx.mirrors_seen = render_mirrors(
                     r,
                     scene,
                     w,
                     p,
                     lighting,
-                    Some(self.mirror_turn),
+                    Some(self.gfx.mirror_turn),
                     mirror_view,
                 );
             }
@@ -510,7 +510,7 @@ impl App {
     /// the window's title once a second.
     fn frame_count(&mut self, event_loop: &ActiveEventLoop) -> bool {
         let (Some(s), Some(r), Some(cam), Some(win)) = (
-            self.surface.as_ref(),
+            self.gfx.surface.as_ref(),
             self.renderer.as_mut(),
             self.camera.as_ref(),
             self.window.as_ref(),
@@ -530,9 +530,9 @@ impl App {
         if let (Some(limit), false) = (self.args.exit_after, self.exiting) {
             if self.started.elapsed().as_secs_f32() > limit {
                 self.exiting = true;
-                log::info!("exit after {limit} s: {} frames total ({} with the window hidden{}), {:.1} fps average, {} frames over 50 ms, worst {:.0} ms", self.perf.total_frames, self.hidden_frames, if omsi_cfg::flags::OMSI_RENDER_OCCLUDED.is_set() { ", drawn off-screen" } else { ", not drawn" }, self.perf.total_frames as f32 / self.started.elapsed().as_secs_f32(), self.perf.spikes, self.perf.worst_ms);
+                log::info!("exit after {limit} s: {} frames total ({} with the window hidden{}), {:.1} fps average, {} frames over 50 ms, worst {:.0} ms", self.perf.total_frames, self.gfx.hidden_frames, if omsi_cfg::flags::OMSI_RENDER_OCCLUDED.is_set() { ", drawn off-screen" } else { ", not drawn" }, self.perf.total_frames as f32 / self.started.elapsed().as_secs_f32(), self.perf.spikes, self.perf.worst_ms);
                 if let (Some(st), Some(w)) =
-                    (self.streamer.as_ref(), self.world.as_ref())
+                    (self.gfx.streamer.as_ref(), self.world.as_ref())
                 {
                     log::info!("tile streaming: {} tiles loaded now, {} loaded and {} unloaded in all, {:.1} s preparing on the worker, slowest upload {:.0} ms, streaming over 16 ms in {} frames (worst {:.0} ms); {} objects + {} trees, {} rows, {} attached ({} without parent), {} unresolved", w.loaded_tiles().len(), st.loaded_total, st.unloaded_total, st.prepare_secs, st.worst_upload_ms, st.slow_frames, st.worst_frame_ms, st.stats.objects, st.stats.trees, st.stats.rows, st.stats.attached, st.stats.unattached, st.stats.failed_objects);
                     st.stats.log_ground();

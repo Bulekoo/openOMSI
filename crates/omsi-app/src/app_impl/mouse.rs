@@ -93,10 +93,10 @@ impl App {
     pub(crate) fn on_mouse_moved(&mut self, x: f32, y: f32) {
         // a mirror panel being dragged follows the cursor (nothing else of the cursor's
         // work is done meanwhile, and outside a drag none of it is touched)
-        if self.mirror_hud.dragging() {
-            if let Some(size) = self.surface.as_ref().map(|_| self.hud_size()) {
+        if self.gfx.mirror_hud.dragging() {
+            if let Some(size) = self.gfx.surface.as_ref().map(|_| self.hud_size()) {
                 let origin_x = self.cursor.0 - self.hud_cursor().0;
-                if self.mirror_hud.moved((x - origin_x, y), size) {
+                if self.gfx.mirror_hud.moved((x - origin_x, y), size) {
                     self.cursor = (x, y);
                     return;
                 }
@@ -152,7 +152,7 @@ impl App {
         }
         self.xr.vr_cursor_physical = Some((x, y));
         self.html_move();
-        let Some((width, height)) = self.surface.as_ref().map(|s|
+        let Some((width, height)) = self.gfx.surface.as_ref().map(|s|
             (s.config.width as f32, s.config.height as f32)) else { return };
         if self.window_focused && !self.mouse_look
             && (x < 12.0 || x > width - 12.0 || y < 12.0 || y > height - 12.0) {
@@ -191,7 +191,7 @@ impl App {
     /// lock, as standing); moving back gives that back first, the cursor held at the edge
     /// until it is used up, so the wheel never jumps.
     pub(crate) fn mouse_past_edge(&mut self, dx: f32) {
-        let Some(w) = self.surface.as_ref().map(|s| s.config.width as f32) else { return };
+        let Some(w) = self.gfx.surface.as_ref().map(|s| s.config.width as f32) else { return };
         let per_px = 2.0 / w.max(1.0);
         let (at_left, at_right) = (self.cursor.0 <= 2.0, self.cursor.0 >= w - 3.0);
         let before = self.mouse_edge;
@@ -448,7 +448,7 @@ impl App {
             }
             return;
         }
-        let ray = self.camera.as_ref().zip(self.surface.as_ref())
+        let ray = self.camera.as_ref().zip(self.gfx.surface.as_ref())
             .map(|(cam, s)| self.cockpit_cursor_ray(cam, (s.config.width, s.config.height)));
         if let (Some(p), Some((o, d, spread))) = (
             self.player.as_mut(),
@@ -535,7 +535,7 @@ impl App {
 
     /// The ray under the cursor now (see [`Self::cockpit_cursor_ray`]).
     fn cursor_ray_now(&self) -> Option<(glam::DVec3, glam::Vec3, f32)> {
-        let (cam, s) = self.camera.as_ref().zip(self.surface.as_ref())?;
+        let (cam, s) = self.camera.as_ref().zip(self.gfx.surface.as_ref())?;
         Some(self.cockpit_cursor_ray(cam, (s.config.width, s.config.height)))
     }
 

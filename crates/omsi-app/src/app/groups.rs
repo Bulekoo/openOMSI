@@ -98,3 +98,30 @@ pub(crate) struct PerfState {
     /// for the CPU time a frame costs (the wall time says little on a busy machine).
     pub(crate) cpu_mark: Option<(f64, Instant, u32)>,
 }
+
+/// The drawing around the renderer: the wgpu instance and surface, the tile streaming, the bus mirrors, the window's visibility and what stands in for it.
+pub(crate) struct GfxState {
+    pub(crate) instance: wgpu::Instance,
+    pub(crate) surface: Option<SurfaceState<'static>>,
+    /// Tile streaming around the camera (the window's default).
+    pub(crate) streamer: Option<tiles::Streamer>,
+    /// The window spans the triple screen's three monitors: fullscreen would shrink it to one.
+    pub(crate) spanned: bool,
+    /// Mirror pictures due (see `MIRROR_RATE`), and which mirror is next.
+    pub(crate) mirror_budget: f32,
+    pub(crate) mirrors_seen: usize,
+    pub(crate) mirror_turn: usize,
+    /// With no real-time reflections: the bus whose mirrors are frozen (see
+    /// `MIRROR_FREEZE_REDRAW`).
+    pub(crate) frozen_mirrors: Option<FrozenMirrors>,
+    /// The mirror panels laid over the picture (see `mirror_hud`).
+    pub(crate) mirror_hud: crate::mirror_hud::MirrorHud,
+    /// The window is minimised or out of sight, as its events last said.
+    pub(crate) window_hidden: bool,
+    /// OMSI 2's route arrows over the road (the `nav_arrows` setting).
+    pub(crate) route_arrows: crate::route_arrows::RouteArrows,
+    /// Frames the window was hidden for (they are not drawn) and whether the exit is under way.
+    pub(crate) hidden_frames: u32,
+    /// Stand-in for the window's frame while the window is hidden (OMSI_RENDER_OCCLUDED).
+    pub(crate) stand_in: Option<wgpu::Texture>,
+}

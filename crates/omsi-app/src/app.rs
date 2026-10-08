@@ -9,9 +9,9 @@ const SLOW_UPLOAD_MB_S: f64 = 300.0;
 
 pub(crate) struct App {
     pub(crate) args: Args,
-    pub(crate) instance: wgpu::Instance,
+    /// What draws the picture besides the renderer and the scene (see `GfxState`).
+    pub(crate) gfx: GfxState,
     pub(crate) window: Option<Arc<Window>>,
-    pub(crate) surface: Option<SurfaceState<'static>>,
     pub(crate) renderer: Option<Renderer>,
     /// The VR headset and what goes with it (see `VrState`).
     pub(crate) xr: VrState,
@@ -31,8 +31,6 @@ pub(crate) struct App {
     /// (manufacturer, type) of each vehicle of `vehicle_list`, by its path.
     pub(crate) vehicle_meta: std::collections::HashMap<String, (String, String)>,
     pub(crate) world: Option<Arc<World>>,
-    /// Tile streaming around the camera (the window's default).
-    pub(crate) streamer: Option<tiles::Streamer>,
     /// The sim date and the season's texture folder the loaded world shows (see
     /// `follow_date`).
     pub(crate) world_day: Option<(i32, Option<String>)>,
@@ -47,8 +45,6 @@ pub(crate) struct App {
     pub(crate) hud: Option<hud::Hud>,
     /// The route navigator (ETS2-style map in a corner).
     pub(crate) navigator: Option<navigator::Navigator>,
-    /// The window spans the triple screen's three monitors: fullscreen would shrink it to one.
-    pub(crate) spanned: bool,
     /// Chat, mouse-over names and name tags (Roboto).
     pub(crate) ui: Option<ui::Ui>,
     /// Frame timing, profiling and the test hooks (see `PerfState`).
@@ -69,15 +65,6 @@ pub(crate) struct App {
     pub(crate) weather: Option<omsi_content::weather::Weather>,
     pub(crate) clock: omsi_sim::SimClock,
     pub(crate) started: Instant,
-    /// Mirror pictures due (see `MIRROR_RATE`), and which mirror is next.
-    pub(crate) mirror_budget: f32,
-    pub(crate) mirrors_seen: usize,
-    pub(crate) mirror_turn: usize,
-    /// With no real-time reflections: the bus whose mirrors are frozen (see
-    /// `MIRROR_FREEZE_REDRAW`).
-    pub(crate) frozen_mirrors: Option<FrozenMirrors>,
-    /// The mirror panels laid over the picture (see `mirror_hud`).
-    pub(crate) mirror_hud: crate::mirror_hud::MirrorHud,
     /// Cursor and view the hover was last worked out for (see the redraw).
     pub(crate) hover_key: Option<(i32, i32, i32, i32)>,
     pub(crate) view: String,
@@ -86,8 +73,6 @@ pub(crate) struct App {
     /// The window lost the focus or was minimised or hidden: the keyboard and the mouse
     /// work nothing until it has the focus again (`App::input_lost` / `input_back`).
     pub(crate) input_away: bool,
-    /// The window is minimised or out of sight, as its events last said.
-    pub(crate) window_hidden: bool,
     pub(crate) keys: hashbrown::HashSet<KeyCode>,
     /// Door trigger groups currently held by the Shift+number shortcut. Keeping the
     /// release until physical key-up prevents latched button states and door chatter.
@@ -229,8 +214,6 @@ pub(crate) struct App {
     pub(crate) admin_list: Option<Vec<(String, String)>>,
     /// Which of the game menu's lists `admin_list` holds (see `game_lists`).
     pub(crate) list_kind: Option<crate::game_lists::ListKind>,
-    /// OMSI 2's route arrows over the road (the `nav_arrows` setting).
-    pub(crate) route_arrows: crate::route_arrows::RouteArrows,
     /// OMSI's global key actions from `Inputs/keyboard.cfg` ([game]).
     pub(crate) game_keys: Vec<omsi_content::KeyBinding>,
     /// Keys (DirectInput scan codes, no modifier) the player bound on the Controls page to
@@ -316,11 +299,7 @@ pub(crate) struct App {
     /// The mouse cursor currently shows the hand (it is over a switch).
     pub(crate) cursor_kind: u8,
     pub(crate) settings: settings::Settings,
-    /// Frames the window was hidden for (they are not drawn) and whether the exit is under way.
-    pub(crate) hidden_frames: u32,
     pub(crate) exiting: bool,
-    /// Stand-in for the window's frame while the window is hidden (OMSI_RENDER_OCCLUDED).
-    pub(crate) stand_in: Option<wgpu::Texture>,
     /// The on-screen controls of a phone (see `touch.rs`).
     pub(crate) touch: crate::touch::Touch,
 }
@@ -335,11 +314,11 @@ impl App {
     pub(crate) fn resumed_impl(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(window) = self.window.clone() {
             // back from the background (a phone): the window's surface is made again
-            if self.surface.is_none() {
+            if self.gfx.surface.is_none() {
                 if let Some(r) = self.renderer.as_ref() {
                     let size = window.inner_size();
                     let vsync = self.settings.vsync && !self.vr_active();
-                    self.surface = SurfaceState::new_with(&self.instance, window.clone(), r, size.width.max(1), size.height.max(1), vsync).ok();
+                    self.gfx.surface = SurfaceState::new_with(&self.gfx.instance, window.clone(), r, size.width.max(1), size.height.max(1), vsync).ok();
                     self.last = Instant::now();
                 }
             }
@@ -414,7 +393,7 @@ impl App {
                 if self.settings.fullscreen || gamescope || resolution.is_some() || self.args.size != crate::cli::DEFAULT_SIZE {
                     log::info!("triple screen: spanning three monitors instead of the fullscreen / window size settings");
                 }
-                self.spanned = true;
+                self.gfx.spanned = true;
                 attrs = attrs
                     .with_fullscreen(None)
                     .with_decorations(false)
@@ -443,7 +422,7 @@ impl App {
                 }
             },
         };
-        let mut renderer = match window_renderer(&mut self.instance, &window, self.settings.render_options()) {
+        let mut renderer = match window_renderer(&mut self.gfx.instance, &window, self.settings.render_options()) {
             Ok(r) => r,
             Err(e) => {
                 fatal_message(&format!("The game cannot draw on this computer: {e:#}"));
@@ -468,7 +447,7 @@ impl App {
         crate::lights::set_corona_root(&self.args.root);
         let size = window.inner_size();
         let surface = match SurfaceState::new_with(
-            &self.instance,
+            &self.gfx.instance,
             window.clone(),
             &renderer,
             size.width,
@@ -492,7 +471,7 @@ impl App {
         );
         let scene = renderer.new_scene();
         self.window = Some(window);
-        self.surface = Some(surface);
+        self.gfx.surface = Some(surface);
         self.renderer = Some(renderer);
         self.scene = Some(scene);
         // fully specified runs skip the menu
@@ -549,7 +528,7 @@ impl App {
                         "texture budget: {:.0} MB",
                         texture_budget(&self.settings) as f64 / 1e6
                     );
-                    self.streamer = Some(tiles::Streamer::new(
+                    self.gfx.streamer = Some(tiles::Streamer::new(
                         w.clone(),
                         &start_centers(&self.args, &cam, Some(&w)),
                         distance,
@@ -831,7 +810,7 @@ impl App {
             return true;
         };
         let centers = start_centers(&self.args, &cam, self.world.as_deref());
-        let progress = match self.streamer.as_mut() {
+        let progress = match self.gfx.streamer.as_mut() {
             Some(streamer) => {
                 streamer.update(
                     &renderer,
@@ -870,7 +849,7 @@ impl App {
         let mut reconfigure = false;
         if let (Some(ui), Some(s), Some(win)) = (
             self.ui.as_mut(),
-            self.surface.as_ref(),
+            self.gfx.surface.as_ref(),
             self.window.as_ref(),
         ) {
             scene.overlays.clear();
@@ -930,7 +909,7 @@ impl App {
             self.renderer = Some(renderer);
         }
         if reconfigure {
-            if let (Some(s), Some(r), Some(win)) = (self.surface.as_mut(), self.renderer.as_ref(), self.window.as_ref()) {
+            if let (Some(s), Some(r), Some(win)) = (self.gfx.surface.as_mut(), self.renderer.as_ref(), self.window.as_ref()) {
                 let size = win.inner_size();
                 s.resize(r, size.width, size.height);
             }
@@ -958,7 +937,7 @@ impl App {
             centers.extend(self.net.remotes.remotes.values().map(|r| r.vehicle().position));
         }
         let (Some(streamer), Some(w), Some(r), Some(scene)) = (
-            self.streamer.as_mut(),
+            self.gfx.streamer.as_mut(),
             self.world.as_ref(),
             self.renderer.as_ref(),
             self.scene.as_mut(),

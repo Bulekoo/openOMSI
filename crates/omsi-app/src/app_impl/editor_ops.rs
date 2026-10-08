@@ -62,7 +62,7 @@ impl App {
                 if !tiles.is_empty() {
                     log::info!("map editor: ground of tiles {tiles:?} at {at:?}");
                     world.forget_staged(&tiles);
-                    if let (Some(st), Some(r), Some(scene)) = (self.streamer.as_mut(), self.renderer.as_ref(), self.scene.as_mut()) {
+                    if let (Some(st), Some(r), Some(scene)) = (self.gfx.streamer.as_mut(), self.renderer.as_ref(), self.scene.as_mut()) {
                         st.reload(r, scene, Some(&tiles), self.sound.audio.as_ref());
                     }
                 }
@@ -132,7 +132,7 @@ impl App {
             }
             return true;
         }
-        let (Some(cam), Some(s), Some(world)) = (self.camera.as_ref(), self.surface.as_ref(), self.world.clone()) else { return true };
+        let (Some(cam), Some(s), Some(world)) = (self.camera.as_ref(), self.gfx.surface.as_ref(), self.world.clone()) else { return true };
         let (o, d) = self.world_cursor_ray(cam, (s.config.width, s.config.height));
         let ed = self.editor.as_mut().unwrap();
         // (the copy being edited stays the one dragged while it is under the cursor)
@@ -155,7 +155,7 @@ impl App {
         if !self.editor_drag {
             return;
         }
-        let (Some(cam), Some(s), Some(world)) = (self.camera.as_ref(), self.surface.as_ref(), self.world.clone()) else { return };
+        let (Some(cam), Some(s), Some(world)) = (self.camera.as_ref(), self.gfx.surface.as_ref(), self.world.clone()) else { return };
         let (o, d) = self.world_cursor_ray(cam, (s.config.width, s.config.height));
         let Some(hit) = crate::placing::ground_hit(&world, o, d.as_dvec3(), 400.0) else { return };
         let (Some(r), Some(scene), Some(ed)) = (self.renderer.as_ref(), self.scene.as_mut(), self.editor.as_mut()) else { return };

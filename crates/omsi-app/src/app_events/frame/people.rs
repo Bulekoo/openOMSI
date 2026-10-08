@@ -15,7 +15,7 @@ impl App {
         self.tick_on_foot(if self.paused { 0.0 } else { dt });
         self.sync_remote_walkers();
         let __t = Instant::now();
-        let sight = self.camera.as_ref().zip(self.surface.as_ref())
+        let sight = self.camera.as_ref().zip(self.gfx.surface.as_ref())
             .and_then(|(c, s)| self.sight_extent(c, (s.config.width, s.config.height)));
         if let (Some(h), Some(w), Some(r), Some(scene)) = (
             self.humans.as_mut(),
@@ -57,7 +57,7 @@ impl App {
                 self.humans_populate_t = 2.0;
                 h.populate(w, r, scene, center);
             }
-            if let (Some(cam), Some(s)) = (self.camera.as_ref(), self.surface.as_ref()) {
+            if let (Some(cam), Some(s)) = (self.camera.as_ref(), self.gfx.surface.as_ref()) {
                 h.eye = Some(humans::Eye::of(
                     cam,
                     s.config.width as f32 / s.config.height.max(1) as f32,

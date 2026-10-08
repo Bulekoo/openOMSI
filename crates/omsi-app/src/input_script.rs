@@ -63,7 +63,7 @@ impl App {
             }
             // Alt+Enter: full screen on and off
             if pressed && !repeat && matches!(code, KeyCode::Enter | KeyCode::NumpadEnter) && (self.keys.contains(&KeyCode::AltLeft) || self.keys.contains(&KeyCode::AltRight)) {
-                if self.spanned {
+                if self.gfx.spanned {
                     log::info!("triple screen: the window spans three monitors, Alt+Enter is left alone");
                 } else if let Some(win) = self.window.as_ref() {
                     win.set_fullscreen(if win.fullscreen().is_some() { None } else { Some(winit::window::Fullscreen::Borderless(None)) });
@@ -152,20 +152,20 @@ impl App {
             let shift = self.keys.contains(&KeyCode::ShiftLeft) || self.keys.contains(&KeyCode::ShiftRight);
             if pressed && !repeat && code == KeyCode::KeyM && ctrl {
                 if let Some(p) = self.player.as_ref() {
-                    let msg = if shift { self.mirror_hud.toggle_edit(p) } else { self.mirror_hud.toggle(p) };
+                    let msg = if shift { self.gfx.mirror_hud.toggle_edit(p) } else { self.gfx.mirror_hud.toggle(p) };
                     self.service_msg = Some((msg, if shift { 6.0 } else { 3.0 }));
                 }
                 return true;
             }
             // (in the editor the arrows aim the mirror under the cursor; see the frame)
-            if matches!(code, KeyCode::ArrowLeft | KeyCode::ArrowRight | KeyCode::ArrowUp | KeyCode::ArrowDown | KeyCode::PageUp | KeyCode::PageDown | KeyCode::Minus | KeyCode::Equal | KeyCode::NumpadAdd | KeyCode::NumpadSubtract) && self.mirror_hud.arrow(code, pressed) {
+            if matches!(code, KeyCode::ArrowLeft | KeyCode::ArrowRight | KeyCode::ArrowUp | KeyCode::ArrowDown | KeyCode::PageUp | KeyCode::PageDown | KeyCode::Minus | KeyCode::Equal | KeyCode::NumpadAdd | KeyCode::NumpadSubtract) && self.gfx.mirror_hud.arrow(code, pressed) {
                 return true;
             }
             // R puts the mirror under the cursor back as the bus has it, Shift+R every mirror
-            if self.mirror_hud.editing() && code == KeyCode::KeyR {
+            if self.gfx.mirror_hud.editing() && code == KeyCode::KeyR {
                 if pressed && !repeat {
                     let size = self.hud_size();
-                    let which = self.mirror_hud.cam_under(self.hud_cursor(), size);
+                    let which = self.gfx.mirror_hud.cam_under(self.hud_cursor(), size);
                     let msg = match self.player.as_mut() {
                         Some(p) if shift => {
                             let n = p.vehicle.ty.def.cameras_reflexion.len();
@@ -195,18 +195,18 @@ impl App {
                 }
                 return true;
             }
-            if self.mirror_hud.editing() && matches!(code, KeyCode::BracketLeft | KeyCode::BracketRight | KeyCode::Semicolon | KeyCode::Quote) {
+            if self.gfx.mirror_hud.editing() && matches!(code, KeyCode::BracketLeft | KeyCode::BracketRight | KeyCode::Semicolon | KeyCode::Quote) {
                 if pressed {
                     let size = self.hud_size();
-                    self.mirror_hud.size_key(code, self.hud_cursor(), size);
+                    self.gfx.mirror_hud.size_key(code, self.hud_cursor(), size);
                 }
                 return true;
             }
-            if self.mirror_hud.editing() && matches!(code, KeyCode::Insert | KeyCode::Delete | KeyCode::Backspace | KeyCode::KeyC | KeyCode::Escape) {
+            if self.gfx.mirror_hud.editing() && matches!(code, KeyCode::Insert | KeyCode::Delete | KeyCode::Backspace | KeyCode::KeyC | KeyCode::Escape) {
                 if pressed && !repeat {
                     let size = self.hud_size();
                     if let Some(p) = self.player.as_ref() {
-                        if let Some(msg) = self.mirror_hud.key(code, p, self.hud_cursor(), size) {
+                        if let Some(msg) = self.gfx.mirror_hud.key(code, p, self.hud_cursor(), size) {
                             self.service_msg = Some((msg, 4.0));
                         }
                     }
@@ -882,11 +882,11 @@ impl App {
                 "focus" if arg == "0" => self.input_lost(),
                 "focus" => self.input_back(),
                 "minimize" => {
-                    self.window_hidden = true;
+                    self.gfx.window_hidden = true;
                     self.input_lost();
                 }
                 "restore" => {
-                    self.window_hidden = false;
+                    self.gfx.window_hidden = false;
                     self.input_back();
                 }
                 "key" | "keydown" | "keyup" => {

@@ -134,7 +134,7 @@ impl App {
         // looking round does: the cursor goes to their buttons)
         let panels_mouse = self.plugin_focus();
         if let (true, Some(s)) = (self.mouse_drive && bus_view && !self.mouse_look && !self.input_away && !panels_mouse
-                                      && self.game_menu.is_none(), self.surface.as_ref()) {
+                                      && self.game_menu.is_none(), self.gfx.surface.as_ref()) {
             let (w, h) = (s.config.width as f32, s.config.height as f32);
             if std::mem::take(&mut self.center_cursor) {
                 self.cursor = (w * 0.5, h * 0.5);

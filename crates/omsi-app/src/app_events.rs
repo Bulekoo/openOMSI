@@ -61,7 +61,7 @@ impl ApplicationHandler for App {
     /// A phone put the app into the background: its window's surface goes (made again on
     /// `resumed`), the fingers and the held keys are let go.
     fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
-        self.surface = None;
+        self.gfx.surface = None;
         self.touch.drop_gpu();
         self.input_lost();
         self.save_last_situation();
@@ -75,19 +75,19 @@ impl ApplicationHandler for App {
                 crate::platform::exit(event_loop);
             }
             WindowEvent::Resized(size) => {
-                if let (Some(s), Some(r)) = (self.surface.as_mut(), self.renderer.as_ref()) {
+                if let (Some(s), Some(r)) = (self.gfx.surface.as_mut(), self.renderer.as_ref()) {
                     s.resize(r, size.width, size.height);
                 }
                 // (minimised, Windows makes the window 0 x 0)
                 let hidden = size.width == 0 || size.height == 0;
-                if hidden && !self.window_hidden {
+                if hidden && !self.gfx.window_hidden {
                     self.input_lost();
                 }
-                self.window_hidden = hidden;
+                self.gfx.window_hidden = hidden;
             }
             // (minimised or covered entirely, macOS and Wayland: the focus goes with it, and a
             // window merely covered by another may still be the one the player drives with)
-            WindowEvent::Occluded(hidden) => self.window_hidden = hidden,
+            WindowEvent::Occluded(hidden) => self.gfx.window_hidden = hidden,
             WindowEvent::Focused(true) => {
                 self.window_focused = true;
                 if let Some(ctl) = self.controllers.as_mut() {
@@ -399,7 +399,7 @@ impl ApplicationHandler for App {
 impl App {
     /// The window's size in pixels, while the mirror panels can be worked (in the cab, no menu).
     pub(crate) fn mirror_hud_size(&self) -> Option<(f32, f32)> {
-        if !self.in_cab || self.game_menu.is_some() || !self.mirror_hud.editing() {
+        if !self.in_cab || self.game_menu.is_some() || !self.gfx.mirror_hud.editing() {
             return None;
         }
         Some(self.hud_size())
@@ -413,7 +413,7 @@ impl App {
             let shift =
                 self.keys.contains(&KeyCode::ShiftLeft) || self.keys.contains(&KeyCode::ShiftRight);
             if self
-                .mirror_hud
+                .gfx.mirror_hud
                 .wheel(amount, shift, self.hud_cursor(), size)
             {
                 return;
@@ -457,7 +457,7 @@ impl App {
         // movement. Knobs, the sun blind and the ignition key are far easier to
         // set that way than by holding the button down and moving the mouse.
         if self.hover.is_some() && self.view != "free" {
-            let ray = self.camera.as_ref().zip(self.surface.as_ref())
+            let ray = self.camera.as_ref().zip(self.gfx.surface.as_ref())
                 .map(|(cam, s)| self.cockpit_cursor_ray(cam, (s.config.width, s.config.height)));
             if let (Some(p), Some((o, d, spread))) = (
                 self.player.as_mut(),
@@ -501,7 +501,7 @@ impl App {
             .mirror_hud_size()
             .or_else(|| (!pressed).then(|| self.hud_size()))
         {
-            if self.mirror_hud.press(pressed, self.hud_cursor(), size) {
+            if self.gfx.mirror_hud.press(pressed, self.hud_cursor(), size) {
                 return;
             }
         }

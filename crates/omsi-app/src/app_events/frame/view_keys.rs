@@ -138,10 +138,10 @@ impl App {
         // the mirror editor: an arrow held over a panel aims that panel's mirror
         // (kept per bus like Ctrl+Alt+arrows below)
         if let (Some(size), Some(a)) =
-            (self.mirror_hud_size(), self.mirror_hud.turning())
+            (self.mirror_hud_size(), self.gfx.mirror_hud.turning())
         {
             if let (Some(i), Some(p)) = (
-                self.mirror_hud.cam_under(self.hud_cursor(), size),
+                self.gfx.mirror_hud.cam_under(self.hud_cursor(), size),
                 self.player.as_mut(),
             ) {
                 let n = p.vehicle.ty.def.cameras_reflexion.len();

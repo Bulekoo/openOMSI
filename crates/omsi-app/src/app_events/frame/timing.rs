@@ -51,7 +51,7 @@ impl App {
             return None;
         }
         let desktop_vsync = self.settings.vsync && !self.vr_active();
-        if let (Some(surface), Some(renderer)) = (self.surface.as_mut(), self.renderer.as_ref()) {
+        if let (Some(surface), Some(renderer)) = (self.gfx.surface.as_mut(), self.renderer.as_ref()) {
             surface.set_vsync(renderer, desktop_vsync);
         }
         // in the own bus's cab: at the wheel, a passenger's view, or sitting in a
@@ -184,7 +184,7 @@ impl App {
             let lines = m.lines();
             if let (Some(hud), Some(s), Some(r), Some(scene), Some(win)) = (
                 self.hud.as_mut(),
-                self.surface.as_ref(),
+                self.gfx.surface.as_ref(),
                 self.renderer.as_mut(),
                 self.scene.as_mut(),
                 self.window.as_ref(),

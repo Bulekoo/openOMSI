@@ -8,7 +8,7 @@ impl App {
     pub(super) fn frame_traffic(&mut self, dt: f32) {
         let __t = Instant::now();
         // (with a triple screen, all of its three panels are in sight)
-        let sight = self.camera.as_ref().zip(self.surface.as_ref())
+        let sight = self.camera.as_ref().zip(self.gfx.surface.as_ref())
             .and_then(|(c, s)| self.sight_extent(c, (s.config.width, s.config.height)));
         if let (Some(t), Some(w), Some(r), Some(scene)) = (
             self.traffic.as_mut(),
@@ -23,7 +23,7 @@ impl App {
                 .or(self.camera.as_ref().map(|c| c.position))
                 .unwrap_or(DVec3::ZERO);
             let aspect = self
-                .surface
+                .gfx.surface
                 .as_ref()
                 .map(|s| s.config.width as f64 / s.config.height.max(1) as f64)
                 .unwrap_or(16.0 / 9.0);

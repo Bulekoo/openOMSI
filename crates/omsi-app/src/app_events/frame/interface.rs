@@ -11,7 +11,7 @@ impl App {
         let menu_lines = if self.game_menu.is_some() { self.game_menu_items() } else { Vec::new() };
         // (the mirror editor's keys and the panel under the cursor, while it is on)
         let mirror_help = match (self.player.as_ref(), self.mirror_hud_size()) {
-            (Some(p), Some(size)) => self.mirror_hud.help_lines(p, self.hud_cursor(), size),
+            (Some(p), Some(size)) => self.gfx.mirror_hud.help_lines(p, self.hud_cursor(), size),
             _ => Vec::new(),
         };
         let vr_nav_display = self.vr_nav_display();
@@ -34,7 +34,7 @@ impl App {
             scene.overlays.clear();
         }
         let hud = self
-            .surface
+            .gfx.surface
             .as_ref()
             .map(|s| {
                 self.settings
@@ -143,7 +143,7 @@ impl App {
         if let (Some(nav), Some(p), Some(_)) = (
             self.navigator.as_mut(),
             self.player.as_ref(),
-            self.surface.as_ref(),
+            self.gfx.surface.as_ref(),
         ) {
             let old_enabled = nav.enabled;
             let old_opacity = nav.opacity;
@@ -232,12 +232,12 @@ impl App {
             if nav.arrows {
                 if let Some(w) = self.world.as_ref() {
                     let spots = nav.arrow_spots(self.traffic.as_ref().map(|t| &t.net), 350.0, &|id| w.object_positions.lock().get(&id).map(|p| (p.0, p.1[0])));
-                    self.route_arrows.tick(dt, w, r, scene, &spots);
+                    self.gfx.route_arrows.tick(dt, w, r, scene, &spots);
                 }
-            } else if self.route_arrows.any() {
+            } else if self.gfx.route_arrows.any() {
                 // (switched off in the menu: the ones standing go too)
                 if let Some(w) = self.world.as_ref() {
-                    self.route_arrows.clear(w, r, scene);
+                    self.gfx.route_arrows.clear(w, r, scene);
                 }
             }
         }
@@ -291,7 +291,7 @@ impl App {
         menu_tabs: Option<(Vec<String>, usize)>,
     ) {
         let (Some(r), Some(scene)) = (self.renderer.as_ref(), self.scene.as_mut()) else { return };
-        if let (Some(ui), Some(s)) = (self.ui.as_mut(), self.surface.as_ref()) {
+        if let (Some(ui), Some(s)) = (self.ui.as_mut(), self.gfx.surface.as_ref()) {
             let scale = self.window.as_ref().map(|w| w.scale_factor() as f32).unwrap_or(1.0);
             let (w, h) = (hud[2], hud[3]);
             self.net.remotes.chat.disabled = !self.settings.chat;

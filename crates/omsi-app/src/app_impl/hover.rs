@@ -5,7 +5,7 @@ use super::*;
 impl App {
     pub(crate) fn hud_size(&self) -> (f32, f32) {
         let v = self
-            .surface
+            .gfx.surface
             .as_ref()
             .map(|s| {
                 self.settings
@@ -17,7 +17,7 @@ impl App {
 
     pub(crate) fn hud_cursor(&self) -> (f32, f32) {
         let x = self
-            .surface
+            .gfx.surface
             .as_ref()
             .map(|s| {
                 self.settings
@@ -81,7 +81,7 @@ impl App {
             self.cursor, self.game_menu.is_some() || self.chooser.is_some())) {
             let surface = self.player.as_ref()
                 .zip(self.camera.as_ref())
-                .zip(self.surface.as_ref())
+                .zip(self.gfx.surface.as_ref())
                 .filter(|_| matches!(self.view.as_str(), "driver" | "pax"))
                 .map(|((player, camera), window)| {
                     let (origin, direction, _) = self.cockpit_cursor_ray(camera,
@@ -101,7 +101,7 @@ impl App {
         let found = match (
             self.player.as_ref(),
             self.camera.as_ref(),
-            self.surface.as_ref(),
+            self.gfx.surface.as_ref(),
         ) {
             (Some(p), Some(cam), Some(s)) if self.view != "free"
                 && (self.view != "foot" || self.foot_reaches_bus())
