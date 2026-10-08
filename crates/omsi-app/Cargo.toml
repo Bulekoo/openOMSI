@@ -81,6 +81,13 @@ windows = { workspace = true, features = ["Win32_Devices_HumanInterfaceDevice", 
 openxr = { version = "0.22", default-features = false, features = ["static"] }
 wgpu-hal = { workspace = true, features = ["dx12"] }
 
+# Windows: wgpu's OpenGL ES backend on ANGLE's Direct3D 11 renderer (`GraphicsApi::Angle`,
+# tried last; Google's libEGL.dll and libGLESv2.dll beside the game). Only here: on a Mac
+# the feature would put wgpu's GL backend on ANGLE's Metal renderer
+[target.'cfg(windows)'.dependencies.wgpu]
+workspace = true
+features = ["angle"]
+
 # macOS: the axes of wheels and pedals straight from their HID elements (see `mac_hid`), and
 # Xbox-type controllers through the GameController framework (see `mac_game_controller`):
 # Apple's own driver takes them over completely and leaves gilrs nothing to read
