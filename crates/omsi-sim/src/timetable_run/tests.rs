@@ -574,3 +574,15 @@ fn an_ai_bus_without_a_destination_still_gets_its_line_and_the_ai_trigger() {
 mod authored_station;
 mod duty;
 mod route;
+
+/// The row OMSI's AI bus is given: the first whose ident is the destination, whatever
+/// the codes' order; of equally loose matches the first as well.
+#[test]
+fn a_tour_bus_takes_a_trip_on_only_at_its_start() {
+    let route = [10, 11, 12, 13, 14, 15, 16];
+    assert_eq!(tour_entry(&route, 10), Some(0));
+    assert_eq!(tour_entry(&route, 13), Some(3));
+    // the same trip again: the bus stands on its last lane
+    assert_eq!(tour_entry(&route, 16), None);
+    assert_eq!(tour_entry(&route, 99), None);
+}

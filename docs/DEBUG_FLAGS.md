@@ -21,7 +21,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_BENCH_FRAMES` | bool | off | use | app | With OMSI_BENCH: log every bench frame's times, not only the medians. |
 | `OMSI_DEBUG_AI_WIDE` | bool | off | use | sim | Log every tenth of a second an AI car standing over 1.5 m beside its way. |
 | `OMSI_DEBUG_ANIM` | text | - | once | sim | Log the animations of the meshes whose file name contains this text. |
-| `OMSI_DEBUG_BOARDS` | bool | off | use | app | Log boarding at bus stops. |
+| `OMSI_DEBUG_BOARDS` | bool | off | use | sim | Log boarding at bus stops. |
 | `OMSI_DEBUG_CAMERA` | num | 1 | once | app | Camera arm log: 1 the types and what stops the arm, 2 also every frame. |
 | `OMSI_DEBUG_CAR` | num | - | use | sim | Log the state of the AI car with this id every step. |
 | `OMSI_DEBUG_CAREER` | bool | off | use | app | Log the jolts the career scoring counts. |
@@ -65,7 +65,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_DEBUG_RASTER` | text | - | use | app | x,y: log the ground raster at that point. |
 | `OMSI_DEBUG_REPEATERS` | bool | off | use | app | Log repeater objects whose spline chain disagrees with the map. |
 | `OMSI_DEBUG_REST` | bool | off | use | app | Log where the bus came to rest on the ground after spawning. |
-| `OMSI_DEBUG_ROUTES` | bool | off | use | app | Log where consecutive lanes of an AI route do not join. |
+| `OMSI_DEBUG_ROUTES` | bool | off | use | sim | Log where consecutive lanes of an AI route do not join. |
 | `OMSI_DEBUG_RT` | num | off | use | render | Log the ray tracing structures every 30 frames (with a number: a debug view). |
 | `OMSI_DEBUG_SEAT` | bool | off | use | sim | Log the driver seat's suspension meshes. |
 | `OMSI_DEBUG_SERVICES` | bool | off | use | app | Log petrol station boxes and the bus's distance to them. |
@@ -143,7 +143,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_CHECK_SPIKES` | bool | off | use | app | Map check: road faces standing taller than profile, gradient and cant allow. |
 | `OMSI_CHECK_SPLINES` | bool | off | use | app | Map check: chained splines whose ends do not meet in height. |
 | `OMSI_CHECK_TPOSE` | bool | off | use | app | Check: people drawn in the rest (T) pose, wider than 1.3 m hand to hand. |
-| `OMSI_CHECK_TRIPS` | text | - | use | app | 1: build every trip's route on the loaded lanes and report breaks; a trip name: log every step of that trip. |
+| `OMSI_CHECK_TRIPS` | text | - | use | app, sim | 1: build every trip's route on the loaded lanes and report breaks; a trip name: log every step of that trip. |
 | `OMSI_CHECK_TYPES` | bool | off | use | app | Map check: list the object types per folder that loading leaves out. |
 | `OMSI_CHECK_WALLS` | bool | off | use | sim | Check: everybody inside a bus who stands away from its walkways. |
 | `OMSI_CHECK_WHEELS` | bool | off | use | app | Map check: probe the ground along every lane's wheel tracks (invisible walls, humps, holes). |

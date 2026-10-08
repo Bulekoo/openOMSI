@@ -1,20 +1,8 @@
-//! The departures due each frame: buses put on the road, tours handing their bus on, trips
-//! carried on as tiles load.
+//! The departures due each frame put on the road (which are due is omsi-sim's
+//! `ScheduleSim`), tours handing their bus on, buses taken off.
 
 use super::*;
 use omsi_render::{Renderer, Scene};
-
-/// A tour's bus takes its next trip on only from one of the trip's first lanes (or a short
-/// way onto one of them): Omsi.exe starts every trip at its beginning.
-pub(super) const TOUR_ENTRY_LANES: usize = 4;
-
-/// Where on the next trip's route `section` the tour's bus standing on `lane` takes it on:
-/// only on one of its first lanes. A tour repeating the same trip leaves its bus on the
-/// route's last lane, and taken on there the trip was over at once - the bus stood at the
-/// last stop for good, and every bus behind it queued (#976).
-pub(super) fn tour_entry(section: &[usize], lane: usize) -> Option<usize> {
-    section.iter().take(TOUR_ENTRY_LANES).position(|&l| l == lane)
-}
 
 impl Schedule {
     /// The clock was set to another time (by hand, the menu, Ctrl+Shift+Page Up/Down): every
@@ -26,51 +14,15 @@ impl Schedule {
         if traffic.is_mirror() {
             return;
         }
-        let gone: Vec<u64> = self.car_departure.keys().copied().collect();
+        let gone: Vec<u64> = self.sim.car_ids();
         let mut n = 0;
         for id in gone {
-            self.car_departure.remove(&id);
+            self.sim.forget_car(id);
             if traffic.remove_car(view, world, renderer, scene, id) {
                 n += 1;
             }
         }
-        self.running.clear();
-        self.pending.clear();
-        self.waiting.clear();
-        self.awaiting.clear();
-        self.retry_at.clear();
-        self.startup.clear();
-        self.later_layover.clear();
-        // (the clock set back over midnight: the day before)
-        while day_time < self.day_base {
-            self.day_base -= DAY;
-            let mut c = self.date_clock.clone();
-            if c.day_of_year > 1 {
-                c.day_of_year -= 1;
-            } else {
-                c.year -= 1;
-                c.day_of_year = omsi_sim::clock::days_in_year(c.year);
-            }
-            self.date_clock = c.clone();
-            self.set_day(&c);
-        }
-        self.roll_day(day_time);
-        for i in 0..self.departures.len() {
-            if !self.is_player_tour(i) {
-                self.departures[i].spawned = false;
-            }
-        }
-        self.last_tod = day_time - self.day_base;
-        self.restarted = true;
-        log::info!("timetable: the clock was set to {}: {n} timetable buses taken off, the trips under way put out again", hhmm(day_time - self.day_base));
-    }
-
-    /// The timetable bus on the road that runs departure `k` (not one that has been let go).
-    pub(super) fn tour_bus(&self, k: usize, traffic: &Traffic) -> Option<usize> {
-        traffic
-            .cars
-            .iter()
-            .position(|c| c.is_bus() && !c.gone && self.car_departure.get(&c.id) == Some(&k))
+        self.sim.restart_clock(day_time, n);
     }
 
     /// The timetable buses at the end of their trip: each takes its tour's next trip on
@@ -87,34 +39,26 @@ impl Schedule {
         let done: Vec<u64> = traffic.cars.iter().filter(|c| c.trip_done()).map(|c| c.id).collect();
         for id in done {
             let Some(ci) = traffic.cars.iter().position(|c| c.id == id) else { continue };
-            let next = self.car_departure.get(&id).and_then(|&k| self.tour_next[k]);
+            let next = self.sim.next_of_car(id);
             let mut taken = false;
             if let Some(j) = next {
-                let d = &self.departures[j];
-                let open = self.awaiting.contains(&j) || (!d.spawned && self.runs(j));
-                if open && !self.is_player_tour(j) && self.day_base + d.time - day_time < TOUR_LAYOVER_MAX {
+                if self.sim.may_take_on(j, day_time) {
                     if let Placed::Spawned =
                         self.spawn_departure(j, world, traffic, view, renderer, scene, day_time, Some(ci))
                     {
                         taken = true;
-                        self.departures[j].spawned = true;
-                        self.awaiting.remove(&j);
-                        self.pending.retain(|x| *x != j);
-                        self.waiting.retain(|x| *x != j);
-                        self.retry_at.remove(&j);
-                        self.later_layover.remove(&j);
+                        self.sim.taken_on(j);
                     }
                 }
-                // its bus is not coming: the trip gets a bus of its own
-                if !taken && self.awaiting.remove(&j) {
-                    self.pending.push_back(j);
+                if !taken {
+                    self.sim.not_taken_on(j);
                 }
             }
             if !taken && next.is_none() {
                 // the tour's last trip is over: Omsi takes the bus (and what is coupled to
                 // it) off the road at once rather than letting it drive on
                 traffic.remove_car(view, world, renderer, scene, id);
-                self.car_departure.remove(&id);
+                self.sim.forget_car(id);
                 if omsi_cfg::flags::OMSI_DEBUG_TRAFFIC.is_set() {
                     log::info!("scheduled bus {id}: the last trip of its tour is over: removed");
                 }
@@ -125,91 +69,7 @@ impl Schedule {
                 }
             }
         }
-        // a trip whose tour's bus has gone off the road meanwhile
-        if !self.awaiting.is_empty() {
-            let orphans: Vec<usize> = self
-                .awaiting
-                .iter()
-                .copied()
-                .filter(|&j| self.tour_prev[j].and_then(|k| self.tour_bus(k, traffic)).is_none())
-                .collect();
-            for j in orphans {
-                self.awaiting.remove(&j);
-                self.pending.push_back(j);
-            }
-        }
-    }
-
-    /// How many due departures are still waiting to be put on the road.
-    /// Omsi.exe's station targets (0x61cb18): per bus stop, the stops the timetable's trips
-    /// go on to from there, each with the termini of the trips that do. A passenger waiting
-    /// at the stop wants one of these targets and boards a bus whose terminus is among its
-    /// termini (0x61c33c); the names compare exactly.
-    /// Per bus stop, the destinations of the trips due there within the next
-    /// [`PAX_SPAWN_AHEAD`] (today's departures, the stations they stop at after it): what
-    /// the people turning up there now draw their destination from. Omsi.exe spawns
-    /// people for a trip up to a quarter of an hour before it is due at their stop (pionsix's
-    /// tests, #1436); the destinations of every trip of the map, whatever its hour or day,
-    /// had people waiting at 2 a.m. for the six o'clock bus and at a school's stop for hours
-    /// before its run (#1415). Which buses they then take is still the stop's line records
-    /// (`stop_targets`), from every trip.
-    pub fn due_destinations(&self, day_time: f64) -> HashMap<i64, HashSet<String>> {
-        let names = self.stop_names();
-        let name_of = |id: i64| names.get(&id).cloned().unwrap_or_else(|| id.to_string());
-        let tod = day_time - self.day_base;
-        let longest = self.times.iter().flatten().map(|t| t.duration).fold(0.0, f64::max);
-        let from = self.departures.partition_point(|d| d.time < tod - longest - 60.0);
-        let mut out: HashMap<i64, HashSet<String>> = HashMap::new();
-        for i in from..self.departures.len() {
-            let d = &self.departures[i];
-            if d.time > tod + PAX_SPAWN_AHEAD {
-                break;
-            }
-            if !self.runs(i) {
-                continue;
-            }
-            let tt = self.times_of(i);
-            let stations = trip_stations(&self.data.trips[d.trip]);
-            for (k, sid) in stations.iter().enumerate() {
-                let due = d.time + tt.stations.get(k).map(|s| s.0).unwrap_or(0.0);
-                if !(tod - 60.0..=tod + PAX_SPAWN_AHEAD).contains(&due) || !tt.stops.get(k).copied().unwrap_or(true) {
-                    continue;
-                }
-                let here = name_of(*sid);
-                let set = out.entry(*sid).or_default();
-                for (j, to) in stations.iter().enumerate().skip(k + 1) {
-                    if !tt.stops.get(j).copied().unwrap_or(true) {
-                        continue;
-                    }
-                    let to = name_of(*to);
-                    if to != here {
-                        set.insert(to);
-                    }
-                }
-            }
-        }
-        out
-    }
-
-    pub fn stop_targets(&self) -> HashMap<i64, Vec<(String, HashSet<String>)>> {
-        let names = self.stop_names();
-        let name_of = |id: i64| names.get(&id).cloned().unwrap_or_else(|| id.to_string());
-        station_targets(self.data.trips.iter().map(|t| (trip_stations(t), t.terminus.trim().to_string())), name_of)
-    }
-
-    /// The name each bus stop object has in the timetable (`Busstops.cfg`, the first entry
-    /// of an object id): what [`Schedule::stop_targets`] calls it. The map object's own
-    /// label can read otherwise (renamed in the editor, another code page than the tiles').
-    pub fn stop_names(&self) -> HashMap<i64, String> {
-        let mut names = HashMap::new();
-        for b in &self.data.bus_stops {
-            names.entry(b.object_id).or_insert_with(|| b.name.trim().to_string());
-        }
-        names
-    }
-
-    pub fn pending(&self) -> usize {
-        self.pending.len()
+        self.sim.requeue_orphans(&traffic.sim);
     }
 
     /// Spawn buses whose departure time has come (or passed within `window` seconds), and
@@ -229,301 +89,27 @@ impl Schedule {
         if traffic.is_mirror() {
             return;
         }
-        self.roll_day(day_time);
-        // the time of day of today's timetable
-        let tod = day_time - self.day_base;
-        self.last_tod = tod;
-        if std::mem::take(&mut self.purge_player_tour) {
-            let gone: Vec<u64> = self
-                .car_departure
-                .iter()
-                .filter(|(_, i)| self.is_player_tour(**i))
-                .map(|(id, _)| *id)
-                .collect();
-            for id in gone {
-                self.car_departure.remove(&id);
-                self.running.retain(|r| r.car != id);
-                if traffic.remove_car(view, world, renderer, scene, id) {
-                    log::info!("timetable: bus {id} of the player's tour taken off the road");
-                }
+        for id in self.sim.begin_tick(day_time) {
+            if traffic.remove_car(view, world, renderer, scene, id) {
+                log::info!("timetable: bus {id} of the player's tour taken off the road");
             }
         }
-        let window = if std::mem::take(&mut self.restarted) { window.max(20.0 * 60.0) } else { window };
-        let loading = window > 60.0;
-        let due: Vec<usize> = self
-            .departures
-            .iter()
-            .enumerate()
-            .filter(|(i, d)| !d.spawned && d.time <= tod && d.time > tod - window && self.runs(*i))
-            .map(|(i, _)| i)
-            .collect();
-        for i in due {
-            self.departures[i].spawned = true;
-            // the tour's bus is still on its way here: it takes the trip on when it arrives
-            if self.tour_prev[i].and_then(|k| self.tour_bus(k, traffic)).is_some() {
-                self.awaiting.insert(i);
-                continue;
-            }
-            self.pending.push_back(i);
-            if loading {
-                self.startup.insert(i);
-            }
-        }
-        // Buses on their layover: a trip that leaves within the next quarter of an hour,
-        // whose tour's previous trip is already over, stands at its first stop with the
-        // doors shut until its departure. Without this a map with one bus per line
-        // showed no bus at all for most of the hour - it only existed while driving.
-        let mut early: Vec<usize> = Vec::new();
-        // departures are sorted by time: only the ones in the next quarter of an hour
-        let start = self.departures.partition_point(|d| d.time <= tod);
-        for i in start..self.departures.len() {
-            let d = &self.departures[i];
-            if d.time > tod + LAYOVER {
-                break;
-            }
-            if d.spawned || self.later_layover.contains(&i) || !self.runs(i) {
-                continue;
-            }
-            // only a trip with stops has a first stop to wait at: a flight (TXL.ttl, every
-            // ten minutes) would take off a quarter of an hour early
-            let Some(first) = trip_stations(&self.data.trips[d.trip]).first().copied() else {
-                continue;
-            };
-            if d.time > tod + LAYOVER_SHARED {
-                let shared = match self.shared_stand.get(&first) {
-                    Some(&v) => v,
-                    None => {
-                        let positions = world.object_positions.lock();
-                        let Some(&(here, _)) = positions.get(&first) else {
-                            continue;
-                        };
-                        let v = self.served.contains(&first)
-                            || self.served.iter().any(|sid| {
-                            positions
-                                .get(sid)
-                                .map(|p| (p.0 - here).length() < 30.0)
-                                .unwrap_or(false)
-                        });
-                        if omsi_cfg::flags::OMSI_DEBUG_TRAFFIC.is_set() {
-                            let nearest = self
-                                .served
-                                .iter()
-                                .filter_map(|sid| {
-                                    positions.get(sid).map(|p| ((p.0 - here).length(), *sid))
-                                })
-                                .fold((f64::MAX, 0), |a, b| if b.0 < a.0 { b } else { a });
-                            log::info!("layover stand {first} at ({:.0}, {:.0}): shared {v}, nearest served station {} at {:.0} m", here.x, here.y, nearest.1, nearest.0);
-                        }
-                        drop(positions);
-                        self.shared_stand.insert(first, v);
-                        v
-                    }
-                };
-                if shared {
-                    continue;
-                }
-            }
-            let prev_running = self.tour_prev[i]
-                .map(|k| {
-                    self.dep_time(k) + self.times_of(k).duration >= day_time
-                        || self.tour_bus(k, traffic).is_some()
-                })
-                .unwrap_or(false);
-            if !prev_running {
-                early.push(i);
-            }
-        }
-        for i in early {
-            self.departures[i].spawned = true;
-            self.pending.push_back(i);
-            if loading {
-                self.startup.insert(i);
-            }
-        }
-        // buses whose ground was unloaded under them wait for it to come back
-        for id in std::mem::take(&mut traffic.removed_scheduled) {
-            if let Some(i) = self.car_departure.remove(&id) {
-                log::debug!("departure {i}: its bus left the loaded tiles, waiting for them");
-                self.waiting.push(i);
-            }
-        }
-        if self.car_departure.len() > 64 + traffic.cars.len() * 2 {
-            let alive: std::collections::HashSet<u64> = traffic.cars.iter().map(|c| c.id).collect();
-            self.car_departure.retain(|id, _| alive.contains(id));
-        }
-        // tiles brought lanes, or half a minute went by: the waiting departures may be on
-        // loaded ground now, and the routes that stopped short may go on
-        let grew = traffic.lanes_generation != self.seen_generation;
-        if grew || day_time - self.last_retry >= 30.0 || day_time < self.last_retry {
-            self.last_retry = day_time;
-            for i in std::mem::take(&mut self.waiting) {
-                if !self.pending.contains(&i) {
-                    self.pending.push_back(i);
-                }
-            }
-            self.retry_at.clear();
-        } else if !self.retry_at.is_empty() {
-            // the ones whose vehicle has just reached the loaded part of its way
-            let due: Vec<usize> = self
-                .waiting
-                .iter()
-                .copied()
-                .filter(|i| {
-                    self.retry_at
-                        .get(i)
-                        .map(|t| *t <= day_time)
-                        .unwrap_or(false)
-                })
-                .collect();
-            if !due.is_empty() {
-                self.waiting.retain(|i| !due.contains(i));
-                for i in due {
-                    self.retry_at.remove(&i);
-                    if !self.pending.contains(&i) {
-                        // ahead of the others: it is due now
-                        self.pending.push_front(i);
-                    }
-                }
-            }
-        }
-        if grew {
-            self.seen_generation = traffic.lanes_generation;
-            self.carry_on(world, traffic);
-        }
+        let loading = self.sim.queue_due(world, &mut traffic.sim, day_time, window);
         self.fleet(world, traffic, renderer, scene, day_time);
         self.tour_handover(world, traffic, view, renderer, scene, day_time);
         // a handful per call: spawning a bus builds its meshes, and a whole rush hour at
         // once is a frame that lasts seconds (a departure that has to wait costs little)
         let (mut spawned, mut tried) = (0, 0);
         while spawned < if loading { 3 } else { 1 } && tried < 24 {
-            let Some(i) = self.pending.pop_front() else {
+            let Some(i) = self.sim.next_pending() else {
                 break;
             };
             tried += 1;
-            match self.spawn_departure(i, world, traffic, view, renderer, scene, day_time, None) {
-                Placed::Spawned => spawned += 1,
-                Placed::Wait => self.waiting.push(i),
-                Placed::Busy => {
-                    // a vehicle stands where the bus would appear (the player's bus may stand
-                    // there for its whole layover): again in a few seconds, without keeping
-                    // the traffic on its quick spawning pace meanwhile
-                    self.retry_at.insert(i, day_time + 3.0);
-                    self.waiting.push(i);
-                }
-                Placed::Drop => {}
+            let placed = self.spawn_departure(i, world, traffic, view, renderer, scene, day_time, None);
+            if let Placed::Spawned = placed {
+                spawned += 1;
             }
-        }
-    }
-
-    /// Carry the routes of the running trips on over the lanes the network gained.
-    pub(super) fn carry_on(&mut self, world: &World, traffic: &mut Traffic) {
-        let mut keep = Vec::new();
-        for mut run in std::mem::take(&mut self.running) {
-            let Some(ci) = traffic.cars.iter().position(|c| c.id == run.car) else {
-                continue;
-            };
-            let last = traffic.cars[ci].state.route.last().copied();
-            add_twins(traffic, &run.steps[run.next.saturating_sub(1)..]);
-            let slots = self.slots(world, traffic, &run.steps[run.next..], last);
-            let n = slots
-                .iter()
-                .position(|s| *s == Slot::Waiting)
-                .unwrap_or(slots.len());
-            let lanes: Vec<usize> = slots[..n]
-                .iter()
-                .filter_map(|s| {
-                    if let Slot::Lane(l) = s {
-                        Some(*l)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            // (bridged from the end of what the bus has)
-            let (lanes, index) = match last {
-                Some(l) if !lanes.is_empty() => {
-                    let with: Vec<usize> = std::iter::once(l).chain(lanes.iter().copied()).collect();
-                    add_connectors(traffic, &with);
-                    let (b, ix) = bridge_gaps(&traffic.net, &with);
-                    (b[1..].to_vec(), ix[1..].iter().map(|k| k.saturating_sub(1)).collect::<Vec<_>>())
-                }
-                _ => {
-                    add_connectors(traffic, &lanes);
-                    bridge_gaps(&traffic.net, &lanes)
-                }
-            };
-            if !lanes.is_empty() {
-                let base = traffic.cars[ci].state.route.len();
-                let mut stops = Vec::new();
-                let mut from = 0;
-                for (si, (sid, t_dep)) in run.stations.iter().enumerate() {
-                    if run.served[si] {
-                        continue;
-                    }
-                    let Some((pos, _)) = world.object_positions.lock().get(sid).copied() else {
-                        continue;
-                    };
-                    if let Some((ri, ss, lat)) = project_stop(
-                        &traffic.net,
-                        &lanes,
-                        pos,
-                        Some(STOP_REACH),
-                        from,
-                        world.stop_side(*sid),
-                        station_route(run.station_steps[si], run.next, &slots[..n], &index),
-                    ) {
-                        from = ri;
-                        stops.push((base + ri, ss, bay_offset(lat), *t_dep, *sid, world.stop_side(*sid)));
-                        run.served[si] = true;
-                    }
-                }
-                let (ty, rail) = (traffic.cars[ci].vehicle.ty.clone(), traffic.cars[ci].is_rail());
-                place_stops(&traffic.net, &lanes, base, &mut stops, &ty, rail);
-                stops.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)));
-                log::debug!(
-                    "scheduled bus {}: route carried on by {} lanes, {} more stops",
-                    run.car,
-                    lanes.len(),
-                    stops.len()
-                );
-                let car = &mut traffic.sim.cars[ci];
-                car.state.route.extend(lanes);
-                if let Some(b) = car.bus.as_mut() {
-                    b.stops.extend(stops.into_iter().map(crate::bus_service::Stop::from_tuple));
-                }
-                // (it may have stood waiting at the end of what it had)
-                car.state.planned_next = None;
-                car.state.plan_next(&traffic.sim.net);
-            }
-            run.next += n;
-            if run.next < run.steps.len() {
-                keep.push(run);
-            } else {
-                if let Some(b) = traffic.cars[ci].bus.as_mut() {
-                    b.route_open = false;
-                }
-            }
-        }
-        self.running = keep;
-    }
-
-    pub(super) fn ai_timetable(&self, i: usize) -> crate::bus_service::AiTimetable {
-        let trip = &self.data.trips[self.departures[i].trip];
-        let ids = trip_stations(trip);
-        let names = self.trip_stop_names(self.departures[i].trip);
-        let times = &self.times_of(i).stations;
-        let departure = self.dep_time(i);
-        crate::bus_service::AiTimetable {
-            line: self.display_line(i),
-            terminus: trip.terminus.clone(),
-            stops: ids
-                .into_iter()
-                .zip(names)
-                .zip(times)
-                .map(|((id, name), &(arr, dep))| {
-                    (id, name, (departure + arr) as f32, (departure + dep) as f32)
-                })
-                .collect(),
+            self.sim.settle(i, &placed, day_time);
         }
     }
 }
