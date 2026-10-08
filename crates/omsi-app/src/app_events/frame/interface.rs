@@ -47,7 +47,7 @@ impl App {
         self.frame_navigator(dt, hud, vr_active, nav_hidden, vr_nav_display);
         // the Lua plugins' panels (`omsi.ui`): over the picture and the navigator,
         // under the game's own interface; not under its menus, nor in VR
-        let plugin_focus = crate::plugin_ui::focused(&self.plugins);
+        let plugin_focus = crate::plugin_ui::focused(&self.integrations.plugins);
         self.frame_plugin_panels(dt, hud, vr_active);
         self.frame_ui_draw(dt, hud, vr_active, plugin_focus, &notes, tooltip, menu_lines, menu_tabs);
         *self.profile.entry("hud").or_default() += __t.elapsed().as_secs_f64();
@@ -98,7 +98,7 @@ impl App {
             }
         }
         self.service_msg = self.service_msg.take().filter(|(_, l)| *l > 0.0);
-        self.update_watch.tick(&mut self.notices);
+        self.integrations.update_watch.tick(&mut self.notices);
         for n in self.notices.iter_mut() {
             n.left -= dt;
         }
@@ -124,7 +124,7 @@ impl App {
             }
         }
         // (the cursor no longer works the cab: how to have it back)
-        if crate::plugin_ui::focused(&self.plugins) {
+        if crate::plugin_ui::focused(&self.integrations.plugins) {
             lines.push(crate::plugin_ui::FOCUS_NOTE.into());
         }
         (lines, tooltip)
@@ -246,7 +246,7 @@ impl App {
     /// The Lua plugins' panels (`omsi.ui`).
     fn frame_plugin_panels(&mut self, dt: f32, hud: [f32; 4], vr_active: bool) {
         let (Some(r), Some(scene)) = (self.renderer.as_ref(), self.scene.as_mut()) else { return };
-        if let Some(plugin_ui) = self.plugins.as_ref().map(|p| p.ui.clone()) {
+        if let Some(plugin_ui) = self.integrations.plugins.as_ref().map(|p| p.ui.clone()) {
             let dpi = self
                 .window
                 .as_ref()
@@ -272,7 +272,7 @@ impl App {
                 navigator: self.navigator.as_ref().and_then(|n| n.screen_rect()),
             };
             let mut state = plugin_ui.borrow_mut();
-            self.plugin_panels.frame(r, scene, &mut state, &frame);
+            self.integrations.plugin_panels.frame(r, scene, &mut state, &frame);
         }
     }
 

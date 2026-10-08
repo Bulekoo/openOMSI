@@ -9,17 +9,17 @@ impl App {
         // Discord's status: the map, the bus, the line (every few seconds)
         #[cfg(not(target_os = "android"))]
         {
-            self.discord_t -= dt;
-            if self.discord_t <= 0.0 {
-                self.discord_t = 5.0;
+            self.integrations.discord_t -= dt;
+            if self.integrations.discord_t <= 0.0 {
+                self.integrations.discord_t = 5.0;
                 if self.args.server.is_none()
-                    && self.discord.is_none()
+                    && self.integrations.discord.is_none()
                     && self.settings.discord_status
                 {
-                    self.discord =
+                    self.integrations.discord =
                         crate::discord::Discord::start(&self.settings.discord_app_id);
                 }
-                if let Some(d) = self.discord.as_ref() {
+                if let Some(d) = self.integrations.discord.as_ref() {
                     let bus = self.player.as_ref().map(|p| {
                         let definition = &p.vehicle.ty.def;
                         let short = omsi_launcher_lib::vehicle_type_label(&definition.type_name, &definition.path);
@@ -39,16 +39,16 @@ impl App {
 
         // Steam's callbacks (rich presence)
         #[cfg(steam)]
-        if let Some(steam) = self.steam.as_ref() {
+        if let Some(steam) = self.integrations.steam.as_ref() {
             steam.client.run_callbacks();
         }
         // the plugins' frame, with the bus's scripts done
-        let plugins = self.plugins.get_or_insert_with(crate::plugins::load);
+        let plugins = self.integrations.plugins.get_or_insert_with(crate::plugins::load);
         if !plugins.is_empty() && !self.paused {
             let info = crate::plugins::game_info(self);
-            let keys = std::mem::take(&mut self.plugin_keys);
-            let events = std::mem::take(&mut self.plugin_events);
-            let plugins = self.plugins.as_mut().unwrap();
+            let keys = std::mem::take(&mut self.integrations.plugin_keys);
+            let events = std::mem::take(&mut self.integrations.plugin_events);
+            let plugins = self.integrations.plugins.as_mut().unwrap();
             // the vehicles around it: the AI traffic and the other players' buses
             let mut others: Vec<(u64, &'static str, &mut omsi_sim::VehicleInstance)> = Vec::new();
             if let Some(t) = self.traffic.as_mut() {
@@ -78,10 +78,10 @@ impl App {
                 }
             }
         } else {
-            self.plugin_keys.clear();
+            self.integrations.plugin_keys.clear();
             // (while the game is paused they wait for the next frame)
-            if self.plugins.as_ref().is_none_or(|p| p.is_empty()) {
-                self.plugin_events.clear();
+            if self.integrations.plugins.as_ref().is_none_or(|p| p.is_empty()) {
+                self.integrations.plugin_events.clear();
             }
         }
         // OMSI_WATCH_VARS=a,b: every change of those variables of the player's bus
@@ -102,7 +102,7 @@ impl App {
             let hurt = steps::people_in_career(&mut self.career, h, p, self.settings.collision_pedestrians);
             if hurt > 0 {
                 self.service_msg = Some(("Pedestrian knocked down!".into(), 6.0));
-                crate::plugins::queue_event(&mut self.plugin_events, "pedestrian", vec![omsi_plugin::InfoValue::Num(hurt as f64)]);
+                crate::plugins::queue_event(&mut self.integrations.plugin_events, "pedestrian", vec![omsi_plugin::InfoValue::Num(hurt as f64)]);
             }
         }
     }

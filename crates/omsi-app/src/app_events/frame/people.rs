@@ -134,7 +134,7 @@ impl App {
                 self.clock.time,
                 Some(&self.clock),
                 true,
-                Some(&mut self.plugin_events),
+                Some(&mut self.integrations.plugin_events),
             );
         }
         if let Some(p) = self.player.as_mut() {
@@ -146,7 +146,7 @@ impl App {
                 self.service_msg = Some((format!("Crash: {:.0} kJ", crash / 1000.0), 6.0));
                 use omsi_plugin::InfoValue::Num;
                 let args = vec![Num(crash as f64 / 1000.0), Num(p.vehicle.physics.velocity_kmh().abs() as f64)];
-                crate::plugins::queue_event(&mut self.plugin_events, "crash", args);
+                crate::plugins::queue_event(&mut self.integrations.plugin_events, "crash", args);
             }
         }
         if !self.paused {

@@ -169,8 +169,8 @@ impl ApplicationHandler for App {
                 }
                 // (the Lua plugins' `key` event; a key held down repeats nothing)
                 if let (PhysicalKey::Code(code), false) = (event.physical_key, event.repeat) {
-                    if self.plugin_keys.len() < 64 {
-                        self.plugin_keys.push((format!("{code:?}"), event.state == ElementState::Pressed));
+                    if self.integrations.plugin_keys.len() < 64 {
+                        self.integrations.plugin_keys.push((format!("{code:?}"), event.state == ElementState::Pressed));
                     }
                 }
                 // a phone's back key is Escape (the game menu, out of the city map ...)
@@ -380,7 +380,7 @@ impl ApplicationHandler for App {
         crate::game_lists::flush_settings(true);
         self.finish_session();
         // ("playing now" ends with the game)
-        self.presence = None;
+        self.integrations.presence = None;
         if let Some(lan) = self.net.lan.take() {
             // dropping the session says goodbye (BYE) to the host or the players
             drop(lan);

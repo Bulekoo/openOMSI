@@ -15,7 +15,7 @@ impl App {
             crate::app::report_missing_content(&w, &mut none);
         }
         // PluginFinalize, as OMSI calls it on the way out
-        if let Some(mut p) = self.plugins.take() {
+        if let Some(mut p) = self.integrations.plugins.take() {
             p.finalize();
         }
         if self.player.is_none() || self.career.seconds <= 0.0 {

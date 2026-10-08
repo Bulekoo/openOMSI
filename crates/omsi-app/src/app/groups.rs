@@ -42,3 +42,26 @@ pub(crate) struct NetState {
     pub(crate) lan: Option<omsi_net::LanSession>,
     pub(crate) remotes: lan::LanGame,
 }
+
+/// What the game talks to besides itself: the OMSI and Lua plugins, Discord, Steam, the website's "playing now" and the look for a newer release.
+pub(crate) struct Integrations {
+    /// Keys pressed (true) and let go since the Lua plugins' last frame.
+    pub(crate) plugin_keys: Vec<(String, bool)>,
+    /// What happened since the Lua plugins' last frame: crashes, people knocked down,
+    /// stops skipped (see `plugins::queue_event`).
+    pub(crate) plugin_events: Vec<omsi_plugin::GameEvent>,
+    /// The Lua plugins' panels and notifications on the screen (`omsi.ui`).
+    pub(crate) plugin_panels: crate::plugin_ui::PluginPanels,
+    /// Discord's "Playing openOMSI" status, and when it was last brought up to date.
+    pub(crate) discord: Option<crate::discord::Discord>,
+    pub(crate) discord_t: f32,
+    // Steamworks API layer and it's last updated time
+    #[cfg(steam)]
+    pub(crate) steam: Option<crate::steam::Steam>,
+    /// The look for a newer release during the session (cards over the navigator).
+    pub(crate) update_watch: crate::update_watch::UpdateWatch,
+    /// "Playing now" on the website (None: not counted, setting `presence`).
+    pub(crate) presence: Option<crate::presence::Presence>,
+    /// The OMSI plugins (`plugins/*.opl`), loaded with the first frame.
+    pub(crate) plugins: Option<omsi_plugin::Plugins>,
+}

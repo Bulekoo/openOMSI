@@ -150,13 +150,8 @@ pub(crate) struct App {
     /// The keyboard chose the line of the menu last (the mouse moved since: false), so the
     /// chosen line is shown lit; with the mouse only the line under it is.
     pub(crate) menu_kbd: bool,
-    /// Keys pressed (true) and let go since the Lua plugins' last frame.
-    pub(crate) plugin_keys: Vec<(String, bool)>,
-    /// What happened since the Lua plugins' last frame: crashes, people knocked down,
-    /// stops skipped (see `plugins::queue_event`).
-    pub(crate) plugin_events: Vec<omsi_plugin::GameEvent>,
-    /// The Lua plugins' panels and notifications on the screen (`omsi.ui`).
-    pub(crate) plugin_panels: crate::plugin_ui::PluginPanels,
+    /// Plugins and the services outside the game (see `Integrations`).
+    pub(crate) integrations: Integrations,
     /// Seconds Ctrl+Shift+Page Up/Down has been held (the clock runs faster the longer).
     pub(crate) clock_hold: f32,
     /// How far the clock was set since the timetable was last put out again (s; see
@@ -172,12 +167,6 @@ pub(crate) struct App {
     pub(crate) arrow_glance: bool,
     /// The next click on the city map puts the bus there (Esc → Move the bus on the map).
     pub(crate) teleport_pick: bool,
-    /// Discord's "Playing openOMSI" status, and when it was last brought up to date.
-    pub(crate) discord: Option<crate::discord::Discord>,
-    pub(crate) discord_t: f32,
-    // Steamworks API layer and it's last updated time
-    #[cfg(steam)]
-    pub(crate) steam: Option<crate::steam::Steam>,
     /// Head tracking (Settings → head tracking), started with the first frame that wants it.
     pub(crate) headtrack: Option<crate::headtrack::HeadTracker>,
     /// When head tracking last failed to start (tried again a few seconds later).
@@ -318,10 +307,6 @@ pub(crate) struct App {
     pub(crate) pumping: Option<(&'static str, f32)>,
     /// The server's notifications on the screen (`notify`), oldest first.
     pub(crate) notices: Vec<crate::ui::Notice>,
-    /// The look for a newer release during the session (cards over the navigator).
-    pub(crate) update_watch: crate::update_watch::UpdateWatch,
-    /// "Playing now" on the website (None: not counted, setting `presence`).
-    pub(crate) presence: Option<crate::presence::Presence>,
     /// What the log has said (see applog.rs).
     pub(crate) log_state: crate::applog::LogState,
     /// The driver's personnel file and this session's statistics.
@@ -363,8 +348,6 @@ pub(crate) struct App {
     /// OMSI_PROFILE: process CPU seconds, time and frame count once the start-up is over,
     /// for the CPU time a frame costs (the wall time says little on a busy machine).
     pub(crate) cpu_mark: Option<(f64, Instant, u32)>,
-    /// The OMSI plugins (`plugins/*.opl`), loaded with the first frame.
-    pub(crate) plugins: Option<omsi_plugin::Plugins>,
     /// The on-screen controls of a phone (see `touch.rs`).
     pub(crate) touch: crate::touch::Touch,
 }
@@ -397,8 +380,8 @@ impl App {
     pub(crate) fn create_window(&mut self, event_loop: &ActiveEventLoop, given: Option<Arc<Window>>) {
         // Steam's rich presence starts before the game window (see `steam.rs`)
         #[cfg(steam)]
-        if self.steam.is_none() {
-            self.steam = crate::steam::Steam::start();
+        if self.integrations.steam.is_none() {
+            self.integrations.steam = crate::steam::Steam::start();
         }
 
         // --size sets the window's size in points as well (1600x900 unless given)

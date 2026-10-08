@@ -1077,13 +1077,13 @@ pub(crate) fn focused(plugins: &Option<omsi_plugin::Plugins>) -> bool {
 impl crate::App {
     /// Whether the plugins' panels have the mouse (`omsi.ui.focus`).
     pub(crate) fn plugin_focus(&self) -> bool {
-        focused(&self.plugins)
+        focused(&self.integrations.plugins)
     }
 
     /// Esc while the panels have the mouse: it goes back to the bus (and not on to the
     /// menu). True when it did.
     pub(crate) fn release_plugin_focus(&mut self) -> bool {
-        let Some(p) = self.plugins.as_ref().filter(|p| p.ui.borrow().focused()) else {
+        let Some(p) = self.integrations.plugins.as_ref().filter(|p| p.ui.borrow().focused()) else {
             return false;
         };
         p.ui.borrow_mut().release_focus();
@@ -1093,14 +1093,14 @@ impl crate::App {
     /// The left button while the panels have the mouse: a press on a clickable part goes to
     /// its plugin as `ui_click`; the bus gets none of them.
     pub(crate) fn plugin_click(&mut self, pressed: bool) {
-        let Some(p) = self.plugins.as_ref() else {
+        let Some(p) = self.integrations.plugins.as_ref() else {
             return;
         };
         if !pressed {
             return;
         }
         let hit = self
-            .plugin_panels
+            .integrations.plugin_panels
             .click_at(&p.ui.borrow(), self.cursor.0, self.cursor.1);
         if let Some((owner, panel, element)) = hit {
             p.ui.borrow_mut().click(owner, &panel, element.as_deref());

@@ -47,7 +47,7 @@ impl App {
             || self.chooser.is_some()
             || self.list_kind.is_some()
             || self.navigator.as_ref().is_some_and(|n| n.map_open())
-            || crate::plugin_ui::focused(&self.plugins)
+            || crate::plugin_ui::focused(&self.integrations.plugins)
             || !matches!(self.view.as_str(), "driver" | "outside" | "pax");
         let hide = (moved || actions.iter().any(|a| a.1)) && !needs_mouse && !vr_on;
         if self.xr.vr_nav_edit.is_none() && hide != self.cursor_hidden.is_some() && (hide || needs_mouse) {
