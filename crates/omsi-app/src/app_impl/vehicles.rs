@@ -19,7 +19,7 @@ impl App {
         // (the depot file by its file name, as `find_hof` looks for it)
         let hof = p.vehicle.host.hof.as_ref().and_then(|h| h.path.file_stem().map(|s| s.to_string_lossy().to_string()).or_else(|| Some(h.name.clone())));
         let before = p.uid;
-        self.swap_pending = true;
+        self.menus.swap_pending = true;
         self.place_vehicle(&bus, paint, hof);
         if let Some(p) = self.player.as_ref().filter(|p| p.uid != before) {
             let name = format!("{} {}", p.vehicle.ty.def.manufacturer, p.vehicle.ty.def.type_name);
@@ -56,8 +56,8 @@ impl App {
 
     pub(crate) fn place_vehicle(&mut self, bus: &str, paint: Option<String>, hof: Option<String>) {
         // (in the driven vehicle's place, see `swap_pending`)
-        let swap = std::mem::take(&mut self.swap_pending) && self.player.is_some();
-        let name = self.vehicle_list.iter().find(|v| v.1 == bus).map(|v| v.0.clone()).unwrap_or_else(|| bus.to_string());
+        let swap = std::mem::take(&mut self.menus.swap_pending) && self.player.is_some();
+        let name = self.menus.vehicle_list.iter().find(|v| v.1 == bus).map(|v| v.0.clone()).unwrap_or_else(|| bus.to_string());
         // (a server's own buses only - its `vehicles` list, #1183 - whoever asks: the lists,
         // a plugin, the input script)
         if crate::lan::server_offers().is_some_and(|o| !crate::lan::offers(&o, bus)) {
@@ -160,7 +160,7 @@ impl App {
         // whole map: a street far off on a big map was "no street" until the bus had been
         // flown there (#235). (the height of the point does not matter: the nearest by the
         // ground plan)
-        let nets = [self.traffic.as_ref().map(|t| &t.net), self.navigator.as_ref().and_then(|n| n.map_net())];
+        let nets = [self.traffic.as_ref().map(|t| &t.net), self.menus.navigator.as_ref().and_then(|n| n.map_net())];
         let Some((net, (lane, s, _))) = nets
             .into_iter()
             .flatten()

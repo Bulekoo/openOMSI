@@ -64,16 +64,16 @@ impl App {
             // what the plugins asked the game to do: lines of the game menu
             for c in commands {
                 if let Some(k) = self.game_menu_items().iter().position(|m| m.0 == c) {
-                    let was = self.game_menu;
-                    self.menu_prev_pause = self.paused;
+                    let was = self.menus.game_menu;
+                    self.menus.menu_prev_pause = self.paused;
                     self.menu_choose(event_loop, k);
                     // (an action leaves the menu as it found it)
-                    if self.chooser.is_none() && was.is_none() {
-                        self.game_menu = None;
+                    if self.menus.chooser.is_none() && was.is_none() {
+                        self.menus.game_menu = None;
                     }
                 } else {
                     // (a line of the vehicle or world pages)
-                    self.menu_prev_pause = self.paused;
+                    self.menus.menu_prev_pause = self.paused;
                     self.page_action(&c);
                 }
             }

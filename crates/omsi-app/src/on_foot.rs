@@ -771,7 +771,7 @@ impl App {
             // the city map (Shift+M) and the navigator (Shift+N) go on foot as well (#705)
             KeyCode::KeyM if shift && !ctrl => {
                 if pressed && !repeat {
-                    if let Some(n) = self.navigator.as_mut() {
+                    if let Some(n) = self.menus.navigator.as_mut() {
                         n.toggle_map();
                     }
                 }

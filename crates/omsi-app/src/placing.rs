@@ -64,16 +64,16 @@ pub(crate) fn put_vehicle(v: &mut omsi_sim::VehicleInstance, at: DVec3, heading:
 impl App {
     /// The vehicle just placed (`uid`) follows the mouse until it is set down.
     pub(crate) fn begin_placing(&mut self, uid: u64, heading: f64) {
-        self.placing = Some(Placing { uid, heading, at: None, blocked: false });
+        self.menus.placing = Some(Placing { uid, heading, at: None, blocked: false });
         self.service_msg = Some(("Placing: point at the ground, mouse wheel or Q / E turns it, R turns it round, click sets it down, Esc takes it away".into(), 30.0));
     }
 
     /// Every frame while placing: the vehicle where the cursor points.
     pub(crate) fn placing_frame(&mut self) {
-        let Some(pl) = self.placing.as_ref() else { return };
+        let Some(pl) = self.menus.placing.as_ref() else { return };
         let (uid, heading) = (pl.uid, pl.heading);
         let Some(k) = self.placed.iter().position(|q| q.uid == uid) else {
-            self.placing = None;
+            self.menus.placing = None;
             return;
         };
         let (Some(w), Some(cam), Some(s)) = (self.world.clone(), self.camera.as_ref(), self.gfx.surface.as_ref()) else { return };
@@ -111,7 +111,7 @@ impl App {
         if let Some(at) = hit {
             put_vehicle(&mut self.placed[k].vehicle, at, heading);
         }
-        if let Some(pl) = self.placing.as_mut() {
+        if let Some(pl) = self.menus.placing.as_mut() {
             pl.at = hit;
             pl.blocked = blocked;
         }
@@ -125,18 +125,18 @@ impl App {
 
     /// The mouse wheel while placing: the vehicle turns (7.5° a notch).
     pub(crate) fn placing_wheel(&mut self, amount: f32) {
-        if let Some(pl) = self.placing.as_mut() {
+        if let Some(pl) = self.menus.placing.as_mut() {
             pl.heading = (pl.heading + amount as f64 * 7.5).rem_euclid(360.0);
         }
     }
 
     /// A left click while placing: set down where it stands (true: the click was taken).
     pub(crate) fn placing_click(&mut self) -> bool {
-        let Some(pl) = self.placing.as_ref() else { return false };
+        let Some(pl) = self.menus.placing.as_ref() else { return false };
         match (pl.at, pl.blocked) {
             (Some(_), false) => {
                 let uid = pl.uid;
-                self.placing = None;
+                self.menus.placing = None;
                 if let Some(q) = self.placed.iter_mut().find(|q| q.uid == uid) {
                     // settled onto its wheels where it was put
                     for _ in 0..3 {
@@ -155,7 +155,7 @@ impl App {
 
     /// Keys while placing; true when the key was taken.
     pub(crate) fn placing_key(&mut self, code: KeyCode, pressed: bool) -> bool {
-        if self.placing.is_none() {
+        if self.menus.placing.is_none() {
             return false;
         }
         match code {
@@ -172,7 +172,7 @@ impl App {
                         KeyCode::KeyQ => -15.0,
                         _ => 15.0,
                     };
-                    if let Some(pl) = self.placing.as_mut() {
+                    if let Some(pl) = self.menus.placing.as_mut() {
                         pl.heading = (pl.heading + turn).rem_euclid(360.0);
                     }
                 }
@@ -191,7 +191,7 @@ impl App {
     /// Every vehicle one placed goes (Esc menu: Remove the placed vehicles), their riders
     /// stepping out where they are.
     pub(crate) fn remove_placed_vehicles(&mut self) {
-        self.placing = None;
+        self.menus.placing = None;
         let n = self.placed.len();
         for mut q in std::mem::take(&mut self.placed) {
             if let (Some(a), Some(mut ss)) = (self.sound.audio.as_ref(), q.sounds.take()) {
@@ -215,7 +215,7 @@ impl App {
 
     /// Escape while placing: the vehicle goes again.
     pub(crate) fn placing_cancel(&mut self) {
-        let Some(pl) = self.placing.take() else { return };
+        let Some(pl) = self.menus.placing.take() else { return };
         let Some(k) = self.placed.iter().position(|q| q.uid == pl.uid) else { return };
         let mut q = self.placed.remove(k);
         if let (Some(a), Some(mut ss)) = (self.sound.audio.as_ref(), q.sounds.take()) {

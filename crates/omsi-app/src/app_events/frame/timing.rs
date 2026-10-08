@@ -10,8 +10,8 @@ impl App {
             self.finish_vr_nav_edit();
         }
         if (!self.vr_active() || self.player.is_none())
-            && matches!(self.list_kind, Some(crate::game_lists::ListKind::Options(_)))
-            && self.admin_list.as_ref().is_some_and(|rows| rows.iter().any(|(_, action)| action.starts_with("vr_nav_")))
+            && matches!(self.menus.list_kind, Some(crate::game_lists::ListKind::Options(_)))
+            && self.menus.admin_list.as_ref().is_some_and(|rows| rows.iter().any(|(_, action)| action.starts_with("vr_nav_")))
         {
             self.open_list(crate::game_lists::ListKind::Options(0));
         }
@@ -165,12 +165,12 @@ impl App {
     /// loading: false when the frame ends here.
     pub(super) fn frame_menus(&mut self, event_loop: &ActiveEventLoop, dt: f32) -> bool {
         // (the cursor over the game menu: a hand over what can be clicked)
-        if self.game_menu.is_some() {
+        if self.menus.game_menu.is_some() {
             let kind = self.menu_cursor_kind();
             self.set_cursor_kind(kind);
         }
         self.run_input_script(event_loop);
-        if let Some(m) = self.menu.as_ref() {
+        if let Some(m) = self.menus.menu.as_ref() {
             if let Some(limit) = self.args.exit_after {
                 if self.started.elapsed().as_secs_f32() > limit {
                     log::info!(
@@ -183,7 +183,7 @@ impl App {
             }
             let lines = m.lines();
             if let (Some(hud), Some(s), Some(r), Some(scene), Some(win)) = (
-                self.hud.as_mut(),
+                self.menus.hud.as_mut(),
                 self.gfx.surface.as_ref(),
                 self.renderer.as_mut(),
                 self.scene.as_mut(),

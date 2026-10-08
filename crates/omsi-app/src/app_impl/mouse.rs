@@ -15,7 +15,7 @@ impl App {
     /// The right mouse button (or both) held in a view of the bus: start OMSI's mouse zoom
     /// (false when there is nothing to zoom - a menu, the city map, on foot).
     pub(crate) fn start_both_drag(&mut self) -> bool {
-        if self.game_menu.is_some() || self.player.is_none() || self.navigator.as_ref().is_some_and(|n| n.map_open()) {
+        if self.menus.game_menu.is_some() || self.player.is_none() || self.menus.navigator.as_ref().is_some_and(|n| n.map_open()) {
             return false;
         }
         let value = match self.view.as_str() {
@@ -68,14 +68,14 @@ impl App {
         // wants it so; otherwise the right button looks round and the wheel and pedals stay
         // where the mouse left them (it went off with every look round, and with every
         // look round in the pause)
-        if pressed && self.input.mouse_drive && self.game_menu.is_none() && self.settings.mouse_right_off && !self.paused {
+        if pressed && self.input.mouse_drive && self.menus.game_menu.is_none() && self.settings.mouse_right_off && !self.paused {
             self.set_mouse_drive(false);
             self.service_msg = Some(("Mouse steering off".into(), 3.0));
         }
         if pressed && self.right_zooms() && self.start_both_drag() {
             return;
         }
-        if self.input.mouse_drive && self.game_menu.is_none() {
+        if self.input.mouse_drive && self.menus.game_menu.is_none() {
             if pressed {
                 self.input.steer_cursor = Some(self.input.cursor);
             } else if let Some((x, y)) = self.input.steer_cursor.take() {
@@ -168,8 +168,8 @@ impl App {
     #[cfg(windows)]
     pub(crate) fn poll_vr_cursor_position(&mut self) {
         if self.xr.vr_nav_edit.is_some() { return; }
-        let cockpit = self.xr.vr.is_some() && self.game_menu.is_none()
-            && self.chooser.is_none() && !self.input.mouse_drive
+        let cockpit = self.xr.vr.is_some() && self.menus.game_menu.is_none()
+            && self.menus.chooser.is_none() && !self.input.mouse_drive
             && matches!(self.view.as_str(), "driver" | "pax");
         if !cockpit {
             self.xr.vr_cursor_physical = None;
@@ -215,27 +215,27 @@ impl App {
         let last = self.input.cursor;
         self.input.cursor = (x, y);
         // the navigator held by the mouse follows it
-        if let Some(n) = self.navigator.as_mut() {
+        if let Some(n) = self.menus.navigator.as_mut() {
             if n.panel_move(x, y) {
                 return true;
             }
         }
         // (the mouse has taken over from the keyboard: only what is under it is lit)
-        if self.game_menu.is_some() && (x, y) != last {
-            self.menu_kbd = false;
+        if self.menus.game_menu.is_some() && (x, y) != last {
+            self.menus.menu_kbd = false;
         }
         // a slider held with the mouse button follows the cursor (while the menu is open)
-        if self.menu_drag.is_some() && self.game_menu.is_none() {
-            self.menu_drag = None;
+        if self.menus.menu_drag.is_some() && self.menus.game_menu.is_none() {
+            self.menus.menu_drag = None;
         }
-        if let Some(k) = self.menu_drag {
+        if let Some(k) = self.menus.menu_drag {
             let c = self.ui.as_ref().and_then(|u| k.checked_sub(u.menu_start).and_then(|i| u.menu_ctl.get(i).copied().flatten()));
             match c {
                 Some(c) => {
                     let fx = ((x - c[0]) / (c[2] - c[0]).max(1.0)).clamp(0.0, 1.0);
                     self.list_click(k, fx);
                 }
-                None => self.menu_drag = None,
+                None => self.menus.menu_drag = None,
             }
             return false;
         }
@@ -266,25 +266,25 @@ impl App {
             }
             return false;
         }
-        if self.pane_scroll_drag.is_some() {
-            if self.chooser.is_none() || self.game_menu.is_none() {
-                self.pane_scroll_drag = None;
+        if self.menus.pane_scroll_drag.is_some() {
+            if self.menus.chooser.is_none() || self.menus.game_menu.is_none() {
+                self.menus.pane_scroll_drag = None;
             } else {
                 self.drag_pane(y);
                 return false;
             }
         }
-        if self.dd_scroll_drag.is_some() {
-            if self.dropdown.is_none() || self.game_menu.is_none() {
-                self.dd_scroll_drag = None;
+        if self.menus.dd_scroll_drag.is_some() {
+            if self.menus.dropdown.is_none() || self.menus.game_menu.is_none() {
+                self.menus.dd_scroll_drag = None;
             } else {
                 self.drag_dropdown(y);
                 return false;
             }
         }
-        if self.menu_scroll_drag {
+        if self.menus.menu_scroll_drag {
             let Some(ui) = self.ui.as_ref() else {
-                self.menu_scroll_drag = false;
+                self.menus.menu_scroll_drag = false;
                 return true;
             };
 
@@ -301,8 +301,8 @@ impl App {
                 if max_top > 0.0 {
                     let delta = (y - last.1) / travel * max_top;
 
-                    self.menu_top = Some(
-                        (self.menu_top.unwrap_or(ui.menu_start as f32) + delta)
+                    self.menus.menu_top = Some(
+                        (self.menus.menu_top.unwrap_or(ui.menu_start as f32) + delta)
                             .clamp(0.0, max_top),
                     );
                 }
@@ -311,12 +311,12 @@ impl App {
             return false;
         }
         // an object dragged in the object editor follows
-        if self.editor_drag {
+        if self.menus.editor_drag {
             self.editor_drag_frame();
             return false;
         }
         // while the city map is open the mouse is the map's
-        if let Some(n) = self.navigator.as_mut().filter(|n| n.map_open()) {
+        if let Some(n) = self.menus.navigator.as_mut().filter(|n| n.map_open()) {
             n.map_move(x, y);
             return false;
         }
@@ -351,21 +351,21 @@ impl App {
     pub(crate) fn on_left(&mut self, pressed: bool) {
         if self.xr.vr_nav_edit.is_some() { return; }
         // the object editor: the mouse picks and drags
-        if self.game_menu.is_none() && self.editor_mouse(pressed) {
+        if self.menus.game_menu.is_none() && self.editor_mouse(pressed) {
             return;
         }
         // the city map: a click on the navigator opens it; while it is open the mouse is
         // the map's (a click outside closes it)
         let (x, y) = self.input.cursor;
         let vr_active = self.vr_active();
-        if let Some(n) = self.navigator.as_mut() {
+        if let Some(n) = self.menus.navigator.as_mut() {
             if n.map_open() {
                 let ctrl = self.input.keys.contains(&KeyCode::ControlLeft) || self.input.keys.contains(&KeyCode::ControlRight);
-                if pressed && (ctrl || self.teleport_pick) {
+                if pressed && (ctrl || self.menus.teleport_pick) {
                     // Ctrl+click (or a click after Esc → Move the bus): the bus to the street
                     // nearest that point, as OMSI's map window places vehicles
                     if let Some(at) = n.map_point(x, y) {
-                        if std::mem::take(&mut self.teleport_pick) {
+                        if std::mem::take(&mut self.menus.teleport_pick) {
                             n.toggle_map();
                         }
                         self.place_bus_at(at);
@@ -402,7 +402,7 @@ impl App {
         // that point, as Ctrl+click on the city map does - OMSI's map view moves the vehicle
         // to a place clicked as well (#1039). A rail vehicle stays on its track.
         let ctrl = self.input.keys.contains(&KeyCode::ControlLeft) || self.input.keys.contains(&KeyCode::ControlRight);
-        if pressed && ctrl && self.view == "free" && self.game_menu.is_none() && self.player.is_some() {
+        if pressed && ctrl && self.view == "free" && self.menus.game_menu.is_none() && self.player.is_some() {
             if self.player.as_ref().is_some_and(|p| crate::rail_drive::is_rail(&p.vehicle.ty.def)) {
                 self.service_msg = Some(("A rail vehicle cannot be moved off its track".into(), 3.0));
                 return;
@@ -440,7 +440,7 @@ impl App {
             return;
         }
         #[cfg(windows)]
-        if self.xr.vr.is_some() && self.input.mouse_drive && self.game_menu.is_none()
+        if self.xr.vr.is_some() && self.input.mouse_drive && self.menus.game_menu.is_none()
             && matches!(self.view.as_str(), "driver" | "pax") {
             if !pressed {
                 if let Some(player) = self.player.as_mut() { player.release(); }
@@ -515,7 +515,7 @@ impl App {
         }
         // (driving with the VR pointer: the clicks are the bus's)
         #[cfg(windows)]
-        if self.xr.vr.is_some() && self.input.mouse_drive && self.game_menu.is_none() && matches!(self.view.as_str(), "driver" | "pax") {
+        if self.xr.vr.is_some() && self.input.mouse_drive && self.menus.game_menu.is_none() && matches!(self.view.as_str(), "driver" | "pax") {
             return false;
         }
         let Some((o, d, _)) = self.cursor_ray_now() else { return false };

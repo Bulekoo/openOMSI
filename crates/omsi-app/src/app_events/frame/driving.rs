@@ -20,9 +20,9 @@ impl App {
         // through every cockpit mesh every frame was a tenth of the frame)
         let key = self.camera.as_ref().map(|c| (self.input.cursor.0.round() as i32, self.input.cursor.1.round() as i32, (c.yaw * 4.0).round() as i32, (c.pitch * 4.0).round() as i32));
         // (the cab sways with the suspension: a view that only turned waits a few frames)
-        let cursor_moved = key.map(|k| (k.0, k.1)) != self.hover_key.map(|k| (k.0, k.1));
-        if cursor_moved || (key != self.hover_key && self.perf.total_frames % 6 == 0) || self.perf.total_frames % 12 == 0 {
-            self.hover_key = key;
+        let cursor_moved = key.map(|k| (k.0, k.1)) != self.menus.hover_key.map(|k| (k.0, k.1));
+        if cursor_moved || (key != self.menus.hover_key && self.perf.total_frames % 6 == 0) || self.perf.total_frames % 12 == 0 {
+            self.menus.hover_key = key;
             self.update_hover();
         }
         *self.perf.profile.entry("player.hover").or_default() +=
@@ -88,7 +88,7 @@ impl App {
             // goes on sliding under the pointer is a view that misses what it was
             // reaching for. Held, not reset: the camera stays where it is, which is
             // where any camera is while the player is busy with something)
-            let reaching = idle > 0.0 && (self.hover.is_some() || self.hover_hand);
+            let reaching = idle > 0.0 && (self.menus.hover.is_some() || self.menus.hover_hand);
             if !self.cam.head_idle_hold.step(dt, reaching) {
                 p.move_head_idle(dt, idle, self.settings.head_idle_pace);
             }

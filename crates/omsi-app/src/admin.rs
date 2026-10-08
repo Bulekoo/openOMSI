@@ -115,7 +115,7 @@ fn host_action(app: &mut App, action: &str, by: Option<u32>) {
             }
             if here {
                 log::info!("LAN: the server's notice {nid}: {}", n.text);
-                crate::ui::push_notice(&mut app.notices, n);
+                crate::ui::push_notice(&mut app.menus.notices, n);
             }
         }
         "kick" | "ban" => {
@@ -363,13 +363,13 @@ pub(crate) fn command(app: &mut App, from: u32, text: &str) {
             if nums.len() == 6 && !rel.is_empty() {
                 let id = nums[0] as i64;
                 if let (Some(w), Some(r), Some(scene)) = (app.world.clone(), app.renderer.as_ref(), app.scene.as_mut()) {
-                    if let Some(g) = app.remote_added.remove(&id) {
+                    if let Some(g) = app.menus.remote_added.remove(&id) {
                         w.remove_helper_object(r, scene, g);
                     }
                     if nums[5] < 0.5 {
                         let path = app.args.root.join(&rel);
                         if let Some(g) = w.add_helper_object(r, scene, &path.to_string_lossy(), glam::DVec3::new(nums[1], nums[2], nums[3]), nums[4], &[]) {
-                            app.remote_added.insert(id, g);
+                            app.menus.remote_added.insert(id, g);
                         }
                     }
                 }
@@ -434,7 +434,7 @@ pub(crate) fn command(app: &mut App, from: u32, text: &str) {
         "notify" if from == 1 => {
             if let Some((id, n)) = crate::ui::Notice::parse(arg) {
                 log::info!("LAN: the server's notice {id}: {}", n.text);
-                crate::ui::push_notice(&mut app.notices, n);
+                crate::ui::push_notice(&mut app.menus.notices, n);
                 if let Some(l) = app.net.lan.as_mut() {
                     l.command(1, &format!("notify-seen {id}"));
                 }

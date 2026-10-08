@@ -8,7 +8,7 @@ impl App {
     /// picture).
     pub(super) fn frame_ui(&mut self, dt: f32) -> Option<crate::vr_navigator::Display> {
         // (the game menu's lines, for the interface below)
-        let menu_lines = if self.game_menu.is_some() { self.game_menu_items() } else { Vec::new() };
+        let menu_lines = if self.menus.game_menu.is_some() { self.game_menu_items() } else { Vec::new() };
         // (the mirror editor's keys and the panel under the cursor, while it is on)
         let mirror_help = match (self.player.as_ref(), self.mirror_hud_size()) {
             (Some(p), Some(size)) => self.gfx.mirror_hud.help_lines(p, self.hud_cursor(), size),
@@ -18,8 +18,8 @@ impl App {
         let vr_active = self.vr_active();
         // the interface over the picture
         // (the pages of an open settings window)
-        let menu_tabs = match self.list_kind.as_ref() {
-            Some(k) if self.chooser.is_some() => crate::game_lists::page_titles(self, k),
+        let menu_tabs = match self.menus.list_kind.as_ref() {
+            Some(k) if self.menus.chooser.is_some() => crate::game_lists::page_titles(self, k),
             _ => None,
         };
         if !(self.world.is_some() && self.renderer.is_some() && self.scene.is_some()) {
@@ -43,7 +43,7 @@ impl App {
             .unwrap_or([0.0, 0.0, 1.0, 1.0]);
         // (not under the open game menu: the pause menu's rail covers the left
         // edge, and the navigator's panel stood out from under it)
-        let nav_hidden = !vr_active && self.game_menu.is_some();
+        let nav_hidden = !vr_active && self.menus.game_menu.is_some();
         self.frame_navigator(dt, hud, vr_active, nav_hidden, vr_nav_display);
         // the Lua plugins' panels (`omsi.ui`): over the picture and the navigator,
         // under the game's own interface; not under its menus, nor in VR
@@ -72,11 +72,11 @@ impl App {
         // know internal, mostly German names)
         let names = describe::names(&self.args.root, &self.settings.language);
         // next to the cursor (`ui`), when the setting asks for it
-        let tooltip = self.hover.as_ref().map(|h| names.control(h));
+        let tooltip = self.menus.hover.as_ref().map(|h| names.control(h));
         // the object editor's keys, while it is on (one quiet line)
         // the mirror editor's keys and the panel under the cursor, while it is on
         lines.extend(mirror_help);
-        if self.editor.is_some() {
+        if self.menus.editor.is_some() {
             lines.push("Object editor: click picks · drag moves · wheel turns (Shift lifts) · Del · C copy · V variant · Backspace undo · Ctrl+S save · Esc".into());
         }
         if let Some(d) = self.duty.as_ref().filter(|d| d.trip_done()) {
@@ -98,11 +98,11 @@ impl App {
             }
         }
         self.service_msg = self.service_msg.take().filter(|(_, l)| *l > 0.0);
-        self.integrations.update_watch.tick(&mut self.notices);
-        for n in self.notices.iter_mut() {
+        self.integrations.update_watch.tick(&mut self.menus.notices);
+        for n in self.menus.notices.iter_mut() {
             n.left -= dt;
         }
-        self.notices.retain(|n| n.left > 0.0);
+        self.menus.notices.retain(|n| n.left > 0.0);
         if let Some(lan) = self.net.lan.as_ref() {
             lines.extend(lan::hud_lines(lan, &self.net.remotes, self.player.as_ref()));
             lines.extend(self.sound.voice.as_ref().and_then(|v| v.hud_line()));
@@ -141,7 +141,7 @@ impl App {
     ) {
         let (Some(r), Some(scene)) = (self.renderer.as_ref(), self.scene.as_mut()) else { return };
         if let (Some(nav), Some(p), Some(_)) = (
-            self.navigator.as_mut(),
+            self.menus.navigator.as_mut(),
             self.player.as_ref(),
             self.gfx.surface.as_ref(),
         ) {
@@ -258,18 +258,18 @@ impl App {
                 settings.ui_scale,
                 settings.ui_scale_window,
             );
-            let map_open = self.navigator.as_ref().is_some_and(|n| n.map_open());
+            let map_open = self.menus.navigator.as_ref().is_some_and(|n| n.map_open());
             let frame = crate::plugin_ui::PanelsFrame {
                 hud,
                 scale: dpi * size,
                 hidden: vr_active
-                    || self.game_menu.is_some()
-                    || self.chooser.is_some()
+                    || self.menus.game_menu.is_some()
+                    || self.menus.chooser.is_some()
                     || map_open,
                 cursor: self.input.cursor,
                 dt,
                 backdrop: ui::backdrop(settings.ui_opacity),
-                navigator: self.navigator.as_ref().and_then(|n| n.screen_rect()),
+                navigator: self.menus.navigator.as_ref().and_then(|n| n.screen_rect()),
             };
             let mut state = plugin_ui.borrow_mut();
             self.integrations.plugin_panels.frame(r, scene, &mut state, &frame);
@@ -339,23 +339,23 @@ impl App {
             // the name of the cab's switch under the cursor, unless the interface
             // covers the cab there (it read like a line of the menu over it)
             let (cx, cy) = self.input.cursor;
-            let map_open = self.navigator.as_ref().is_some_and(|n| n.map_open());
-            let covered = self.game_menu.is_some()
+            let map_open = self.menus.navigator.as_ref().is_some_and(|n| n.map_open());
+            let covered = self.menus.game_menu.is_some()
                 || plugin_focus
                 || self.xr.vr_nav_edit.is_some()
-                || self.chooser.is_some()
+                || self.menus.chooser.is_some()
                 || ui.chat.hovered
                 || map_open
-                || (!vr_active && self.navigator.as_ref().is_some_and(|n| n.over_panel(cx, cy)));
-            let dropdown = self.dropdown.as_ref().filter(|_| self.chooser.is_some()).map(|d| ui::DropdownView {
+                || (!vr_active && self.menus.navigator.as_ref().is_some_and(|n| n.over_panel(cx, cy)));
+            let dropdown = self.menus.dropdown.as_ref().filter(|_| self.menus.chooser.is_some()).map(|d| ui::DropdownView {
                 row: d.row,
                 items: d.items.iter().map(|x| x.0.as_str()).collect(),
                 sel: d.sel,
                 top: d.top,
                 current: d.current,
             });
-            let chooser_list = self.admin_list.as_ref().unwrap_or(&self.vehicle_list);
-            let (chooser_items, chooser_sel): (Vec<(&str, &str)>, Option<usize>) = match self.chooser {
+            let chooser_list = self.menus.admin_list.as_ref().unwrap_or(&self.menus.vehicle_list);
+            let (chooser_items, chooser_sel): (Vec<(&str, &str)>, Option<usize>) = match self.menus.chooser {
                 Some(sel) => {
                     let items = chooser_list.iter().map(|(name, path)| (path.as_str(), name.as_str())).collect();
                     (items, Some(sel))
@@ -364,7 +364,7 @@ impl App {
             };
             // (the game menu's greyed-out lines: the timetable needs an active route)
             let menu_disabled: &[&str] = &[];
-            let (menu_kind, menu_head, menu_preview) = crate::game_lists::menu_extras(self.list_kind.as_ref(), self.admin_list.as_deref(), chooser_sel, self.schedule.as_ref(), self.clock.time);
+            let (menu_kind, menu_head, menu_preview) = crate::game_lists::menu_extras(self.menus.list_kind.as_ref(), self.menus.admin_list.as_deref(), chooser_sel, self.schedule.as_ref(), self.clock.time);
             let frame = ui::Frame {
                 scale,
                 ui_scale: ui::size_factor(h, scale, self.settings.ui_scale, self.settings.ui_scale_window),
@@ -376,36 +376,36 @@ impl App {
                     #[cfg(windows)] { self.xr.vr.is_some() }
                     #[cfg(not(windows))] { false }
                 },
-                tooltip: tooltip.filter(|_| self.settings.tooltips && !self.input.dragging && !covered && self.game_menu.is_none()),
+                tooltip: tooltip.filter(|_| self.settings.tooltips && !self.input.dragging && !covered && self.menus.game_menu.is_none()),
                 // (switched off: none, `Settings::notes`; nor over the city map,
                 // whose header they covered once they stood on the timetable's line)
-                notes: if self.settings.notes && !map_open && self.game_menu.is_none() { notes } else { &[] },
+                notes: if self.settings.notes && !map_open && self.menus.game_menu.is_none() { notes } else { &[] },
                 fps: self.settings.show_fps.then_some(self.perf.fps),
                 paused: self.paused,
                 menu: match chooser_sel {
                     Some(k) => Some((k, &chooser_items[..])),
-                    None => self.game_menu.map(|k| (k, &menu_lines[..])),
+                    None => self.menus.game_menu.map(|k| (k, &menu_lines[..])),
                 },
                 menu_disabled,
                 menu_kind,
                 menu_head,
                 menu_preview,
-                pane_first: self.pane_scroll.filter(|p| Some(p.0) == chooser_sel).map(|p| p.1),
+                pane_first: self.menus.pane_scroll.filter(|p| Some(p.0) == chooser_sel).map(|p| p.1),
                 menu_tabs,
                 dropdown,
-                menu_kbd: self.menu_kbd,
-                menu_top: self.menu_top,
+                menu_kbd: self.menus.menu_kbd,
+                menu_top: self.menus.menu_top,
                 // (not over the city map, which has the stops and their times: it
                 // covered the map's zoom and close buttons)
-                timetable: (self.timetable && !map_open).then(|| timetable_rows(self.duty.as_ref(), self.player.as_ref().map(|p| p.vehicle.host.tt_delay as f64))).flatten(),
-                info: self.info_bar.then(|| info_line(&self.clock, self.player.as_ref(), self.duty.as_ref(), self.humans.as_ref().map(|h| h.riding()), self.career.metres)),
+                timetable: (self.menus.timetable && !map_open).then(|| timetable_rows(self.duty.as_ref(), self.player.as_ref().map(|p| p.vehicle.host.tt_delay as f64))).flatten(),
+                info: self.menus.info_bar.then(|| info_line(&self.clock, self.player.as_ref(), self.duty.as_ref(), self.humans.as_ref().map(|h| h.riding()), self.career.metres)),
                 info_room: self.input.touch.info_room.filter(|_| self.input.touch.enabled),
-                tutorial: self.tutorial.as_ref().filter(|t| !t.hidden && self.game_menu.is_none()).and_then(|t| t.page().map(|p| (p.title.as_str(), p.text.as_str(), p.image.as_deref(), t.at, t.pages.len()))),
+                tutorial: self.menus.tutorial.as_ref().filter(|t| !t.hidden && self.menus.game_menu.is_none()).and_then(|t| t.page().map(|p| (p.title.as_str(), p.text.as_str(), p.image.as_deref(), t.at, t.pages.len()))),
                 chat,
                 chat_size: self.settings.chat_size,
                 tags,
-                notices: &self.notices,
-                notice_anchor: self.navigator.as_ref().and_then(|n| n.screen_rect()),
+                notices: &self.menus.notices,
+                notice_anchor: self.menus.navigator.as_ref().and_then(|n| n.screen_rect()),
             };
             ui.draw_at(r, scene, &frame, dt, hud[0]);
         }

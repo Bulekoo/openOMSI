@@ -259,3 +259,84 @@ pub(crate) struct InputState {
     /// The on-screen controls of a phone (see `touch.rs`).
     pub(crate) touch: crate::touch::Touch,
 }
+
+/// What is open over the picture and how it is being worked: the start and game menus with their lists and drop-downs, the object editor, the vehicle placer, the tutorial, the hover, the HUD, the navigator and the timetable.
+pub(crate) struct MenuState {
+    /// The game menu's vehicle chooser is open, with this vehicle chosen (index into
+    /// `vehicle_list`), and the vehicles it offers (name, path).
+    pub(crate) chooser: Option<usize>,
+    /// The object editor, while it is on (`crate::editor`).
+    pub(crate) editor: Option<crate::editor::Editor>,
+    pub(crate) vehicle_list: Vec<(String, String)>,
+    /// The drop-down open over a row of the settings window, if one is.
+    pub(crate) dropdown: Option<crate::game_lists::Dropdown>,
+    /// (manufacturer, type) of each vehicle of `vehicle_list`, by its path.
+    pub(crate) vehicle_meta: std::collections::HashMap<String, (String, String)>,
+    pub(crate) hud: Option<hud::Hud>,
+    /// The route navigator (ETS2-style map in a corner).
+    pub(crate) navigator: Option<navigator::Navigator>,
+    pub(crate) menu: Option<menu::Menu>,
+    /// Cursor and view the hover was last worked out for (see the redraw).
+    pub(crate) hover_key: Option<(i32, i32, i32, i32)>,
+    /// The cockpit switch the cursor is over, shown in the HUD.
+    pub(crate) hover: Option<String>,
+    /// The part under the cursor when it is not a switch, so the HUD can say so.
+    pub(crate) hover_part: Option<String>,
+    /// A `[mouseevent]` mesh is under the cursor (named in `hover` or not): the hand cursor.
+    pub(crate) hover_hand: bool,
+    /// The game menu (Escape, OMSI's `open_mainmenue`): the chosen line of it.
+    pub(crate) game_menu: Option<usize>,
+    /// The first line of the game menu (or chooser) shown, when a finger has scrolled it
+    /// (in lines, fractional while dragged); `None`: the chosen line is kept in view.
+    pub(crate) menu_top: Option<f32>,
+    pub(crate) menu_scroll_drag: bool,
+    /// The scroll bar of an open drop-down held with the mouse: where on its thumb it was
+    /// taken (pixels from the thumb's top).
+    pub(crate) dd_scroll_drag: Option<f32>,
+    /// The same for the scroll bar of the timetable beside a line's tours.
+    pub(crate) pane_scroll_drag: Option<f32>,
+    /// The timetable beside the tours scrolled with the wheel: (the tour's line in the list,
+    /// the first stop shown).
+    pub(crate) pane_scroll: Option<(usize, usize)>,
+    /// The digits of a time being typed in the world page of the game menu (None: not typing).
+    pub(crate) menu_edit: Option<String>,
+    pub(crate) menu_edit_icao: bool,
+    /// The vehicle being chosen in "Place a vehicle" takes the place of the one driven
+    /// (the game menu's "Swap for another vehicle", #728).
+    pub(crate) swap_pending: bool,
+    /// The line of the open list whose slider the mouse button holds (it follows the cursor).
+    pub(crate) menu_drag: Option<usize>,
+    /// The keyboard chose the line of the menu last (the mouse moved since: false), so the
+    /// chosen line is shown lit; with the mouse only the line under it is.
+    pub(crate) menu_kbd: bool,
+    /// The next click on the city map puts the bus there (Esc → Move the bus on the map).
+    pub(crate) teleport_pick: bool,
+    /// The tutorial being run (`--tutorial`), loaded on the first frame.
+    pub(crate) tutorial: Option<crate::tutorial::Tutorial>,
+    /// The mouse wheel over the menu, notches not yet turned into lines.
+    pub(crate) wheel_acc: f32,
+    /// The object editor: an object dragged with the mouse; seconds to the next resend of
+    /// all edits to the others (LAN host); the copies the host made, as this client shows them.
+    pub(crate) editor_drag: bool,
+    pub(crate) editor_sync_t: f32,
+    pub(crate) remote_added: std::collections::HashMap<i64, crate::scene::TileGpu>,
+    /// Placing a vehicle with the mouse (the spawner): see `placing`.
+    pub(crate) placing: Option<crate::placing::Placing>,
+    /// The chooser shows the administration's lines (label, action) instead of vehicles.
+    pub(crate) admin_list: Option<Vec<(String, String)>>,
+    /// Which of the game menu's lists `admin_list` holds (see `game_lists`).
+    pub(crate) list_kind: Option<crate::game_lists::ListKind>,
+    /// A binding chosen in the pause menu that is waiting for the next physical key:
+    /// (true: [game], false: [vehicles], index in that section).
+    pub(crate) key_capture: Option<(bool, usize)>,
+    /// Whether the game stood paused before the menu opened (closing it goes back to that).
+    pub(crate) menu_prev_pause: bool,
+    /// OMSI's information bar (`view_toggle_informationdisplay`, Ctrl+Y): time, speed, the
+    /// air and cabin temperatures, the passengers aboard, the trip and its next stop along
+    /// the top of the picture.
+    pub(crate) info_bar: bool,
+    /// OMSI's timetable window (`view_set_schedule`, Insert).
+    pub(crate) timetable: bool,
+    /// The server's notifications on the screen (`notify`), oldest first.
+    pub(crate) notices: Vec<crate::ui::Notice>,
+}

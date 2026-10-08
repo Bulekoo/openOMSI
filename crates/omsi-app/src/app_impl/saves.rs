@@ -81,7 +81,7 @@ impl App {
     /// written), as OMSI keeps it: the launcher offers to continue it. Not
     /// in a tutorial, a LAN session or without a bus of one's own.
     pub(crate) fn save_last_situation(&mut self) -> Option<std::path::PathBuf> {
-        if self.tutorial.is_some() || self.net.lan.is_some() || self.player.is_none() {
+        if self.menus.tutorial.is_some() || self.net.lan.is_some() || self.player.is_none() {
             return None;
         }
         let (Some(w), Some(cam)) = (self.world.as_ref(), self.camera.as_ref()) else { return None };

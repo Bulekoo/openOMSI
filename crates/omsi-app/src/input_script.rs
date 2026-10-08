@@ -35,7 +35,7 @@ impl App {
         }
         // Escape closes the city map first (it would end the session)
         if pressed && code == KeyCode::Escape {
-            if let Some(n) = self.navigator.as_mut().filter(|n| n.map_open()) {
+            if let Some(n) = self.menus.navigator.as_mut().filter(|n| n.map_open()) {
                 n.toggle_map();
                 return;
             }
@@ -147,7 +147,7 @@ impl App {
 
     /// `on_key` for the mirror panels in the cab; true when the key was theirs.
     fn mirror_hud_key(&mut self, code: KeyCode, pressed: bool, repeat: bool) -> bool {
-        if self.cam.in_cab && self.game_menu.is_none() && self.player.is_some() {
+        if self.cam.in_cab && self.menus.game_menu.is_none() && self.player.is_some() {
             let ctrl = self.input.keys.contains(&KeyCode::ControlLeft) || self.input.keys.contains(&KeyCode::ControlRight);
             let shift = self.input.keys.contains(&KeyCode::ShiftLeft) || self.input.keys.contains(&KeyCode::ShiftRight);
             if pressed && !repeat && code == KeyCode::KeyM && ctrl {
@@ -219,7 +219,7 @@ impl App {
 
     /// `on_key` while the start menu is shown (it takes every key); true when it was.
     fn start_menu_key(&mut self, event_loop: &ActiveEventLoop, event_key: PhysicalKey, pressed: bool) -> bool {
-        if let (Some(m), PhysicalKey::Code(code)) = (self.menu.as_mut(), event_key) {
+        if let (Some(m), PhysicalKey::Code(code)) = (self.menus.menu.as_mut(), event_key) {
             if pressed {
                 if code == KeyCode::Escape {
                     crate::platform::exit(event_loop);
@@ -246,8 +246,8 @@ impl App {
                             log::error!("{e:#}");
                         }
                     }
-                    self.menu = None;
-                    self.hud = None;
+                    self.menus.menu = None;
+                    self.menus.hud = None;
                     self.load_world_now(event_loop);
                 }
             }
@@ -283,19 +283,19 @@ impl App {
     /// editor, Escape, a tutorial's pages. True when the key was theirs.
     fn overlay_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, pressed: bool, repeat: bool) -> bool {
         // placing a vehicle with the mouse: its keys first (Escape takes it away)
-        if self.game_menu.is_none() && self.placing_key(code, pressed) {
+        if self.menus.game_menu.is_none() && self.placing_key(code, pressed) {
             return true;
         }
         // the game menu: Escape opens it (and pauses, except in a LAN session, which
         // goes on for the others), and while it is open the keys are its own
-        if self.game_menu.is_some() {
+        if self.menus.game_menu.is_some() {
             if pressed && !repeat {
                 self.menu_key(event_loop, code);
             }
             return true;
         }
         // the object editor takes its keys first (Escape leaves it)
-        if pressed && self.editor.is_some() && self.editor_key(code) {
+        if pressed && self.menus.editor.is_some() && self.editor_key(code) {
             return true;
         }
         if pressed && !repeat && code == KeyCode::Escape {
@@ -303,7 +303,7 @@ impl App {
             return true;
         }
         // a tutorial's pages: Enter / Page Down on, Page Up back, Ctrl+T hides them
-        if let (true, Some(t)) = (pressed, self.tutorial.as_mut()) {
+        if let (true, Some(t)) = (pressed, self.menus.tutorial.as_mut()) {
             let ctrl = self.input.keys.contains(&KeyCode::ControlLeft) || self.input.keys.contains(&KeyCode::ControlRight);
             match code {
                 KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::PageDown if !t.hidden && self.net.lan.is_none() => {
@@ -372,7 +372,7 @@ impl App {
                 // nothing (#817)
                 if action.as_deref() == Some("exit") {
                     self.finish_vr_nav_edit();
-                    self.game_menu = None;
+                    self.menus.game_menu = None;
                     self.finish_session();
                     crate::platform::exit(event_loop);
                     return true;
@@ -443,7 +443,7 @@ impl App {
                 // OMSI's `view_toggle_informationdisplay` (Ctrl+Y)
                 // OMSI's `view_toggle_informationdisplay` (Shift+Y: 21 / 2)
                 KeyCode::KeyY if shift_now && !ctrl => {
-                    self.set_info_bar(!self.info_bar);
+                    self.set_info_bar(!self.menus.info_bar);
                     return true;
                 }
                 // OMSI's `view_set_schedule` (Insert: 210 / 1, the key's state every frame),
@@ -451,7 +451,7 @@ impl App {
                 // binding, handled above, and one with scan code 0 is unbound - Insert opened
                 // the timetable all the same (#1245)
                 KeyCode::Insert if !shift_now && !ctrl && !self.input.game_keys.iter().any(|b| b.action.eq_ignore_ascii_case("view_set_schedule")) => {
-                    self.timetable = !self.timetable;
+                    self.menus.timetable = !self.menus.timetable;
                     return true;
                 }
                 _ => {}
@@ -552,7 +552,7 @@ impl App {
                     || self.input.keys.contains(&KeyCode::ShiftRight) =>
                     {
                         // Shift+M: the city map (M alone is the starter)
-                        if let Some(n) = self.navigator.as_mut() {
+                        if let Some(n) = self.menus.navigator.as_mut() {
                             n.toggle_map();
                         }
                     }
@@ -771,7 +771,7 @@ impl App {
                 // too, as mouse steering takes it)
                 "rawmouse" => {
                     let (dx, _) = xy();
-                    if self.input.mouse_drive && self.game_menu.is_none() {
+                    if self.input.mouse_drive && self.menus.game_menu.is_none() {
                         self.mouse_past_edge(dx);
                     }
                 }
@@ -809,24 +809,24 @@ impl App {
                 // `wheel <notches>`: the mouse wheel, where the placing and the menu take it
                 "wheel" => {
                     let n = xy().0;
-                    if self.editor.is_some() && self.game_menu.is_none() {
+                    if self.menus.editor.is_some() && self.menus.game_menu.is_none() {
                         self.editor_wheel(n);
-                    } else if self.placing.is_some() && self.game_menu.is_none() {
+                    } else if self.menus.placing.is_some() && self.menus.game_menu.is_none() {
                         self.placing_wheel(n);
-                    } else if self.game_menu.is_some() {
+                    } else if self.menus.game_menu.is_some() {
                         self.menu_wheel(n);
                     } else {
                         self.wheel(n);
                     }
-                    log::info!("input script: wheel {n}: menu line {:?}, chooser {:?}, placing heading {:?}", self.game_menu, self.chooser, self.placing.as_ref().map(|p| p.heading));
+                    log::info!("input script: wheel {n}: menu line {:?}, chooser {:?}, placing heading {:?}", self.menus.game_menu, self.menus.chooser, self.menus.placing.as_ref().map(|p| p.heading));
                 }
                 // `click`: a left click where the cursor is, through the window's own path;
                 // `click down` / `click up` only press or let go (a drag in between)
                 "click" => {
                     let (press, release) = (arg != "up", arg != "down");
-                    if self.placing.is_some() && self.game_menu.is_none() {
+                    if self.menus.placing.is_some() && self.menus.game_menu.is_none() {
                         self.placing_click();
-                    } else if self.game_menu.is_some() {
+                    } else if self.menus.game_menu.is_some() {
                         // (on the menu as the window's button: its lines, its arrows)
                         if press {
                             self.left_button(event_loop, true);
@@ -842,7 +842,7 @@ impl App {
                             self.on_left(false);
                         }
                     }
-                    log::info!("input script: click: placing {:?}, placed at {:?}", self.placing.as_ref().map(|p| (p.at, p.blocked)), self.placed.last().map(|q| (q.vehicle.position, q.vehicle.heading)));
+                    log::info!("input script: click: placing {:?}, placed at {:?}", self.menus.placing.as_ref().map(|p| (p.at, p.blocked)), self.placed.last().map(|q| (q.vehicle.position, q.vehicle.heading)));
                 }
                 // `both down|up`: both mouse buttons held (OMSI's mouse zoom) or let go
                 "both" => {
@@ -932,7 +932,7 @@ impl App {
                         "input script: mouse steering {} look {} menu {:?} paused {} focused {} steer {:.3}",
                         self.input.mouse_drive,
                         self.input.mouse_look,
-                        self.game_menu,
+                        self.menus.game_menu,
                         self.paused,
                         self.input.window_focused,
                         self.input.mouse_steer.0
@@ -945,15 +945,15 @@ impl App {
                         .map(|p| (p.vehicle.var(arg), p.vehicle.str_var(arg)));
                     let names = describe::names(&self.args.root, &self.settings.language);
                     let shown = self
-                        .hover
+                        .menus.hover
                         .as_deref()
                         .map(|h| names.control(h))
-                        .or_else(|| self.hover_part.as_deref().map(|p| names.part(p)));
+                        .or_else(|| self.menus.hover_part.as_deref().map(|p| names.part(p)));
                     log::info!(
                         "input script: {arg} = {:?}  hover {:?} / {:?} shown as {:?}",
                         v,
-                        self.hover,
-                        self.hover_part,
+                        self.menus.hover,
+                        self.menus.hover_part,
                         shown
                     );
                 }
@@ -963,7 +963,7 @@ impl App {
                     if let Some(n) = arg.strip_prefix("pick:").and_then(|n| n.parse::<usize>().ok()) {
                         self.chooser_pick(n);
                     } else {
-                        if self.game_menu.is_none() {
+                        if self.menus.game_menu.is_none() {
                             self.open_game_menu();
                         }
                         // (a line of the vehicle or world pages is done directly)

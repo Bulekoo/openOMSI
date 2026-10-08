@@ -71,14 +71,14 @@ impl App {
 
     pub(crate) fn update_hover(&mut self) {
         if self.xr.vr_nav_edit.is_some() || self.input.cursor_hidden.is_some() {
-            self.hover = None;
-            self.hover_part = None;
-            self.hover_hand = false;
+            self.menus.hover = None;
+            self.menus.hover_part = None;
+            self.menus.hover_hand = false;
             return;
         }
         #[cfg(windows)]
         if !self.input.mouse_drive && self.xr.vr.as_ref().is_some_and(|vr| vr.needs_cursor_surface(
-            self.input.cursor, self.game_menu.is_some() || self.chooser.is_some())) {
+            self.input.cursor, self.menus.game_menu.is_some() || self.menus.chooser.is_some())) {
             let surface = self.player.as_ref()
                 .zip(self.camera.as_ref())
                 .zip(self.gfx.surface.as_ref())
@@ -114,19 +114,19 @@ impl App {
             _ => (None, false),
         };
         let (found, hand) = found;
-        self.hover_hand = hand;
+        self.menus.hover_hand = hand;
         match found {
             Some((name, true)) => {
-                self.hover = Some(name);
-                self.hover_part = None;
+                self.menus.hover = Some(name);
+                self.menus.hover_part = None;
             }
             Some((name, false)) => {
-                self.hover = None;
-                self.hover_part = Some(name);
+                self.menus.hover = None;
+                self.menus.hover_part = Some(name);
             }
             None => {
-                self.hover = None;
-                self.hover_part = None;
+                self.menus.hover = None;
+                self.menus.hover_part = None;
             }
         }
         // the cursor itself says when it is over something that can be operated
@@ -141,18 +141,18 @@ impl App {
             && self.player.is_some()
             && self.input.both_drag.is_none()
             && matches!(self.view.as_str(), "driver" | "outside" | "pax" | "free");
-        let kind: u8 = if self.input.both_drag.is_some() && self.game_menu.is_none() {
+        let kind: u8 = if self.input.both_drag.is_some() && self.menus.game_menu.is_none() {
             4
-        } else if rmb_zoom && self.game_menu.is_none() {
+        } else if rmb_zoom && self.menus.game_menu.is_none() {
             4
-        } else if self.input.mouse_look && self.game_menu.is_none() {
+        } else if self.input.mouse_look && self.menus.game_menu.is_none() {
             3
-        } else if self.input.mouse_drive && self.mouse_steers_in_view() && self.game_menu.is_none() {
+        } else if self.input.mouse_drive && self.mouse_steers_in_view() && self.menus.game_menu.is_none() {
             2
-        } else if self.game_menu.is_some() {
+        } else if self.menus.game_menu.is_some() {
             // (the game menu's own cursor: not overwritten here, or it flips back and forth)
             self.menu_cursor_kind()
-        } else if self.hover.is_some() || self.hover_hand {
+        } else if self.menus.hover.is_some() || self.menus.hover_hand {
             1
         } else {
             0
@@ -180,7 +180,7 @@ impl App {
     /// a page, a control, the scroll bar), the closed hand while a slider or the scroll bar
     /// is held.
     pub(crate) fn menu_cursor_kind(&self) -> u8 {
-        if self.menu_drag.is_some() || self.menu_scroll_drag || self.dd_scroll_drag.is_some() || self.pane_scroll_drag.is_some() {
+        if self.menus.menu_drag.is_some() || self.menus.menu_scroll_drag || self.menus.dd_scroll_drag.is_some() || self.menus.pane_scroll_drag.is_some() {
             return 4;
         }
         let Some(u) = self.ui.as_ref() else { return 0 };

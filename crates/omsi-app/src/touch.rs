@@ -248,11 +248,11 @@ impl App {
         let push = |b: &mut Vec<Button>, btn: Btn, rect: Rect, icon: &'static str, label: &str, on: bool, round: bool| {
             b.push(Button { btn, rect, icon, label: label.to_string(), on, round });
         };
-        let menu_mode = self.game_menu.is_some() || self.chooser.is_some() || self.navigator.as_ref().is_some_and(|n| n.map_open());
+        let menu_mode = self.menus.game_menu.is_some() || self.menus.chooser.is_some() || self.menus.navigator.as_ref().is_some_and(|n| n.map_open());
         if menu_mode {
             // only the way out: the menu is worked with the fingers as a mouse
             let r = 24.0 * u;
-            if self.game_menu.is_some() || self.chooser.is_some() {
+            if self.menus.game_menu.is_some() || self.menus.chooser.is_some() {
                 push(&mut b, Btn::CloseMenu, rb(w - pad - r, pad + r, r), "close", "", false, true);
             } else {
                 push(&mut b, Btn::Map, rb(w - pad - r, pad + r, r), "close", "", false, true);
@@ -286,7 +286,7 @@ impl App {
         push(&mut b, Btn::Map, rb(x, y, r), "map", "", false, true);
         if self.duty.is_some() {
             x -= step;
-            push(&mut b, Btn::Timetable, rb(x, y, r), "departure_board", "", self.timetable, true);
+            push(&mut b, Btn::Timetable, rb(x, y, r), "departure_board", "", self.menus.timetable, true);
         }
         x -= step;
         push(&mut b, Btn::Screenshot, rb(x, y, r), "photo_camera", "", false, true);
@@ -416,8 +416,8 @@ impl App {
                     (Btn::SaloonLights, "highlight", "Saloon lights", false),
                     (Btn::Ticket, "confirmation_number", "Sell ticket", false),
                     (Btn::InteriorCam, "airline_seat_recline_normal", "Next seat view", false),
-                    (Btn::Navigator, "navigation", "Navigator", self.navigator.as_ref().is_some_and(|n| n.enabled)),
-                    (Btn::Info, "info", "Information bar", self.info_bar),
+                    (Btn::Navigator, "navigation", "Navigator", self.menus.navigator.as_ref().is_some_and(|n| n.enabled)),
+                    (Btn::Info, "info", "Information bar", self.menus.info_bar),
                     (Btn::Tilt, "screen_rotation", "Tilt steering", t.tilt),
                 ];
                 let cols = 4;
@@ -454,11 +454,11 @@ impl App {
 
     pub(crate) fn finger_down(&mut self, event_loop: &ActiveEventLoop, id: u64, p: Vec2) {
         self.input.touch.fingers.retain(|f| f.id != id);
-        let menu_mode = self.game_menu.is_some() || self.chooser.is_some() || self.navigator.as_ref().is_some_and(|n| n.map_open());
+        let menu_mode = self.menus.game_menu.is_some() || self.menus.chooser.is_some() || self.menus.navigator.as_ref().is_some_and(|n| n.map_open());
         let t = &self.input.touch;
         let role = if let Some(k) = t.button_at(p) {
             Role::Button(k, t.buttons[k].btn)
-        } else if self.game_menu.is_some() || self.chooser.is_some() {
+        } else if self.menus.game_menu.is_some() || self.menus.chooser.is_some() {
             Role::Menu
         } else if menu_mode {
             Role::Mouse
@@ -475,12 +475,12 @@ impl App {
                 let d = p - t.wheel_c;
                 Role::Wheel(d.y.atan2(d.x), d.length())
             }
-        } else if self.navigator.as_ref().is_some_and(|n| n.over_panel(p.x, p.y)) {
+        } else if self.menus.navigator.as_ref().is_some_and(|n| n.over_panel(p.x, p.y)) {
             Role::Navigator
         } else {
             // the cockpit's switch under the finger, else the camera's
             self.on_cursor(p.x, p.y);
-            if self.hover.is_some() && self.view == "driver" && self.input.touch.fingers.iter().all(|f| f.role != Role::Cockpit) {
+            if self.menus.hover.is_some() && self.view == "driver" && self.input.touch.fingers.iter().all(|f| f.role != Role::Cockpit) {
                 self.left_button(event_loop, true);
                 Role::Cockpit
             } else {
@@ -572,9 +572,9 @@ impl App {
                     // (no line lit under a finger that scrolls)
                     self.on_cursor(-1e4, -1e4);
                     let (start, row_h) = self.ui.as_ref().map(|u| (u.menu_start as f32, u.menu_row_h.max(1.0))).unwrap_or((0.0, 1.0));
-                    let top = self.menu_top.unwrap_or(start) - (p.y - last.y) / row_h;
+                    let top = self.menus.menu_top.unwrap_or(start) - (p.y - last.y) / row_h;
                     let (n, rows) = (self.menu_len() as f32, self.ui.as_ref().map(|u| u.menu_rows).unwrap_or(0) as f32);
-                    self.menu_top = Some(top.clamp(0.0, (n - rows).max(0.0)));
+                    self.menus.menu_top = Some(top.clamp(0.0, (n - rows).max(0.0)));
                 } else {
                     self.on_cursor(p.x, p.y);
                 }
@@ -640,7 +640,7 @@ impl App {
                 if f.moved {
                     self.on_cursor(p.x, p.y);
                 }
-                match (cancelled, f.moved, self.navigator.as_mut()) {
+                match (cancelled, f.moved, self.menus.navigator.as_mut()) {
                     // (a tap taken away by the system opens nothing)
                     (true, false, Some(n)) => {
                         n.panel_release();
@@ -655,7 +655,7 @@ impl App {
                     self.left_button(event_loop, false);
                 } else {
                     // (the fraction of a line left over is rounded, as the menu shows it)
-                    self.menu_top = self.menu_top.map(f32::round);
+                    self.menus.menu_top = self.menus.menu_top.map(f32::round);
                 }
             }
             Role::Look => {
@@ -752,7 +752,7 @@ impl App {
                 self.open_game_menu();
             }
             Btn::CloseMenu => {
-                if self.chooser.is_some() {
+                if self.menus.chooser.is_some() {
                     self.tap_key(event_loop, KeyCode::Escape, false, true);
                 } else {
                     self.close_game_menu();
@@ -780,12 +780,12 @@ impl App {
                 self.cam.orbit = ORBIT_DEFAULT;
             }
             Btn::Map => {
-                if let Some(n) = self.navigator.as_mut() {
+                if let Some(n) = self.menus.navigator.as_mut() {
                     n.enabled = true;
                     n.toggle_map();
                 }
             }
-            Btn::Timetable => self.timetable = !self.timetable,
+            Btn::Timetable => self.menus.timetable = !self.menus.timetable,
             Btn::Panel => self.input.touch.panel = !self.input.touch.panel,
             Btn::Hide => {
                 self.input.touch.hidden = !self.input.touch.hidden;
@@ -849,11 +849,11 @@ impl App {
                 self.game_action("view_interiorcam_plus");
             }
             Btn::Navigator => {
-                if let Some(n) = self.navigator.as_mut() {
+                if let Some(n) = self.menus.navigator.as_mut() {
                     n.enabled = !n.enabled;
                 }
             }
-            Btn::Info => self.set_info_bar(!self.info_bar),
+            Btn::Info => self.set_info_bar(!self.menus.info_bar),
             Btn::Tilt => {
                 self.input.touch.tilt = !self.input.touch.tilt;
                 crate::platform::set_tilt(self.input.touch.tilt);

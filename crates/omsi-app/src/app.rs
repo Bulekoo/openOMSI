@@ -20,16 +20,8 @@ pub(crate) struct App {
     pub(crate) player: Option<Player>,
     /// A situation's further vehicles and those placed from the game menu, standing.
     pub(crate) placed: Vec<Player>,
-    /// The game menu's vehicle chooser is open, with this vehicle chosen (index into
-    /// `vehicle_list`), and the vehicles it offers (name, path).
-    pub(crate) chooser: Option<usize>,
-    /// The object editor, while it is on (`crate::editor`).
-    pub(crate) editor: Option<crate::editor::Editor>,
-    pub(crate) vehicle_list: Vec<(String, String)>,
-    /// The drop-down open over a row of the settings window, if one is.
-    pub(crate) dropdown: Option<crate::game_lists::Dropdown>,
-    /// (manufacturer, type) of each vehicle of `vehicle_list`, by its path.
-    pub(crate) vehicle_meta: std::collections::HashMap<String, (String, String)>,
+    /// The menus, lists, editor and on-screen panels (see `MenuState`).
+    pub(crate) menus: MenuState,
     pub(crate) world: Option<Arc<World>>,
     /// The sim date and the season's texture folder the loaded world shows (see
     /// `follow_date`).
@@ -42,9 +34,6 @@ pub(crate) struct App {
     pub(crate) duty: Option<schedule::PlayerDuty>,
     /// The duty was told the places of the stops beyond the loaded tiles.
     pub(crate) duty_places: bool,
-    pub(crate) hud: Option<hud::Hud>,
-    /// The route navigator (ETS2-style map in a corner).
-    pub(crate) navigator: Option<navigator::Navigator>,
     /// Chat, mouse-over names and name tags (Roboto).
     pub(crate) ui: Option<ui::Ui>,
     /// Frame timing, profiling and the test hooks (see `PerfState`).
@@ -55,7 +44,6 @@ pub(crate) struct App {
     /// What the tyres throw up from the water on the roads (see `puddles`).
     pub(crate) spray: puddles::Spray,
     pub(crate) lamps_on: Option<bool>,
-    pub(crate) menu: Option<menu::Menu>,
     pub(crate) populate_t: f32,
     pub(crate) humans_populate_t: f32,
     /// What the game sounds out: the engine, the world around, the radio, the voice chat.
@@ -65,46 +53,13 @@ pub(crate) struct App {
     pub(crate) weather: Option<omsi_content::weather::Weather>,
     pub(crate) clock: omsi_sim::SimClock,
     pub(crate) started: Instant,
-    /// Cursor and view the hover was last worked out for (see the redraw).
-    pub(crate) hover_key: Option<(i32, i32, i32, i32)>,
     pub(crate) view: String,
     /// The keyboard, the mouse, controllers, head tracking and touch (see `InputState`).
     pub(crate) input: InputState,
     pub(crate) last: Instant,
-    /// The cockpit switch the cursor is over, shown in the HUD.
-    pub(crate) hover: Option<String>,
-    /// The part under the cursor when it is not a switch, so the HUD can say so.
-    pub(crate) hover_part: Option<String>,
-    /// A `[mouseevent]` mesh is under the cursor (named in `hover` or not): the hand cursor.
-    pub(crate) hover_hand: bool,
     /// The simulation stands still (OMSI's `sim_pause`, P, or the menu): nothing moves,
     /// the clock stops, the picture and the camera go on.
     pub(crate) paused: bool,
-    /// The game menu (Escape, OMSI's `open_mainmenue`): the chosen line of it.
-    pub(crate) game_menu: Option<usize>,
-    /// The first line of the game menu (or chooser) shown, when a finger has scrolled it
-    /// (in lines, fractional while dragged); `None`: the chosen line is kept in view.
-    pub(crate) menu_top: Option<f32>,
-    pub(crate) menu_scroll_drag: bool,
-    /// The scroll bar of an open drop-down held with the mouse: where on its thumb it was
-    /// taken (pixels from the thumb's top).
-    pub(crate) dd_scroll_drag: Option<f32>,
-    /// The same for the scroll bar of the timetable beside a line's tours.
-    pub(crate) pane_scroll_drag: Option<f32>,
-    /// The timetable beside the tours scrolled with the wheel: (the tour's line in the list,
-    /// the first stop shown).
-    pub(crate) pane_scroll: Option<(usize, usize)>,
-    /// The digits of a time being typed in the world page of the game menu (None: not typing).
-    pub(crate) menu_edit: Option<String>,
-    pub(crate) menu_edit_icao: bool,
-    /// The vehicle being chosen in "Place a vehicle" takes the place of the one driven
-    /// (the game menu's "Swap for another vehicle", #728).
-    pub(crate) swap_pending: bool,
-    /// The line of the open list whose slider the mouse button holds (it follows the cursor).
-    pub(crate) menu_drag: Option<usize>,
-    /// The keyboard chose the line of the menu last (the mouse moved since: false), so the
-    /// chosen line is shown lit; with the mouse only the line under it is.
-    pub(crate) menu_kbd: bool,
     /// Plugins and the services outside the game (see `Integrations`).
     pub(crate) integrations: Integrations,
     /// How far the clock was set since the timetable was last put out again (s; see
@@ -112,10 +67,6 @@ pub(crate) struct App {
     pub(crate) clock_jump: f64,
     /// The bus whose seat (`settings::bus_seats`) `settings.seat` holds now.
     pub(crate) seat_bus: String,
-    /// The next click on the city map puts the bus there (Esc → Move the bus on the map).
-    pub(crate) teleport_pick: bool,
-    /// The tutorial being run (`--tutorial`), loaded on the first frame.
-    pub(crate) tutorial: Option<crate::tutorial::Tutorial>,
     /// The player out of the seat, walking about (`on_foot`).
     pub(crate) on_foot: Option<crate::on_foot::OnFoot>,
     /// The multiplayer session and the other players (see `NetState`).
@@ -125,41 +76,15 @@ pub(crate) struct App {
     pub(crate) safe_pose: Option<(glam::DVec3, f64)>,
     /// Seconds since `safe_pose` was taken.
     pub(crate) safe_age: f32,
-    /// The mouse wheel over the menu, notches not yet turned into lines.
-    pub(crate) wheel_acc: f32,
-    /// The object editor: an object dragged with the mouse; seconds to the next resend of
-    /// all edits to the others (LAN host); the copies the host made, as this client shows them.
-    pub(crate) editor_drag: bool,
-    pub(crate) editor_sync_t: f32,
-    pub(crate) remote_added: std::collections::HashMap<i64, crate::scene::TileGpu>,
-    /// Placing a vehicle with the mouse (the spawner): see `placing`.
-    pub(crate) placing: Option<crate::placing::Placing>,
-    /// The chooser shows the administration's lines (label, action) instead of vehicles.
-    pub(crate) admin_list: Option<Vec<(String, String)>>,
-    /// Which of the game menu's lists `admin_list` holds (see `game_lists`).
-    pub(crate) list_kind: Option<crate::game_lists::ListKind>,
-    /// A binding chosen in the pause menu that is waiting for the next physical key:
-    /// (true: [game], false: [vehicles], index in that section).
-    pub(crate) key_capture: Option<(bool, usize)>,
-    /// Whether the game stood paused before the menu opened (closing it goes back to that).
-    pub(crate) menu_prev_pause: bool,
-    /// OMSI's information bar (`view_toggle_informationdisplay`, Ctrl+Y): time, speed, the
-    /// air and cabin temperatures, the passengers aboard, the trip and its next stop along
-    /// the top of the picture.
-    pub(crate) info_bar: bool,
     /// A time of day the bus's script wrote (`(S.S.Time)`), for the clock at the next frame.
     pub(crate) pending_time: Option<f64>,
     /// The play time (`clock.run_time`) the last situation was saved at.
     pub(crate) autosave_t: f64,
-    /// OMSI's timetable window (`view_set_schedule`, Insert).
-    pub(crate) timetable: bool,
     /// Last workshop / fuel pump / wash message, and how long it still shows.
     pub(crate) service_msg: Option<(String, f32)>,
     /// The fuel pump or the bus wash running (`run_service`): which, and the seconds the
     /// tank or the dirt has not changed (it ends after `SERVICE_SETTLE`).
     pub(crate) pumping: Option<(&'static str, f32)>,
-    /// The server's notifications on the screen (`notify`), oldest first.
-    pub(crate) notices: Vec<crate::ui::Notice>,
     /// The driver's personnel file and this session's statistics.
     pub(crate) career: career::Career,
     /// The duty's stops with their times as driven, kept in a file (`journey`).
@@ -357,8 +282,8 @@ impl App {
             self.load_world_now(event_loop);
         } else {
             let mut fonts = omsi_sim::texttex::FontLibrary::new(&self.args.root);
-            self.hud = Some(hud::Hud::new(&mut fonts));
-            self.menu = Some(menu::Menu::new(&self.args.root, &self.args.map));
+            self.menus.hud = Some(hud::Hud::new(&mut fonts));
+            self.menus.menu = Some(menu::Menu::new(&self.args.root, &self.args.map));
         }
     }
 
@@ -530,12 +455,12 @@ impl App {
                 if self.camera.is_none() {
                     self.camera = Some(cam);
                 }
-                self.navigator = Some(navigator::Navigator::new(
+                self.menus.navigator = Some(navigator::Navigator::new(
                     self.settings.navigator,
                     self.settings.ui_opacity,
                     &self.settings.navigator_corner,
                 ));
-                if let Some(n) = self.navigator.as_mut() {
+                if let Some(n) = self.menus.navigator.as_mut() {
                     n.arrows = self.settings.nav_arrows;
                     n.show_ai = self.settings.nav_ai;
                 }
@@ -653,7 +578,7 @@ impl App {
                     }
                 }
                 if self.traffic.is_none() {
-                    if let Some(n) = self.navigator.as_mut() {
+                    if let Some(n) = self.menus.navigator.as_mut() {
                         n.add_lanes(std::mem::take(&mut *w.lanes.lock()));
                     }
                 }
@@ -859,7 +784,7 @@ impl App {
             None => {
                 // no traffic system: the navigator keeps the roads for its map
                 let lanes = std::mem::take(&mut *w.lanes.lock());
-                if let Some(n) = self.navigator.as_mut() {
+                if let Some(n) = self.menus.navigator.as_mut() {
                     n.add_lanes(lanes);
                 }
             }

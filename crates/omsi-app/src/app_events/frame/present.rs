@@ -260,7 +260,7 @@ impl App {
                 self.input.cursor,
                 self.player.as_ref().map(|p| (p.vehicle.position, p.vehicle.body_rotation())),
                 vr_nav_display.filter(|d| d.placement.enabled).and_then(|d| {
-                    self.navigator.as_ref().and_then(|n| n.panel_overlay).map(|index| (index, d))
+                    self.menus.navigator.as_ref().and_then(|n| n.panel_overlay).map(|index| (index, d))
                 }),
                 self.player.as_ref().map(|p| p.uid),
                 self.settings.vr_head_smoothing_ms,

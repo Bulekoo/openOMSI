@@ -8,18 +8,18 @@ impl App {
     pub(crate) fn toggle_editor(&mut self) {
         // (in a LAN session the host edits the map for everybody: its edits go to the
         // others' games, a client's would stay its own)
-        if self.editor.is_none() && self.net.lan.as_ref().map(|l| l.role == omsi_net::Role::Client).unwrap_or(false) {
+        if self.menus.editor.is_none() && self.net.lan.as_ref().map(|l| l.role == omsi_net::Role::Client).unwrap_or(false) {
             self.service_msg = Some(("In a LAN session only the host edits the map".into(), 3.0));
             return;
         }
-        if self.editor.take().is_some() {
-            self.editor_drag = false;
+        if self.menus.editor.take().is_some() {
+            self.menus.editor_drag = false;
             self.service_msg = Some(("Object editor off (unsaved changes stay until the end of the session)".into(), 3.0));
             return;
         }
         let ed = crate::editor::Editor::default();
         let msg = self.world.as_ref().map(|w| ed.describe(w)).unwrap_or_default();
-        self.editor = Some(ed);
+        self.menus.editor = Some(ed);
         self.service_msg = Some((format!("{msg} - click picks, drag moves, wheel turns (Shift: height), Delete, C copy, V variant, Backspace undo, PgUp/PgDn/F ground, [ ] brush, Ctrl+S save, Esc leave"), 10.0));
     }
 
@@ -37,18 +37,18 @@ impl App {
                 return true;
             }
             crate::editor::Action::Pick => {
-                let ed = self.editor.as_mut().unwrap();
+                let ed = self.menus.editor.as_mut().unwrap();
                 ed.pick(&world, eye, fwd);
                 ed.describe(&world)
             }
             crate::editor::Action::NextPick => {
-                let ed = self.editor.as_mut().unwrap();
+                let ed = self.menus.editor.as_mut().unwrap();
                 ed.next_pick();
                 ed.describe(&world)
             }
             crate::editor::Action::Save => {
                 let content = crate::startup::content_dir();
-                let ed = self.editor.as_ref().unwrap();
+                let ed = self.menus.editor.as_ref().unwrap();
                 match content.map(|c| ed.save(&world, &self.args.map, &c, &self.args.root)) {
                     Some(Ok(files)) if files.is_empty() => "Nothing to save".to_string(),
                     Some(Ok(files)) => format!("Saved {} tile(s) to the content folder ({})", files.len(), files.iter().filter_map(|f| f.file_name()).map(|n| n.to_string_lossy()).collect::<Vec<_>>().join(", ")),
@@ -58,7 +58,7 @@ impl App {
             }
             a @ (crate::editor::Action::Ground(_) | crate::editor::Action::Flatten | crate::editor::Action::Brush(_)) => {
                 let at = crate::editor::Editor::aim(&world, eye, fwd);
-                let (msg, tiles) = self.editor.as_mut().unwrap().ground(&world, at, &a);
+                let (msg, tiles) = self.menus.editor.as_mut().unwrap().ground(&world, at, &a);
                 if !tiles.is_empty() {
                     log::info!("map editor: ground of tiles {tiles:?} at {at:?}");
                     world.forget_staged(&tiles);
@@ -70,7 +70,7 @@ impl App {
             }
             a => {
                 let (Some(r), Some(scene)) = (self.renderer.as_ref(), self.scene.as_mut()) else { return true };
-                match self.editor.as_mut().unwrap().apply(&world, r, scene, &a) {
+                match self.menus.editor.as_mut().unwrap().apply(&world, r, scene, &a) {
                     Some(m) => m,
                     None => "Pick an object first (Enter)".to_string(),
                 }
@@ -85,7 +85,7 @@ impl App {
     /// The host's edits to the other players' games (`all`: every edit of the session,
     /// sent again every ten seconds for the ones who joined since).
     pub(crate) fn editor_broadcast(&mut self, all: bool) {
-        let (Some(ed), Some(w)) = (self.editor.as_ref(), self.world.as_ref()) else {
+        let (Some(ed), Some(w)) = (self.menus.editor.as_ref(), self.world.as_ref()) else {
             if all {
                 // (edits stay after the editor is left: sent from the world's list)
                 if let (Some(w), Some(l)) = (self.world.as_ref(), self.net.lan.as_mut()) {
@@ -122,19 +122,19 @@ impl App {
     /// The mouse in the object editor: a click picks what is under the cursor (and starts
     /// dragging it), a drag moves it over the ground; true when the editor took it.
     pub(crate) fn editor_mouse(&mut self, pressed: bool) -> bool {
-        if self.editor.is_none() {
+        if self.menus.editor.is_none() {
             return false;
         }
         if !pressed {
-            if self.editor_drag {
-                self.editor_drag = false;
+            if self.menus.editor_drag {
+                self.menus.editor_drag = false;
                 self.editor_broadcast(false);
             }
             return true;
         }
         let (Some(cam), Some(s), Some(world)) = (self.camera.as_ref(), self.gfx.surface.as_ref(), self.world.clone()) else { return true };
         let (o, d) = self.world_cursor_ray(cam, (s.config.width, s.config.height));
-        let ed = self.editor.as_mut().unwrap();
+        let ed = self.menus.editor.as_mut().unwrap();
         // (the copy being edited stays the one dragged while it is under the cursor)
         let on_added = ed.editing_added.and_then(|k| ed.added.get(k)).map(|a| {
             let p = a.base + a.moved - o;
@@ -144,7 +144,7 @@ impl App {
         if !on_added {
             ed.pick(&world, o, d);
         }
-        self.editor_drag = on_added || ed.selected.is_some();
+        self.menus.editor_drag = on_added || ed.selected.is_some();
         let msg = ed.describe(&world);
         self.service_msg = Some((msg, 5.0));
         true
@@ -152,13 +152,13 @@ impl App {
 
     /// The cursor moved while an object is dragged.
     pub(crate) fn editor_drag_frame(&mut self) {
-        if !self.editor_drag {
+        if !self.menus.editor_drag {
             return;
         }
         let (Some(cam), Some(s), Some(world)) = (self.camera.as_ref(), self.gfx.surface.as_ref(), self.world.clone()) else { return };
         let (o, d) = self.world_cursor_ray(cam, (s.config.width, s.config.height));
         let Some(hit) = crate::placing::ground_hit(&world, o, d.as_dvec3(), 400.0) else { return };
-        let (Some(r), Some(scene), Some(ed)) = (self.renderer.as_ref(), self.scene.as_mut(), self.editor.as_mut()) else { return };
+        let (Some(r), Some(scene), Some(ed)) = (self.renderer.as_ref(), self.scene.as_mut(), self.menus.editor.as_mut()) else { return };
         if let Some(m) = ed.drag_to(&world, r, scene, hit) {
             self.service_msg = Some((m, 3.0));
         }
@@ -166,13 +166,13 @@ impl App {
 
     /// The wheel in the object editor: the object turns (5° a notch), with Shift it rises.
     pub(crate) fn editor_wheel(&mut self, amount: f32) -> bool {
-        if self.editor.is_none() {
+        if self.menus.editor.is_none() {
             return false;
         }
         let shift = self.input.keys.contains(&KeyCode::ShiftLeft) || self.input.keys.contains(&KeyCode::ShiftRight);
         let action = if shift { crate::editor::Action::Move(glam::DVec3::Z * 0.1 * amount as f64) } else { crate::editor::Action::Turn(5.0 * amount as f64) };
         let (Some(world), Some(r), Some(scene)) = (self.world.clone(), self.renderer.as_ref(), self.scene.as_mut()) else { return true };
-        if let Some(m) = self.editor.as_mut().unwrap().apply(&world, r, scene, &action) {
+        if let Some(m) = self.menus.editor.as_mut().unwrap().apply(&world, r, scene, &action) {
             self.service_msg = Some((m, 3.0));
             self.editor_broadcast(false);
         }

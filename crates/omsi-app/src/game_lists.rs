@@ -221,11 +221,11 @@ fn bus_cmp(a: &str, b: &str) -> std::cmp::Ordering {
 /// server only those it offers (#1183).
 fn place_vehicles(app: &App, unknown: &str) -> Vec<(String, String, String, String)> {
     let offered = crate::lan::server_offers();
-    app.vehicle_list
+    app.menus.vehicle_list
         .iter()
         .filter(|(_, path)| offered.as_deref().is_none_or(|o| crate::lan::offers(o, path)))
         .map(|(name, path)| {
-            let (maker, ty) = app.vehicle_meta.get(path).cloned().unwrap_or_default();
+            let (maker, ty) = app.menus.vehicle_meta.get(path).cloned().unwrap_or_default();
             let maker = bus_label(&maker);
             let ty = if ty.trim().is_empty() { bus_label(name) } else { bus_label(&ty) };
             let shown = if maker.is_empty() { unknown.to_string() } else { maker.clone() };
@@ -316,24 +316,24 @@ impl App {
     }
 
     pub(crate) fn begin_key_capture(&mut self, game: bool, index: usize) {
-        self.key_capture = Some((game, index));
+        self.menus.key_capture = Some((game, index));
         self.service_msg = Some(("Press a key for this action (Delete clears it, Esc cancels)".into(), 5.0));
         self.refresh_list();
     }
 
     pub(crate) fn cancel_key_capture(&mut self) {
-        if self.key_capture.take().is_some() {
+        if self.menus.key_capture.take().is_some() {
             self.service_msg = Some(("Key change cancelled".into(), 2.0));
             self.refresh_list();
         }
     }
 
     pub(crate) fn apply_key_capture(&mut self, scan: Option<i32>, chord: i32) {
-        let Some((game, index)) = self.key_capture else { return };
+        let Some((game, index)) = self.menus.key_capture else { return };
         let mut cfg = keyboard_cfg(self);
         let list = if game { &mut cfg.game } else { &mut cfg.vehicles };
         let Some(binding) = list.get_mut(index) else {
-            self.key_capture = None;
+            self.menus.key_capture = None;
             self.service_msg = Some(("That key entry no longer exists".into(), 3.0));
             self.refresh_list();
             return;
@@ -344,7 +344,7 @@ impl App {
         let action = binding.action.clone();
         match write_keyboard_cfg(self, &cfg) {
             Ok(()) => {
-                self.key_capture = None;
+                self.menus.key_capture = None;
                 self.install_keyboard_cfg(cfg);
                 let key = scan.map(|s| crate::keys::key_name(s as i64, (hold | chord) as i64)).unwrap_or_else(|| "(unbound)".into());
                 self.service_msg = Some((format!("{}: {key}", crate::describe::names(&self.args.root, &self.settings.language).control(&action)), 3.0));
@@ -365,7 +365,7 @@ impl App {
         match write_keyboard_cfg(self, &cfg) {
             Ok(()) => {
                 self.install_keyboard_cfg(cfg);
-                self.key_capture = Some((false, index));
+                self.menus.key_capture = Some((false, index));
                 self.service_msg = Some((format!("KY_{action} added. Press its key now."), 5.0));
             }
             Err(e) => self.service_msg = Some((format!("Event was not added: {e}"), 5.0)),
@@ -382,7 +382,7 @@ fn keyboard_pages(app: &App) -> Vec<Page> {
         let mut bindings: Vec<_> = bindings.iter().enumerate().collect();
         bindings.sort_by_key(|(_, b)| names.control(&b.action).to_lowercase());
         for (i, b) in bindings {
-            let key = if app.key_capture == Some((is_game, i)) { "press a key…".into() }
+            let key = if app.menus.key_capture == Some((is_game, i)) { "press a key…".into() }
                 else { crate::keys::key_name(b.scan_code as i64, b.modifier as i64) };
             rows.push((row(&names.control(&b.action), 'a', &key, "Enter to change; Delete clears; Esc cancels", None),
                 format!("keybind {} {i}", if is_game { "g" } else { "v" })));
@@ -483,7 +483,7 @@ pub(crate) fn items(app: &App, kind: &ListKind) -> Vec<(String, String)> {
         ListKind::RouteNumbers => {
             // any route number, typed as on OMSI's own field (#836): the scripts that read
             // it (a bus that switches its functions by route number) take what is typed
-            match app.menu_edit.as_ref() {
+            match app.menus.menu_edit.as_ref() {
                 Some(t) => out.push((format!("{}: {t}_  ({})", tr("Route number"), tr("Enter sets it, Esc cancels")), "route_type".into())),
                 None => out.push((format!("{}...", tr("Type a route number")), "route_type".into())),
             }
@@ -757,18 +757,18 @@ pub(crate) fn run_move(app: &mut App, kind: &ListKind, action: &str, mv: Move) -
                 // (the preset, the clouds and the precipitation are picked from a drop-down: `App::chooser_pick`)
                 "weather" | "cloudkind" | "precipkind" | "metar_src" | "sel" | "preset" | "gfxprofile" | "reset" => {}
                 "metar_icao_edit" if step => {
-                    if app.menu_edit_icao { app.apply_icao_edit(); } else { app.start_icao_edit(); }
+                    if app.menus.menu_edit_icao { app.apply_icao_edit(); } else { app.start_icao_edit(); }
                 }
                 // the exact time: Enter starts typing it, and sets it when typed
                 "time_edit" if step => {
-                    if app.menu_edit.is_some() {
+                    if app.menus.menu_edit.is_some() {
                         app.apply_time_edit();
                     } else if app.net.lan.as_ref().is_some_and(|l| l.role == omsi_net::Role::Client) {
                         app.service_msg = Some(("In a LAN session the host sets the clock".into(), 3.0));
                     } else if app.real_time_locked() {
                         app.service_msg = Some(("The time cannot be changed while the real-time sync is on".into(), 3.0));
                     } else {
-                        app.menu_edit = Some(String::new());
+                        app.menus.menu_edit = Some(String::new());
                     }
                 }
                 "seat_reset" if step => {
@@ -913,13 +913,13 @@ pub(crate) fn run_move(app: &mut App, kind: &ListKind, action: &str, mv: Move) -
         ListKind::Destinations if verb == "routes" => Some(ListKind::RouteNumbers),
         ListKind::RouteNumbers if verb == "route_type" => {
             // the first press starts typing, the next one (Enter) sets what is typed
-            match app.menu_edit.take() {
+            match app.menus.menu_edit.take() {
                 Some(t) => {
                     set_route_by_hand(app, &t);
                     None
                 }
                 None => {
-                    app.menu_edit = Some(String::new());
+                    app.menus.menu_edit = Some(String::new());
                     Some(ListKind::RouteNumbers)
                 }
             }
@@ -1493,8 +1493,8 @@ fn option_set(app: &mut App, verb: &str, arg: &str, v: f32) -> Option<(&'static 
 fn toggle_now(app: &App, id: &str) -> Option<bool> {
     let s = &app.settings;
     Some(match id {
-        "navigator" => if app.vr_active() { app.vr_nav_profile().enabled } else { app.navigator.as_ref().is_some_and(|n| n.enabled) },
-        "nav_ai" => app.navigator.as_ref().map_or(s.nav_ai, |n| n.show_ai),
+        "navigator" => if app.vr_active() { app.vr_nav_profile().enabled } else { app.menus.navigator.as_ref().is_some_and(|n| n.enabled) },
+        "nav_ai" => app.menus.navigator.as_ref().map_or(s.nav_ai, |n| n.show_ai),
         "shadows" => s.shadows,
         "head" => s.head_movement,
         "cam_smooth" => s.driverview_smooth,
@@ -1523,9 +1523,9 @@ fn toggle_now(app: &App, id: &str) -> Option<bool> {
         "head_tracking_invert_x" => s.head_tracking_invert_x,
         "head_tracking_invert_y" => s.head_tracking_invert_y,
         "head_tracking_invert_z" => s.head_tracking_invert_z,
-        "timetable_win" => app.timetable,
-        "info_bar" => app.info_bar,
-        "nav_arrows" => app.navigator.as_ref().map_or(s.nav_arrows, |n| n.arrows),
+        "timetable_win" => app.menus.timetable,
+        "info_bar" => app.menus.info_bar,
+        "nav_arrows" => app.menus.navigator.as_ref().map_or(s.nav_arrows, |n| n.arrows),
         "exact_fare" => s.exact_fare,
         "collision_pedestrians" => s.collision_pedestrians,
         "ssao" => s.ssao,
@@ -1572,14 +1572,14 @@ fn toggle_set(app: &mut App, id: &str, on: bool) -> Option<(&'static str, String
                 if app.vr_nav_profile().enabled != on { app.vr_nav_adjust("enabled", 1.0); }
                 return None;
             }
-            if let Some(n) = app.navigator.as_mut() {
+            if let Some(n) = app.menus.navigator.as_mut() {
                 n.enabled = on;
             }
             app.settings.navigator = on;
             Some(("navigator", bit))
         }
         "nav_ai" => {
-            if let Some(n) = app.navigator.as_mut() {
+            if let Some(n) = app.menus.navigator.as_mut() {
                 n.show_ai = on;
             }
             app.settings.nav_ai = on;
@@ -1720,7 +1720,7 @@ fn toggle_set(app: &mut App, id: &str, on: bool) -> Option<(&'static str, String
             Some(("ff_enabled", bit))
         }
         "timetable_win" => {
-            app.timetable = on;
+            app.menus.timetable = on;
             None
         }
         "info_bar" => {
@@ -2234,7 +2234,7 @@ fn sync_live(app: &mut App) {
     crate::startup::SOUND_AI.store(s.vol_ai.to_bits(), std::sync::atomic::Ordering::Relaxed);
     crate::startup::SOUND_SCENERY.store(s.vol_scenery.to_bits(), std::sync::atomic::Ordering::Relaxed);
     omsi_audio::DOPPLER.store(s.doppler, std::sync::atomic::Ordering::Relaxed);
-    if let Some(n) = app.navigator.as_mut() {
+    if let Some(n) = app.menus.navigator.as_mut() {
         n.arrows = s.nav_arrows;
     }
     if let Some(h) = app.humans.as_mut() {
@@ -2541,7 +2541,7 @@ fn vehicle_pages(app: &App) -> Vec<Page> {
         service.push(button("Wash", "Wash", "Cleans the current vehicle", "wash"));
         service.push(button("Repair", "Repair", "Repairs the current vehicle", "repair"));
         service.push(button("Put back on its wheels", "Reset", "Return the vehicle to an upright position", "reset"));
-        if !server && app.navigator.is_some() {
+        if !server && app.menus.navigator.is_some() {
             service.push(button("Move on the map", "Pick", "Teleports you to any location on the map", "teleport"));
             service.push(opens("Teleport to a start point", "Teleport to a starting point on the map", "tplist"));
         }
@@ -2566,7 +2566,7 @@ fn world_pages(app: &App) -> Vec<Page> {
             time.push((row("Date and time", 'i', &text, "Synchronized with the real time", None), "noop".to_string()));
         } else {
             // the exact time: typed as hours, minutes and seconds
-            match app.menu_edit.as_ref() {
+            match app.menus.menu_edit.as_ref() {
                 Some(d) => {
                     let mut c: Vec<char> = d.chars().collect();
                     c.resize(6, '_');
@@ -2597,10 +2597,10 @@ fn world_pages(app: &App) -> Vec<Page> {
         weather.extend(switch_row(app, "metar_sync", "METAR sync", "The weather follows the real METAR report"));
         let src = if app.settings.metar_station.is_empty() { format!("{} ({})", app.metar_station(), omsi_ui::tr("automatic")) } else { app.metar_station() };
         weather.push((row("METAR source", 'o', &src, "The airport used for real weather.", None), "metar_src".to_string()));
-        let typed=if app.menu_edit_icao{
-            let mut s=app.menu_edit.clone().unwrap_or_default(); while s.len()<4{s.push('_');} format!("{s}  (typing)")
+        let typed=if app.menus.menu_edit_icao{
+            let mut s=app.menus.menu_edit.clone().unwrap_or_default(); while s.len()<4{s.push('_');} format!("{s}  (typing)")
         }else{app.metar_station()};
-        weather.push((row("ICAO",if app.menu_edit_icao{'E'}else{'e'},&typed,"Enter any 4-letter ICAO station.",None),"metar_icao_edit".to_string()));
+        weather.push((row("ICAO",if app.menus.menu_edit_icao{'E'}else{'e'},&typed,"Enter any 4-letter ICAO station.",None),"metar_icao_edit".to_string()));
         if app.metar_locked() {
             weather.push(button("METAR report", "Refresh now", "Fetch the selected station again without waiting for the next automatic update.", "metar_refresh"));
         } else {
@@ -2867,7 +2867,7 @@ fn fleet_numbers(v: &omsi_sim::VehicleInstance) -> Vec<(String, String)> {
 /// Take on line `line`, tour `tour` from now: the duty, and the IBIS typed for it.
 /// The tour on row `k` of the open list of tours: (line, tour).
 pub(crate) fn tour_at(app: &App, k: usize) -> Option<(String, String)> {
-    let action = app.admin_list.as_ref()?.get(k)?.1.strip_prefix("tour ")?;
+    let action = app.menus.admin_list.as_ref()?.get(k)?.1.strip_prefix("tour ")?;
     let (line, tour) = action.split_once('\u{1}')?;
     Some((line.to_string(), tour.to_string()))
 }
@@ -2888,7 +2888,7 @@ pub(crate) fn tour_choice(app: &App, k: usize) -> Option<(usize, usize, usize, u
     let (line, tour) = tour_at(app, k)?;
     let sch = app.schedule.as_ref()?;
     let trips = sch.tour_trip_count(&line, &tour);
-    let (stop, trip) = match app.list_kind.as_ref() {
+    let (stop, trip) = match app.menus.list_kind.as_ref() {
         Some(ListKind::Tours(_, Some(p))) if p.0 == tour => (p.1, p.2),
         _ => (0, sch.tour_trip_now(&line, &tour, app.clock.time)),
     };

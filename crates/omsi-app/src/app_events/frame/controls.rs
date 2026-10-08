@@ -10,7 +10,7 @@ impl App {
         // the tutorial's pages, once the world is there
         if self.world.is_some() {
             if let Some(n) = self.args.tutorial.take() {
-                self.tutorial = crate::tutorial::Tutorial::load(&self.args.root, n, &self.settings.language);
+                self.menus.tutorial = crate::tutorial::Tutorial::load(&self.args.root, n, &self.settings.language);
             }
         }
         // the game controllers: their axes this frame, their buttons' key actions
@@ -28,7 +28,7 @@ impl App {
         ctl.ff_fade = self.settings.ff_fade;
         ctl.steer_gain = if self.settings.wheel_lock >= 45.0 { (self.settings.wheel_range / self.settings.wheel_lock).clamp(0.1, 20.0) } else { 1.0 };
         ctl.disabled = self.settings.ctrl_off.split('|').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
-        ctl.set_editing(self.game_menu.is_some() || self.chooser.is_some());
+        ctl.set_editing(self.menus.game_menu.is_some() || self.menus.chooser.is_some());
         let analog = ctl.poll();
         let actions = std::mem::take(&mut ctl.actions);
         let moved = match (analog.steering, self.input.last_ctl_steer) {
@@ -43,10 +43,10 @@ impl App {
         #[cfg(not(windows))]
         let vr_on = false;
         let needs_mouse = self.input.mouse_drive
-            || self.game_menu.is_some()
-            || self.chooser.is_some()
-            || self.list_kind.is_some()
-            || self.navigator.as_ref().is_some_and(|n| n.map_open())
+            || self.menus.game_menu.is_some()
+            || self.menus.chooser.is_some()
+            || self.menus.list_kind.is_some()
+            || self.menus.navigator.as_ref().is_some_and(|n| n.map_open())
             || crate::plugin_ui::focused(&self.integrations.plugins)
             || !matches!(self.view.as_str(), "driver" | "outside" | "pax");
         let hide = (moved || actions.iter().any(|a| a.1)) && !needs_mouse && !vr_on;
@@ -99,7 +99,7 @@ impl App {
         let mut analog = analog;
         // the head turned by a stick or an axis set up for it (#454), at up to
         // 120 degrees a second, in the views of the bus, on foot and flying
-        if analog.look != [0.0, 0.0] && self.game_menu.is_none() && self.chooser.is_none() && !self.paused {
+        if analog.look != [0.0, 0.0] && self.menus.game_menu.is_none() && self.menus.chooser.is_none() && !self.paused {
             let k = LOOK_STICK_DEG_S * dt * self.settings.look_sens;
             self.look_by(analog.look[0] * k, analog.look[1] * k);
         }
@@ -134,7 +134,7 @@ impl App {
         // looking round does: the cursor goes to their buttons)
         let panels_mouse = self.plugin_focus();
         if let (true, Some(s)) = (self.input.mouse_drive && bus_view && !self.input.mouse_look && !self.input.input_away && !panels_mouse
-                                      && self.game_menu.is_none(), self.gfx.surface.as_ref()) {
+                                      && self.menus.game_menu.is_none(), self.gfx.surface.as_ref()) {
             let (w, h) = (s.config.width as f32, s.config.height as f32);
             if std::mem::take(&mut self.input.center_cursor) {
                 self.input.cursor = (w * 0.5, h * 0.5);
@@ -195,7 +195,7 @@ impl App {
             analog.throttle = Some(self.input.mouse_pedals.0);
             analog.brake = Some(self.input.mouse_pedals.1);
         } else if self.input.mouse_drive && bus_view && (self.input.mouse_look || self.input.input_away || panels_mouse)
-            && self.game_menu.is_none() {
+            && self.menus.game_menu.is_none() {
             // looking round with the right button: the wheel and the pedals stay where
             // the mouse left them, as in OMSI (they went slack until the button was let
             // go - no quick look round while driving). With the window in the
@@ -218,7 +218,7 @@ impl App {
         // OMSI's view actions (other cameras, views)
         let mut actions = actions;
         {
-            let menu_open = self.game_menu.is_some() || self.chooser.is_some();
+            let menu_open = self.menus.game_menu.is_some() || self.menus.chooser.is_some();
             let mut game: Vec<String> = Vec::new();
             actions.retain(|(name, down)| {
                 if menu_open && *down { return false; }
@@ -261,7 +261,7 @@ impl App {
             p.axes.pedal_hold = self.settings.brake_hold;
             p.analog = analog;
             for (name, down) in actions {
-                if !down || (self.game_menu.is_none() && self.chooser.is_none()) {
+                if !down || (self.menus.game_menu.is_none() && self.menus.chooser.is_none()) {
                     p.action(&name, down);
                 }
             }

@@ -9,15 +9,15 @@ impl App {
         if self.vr_active() {
             if !self.vr_nav_profile().enabled {
                 self.vr_nav_adjust("enabled", 1.0);
-            } else if self.navigator.as_ref().is_some_and(|n| n.schedule) {
-                if let Some(n) = self.navigator.as_mut() { n.schedule = false; }
+            } else if self.menus.navigator.as_ref().is_some_and(|n| n.schedule) {
+                if let Some(n) = self.menus.navigator.as_mut() { n.schedule = false; }
                 self.vr_nav_adjust("enabled", 1.0);
-            } else if let Some(n) = self.navigator.as_mut() {
+            } else if let Some(n) = self.menus.navigator.as_mut() {
                 n.schedule = true;
             }
             return true;
         }
-        if let Some(n) = self.navigator.as_mut() {
+        if let Some(n) = self.menus.navigator.as_mut() {
             match (n.enabled, n.schedule) {
                 (true, false) => n.schedule = true,
                 (true, true) => {
@@ -80,8 +80,8 @@ impl App {
                     }
                 }
             }
-            self.hover_key = None;
-            if matches!(self.list_kind, Some(crate::game_lists::ListKind::Options(_))) {
+            self.menus.hover_key = None;
+            if matches!(self.menus.list_kind, Some(crate::game_lists::ListKind::Options(_))) {
                 self.refresh_list();
             }
             return true;
@@ -160,7 +160,7 @@ impl App {
             "view_set_schedule" | "view_set_ticketselling" => {
                 let schedule = name == "view_set_schedule";
                 if schedule {
-                    self.timetable = !self.timetable;
+                    self.menus.timetable = !self.menus.timetable;
                 }
                 if let Some(p) = self.player.as_mut() {
                     let def = &p.vehicle.ty.def;
@@ -182,7 +182,7 @@ impl App {
                     }
                 }
             }
-            "view_toggle_informationdisplay" => self.set_info_bar(!self.info_bar),
+            "view_toggle_informationdisplay" => self.set_info_bar(!self.menus.info_bar),
             // (Omsi.exe's camera reset, 0x7edde4, puts back the field of view with the
             // direction: the zoom goes as well, #244)
             "view_reset_direction" => {
@@ -347,7 +347,7 @@ impl App {
 
     /// The information bar on or off, and kept so for the next session (#1164).
     pub(crate) fn set_info_bar(&mut self, on: bool) {
-        self.info_bar = on;
+        self.menus.info_bar = on;
         if self.settings.info_bar != on {
             self.settings.info_bar = on;
             crate::game_lists::remember_setting("info_bar", if on { "1" } else { "0" });
@@ -361,9 +361,9 @@ impl App {
             return;
         }
         self.paused = !self.paused;
-        if self.game_menu.is_some() {
+        if self.menus.game_menu.is_some() {
             // Keep the state a menu close should restore in step with P.
-            self.menu_prev_pause = self.paused;
+            self.menus.menu_prev_pause = self.paused;
         }
     }
 

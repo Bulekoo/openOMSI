@@ -378,7 +378,7 @@ pub(crate) fn run(app: &mut App, kind: &ListKind, action: &str, mv: Move) -> Opt
 
 /// Called after the existing controller's single poll for this frame.
 pub(crate) fn frame(app: &mut App) {
-    if matches!(app.list_kind, Some(ListKind::ControllerDevices(_) | ListKind::Controller(..) | ListKind::ControllerAxis(..))) {
+    if matches!(app.menus.list_kind, Some(ListKind::ControllerDevices(_) | ListKind::Controller(..) | ListKind::ControllerAxis(..))) {
         thread_local! {
             static LAST_REFRESH: std::cell::RefCell<std::time::Instant> = std::cell::RefCell::new(std::time::Instant::now());
         }
@@ -391,7 +391,7 @@ pub(crate) fn frame(app: &mut App) {
         if refresh { app.refresh_list(); }
         return;
     }
-    let Some(ListKind::ControllerCapture(name)) = app.list_kind.clone() else { return };
+    let Some(ListKind::ControllerCapture(name)) = app.menus.list_kind.clone() else { return };
     let pressed = app.input.controllers.as_ref().and_then(|c| c.raw_buttons.iter().find(|(n, b, down)|
         *down && *b < crate::controllers::HAT_BUTTONS + 16 && crate::controllers::names_match(n, &name)).map(|(_, b, _)| *b));
     if let Some(button) = pressed {

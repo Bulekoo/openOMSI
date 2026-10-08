@@ -8,7 +8,7 @@ impl App {
     /// Open the game menu: the simulation pauses (not in a LAN session, which runs on
     /// for the other players).
     pub(crate) fn open_game_menu(&mut self) {
-        self.menu_prev_pause = self.paused;
+        self.menus.menu_prev_pause = self.paused;
         // the menu takes the keys, their key-ups too: what is held now is let go here, or a
         // steering key let go in the menu went on turning the wheel to full lock once the
         // menu closed (a throttle key went on accelerating, a door button stayed pressed)
@@ -16,26 +16,26 @@ impl App {
         if self.net.lan.is_none() {
             self.paused = true;
         }
-        self.game_menu = Some(0);
-        self.menu_top = None;
-        self.menu_kbd = true;
-        self.menu_drag = None;
+        self.menus.game_menu = Some(0);
+        self.menus.menu_top = None;
+        self.menus.menu_kbd = true;
+        self.menus.menu_drag = None;
     }
 
     pub(crate) fn close_game_menu(&mut self) {
-        self.key_capture = None;
-        if self.menu_edit_icao {
+        self.menus.key_capture = None;
+        if self.menus.menu_edit_icao {
             if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
-            self.menu_edit_icao=false; self.menu_edit=None;
+            self.menus.menu_edit_icao=false; self.menus.menu_edit=None;
         }
-        self.game_menu = None;
-        self.menu_top = None;
-        self.paused = self.menu_prev_pause;
+        self.menus.game_menu = None;
+        self.menus.menu_top = None;
+        self.paused = self.menus.menu_prev_pause;
     }
 
     pub(crate) fn menu_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode) {
-        self.menu_kbd = true;
-        if self.key_capture.is_some() {
+        self.menus.menu_kbd = true;
+        if self.menus.key_capture.is_some() {
             match code {
                 KeyCode::ShiftLeft | KeyCode::ShiftRight | KeyCode::ControlLeft | KeyCode::ControlRight | KeyCode::AltLeft | KeyCode::AltRight => {}
                 KeyCode::Escape => self.cancel_key_capture(),
@@ -54,22 +54,22 @@ impl App {
             }
             return;
         }
-        if self.chooser.is_some() {
+        if self.menus.chooser.is_some() {
             self.chooser_key(code);
             return;
         }
         let n = self.game_menu_items().len();
-        let sel = self.game_menu.unwrap_or(0);
+        let sel = self.menus.game_menu.unwrap_or(0);
         let modified = self.input.keys.iter().any(|key| {
             matches!(*key, KeyCode::ControlLeft | KeyCode::ControlRight | KeyCode::AltLeft | KeyCode::AltRight | KeyCode::ShiftLeft | KeyCode::ShiftRight)
         });
-        self.menu_top = None;
+        self.menus.menu_top = None;
         match code {
             // P changes only the simulation state, even while a menu is open.
             KeyCode::KeyP if !modified => self.toggle_pause(),
             KeyCode::Escape => self.close_game_menu(),
-            KeyCode::ArrowUp | KeyCode::KeyW => self.game_menu = Some(self.menu_step(sel, n, false)),
-            KeyCode::ArrowDown | KeyCode::KeyS => self.game_menu = Some(self.menu_step(sel, n, true)),
+            KeyCode::ArrowUp | KeyCode::KeyW => self.menus.game_menu = Some(self.menu_step(sel, n, false)),
+            KeyCode::ArrowDown | KeyCode::KeyS => self.menus.game_menu = Some(self.menu_step(sel, n, true)),
             KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::Space => self.menu_choose(event_loop, sel),
             _ => {}
         }
@@ -78,51 +78,51 @@ impl App {
     /// The open drop-down's scroll bar held with the mouse at height `y`: the first entry
     /// shown follows the thumb.
     pub(crate) fn drag_dropdown(&mut self, y: f32) {
-        let (Some(grab), Some(ui)) = (self.dd_scroll_drag, self.ui.as_ref()) else { return };
+        let (Some(grab), Some(ui)) = (self.menus.dd_scroll_drag, self.ui.as_ref()) else { return };
         let Some((track, thumb)) = ui.dd_scroll else { return };
         let rows = ui.dd_rows.max(1);
-        let Some(d) = self.dropdown.as_mut() else { return };
+        let Some(d) = self.menus.dropdown.as_mut() else { return };
         d.top = dropdown_top_at(y - grab, track, thumb[3] - thumb[1], d.items.len(), rows);
     }
 
     /// The scroll bar of the timetable beside the tours held with the mouse at height `y`:
     /// the first stop shown follows the thumb.
     pub(crate) fn drag_pane(&mut self, y: f32) {
-        let (Some(grab), Some(k)) = (self.pane_scroll_drag, self.chooser) else { return };
+        let (Some(grab), Some(k)) = (self.menus.pane_scroll_drag, self.menus.chooser) else { return };
         let Some((track, thumb, n, fit)) = self.ui.as_ref().and_then(|u| u.menu_pane_scroll) else { return };
-        self.pane_scroll = Some((k, dropdown_top_at(y - grab, track, thumb[3] - thumb[1], n, fit)));
+        self.menus.pane_scroll = Some((k, dropdown_top_at(y - grab, track, thumb[3] - thumb[1], n, fit)));
     }
 
     /// The mouse wheel over the game menu: the chosen line moves (the menu scrolls with it),
     /// in a list the same; no wrapping round.
     pub(crate) fn menu_wheel(&mut self, amount: f32) {
         // (an open drop-down scrolls, not the window under it)
-        if self.dropdown.is_some() {
-            self.wheel_acc += amount;
-            let steps = self.wheel_acc.trunc() as i64;
+        if self.menus.dropdown.is_some() {
+            self.menus.wheel_acc += amount;
+            let steps = self.menus.wheel_acc.trunc() as i64;
             if steps == 0 {
                 return;
             }
-            self.wheel_acc -= steps as f32;
+            self.menus.wheel_acc -= steps as f32;
             let rows = self.ui.as_ref().map(|u| u.dd_rows).unwrap_or(8);
-            if let Some(d) = self.dropdown.as_mut() {
+            if let Some(d) = self.menus.dropdown.as_mut() {
                 let max = d.items.len().saturating_sub(rows) as i64;
                 d.top = (d.top as i64 - steps).clamp(0, max) as usize;
             }
             return;
         }
-        self.wheel_acc += amount;
-        let steps = self.wheel_acc.trunc() as i64;
+        self.menus.wheel_acc += amount;
+        let steps = self.menus.wheel_acc.trunc() as i64;
         if steps == 0 {
             return;
         }
-        self.wheel_acc -= steps as f32;
+        self.menus.wheel_acc -= steps as f32;
         // the wheel over the timetable beside the tours scrolls its stops
-        if let (Some(u), Some(k)) = (self.ui.as_ref(), self.chooser) {
+        if let (Some(u), Some(k)) = (self.ui.as_ref(), self.menus.chooser) {
             let (x, y) = self.input.cursor;
             if u.menu_pane_box.is_some_and(|r| x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3]) {
                 let first = (u.menu_pane_start as i64 - steps).max(0) as usize;
-                self.pane_scroll = Some((k, first));
+                self.menus.pane_scroll = Some((k, first));
                 return;
             }
         }
@@ -130,14 +130,14 @@ impl App {
         // walk the highlight up and down the lines)
         let n = self.menu_len() as f32;
         let (start, rows) = self.ui.as_ref().map(|u| (u.menu_start as f32, u.menu_rows as f32)).unwrap_or((0.0, n));
-        let top = (self.menu_top.unwrap_or(start) - steps as f32).clamp(0.0, (n - rows).max(0.0));
-        self.menu_top = Some(top);
+        let top = (self.menus.menu_top.unwrap_or(start) - steps as f32).clamp(0.0, (n - rows).max(0.0));
+        self.menus.menu_top = Some(top);
     }
 
     /// How many lines the menu shows now (the chooser's list, else the game menu's).
     pub(crate) fn menu_len(&self) -> usize {
-        match self.chooser {
-            Some(_) => self.admin_list.as_ref().unwrap_or(&self.vehicle_list).len(),
+        match self.menus.chooser {
+            Some(_) => self.menus.admin_list.as_ref().unwrap_or(&self.menus.vehicle_list).len(),
             None => self.game_menu_items().len(),
         }
     }
@@ -145,8 +145,8 @@ impl App {
     /// Do what line `k` of the game menu says.
     pub(crate) fn menu_choose(&mut self, event_loop: &ActiveEventLoop, k: usize) {
         // (a click in an open list keeps the scroll where it is: no jump to the line)
-        self.menu_top = if self.chooser.is_some() { self.ui.as_ref().map(|u| u.menu_start as f32) } else { None };
-        if self.chooser.is_some() {
+        self.menus.menu_top = if self.menus.chooser.is_some() { self.ui.as_ref().map(|u| u.menu_start as f32) } else { None };
+        if self.menus.chooser.is_some() {
             self.chooser_pick(k);
             return;
         }
@@ -173,7 +173,7 @@ impl App {
             "duty" => self.open_list(crate::game_lists::ListKind::Lines),
             "map" => {
                 self.close_game_menu();
-                if let Some(n) = self.navigator.as_mut() {
+                if let Some(n) = self.menus.navigator.as_mut() {
                     if !n.map_open() {
                         n.toggle_map();
                     }
@@ -205,14 +205,14 @@ impl App {
                 self.back_to_bus();
             }
             "load" => {
-                self.game_menu = None;
+                self.menus.game_menu = None;
                 if self.load_quicksave() {
                     self.finish_session();
                     crate::platform::exit(event_loop);
                 }
             }
             "quit" => {
-                self.game_menu = None;
+                self.menus.game_menu = None;
                 self.finish_session();
                 crate::platform::exit(event_loop);
             }
@@ -229,18 +229,18 @@ impl App {
         match id {
             "swap" | "place" => {
                 // (a plain "Place a vehicle" puts one beside; "Swap" in the driven one's place)
-                self.swap_pending = id == "swap" && self.player.is_some();
-                if self.vehicle_list.is_empty() {
+                self.menus.swap_pending = id == "swap" && self.player.is_some();
+                if self.menus.vehicle_list.is_empty() {
                     let menu = crate::menu::Menu::new(&self.args.root, &self.args.map);
-                    self.vehicle_meta = menu.vehicles.iter().zip(menu.vehicle_meta).map(|(v, meta)| (v.1.clone(), meta)).collect();
-                    self.vehicle_list = menu.vehicles;
+                    self.menus.vehicle_meta = menu.vehicles.iter().zip(menu.vehicle_meta).map(|(v, meta)| (v.1.clone(), meta)).collect();
+                    self.menus.vehicle_list = menu.vehicles;
                     // (alphabetical)
-                    self.vehicle_list.sort_by_key(|v| v.0.to_lowercase());
-                    crate::mt::protect(self.vehicle_list.iter().map(|v| v.0.as_str()));
+                    self.menus.vehicle_list.sort_by_key(|v| v.0.to_lowercase());
+                    crate::mt::protect(self.menus.vehicle_list.iter().map(|v| v.0.as_str()));
                 }
-                if self.vehicle_list.is_empty() {
+                if self.menus.vehicle_list.is_empty() {
                     self.service_msg = Some(("No vehicles found".into(), 3.0));
-                } else if crate::lan::server_offers().is_some_and(|o| !self.vehicle_list.iter().any(|v| crate::lan::offers(&o, &v.1))) {
+                } else if crate::lan::server_offers().is_some_and(|o| !self.menus.vehicle_list.iter().any(|v| crate::lan::offers(&o, &v.1))) {
                     self.service_msg = Some(("The server offers none of the vehicles installed here".into(), 4.0));
                 } else {
                     // (as the launcher's bus step: the manufacturer, then the type)
@@ -285,11 +285,11 @@ impl App {
             }
             "teleport" => {
                 self.close_game_menu();
-                if let Some(n) = self.navigator.as_mut() {
+                if let Some(n) = self.menus.navigator.as_mut() {
                     if !n.map_open() {
                         n.toggle_map();
                     }
-                    self.teleport_pick = true;
+                    self.menus.teleport_pick = true;
                     self.service_msg = Some(("Click a street on the map: the bus is put there".into(), 6.0));
                 }
             }
@@ -303,11 +303,11 @@ impl App {
                 self.toggle_editor();
             }
             "timetable" => {
-                self.timetable = !self.timetable;
+                self.menus.timetable = !self.menus.timetable;
                 self.close_game_menu();
             }
             "info" => {
-                self.set_info_bar(!self.info_bar);
+                self.set_info_bar(!self.menus.info_bar);
                 self.close_game_menu();
             }
             "refuel" | "wash" | "repair" => {
@@ -394,7 +394,7 @@ impl crate::App {
         if !self.duty.as_ref().is_some_and(|d| d.stop_to_skip()) {
             v.retain(|x| x.0 != "skipstop");
         }
-        if self.navigator.is_none() {
+        if self.menus.navigator.is_none() {
             v.retain(|x| x.0 != "map");
         }
         let host = self.net.lan.as_ref().map(|l| l.role == omsi_net::Role::Host).unwrap_or(false);
@@ -447,7 +447,7 @@ impl crate::App {
 
     /// Whether line `k` of the game menu is greyed out.
     pub(crate) fn menu_item_off(&self, k: usize) -> bool {
-        self.chooser.is_none() && self.game_menu_items().get(k).is_some_and(|m| self.menu_disabled_ids().contains(&m.0))
+        self.menus.chooser.is_none() && self.game_menu_items().get(k).is_some_and(|m| self.menu_disabled_ids().contains(&m.0))
     }
 
     /// The next line up or down from `from` that can be chosen (round the ends; the greyed-out

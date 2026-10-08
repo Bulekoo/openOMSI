@@ -72,7 +72,7 @@ impl App {
             lights::collect(w, scene, &daylight, cam.position, &vehicles);
             *self.perf.profile.entry("lights.collect").or_default() += __tc.elapsed().as_secs_f64();
             // the object editor's pick: a magenta glow over it
-            if let Some(id) = self.editor.as_ref().and_then(|e| e.selected) {
+            if let Some(id) = self.menus.editor.as_ref().and_then(|e| e.selected) {
                 let at = w.edit_objects.lock().get(&id).map(|o| o.pos);
                 let moved = w.object_edits.lock().get(&id).map(|e| e.moved).unwrap_or_default();
                 if let Some(p) = at {

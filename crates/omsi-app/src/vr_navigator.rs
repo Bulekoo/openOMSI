@@ -237,15 +237,15 @@ impl crate::App {
             }
         }
         self.input.buttons_held = (false, false);
-        if self.game_menu.is_some() {
+        if self.menus.game_menu.is_some() {
             self.close_game_menu();
         }
-        self.chooser = None;
-        self.admin_list = None;
-        self.list_kind = None;
-        self.dropdown = None;
-        self.menu_drag = None;
-        self.menu_edit = None;
+        self.menus.chooser = None;
+        self.menus.admin_list = None;
+        self.menus.list_kind = None;
+        self.menus.dropdown = None;
+        self.menus.menu_drag = None;
+        self.menus.menu_edit = None;
         self.view = "driver".into();
         self.xr.vr_nav_edit = Some(Editing {
             moving: false,
@@ -260,13 +260,13 @@ impl crate::App {
         self.input.mouse_look = false;
         self.input.both_drag = None;
         self.input.keys.clear();
-        self.hover_key = None;
+        self.menus.hover_key = None;
         #[cfg(windows)]
         {
             self.xr.vr_zoom_active = false;
             self.reset_vr_pointer();
         }
-        if let Some(n) = self.navigator.as_mut() {
+        if let Some(n) = self.menus.navigator.as_mut() {
             if n.map_open() {
                 n.toggle_map();
             }
@@ -289,7 +289,7 @@ impl crate::App {
         self.paused = edit.paused_before;
         self.input.mouse_drive = edit.mouse_drive_before;
         self.input.mouse_look = false;
-        self.hover_key = None;
+        self.menus.hover_key = None;
         self.input.keys.clear();
         self.input.cursor_hidden = None;
         #[cfg(windows)]

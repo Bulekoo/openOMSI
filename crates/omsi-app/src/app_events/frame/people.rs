@@ -155,9 +155,9 @@ impl App {
         self.placing_frame();
         // the host sends every edit of the map again now and then (players join)
         if self.net.lan.as_ref().map(|l| l.role == omsi_net::Role::Host).unwrap_or(false) {
-            self.editor_sync_t -= dt;
-            if self.editor_sync_t <= 0.0 {
-                self.editor_sync_t = 10.0;
+            self.menus.editor_sync_t -= dt;
+            if self.menus.editor_sync_t <= 0.0 {
+                self.menus.editor_sync_t = 10.0;
                 self.editor_broadcast(true);
             }
         }
