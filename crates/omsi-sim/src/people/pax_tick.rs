@@ -3,9 +3,9 @@
 
 use super::*;
 
-impl Humans {
+impl PeopleSim {
     /// The world position and heading of a passenger.
-    pub(super) fn pax_world(&self, p: &Pax, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>) -> Option<(DVec3, f64)> {
+    pub fn pax_world(&self, p: &Pax, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>) -> Option<(DVec3, f64)> {
         match p.inside {
             None => Some((p.pos, p.yaw.to_degrees())),
             Some(b) => {
@@ -18,10 +18,10 @@ impl Humans {
 
     /// Everybody's passenger tick of this frame, in the order of the people (sub_6ffc7c).
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn pax_frame(
+    pub fn pax_frame(
         &mut self,
         dt: f32,
-        world: &World,
+        world: &dyn World,
         buses: &[BusNow],
         bus_ix: &HashMap<BusId, usize>,
         at_stops: &HashMap<BusId, BusAtStops>,
@@ -130,11 +130,11 @@ impl Humans {
 
     /// One person's tick (sub_62a6a0 without the street walk).
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn pax_tick(
+    pub fn pax_tick(
         &mut self,
         i: usize,
         dt: f32,
-        world: &World,
+        world: &dyn World,
         buses: &[BusNow],
         bus_ix: &HashMap<BusId, usize>,
         at_stops: &HashMap<BusId, BusAtStops>,
@@ -219,7 +219,7 @@ impl Humans {
     }
 
     /// The movement part of the tick (sub_62a6a0, 0x62ad0b - 0x62b966).
-    pub(super) fn pax_move(&mut self, i: usize, dt: f32, dt_ms: f32, world: &World, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>) {
+    pub fn pax_move(&mut self, i: usize, dt: f32, dt_ms: f32, world: &dyn World, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>) {
         let p0 = self.pax(i).unwrap().clone();
         let bn_in = p0.inside.and_then(|b| bus_ix.get(&b).map(|k| &buses[*k]));
         let bn_t = p0.bus.and_then(|b| bus_ix.get(&b).map(|k| &buses[*k]));
@@ -438,7 +438,7 @@ impl Humans {
     }
 
     /// sub_626860: whether somebody within 0.6 m stands in the way.
-    pub(super) fn pax_blockers(&self, i: usize, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>) -> (u8, bool, bool) {
+    pub fn pax_blockers(&self, i: usize, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>) -> (u8, bool, bool) {
         let me = self.pax(i).unwrap();
         let Some((my_pos, my_head)) = self.pax_world(me, buses, bus_ix) else { return (0, true, true) };
         let fs = {

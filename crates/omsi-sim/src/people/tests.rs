@@ -102,9 +102,9 @@ fn seats_counted_by_the_scripts_numbers() {
 
 #[test]
 fn tickets_by_age_and_time() {
-    let mut h = Humans::new(Path::new("/nonexistent"));
+    let mut h = PeopleSim::new(Path::new("/nonexistent"), 200);
     h.tickets = Some(Arc::new(berlin_91()));
-    let count = |h: &mut Humans, age: f32| {
+    let count = |h: &mut PeopleSim, age: f32| {
         let mut n = [0usize; 5];
         for _ in 0..4000 {
             n[h.pick_ticket(age).unwrap()] += 1;
@@ -129,8 +129,8 @@ fn tickets_by_age_and_time() {
     assert_eq!(h.pick_ticket(3.0), None);
 }
 
-fn lane(points: Vec<DVec3>, kind: LaneKind) -> omsi_sim::traffic::Lane {
-    omsi_sim::traffic::LaneBuilder::polyline(points, kind, 2.5)
+fn lane(points: Vec<DVec3>, kind: LaneKind) -> crate::traffic::Lane {
+    crate::traffic::LaneBuilder::polyline(points, kind, 2.5)
 }
 
 #[test]
@@ -313,7 +313,7 @@ fn articulated_cabins_are_joined_through_the_bellows() {
 /// the plain floor.
 #[test]
 fn footsteps_come_from_the_links_step_sound_pack() {
-    let root = omsi_cfg::env::var_os("OMSI_ROOT")
+    let root = omsi_cfg::flags::OMSI_ROOT.os()
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("../../../OMSI 2 Original"));
     let bus = root.join("Vehicles/MAN_SD200/MAN_SD80.bus");
@@ -344,7 +344,7 @@ fn footsteps_come_from_the_links_step_sound_pack() {
 /// the walk from up there to an exit goes down the stairs.
 #[test]
 fn double_decker_exits_are_reached_down_the_stairs() {
-    let root = omsi_cfg::env::var_os("OMSI_ROOT")
+    let root = omsi_cfg::flags::OMSI_ROOT.os()
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("../../../OMSI 2 Original"));
     let bus = root.join("Vehicles/MAN_SD202/MAN_D92.bus");
@@ -412,29 +412,29 @@ fn doors_open_falls_back_when_exit_vars_are_undeclared() {
     std::fs::write(dir.join("vars.txt"), "door_0\ndoor_1\ndoor_2\nPAX_Entry0_Open\n").unwrap();
     std::fs::write(dir.join("main.osc"), "{init}\n{end}\n").unwrap();
 
-    let ty = std::sync::Arc::new(omsi_sim::VehicleType::load(&dir, &dir.join("test.bus")).unwrap());
-    let mut v = VehicleInstance::new(ty, omsi_sim::VehicleHost::new(Default::default()));
+    let ty = std::sync::Arc::new(crate::VehicleType::load(&dir, &dir.join("test.bus")).unwrap());
+    let mut v = VehicleInstance::new(ty, crate::VehicleHost::new(Default::default()));
 
     // Initially both entries and exit closed
-    let (e, x) = Humans::doors_open(&v, 2, 1);
+    let (e, x) = PeopleSim::doors_open(&v, 2, 1);
     assert_eq!(e, vec![false, false]);
     assert_eq!(x, vec![false]);
 
     // Front door leaf 0 opens via PAX_Entry0_Open
     v.set_var("PAX_Entry0_Open", 1.0);
-    let (e, x) = Humans::doors_open(&v, 2, 1);
+    let (e, x) = PeopleSim::doors_open(&v, 2, 1);
     assert_eq!(e, vec![true, false]);
     assert_eq!(x, vec![false]);
 
     // Rear door leaf 2 opens (falls back to door_2 since PAX_Exit0_Open is not in varlist)
     v.set_var("door_2", 1.0);
-    let (e, x) = Humans::doors_open(&v, 2, 1);
+    let (e, x) = PeopleSim::doors_open(&v, 2, 1);
     assert_eq!(e, vec![true, false]);
     assert_eq!(x, vec![true]);
 
     // Front door leaf 1 opens via door_1 fallback
     v.set_var("door_1", 1.0);
-    let (e, x) = Humans::doors_open(&v, 2, 1);
+    let (e, x) = PeopleSim::doors_open(&v, 2, 1);
     assert_eq!(e, vec![true, true]);
     assert_eq!(x, vec![true]);
 
@@ -455,11 +455,11 @@ fn doors_open_reads_pax_vars_the_script_writes_without_declaring() {
     std::fs::write(dir.join("vars.txt"), "door_0\n").unwrap();
     std::fs::write(dir.join("main.osc"), "{frame}\n1 (S.L.PAX_Entry0_Open)\n{end}\n").unwrap();
 
-    let ty = std::sync::Arc::new(omsi_sim::VehicleType::load(&dir, &dir.join("test.bus")).unwrap());
-    let mut v = VehicleInstance::new(ty, omsi_sim::VehicleHost::new(Default::default()));
+    let ty = std::sync::Arc::new(crate::VehicleType::load(&dir, &dir.join("test.bus")).unwrap());
+    let mut v = VehicleInstance::new(ty, crate::VehicleHost::new(Default::default()));
     v.set_var("door_0", 0.0);
     v.set_var("PAX_Entry0_Open", 1.0);
-    let (e, _) = Humans::doors_open(&v, 1, 0);
+    let (e, _) = PeopleSim::doors_open(&v, 1, 0);
     assert_eq!(e, vec![true]);
 
     std::fs::remove_dir_all(&dir).ok();
@@ -478,25 +478,25 @@ fn doors_open_3door_bus_handles_middle_and_rear_exits() {
     std::fs::write(dir.join("vars.txt"), "door_0\ndoor_1\ndoor_2\ndoor_3\ndoor_4\ndoor_5\n").unwrap();
     std::fs::write(dir.join("main.osc"), "{init}\n{end}\n").unwrap();
 
-    let ty = std::sync::Arc::new(omsi_sim::VehicleType::load(&dir, &dir.join("test.bus")).unwrap());
-    let mut v = VehicleInstance::new(ty, omsi_sim::VehicleHost::new(Default::default()));
+    let ty = std::sync::Arc::new(crate::VehicleType::load(&dir, &dir.join("test.bus")).unwrap());
+    let mut v = VehicleInstance::new(ty, crate::VehicleHost::new(Default::default()));
 
     // 3-door bus: 6 entries (all 3 doors), 4 exits (middle door leaves 2,3; rear door leaves 4,5)
-    let (e, x) = Humans::doors_open(&v, 6, 4);
+    let (e, x) = PeopleSim::doors_open(&v, 6, 4);
     assert_eq!(e, vec![false; 6]);
     assert_eq!(x, vec![false; 4]);
 
     // Middle doors (door_2 and door_3) open
     v.set_var("door_2", 1.0);
     v.set_var("door_3", 1.0);
-    let (e, x) = Humans::doors_open(&v, 6, 4);
+    let (e, x) = PeopleSim::doors_open(&v, 6, 4);
     assert_eq!(e, vec![false, false, true, true, false, false]);
     assert_eq!(x, vec![true, true, false, false]);
 
     // Rear doors (door_4 and door_5) open
     v.set_var("door_4", 1.0);
     v.set_var("door_5", 1.0);
-    let (e, x) = Humans::doors_open(&v, 6, 4);
+    let (e, x) = PeopleSim::doors_open(&v, 6, 4);
     assert_eq!(e, vec![false, false, true, true, true, true]);
     assert_eq!(x, vec![true, true, true, true]);
 
@@ -546,9 +546,9 @@ fn a_trailer_nobody_walks_into_is_boarded_by_its_own_doors() {
     let no_exit = cabin_of("cabin_trail_in.cfg", Some(0.0));
     let no_entry = cabin_of("cabin_trail_out.cfg", Some(0.0));
     let jointed_no_exit = cabin_of("cabin_trail_in.cfg", Some(1.0));
-    let ty = std::sync::Arc::new(omsi_sim::VehicleType::load(&dir, &dir.join("vars.bus")).unwrap());
+    let ty = std::sync::Arc::new(crate::VehicleType::load(&dir, &dir.join("vars.bus")).unwrap());
     std::fs::remove_dir_all(&dir).ok();
-    let v = VehicleInstance::new(ty, omsi_sim::VehicleHost::new(Default::default()));
+    let v = VehicleInstance::new(ty, crate::VehicleHost::new(Default::default()));
     assert_eq!((jointed.groups, plain.groups), (1, 1), "a bus joint is walked through");
     assert_eq!(jointed.links.len(), 5);
     assert_eq!(hitched.groups, 2);
@@ -624,9 +624,9 @@ fn doors_past_the_eighth_have_variables_of_their_own_or_go_with_the_eighth() {
         std::fs::write(dir.join("model.cfg"), "").unwrap();
         std::fs::write(dir.join("vars.txt"), vars).unwrap();
         std::fs::write(dir.join("main.osc"), "{init}\n{end}\n").unwrap();
-        let ty = std::sync::Arc::new(omsi_sim::VehicleType::load(&dir, &dir.join("test.bus")).unwrap());
+        let ty = std::sync::Arc::new(crate::VehicleType::load(&dir, &dir.join("test.bus")).unwrap());
         std::fs::remove_dir_all(&dir).ok();
-        VehicleInstance::new(ty, omsi_sim::VehicleHost::new(Default::default()))
+        VehicleInstance::new(ty, crate::VehicleHost::new(Default::default()))
     };
     let mut req = vec![false; 10];
     req[9] = true;
@@ -635,18 +635,18 @@ fn doors_past_the_eighth_have_variables_of_their_own_or_go_with_the_eighth() {
     let all: String = (0..10).map(|i| format!("PAX_Entry{i}_Open\n")).collect();
     let mut v = bus("own", &all);
     v.set_var("PAX_Entry9_Open", 1.0);
-    let (e, _) = Humans::doors_open(&v, 10, 0);
+    let (e, _) = PeopleSim::doors_open(&v, 10, 0);
     assert_eq!(e, [false, false, false, false, false, false, false, false, false, true]);
-    Humans::write_door_requests(&mut v, &DoorWants { entry_req: req.clone(), ..Default::default() });
+    PeopleSim::write_door_requests(&mut v, &DoorWants { entry_req: req.clone(), ..Default::default() });
     assert_eq!((v.var("PAX_Entry9_Req"), v.var("PAX_Entry7_Req")), (Some(1.0), Some(0.0)));
 
     // an older bus knows eight: the ninth and tenth go with the eighth
     let eight: String = (0..8).map(|i| format!("PAX_Entry{i}_Open\n")).collect();
     let mut v = bus("eight", &eight);
     v.set_var("PAX_Entry7_Open", 1.0);
-    let (e, _) = Humans::doors_open(&v, 10, 0);
+    let (e, _) = PeopleSim::doors_open(&v, 10, 0);
     assert_eq!(e, [false, false, false, false, false, false, false, true, true, true]);
-    Humans::write_door_requests(&mut v, &DoorWants { entry_req: req.clone(), ..Default::default() });
+    PeopleSim::write_door_requests(&mut v, &DoorWants { entry_req: req.clone(), ..Default::default() });
     assert_eq!((v.var("PAX_Entry9_Req"), v.var("PAX_Entry7_Req")), (Some(0.0), Some(1.0)));
 }
 
@@ -675,15 +675,15 @@ fn places_follow_their_own_variables() {
          [passpos]\n0\n0\n0.5\n0\n0\n\n[passpos]\n0\n-1\n0.5\n0\n0\nno_such_var\n",
     )
     .unwrap();
-    let ty = std::sync::Arc::new(omsi_sim::VehicleType::load(&dir, &dir.join("test.bus")).unwrap());
+    let ty = std::sync::Arc::new(crate::VehicleType::load(&dir, &dir.join("test.bus")).unwrap());
     let def = omsi_vehicle::Vehicle::load(&dir.join("test.bus")).unwrap();
     let cabin = Cabin::load_train(&[(&def, Vec3::ZERO, f32::INFINITY)]).expect("cabin");
     std::fs::remove_dir_all(&dir).ok();
-    let mut v = VehicleInstance::new(ty, omsi_sim::VehicleHost::new(Default::default()));
+    let mut v = VehicleInstance::new(ty, crate::VehicleHost::new(Default::default()));
     v.set_var("layout_long", 0.0);
     let off = places_off(&v, &cabin);
     assert_eq!(off, [true, false, false, false], "only the place whose variable is 0 is off");
-    let mut h = Humans::new(Path::new("/nonexistent"));
+    let mut h = PeopleSim::new(Path::new("/nonexistent"), 200);
     for _ in 0..40 {
         let k = h.reserve_place(BusId::Player, 4, &off).expect("a free place");
         assert_ne!(k, 0, "nobody takes a place that is switched off");
@@ -717,9 +717,9 @@ fn places_follow_their_own_variables() {
     };
     let taken = places_taken(&bn, &[(BusId::Player, 1), (BusId::Ai(2), 2)]);
     assert_eq!(taken, [("fold_seat_down".to_string(), true)]);
-    Humans::write_door_requests(&mut v, &DoorWants { places: taken, ..Default::default() });
+    PeopleSim::write_door_requests(&mut v, &DoorWants { places: taken, ..Default::default() });
     assert_eq!(v.var("fold_seat_down"), Some(1.0));
-    Humans::write_door_requests(&mut v, &DoorWants { places: places_taken(&bn, &[]), ..Default::default() });
+    PeopleSim::write_door_requests(&mut v, &DoorWants { places: places_taken(&bn, &[]), ..Default::default() });
     assert_eq!(v.var("fold_seat_down"), Some(0.0), "up again once they have got up");
 }
 
@@ -757,7 +757,7 @@ fn riders_get_off_at_a_timetable_stop_the_nearby_stops_do_not_have() {
         places_off: Vec::new(),
         served,
     };
-    let mut h = Humans::new(Path::new("/nonexistent"));
+    let mut h = PeopleSim::new(Path::new("/nonexistent"), 200);
     let reg = h.register_buses(&[bus(Some(496193))], 0.0);
     assert_eq!(reg[&BusId::Ai(5)].next, Some(496193));
     let reg = h.register_buses(&[bus(None)], 0.0);
@@ -827,12 +827,12 @@ fn a_doorway_is_busy_while_somebody_stands_in_it() {
     std::fs::write(dir.join("model.cfg"), "").unwrap();
     std::fs::write(dir.join("vars.txt"), "door_0\n").unwrap();
     std::fs::write(dir.join("main.osc"), "{init}\n{end}\n").unwrap();
-    let ty = std::sync::Arc::new(omsi_sim::VehicleType::load(&dir, &dir.join("vars.bus")).unwrap());
+    let ty = std::sync::Arc::new(crate::VehicleType::load(&dir, &dir.join("vars.bus")).unwrap());
     std::fs::remove_dir_all(&dir).ok();
-    let mut v = VehicleInstance::new(ty, omsi_sim::VehicleHost::new(Default::default()));
+    let mut v = VehicleInstance::new(ty, crate::VehicleHost::new(Default::default()));
     let mut entry_busy = vec![false; 10];
     entry_busy[9] = true;
-    Humans::write_door_requests(&mut v, &DoorWants { entry_busy, exit_busy: vec![false, true], ..Default::default() });
+    PeopleSim::write_door_requests(&mut v, &DoorWants { entry_busy, exit_busy: vec![false, true], ..Default::default() });
     assert_eq!((v.var("PAX_Entry7_Busy"), v.var("PAX_Entry0_Busy")), (Some(1.0), Some(0.0)));
     assert_eq!((v.var("PAX_Exit1_Busy"), v.var("PAX_Exit0_Busy")), (Some(1.0), Some(0.0)));
     // nobody there in the next frame: gone after the scripts' frame, as the requests

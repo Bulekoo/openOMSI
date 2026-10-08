@@ -46,7 +46,7 @@ pub struct LanPerson {
     pub waiting: Option<(i64, usize)>,
 }
 
-impl Humans {
+impl PeopleSim {
     /// Is person `id` (one drawn for another game) here?
     pub fn has_mirror(&self, id: u32) -> bool {
         self.people.iter().any(|p| p.id == id && p.remote)
@@ -83,14 +83,14 @@ impl Humans {
     }
 
     /// Is `p` further than `r` from us and from every other LAN player?
-    pub(super) fn far_from_players(&self, p: DVec3, r: f64) -> bool {
+    pub fn far_from_players(&self, p: DVec3, r: f64) -> bool {
         (p - self.center).length() > r && self.lan_centers.iter().all(|c| (p - *c).length() > r)
     }
 
     /// The stops and pavements around the other players of a LAN session (host).
-    pub(super) fn populate_lan_centers(
+    pub fn populate_lan_centers(
         &mut self,
-        world: &World,
+        world: &dyn World,
         net: &Network,
     ) {
         if self.lan_centers.is_empty() {
@@ -236,9 +236,7 @@ impl Humans {
     /// One of the host's people appears here (client).
     pub fn mirror_add(
         &mut self,
-        world: &World,
-        renderer: &Renderer,
-        scene: &mut Scene,
+        world: &dyn World,
         id: u32,
         ty: usize,
         pose: &MirrorPose,
@@ -259,7 +257,6 @@ impl Humans {
         p.anim = OmsiAnim::default();
         p.remote = true;
         self.mirror_set(id, pose);
-        self.show_bodies(world, renderer, scene);
         true
     }
 
@@ -301,7 +298,7 @@ impl Humans {
     }
 
     /// A remote person this frame: they stand where the host put them.
-    pub(super) fn mirror_want(&mut self, i: usize, _buses: &[BusNow]) -> Want {
+    pub fn mirror_want(&mut self, i: usize, _buses: &[BusNow]) -> Want {
         Want::stand(None, self.people[i].activity)
     }
 
@@ -372,7 +369,7 @@ impl Humans {
     }
 
     /// The host's people waiting at the stop our bus is listed at (client): ask for them.
-    pub(super) fn claim_waiting(&mut self) {
+    pub fn claim_waiting(&mut self) {
         if !self.mirror {
             return;
         }

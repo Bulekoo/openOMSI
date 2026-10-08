@@ -3,14 +3,12 @@
 
 use super::*;
 
-impl Humans {
+impl PeopleSim {
     /// Put people at the bus stops near `center`: at the start everywhere, later only at
     /// stops out of sight (the others fill with people walking up).
     pub fn populate(
         &mut self,
-        world: &World,
-        renderer: &Renderer,
-        scene: &mut Scene,
+        world: &dyn World,
         center: DVec3,
     ) {
         if self.avatar_only {
@@ -30,19 +28,17 @@ impl Humans {
             }
         }
         self.populate_with(world, None, center);
-        self.show_bodies(world, renderer, scene);
     }
 
-    pub(super) fn populate_with(
+    pub fn populate_with(
         &mut self,
-        world: &World,
+        world: &dyn World,
         net: Option<&Network>,
         center: DVec3,
     ) {
         self.center = center;
         let list: Vec<(i64, DVec3, f64, String)> = world
-            .bus_stops
-            .lock()
+            .bus_stops()
             .iter()
             .filter(|s| (s.1 - center).length() < STOP_RANGE + 100.0)
             .map(|s| (s.0, s.1, s.2, s.3.clone()))
@@ -62,15 +58,15 @@ impl Humans {
     /// places are the `[passpos]` of every object near it - within 10 m to the platform's
     /// side and from 10 m behind to the stop's length ahead of it -, the gather point a
     /// metre to the kerb and a metre ahead, the destinations of the trips leaving it.
-    pub(super) fn build_pax_stop(&mut self, world: &World, net: Option<&Network>, id: i64, pos: DVec3, heading: f64, name: &str) -> PaxStop {
+    pub fn build_pax_stop(&mut self, world: &dyn World, net: Option<&Network>, id: i64, pos: DVec3, heading: f64, name: &str) -> PaxStop {
         let length = world.stop_length(id);
         let side = world.stop_side(id).round().clamp(0.0, 255.0) as u8;
         let left = LEFT_HAND.load(std::sync::atomic::Ordering::Relaxed);
         let (xmax, xmin) = (if (side == 1) != left { 0.0 } else { 10.0 }, if (side == 0) != left { 0.0 } else { -10.0 });
         let h = heading.to_radians();
-        let objects = world.object_positions.lock();
+        let objects = world.object_positions();
         let mut spots: Vec<WaitSpot> = Vec::new();
-        for (obj, p, face, height) in world.waiting_places.lock().iter() {
+        for (obj, p, face, height) in world.waiting_places().iter() {
             let Some((opos, _)) = objects.get(obj) else {
                 if debug_pax() && (*p - pos).length() < 30.0 {
                     log::info!("stop {id}: waiting place of object {obj} at {p:?}: object position unknown");
@@ -110,7 +106,7 @@ impl Humans {
         let weights: Vec<f32> = lines
             .iter()
             .map(|(n, _)| {
-                world.bus_stops.lock().iter().find(|s| s.3.trim() == n.trim()).map(|s| world.stop_exit_weight(s.0)).unwrap_or(0.5)
+                world.bus_stops().iter().find(|s| s.3.trim() == n.trim()).map(|s| world.stop_exit_weight(s.0)).unwrap_or(0.5)
             })
             .collect();
         let total: f32 = weights.iter().sum();
@@ -157,13 +153,13 @@ impl Humans {
     /// it has fewer than it should - its pass_enter mean times its own random factor
     /// times the passenger density, at most one per waiting place. A stop going out of
     /// range loses the people waiting there.
-    pub(super) fn stops_tick(&mut self, dt: f32, world: &World) {
+    pub fn stops_tick(&mut self, dt: f32, world: &dyn World) {
         if self.mirror || self.avatar_only {
             return;
         }
         let mut ids: Vec<i64> = self.stops.keys().copied().collect();
         ids.sort_unstable();
-        let forced = omsi_cfg::env::var("OMSI_PAX_WAITING").ok().and_then(|v| v.parse::<usize>().ok());
+        let forced = omsi_cfg::flags::OMSI_PAX_WAITING.parse::<usize>();
         // the people handed over to another player's bus stop counting once it has left
         // their stop (or the session)
         if !self.handed.is_empty() {
@@ -253,7 +249,7 @@ impl Humans {
 
     /// A destination drawn from stop `id`'s (sub_61baa8): by weight; none when the weights
     /// leave the draw over. Also the stop's line record it matched.
-    pub(super) fn draw_dest(&mut self, id: i64) -> (Option<String>, Option<usize>) {
+    pub fn draw_dest(&mut self, id: i64) -> (Option<String>, Option<usize>) {
         let mut r = self.rand_f() as f32;
         let mut dest: Option<String> = None;
         let Some(stop) = self.stops.get(&id) else { return (None, None) };
@@ -288,7 +284,7 @@ impl Humans {
 
     /// A person put at a free waiting place of stop `id` (sub_626044) with a destination
     /// drawn from the stop's (sub_61baa8); they settle there as task 6 does.
-    pub(super) fn spawn_waiting(&mut self, world: &World, id: i64) -> Option<usize> {
+    pub fn spawn_waiting(&mut self, world: &dyn World, id: i64) -> Option<usize> {
         if self.stops.get(&id)?.taken.iter().all(|t| *t) || !self.pool_room() {
             return None;
         }
@@ -319,9 +315,9 @@ impl Humans {
     }
 
     /// Keep strollers on the pavements near the player, and people walking up to the stops.
-    pub(super) fn populate_on_foot(
+    pub fn populate_on_foot(
         &mut self,
-        world: &World,
+        world: &dyn World,
         net: &Network,
         dt: f32,
     ) {
@@ -330,10 +326,10 @@ impl Humans {
         self.ped = Some(ped);
     }
 
-    pub(super) fn populate_on_foot_with(
+    pub fn populate_on_foot_with(
         &mut self,
         ped: &PedNet,
-        world: &World,
+        world: &dyn World,
         net: &Network,
         _dt: f32,
     ) {
@@ -395,7 +391,7 @@ impl Humans {
             }
         }
         // OMSI_PAX_CROSS=x,y: a few pedestrians sent across the signalised crossing nearest that point
-        if let Some((x, y)) = omsi_cfg::env::var("OMSI_PAX_CROSS").ok().and_then(|v| {
+        if let Some((x, y)) = omsi_cfg::flags::OMSI_PAX_CROSS.var().and_then(|v| {
             let mut it = v.split(',').filter_map(|t| t.trim().parse::<f64>().ok());
             Some((it.next()?, it.next()?))
         }) {

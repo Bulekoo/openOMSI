@@ -3,7 +3,7 @@
 
 use super::*;
 
-impl Humans {
+impl PeopleSim {
     /// The buses somebody stamped a ticket in since the last call (the app fires their
     /// `ev_Stamper` sound trigger): `None` the player's, else the AI car's id.
     pub fn take_stamped(&mut self) -> Vec<Option<u64>> {
@@ -21,15 +21,10 @@ impl Humans {
         std::mem::take(&mut self.voice_lines)
     }
 
-    /// `OMSI_TRACE_PAX` is writing a trace.
-    pub fn tracing(&self) -> bool {
-        self.bodies.trace.is_some()
-    }
-
     /// The footsteps taken since the last call, for the environment sounds. They pile up
     /// only between two frames; a run without audio never looks at them, so the list is
     /// dropped once it grows past a crowd's worth of steps.
-    pub fn take_footfalls(&mut self) -> Vec<ambience::Footfall> {
+    pub fn take_footfalls(&mut self) -> Vec<Footfall> {
         if self.footfalls.len() > 256 {
             self.footfalls.clear();
         }
@@ -190,7 +185,7 @@ impl Humans {
             .collect()
     }
 
-    /// Count of people per state, for logs.
+    /// Count of people per state, for logs (omsi-app's `Humans::summary` adds the posing).
     pub fn summary(&self) -> String {
         let mut counts: std::collections::BTreeMap<&'static str, usize> = Default::default();
         for p in &self.people {
@@ -206,15 +201,6 @@ impl Humans {
             out.push_str(&format!(
                 "; {:.2} ms a frame, longest {worst:.1} ms",
                 total / n as f64
-            ));
-        }
-        let (frames, posed, ms, up) = self.bodies.pose_stats;
-        if frames > 0 {
-            out.push_str(&format!(
-                "; posing {:.2} ms a frame ({:.1} people, {:.2} ms of it uploading and placing)",
-                ms / frames as f64,
-                posed as f64 / frames as f64,
-                up / frames as f64
             ));
         }
         out

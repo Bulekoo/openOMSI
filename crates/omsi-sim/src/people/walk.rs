@@ -3,17 +3,17 @@
 
 use super::*;
 
-impl Humans {
+impl PeopleSim {
     /// Nobody on foot walks into a wall: the scenery's collision boxes and meshes (shelters,
     /// fences, walls, buildings with a collision mesh) between knee and head height stop a
     /// step that would enter one, keeping the part of it along the wall. Somebody already
     /// inside one (a waiting place the map put in a shelter's box) is left alone - pushed
     /// out, they jumped. People used to walk through everything but the vehicles.
-    pub(super) fn keep_out_of_walls(&mut self, world: &World, who: &[usize], ground: &mut [(usize, Walker)]) {
+    pub fn keep_out_of_walls(&mut self, world: &dyn World, who: &[usize], ground: &mut [(usize, Walker)]) {
         const R: f64 = 0.22;
         const CELL: f64 = 12.0;
-        let collision = world.collision.lock();
-        let places: Vec<DVec2> = world.waiting_places.lock().iter().map(|w| w.1.truncate()).collect();
+        let collision = world.collision();
+        let places: Vec<DVec2> = world.waiting_places().iter().map(|w| w.1.truncate()).collect();
         let (boxes, meshes, since) = (collision.boxes.len(), collision.meshes.len(), self.wall_key.3);
         if (boxes, meshes, places.len()) != (self.wall_key.0, self.wall_key.1, self.wall_key.2) || self.time - since > 2.0 || self.time < since {
             self.wall_cells.clear();
@@ -33,7 +33,7 @@ impl Humans {
             let key = ((p0.x / CELL).floor() as i32, (p0.y / CELL).floor() as i32, z.floor() as i32);
             let walls = cells.entry(key).or_insert_with(|| {
                 let c = DVec2::new((key.0 as f64 + 0.5) * CELL, (key.1 as f64 + 0.5) * CELL);
-                let probe = omsi_sim::collision::Obb {
+                let probe = crate::collision::Obb {
                     center: c,
                     half: DVec2::splat(CELL * 0.5 + 2.0),
                     heading: 0.0,
@@ -81,7 +81,7 @@ impl Humans {
                     continue;
                 }
                 // onto the wall's face, keeping the step along it
-                if omsi_cfg::env::var_os("OMSI_DEBUG_WALLS").is_some() {
+                if omsi_cfg::flags::OMSI_DEBUG_WALLS.is_set() {
                     log::info!("t={:.1} pax {} ({}) kept out of a wall ({:.1} x {:.1} m, heights {:.1}..{:.1}) at ({:.2}, {:.2}), its centre ({:.2}, {:.2}), want ({:.2}, {:.2}) vel ({:.2}, {:.2})", self.time, self.people[i].label(), self.people[i].state.name(), b.half.x * 2.0, b.half.y * 2.0, z0 - z, z1 - z, w.pos.x, w.pos.y, b.center.x, b.center.y, w.want.x, w.want.y, w.vel.x, w.vel.y);
                 }
                 let n = (q - w.pos).try_normalize().unwrap_or(DVec2::ZERO);
@@ -117,7 +117,7 @@ impl Humans {
 
     /// OMSI_CHECK_WALLS: everybody inside a bus who stands away from its walkways (more
     /// than 0.45 m from every path link, not on a seat): through a seat back or a wall.
-    pub(super) fn check_walls(&self) {
+    pub fn check_walls(&self) {
         for p in &self.people {
             let Place::Bus(bus, local) = p.place else { continue };
             if matches!(&p.state, State::Pax(x) if x.task == Task::SittingInBus || x.st == 9) {
@@ -142,13 +142,13 @@ impl Humans {
 
     /// What pedestrian `i` wants this frame (task 8, `WalkStreet`).
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn decide(
+    pub fn decide(
         &mut self,
         i: usize,
         dt: f32,
-        world: &World,
+        world: &dyn World,
         net: Option<&Network>,
-        traffic: Option<&Traffic>,
+        traffic: Option<&TrafficSim>,
         cars: &[(DVec2, DVec2, f64)],
         remove: &mut Vec<usize>,
     ) -> Want {
@@ -187,12 +187,12 @@ impl Humans {
     }
 
     /// Where a walk along the pavement takes somebody next.
-    pub(super) fn walk_want(
+    pub fn walk_want(
         &mut self,
         i: usize,
         walk: &mut PedWalk,
         net: &Network,
-        traffic: Option<&Traffic>,
+        traffic: Option<&TrafficSim>,
         cars: &[(DVec2, DVec2, f64)],
         dt: f32,
     ) -> Want {
@@ -203,13 +203,13 @@ impl Humans {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn walk_want_with(
+    pub fn walk_want_with(
         &mut self,
         mut ped: Option<&mut PedNet>,
         i: usize,
         walk: &mut PedWalk,
         net: &Network,
-        traffic: Option<&Traffic>,
+        traffic: Option<&TrafficSim>,
         cars: &[(DVec2, DVec2, f64)],
         dt: f32,
     ) -> Want {
@@ -395,12 +395,12 @@ impl Humans {
     /// the carriageway turns green - must do; without a light no car may be about to pass
     /// the crossing. Somebody who has waited very long takes any green (never a red).
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn may_cross(
+    pub fn may_cross(
         &self,
         mut ped: Option<&mut PedNet>,
         net: &Network,
         next: &Leg,
-        traffic: Option<&Traffic>,
+        traffic: Option<&TrafficSim>,
         cars: &[(DVec2, DVec2, f64)],
         pace: f64,
         held: f32,
@@ -412,7 +412,7 @@ impl Humans {
         let t_cross = next.len() as f64 / pace.max(0.5) + 1.0;
         if let (Some((c, li)), Some(t)) = (lane.traffic_light, traffic) {
             if let Some((state, left)) = t.light_state(c, li) {
-                if !omsi_sim::traffic::TrafficLightController::allows_go(state) {
+                if !crate::traffic::TrafficLightController::allows_go(state) {
                     return Err("red light");
                 }
                 if held > 150.0 {
@@ -463,13 +463,13 @@ impl Humans {
 
     /// Take over where the crowd moved person `i`.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn apply(
+    pub fn apply(
         &mut self,
         i: usize,
         w: &Walker,
         want: &Want,
         dt: f32,
-        world: &World,
+        world: &dyn World,
         net: Option<&Network>,
         buses: &[BusNow],
         bus_ix: &HashMap<BusId, usize>,
@@ -583,7 +583,7 @@ impl Humans {
     }
 
     /// People carried by a bus in their seat.
-    pub(super) fn carry(
+    pub fn carry(
         &mut self,
         i: usize,
         dt: f32,

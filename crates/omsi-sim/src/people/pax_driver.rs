@@ -2,14 +2,14 @@
 
 use super::*;
 
-impl Humans {
+impl PeopleSim {
     /// The riders of the player's bus feel how it is driven (0x7d6964 - 0x7d6b7f): every
     /// jolt (`RideComfort::step`) takes the toll of the ride `(1 - x) * k` up for everybody
     /// walking or sitting in it, and whoever reaches a threshold says so (TooBad_A, _B, _C
     /// of the ticket pack's voices) - the third time getting off at the next stop. The
     /// toll eases off by 0.2 a kilometre (`pax_tick`). OMSI's passengers did this; here
     /// they never said a word about the driving (#862, #873).
-    pub(super) fn ride_comfort(&mut self, dt: f32, bus: Option<&VehicleInstance>, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>, world: &World) {
+    pub fn ride_comfort(&mut self, dt: f32, bus: Option<&VehicleInstance>, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>, world: &dyn World) {
         let Some(v) = bus else { return };
         if dt <= 0.0 || self.avatar_only {
             return;
@@ -50,7 +50,7 @@ impl Humans {
     }
 
     /// The greeting or complaint stepping into the player's bus (0x62bf2d - 0x62c43c).
-    pub(super) fn greet_or_complain(&mut self, i: usize, bn: &BusNow) {
+    pub fn greet_or_complain(&mut self, i: usize, bn: &BusNow) {
         let Some((whinge, chat)) = self.tickets.as_ref().map(|t| (t.whinge_prop, t.chattiness)) else { return };
         let air = bn.air;
         let mut complaint_seen = false;
@@ -143,7 +143,7 @@ impl Humans {
     /// driver gets it right; the counter of those requests (`pardons`, the original's
     /// global at 0x859bc4) is shared by everybody at the desk.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn desk_sale(
+    pub fn desk_sale(
         &mut self,
         i: usize,
         dt: f32,

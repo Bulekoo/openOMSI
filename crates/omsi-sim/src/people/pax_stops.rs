@@ -2,16 +2,16 @@
 
 use super::*;
 
-impl Humans {
+impl PeopleSim {
     /// The passenger of person `i`, if it is one.
-    pub(super) fn pax(&self, i: usize) -> Option<&Pax> {
+    pub fn pax(&self, i: usize) -> Option<&Pax> {
         match &self.people[i].state {
             State::Pax(p) => Some(p),
             _ => None,
         }
     }
 
-    pub(super) fn pax_mut(&mut self, i: usize) -> Option<&mut Pax> {
+    pub fn pax_mut(&mut self, i: usize) -> Option<&mut Pax> {
         match &mut self.people[i].state {
             State::Pax(p) => Some(p),
             _ => None,
@@ -20,7 +20,7 @@ impl Humans {
 
     /// The stops as the buses see them this frame (sub_61f93c / sub_61f238), and the
     /// odometers of the buses.
-    pub(super) fn register_buses(&mut self, buses: &[BusNow], dt: f32) -> HashMap<BusId, BusAtStops> {
+    pub fn register_buses(&mut self, buses: &[BusNow], dt: f32) -> HashMap<BusId, BusAtStops> {
         let mut out: HashMap<BusId, BusAtStops> = HashMap::new();
         for s in self.stops.values_mut() {
             s.buses.clear();
@@ -99,7 +99,7 @@ impl Humans {
     /// sub_61c33c: the bus at stop `stop` person `i` gets into, and why: with a line record,
     /// the nearest of the buses listed whose terminus goes there - else the nearest whose
     /// duty takes them there (`fit`); without, the first listed.
-    pub(super) fn bus_for(&self, i: usize, stop: i64, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>) -> Option<(BusId, Fit)> {
+    pub fn bus_for(&self, i: usize, stop: i64, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>) -> Option<(BusId, Fit)> {
         let s = self.stops.get(&stop)?;
         let p = self.pax(i)?;
         match p.line.and_then(|k| s.lines.get(k)) {
@@ -116,17 +116,17 @@ impl Humans {
     }
 
     /// Whether the bus stands in the stop's box (the flag of its entry, sub_61ee18).
-    pub(super) fn in_stop_box(&self, stop: i64, bus: BusId) -> bool {
+    pub fn in_stop_box(&self, stop: i64, bus: BusId) -> bool {
         self.stops.get(&stop).is_some_and(|s| s.buses.iter().any(|b| b.0 == bus && b.1))
     }
 
-    pub(super) fn listed_at(&self, stop: i64, bus: BusId) -> bool {
+    pub fn listed_at(&self, stop: i64, bus: BusId) -> bool {
         self.stops.get(&stop).is_some_and(|s| s.buses.iter().any(|b| b.0 == bus))
     }
 
     /// sub_7e910c: a free place of the bus, at random (none free: nobody gets on). `off`:
     /// the places its scripts have switched off (#721), which nobody takes.
-    pub(super) fn reserve_place(&mut self, bus: BusId, n: usize, off: &[bool]) -> Option<usize> {
+    pub fn reserve_place(&mut self, bus: BusId, n: usize, off: &[bool]) -> Option<usize> {
         let seats = self.seats.entry(bus).or_insert_with(|| vec![false; n]);
         if seats.len() < n {
             seats.resize(n, false);
@@ -142,7 +142,7 @@ impl Humans {
 
     /// sub_5ce4e0: stamp (stamper_prop) or buy (ticketbuy_prop) at a bus that has a
     /// validator / a cash desk, else nothing to do; the ticket bought (sub_5ce2dc).
-    pub(super) fn decide_pax_ticket(&mut self, i: usize, bn: &BusNow) -> (u8, u8) {
+    pub fn decide_pax_ticket(&mut self, i: usize, bn: &BusNow) -> (u8, u8) {
         let Some(tp) = self.tickets.clone() else { return (TICKET_NONE, 0) };
         let mut r = self.rand_f() as f32;
         if !bn.cabin.stampers.is_empty() {
@@ -162,14 +162,14 @@ impl Humans {
         (TICKET_NONE, 0)
     }
 
-    pub(super) fn free_spot(&mut self, stop: i64, k: usize) {
+    pub fn free_spot(&mut self, stop: i64, k: usize) {
         if let Some(t) = self.stops.get_mut(&stop).and_then(|s| s.taken.get_mut(k)) {
             *t = false;
         }
     }
 
     /// sub_61c8d8: a free waiting place of the stop, at random.
-    pub(super) fn take_spot(&mut self, stop: i64) -> Option<usize> {
+    pub fn take_spot(&mut self, stop: i64) -> Option<usize> {
         // Stops a few metres apart (both sides of a bus station's platform, a stop and its
         // copy for another line) find the same objects' places, and each kept its own list of
         // who stands where (as Omsi.exe's 0x61c8d8 does), so two or three people stood in

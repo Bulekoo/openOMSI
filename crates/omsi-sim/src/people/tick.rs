@@ -1,30 +1,14 @@
-//! The frame: the simulation step (`tick_inner`, no renderer) and what the step did shown
-//! to the renderer afterwards (`tick`), and everybody's animation.
+//! The frame: the simulation step (`tick_inner`, no renderer; omsi-app's `Humans::tick`
+//! shows the renderer what it did afterwards), and everybody's animation.
 
 use super::*;
 
-impl Humans {
-    /// Advance everybody. `bus`: the player's vehicle; `traffic`: the timetable buses,
-    /// the traffic lights and the cars pedestrians wait for. Returns true when a passenger
-    /// took the printed ticket (the caller resets `GivenTicket`).
-    pub fn tick(
-        &mut self,
-        dt: f32,
-        world: &World,
-        bus: Option<&VehicleInstance>,
-        traffic: Option<&Traffic>,
-        renderer: &Renderer,
-        scene: &mut Scene,
-    ) -> bool {
-        let started = std::time::Instant::now();
-        self.tick_stages.clear();
-        let took = self.tick_inner(dt, world, bus, traffic);
-        // what the step did, drawn (people who came and went, coins on the desk)
-        let mark = std::time::Instant::now();
-        self.show_bodies(world, renderer, scene);
-        self.tick_stages.push(("bodies", mark.elapsed().as_secs_f64() * 1000.0));
-        let ms = started.elapsed().as_secs_f64() * 1000.0;
-        if (debug_pax() || omsi_cfg::env::var_os("OMSI_PROFILE").is_some()) && ms > 30.0 {
+impl PeopleSim {
+    /// What follows the step and the drawing of what it did (omsi-app's `Humans::tick`
+    /// runs `tick_inner`, then the view, then this): the slow ticks logged, the checks and
+    /// the statistics. `ms`: how long the whole tick took.
+    pub fn tick_done(&mut self, dt: f32, world: &dyn World, ms: f64) {
+        if (debug_pax() || omsi_cfg::flags::OMSI_PROFILE.is_set()) && ms > 30.0 {
             log::info!(
                 "t={:.1} slow people tick: {ms:.1} ms ({} people): {}",
                 self.time,
@@ -32,12 +16,12 @@ impl Humans {
                 self.tick_stages.iter().filter(|s| s.1 >= 1.0).map(|(n, t)| format!("{n} {t:.1}")).collect::<Vec<_>>().join(", ")
             );
         }
-        if omsi_cfg::env::var_os("OMSI_CHECK_WALLS").is_some() {
+        if omsi_cfg::flags::OMSI_CHECK_WALLS.is_set() {
             self.check_walls();
         }
         // OMSI_CHECK_GROUND=1: people on foot with a walkable surface over their heads'
         // reach above them, every two seconds (people "in the ground")
-        if omsi_cfg::env::var_os("OMSI_CHECK_GROUND").is_some() && (self.time / 2.0).floor() != ((self.time - dt as f64) / 2.0).floor() {
+        if omsi_cfg::flags::OMSI_CHECK_GROUND.is_set() && (self.time / 2.0).floor() != ((self.time - dt as f64) / 2.0).floor() {
             for p in &self.people {
                 if !matches!(p.place, Place::Ground) || p.puppet.is_some() {
                     continue;
@@ -58,18 +42,17 @@ impl Humans {
         self.tick_stats.0 += 1;
         self.tick_stats.1 += ms;
         self.tick_stats.2 = self.tick_stats.2.max(ms);
-        took
     }
 
     /// The simulation step: what everybody decides and does this frame. It does not draw;
-    /// the people it makes or takes away are shown by `show_bodies` after it.
+    /// the people it makes or takes away are shown by omsi-app's view after it.
     #[allow(unused_assignments)]
-    pub(super) fn tick_inner(
+    pub fn tick_inner(
         &mut self,
         dt: f32,
-        world: &World,
+        world: &dyn World,
         bus: Option<&VehicleInstance>,
-        traffic: Option<&Traffic>,
+        traffic: Option<&TrafficSim>,
     ) -> bool {
         let mut mark = std::time::Instant::now();
         macro_rules! stage {
@@ -87,7 +70,7 @@ impl Humans {
         } else if let Some(e) = self.eye {
             self.center = e.pos;
         }
-        let generation = world.tiles_generation.load(std::sync::atomic::Ordering::Relaxed);
+        let generation = world.tiles_generation();
         if generation != self.tiles_seen {
             self.tiles_seen = generation;
             self.tiles_changed(world);
@@ -182,18 +165,18 @@ impl Humans {
                 let bb = c.vehicle.ty.def.bounding_box.unwrap_or([2.0, 4.5, 1.6, 0.0, 0.0, 0.8]);
                 cars.push((c.vehicle.position.truncate(), fwd * c.state.speed as f64, bb[1] as f64 * 0.5));
                 if !matches!(c.vehicle.ty.def.kind, omsi_vehicle::VehicleKind::Other(3)) {
-                    let o = omsi_sim::collision::Obb::from_box(bb, c.vehicle.position, c.vehicle.heading);
+                    let o = crate::collision::Obb::from_box(bb, c.vehicle.position, c.vehicle.heading);
                     blocks.push(Block { center: o.center, half: o.half, heading: o.heading, vel: fwd * c.state.speed as f64 });
                     for t in &c.vehicle.trailers {
                         let tb = t.ty.def.bounding_box.unwrap_or([2.5, 7.0, 3.0, 0.0, 0.0, 1.5]);
-                        let o = omsi_sim::collision::Obb::from_box(tb, t.position, t.heading);
+                        let o = crate::collision::Obb::from_box(tb, t.position, t.heading);
                         let th = t.heading.to_radians();
                         blocks.push(Block { center: o.center, half: o.half, heading: o.heading, vel: DVec2::new(th.sin(), th.cos()) * c.state.speed as f64 });
                     }
                 }
             }
         }
-        for o in world.parked_boxes.lock().iter() {
+        for o in world.parked_boxes().iter() {
             if (o.center - self.center.truncate()).length() < 320.0 {
                 blocks.push(Block { center: o.center, half: o.half, heading: o.heading, vel: DVec2::ZERO });
             }
@@ -309,7 +292,7 @@ impl Humans {
     /// Everybody's animation this frame (sub_626ae8): the passengers from what their task
     /// says (`PAX_State`, speed, the room height, the seat, the hand and the head), the
     /// pedestrians from their walk.
-    pub(super) fn animate(&mut self, dt: f32, world: &World, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>) {
+    pub fn animate(&mut self, dt: f32, world: &dyn World, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>) {
         let dt_ms = dt * 1000.0;
         for i in 0..self.people.len() {
             if let Some(pp) = self.people[i].puppet {
@@ -327,7 +310,7 @@ impl Humans {
                         let v = q.as_dvec3() - x.pos;
                         let (s, c) = x.yaw.sin_cos();
                         let local = Vec3::new((v.x * c - v.y * s) as f32, (v.x * s + v.y * c) as f32, v.z as f32);
-                        omsi_sim::human_omsi::d3d(local)
+                        crate::human_omsi::d3d(local)
                     };
                     let reach = (x.reach && x.inside.is_some()).then(|| own(x.reach_at));
                     let look = match (x.look_driver, bn) {
@@ -373,7 +356,7 @@ impl Humans {
             let ev = p.anim.advance(&p.ty.omsi, &input);
             // a foot down inside a vehicle: the link's step sound (outside there are none)
             if let (true, Some((bus, pack))) = (ev.step, footstep) {
-                self.footfalls.push(ambience::Footfall { position: p.position, inside: true, own_bus: bus == BusId::Player, pack: Some(pack) });
+                self.footfalls.push(Footfall { position: p.position, inside: true, own_bus: bus == BusId::Player, pack: Some(pack) });
             }
         }
     }

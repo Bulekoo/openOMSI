@@ -4,7 +4,7 @@ use super::*;
 
 /// Whether the straight way from `a` to `b` goes over a carriageway: across the centre
 /// line of a street lane (walking along the kerb on the carriageway's edge does not).
-pub(super) fn crosses_street(net: &Network, a: DVec2, b: DVec2) -> bool {
+pub fn crosses_street(net: &Network, a: DVec2, b: DVec2) -> bool {
     let mut cells: Vec<(i32, i32)> = Vec::new();
     for p in [a, b, (a + b) * 0.5] {
         let c = Network::grid_cell(p.extend(0.0));
@@ -36,7 +36,7 @@ pub(super) fn crosses_street(net: &Network, a: DVec2, b: DVec2) -> bool {
 }
 
 /// Whether the segments `a`-`b` and `c`-`d` cross.
-pub(super) fn segments_cross(a: DVec2, b: DVec2, c: DVec2, d: DVec2) -> bool {
+pub fn segments_cross(a: DVec2, b: DVec2, c: DVec2, d: DVec2) -> bool {
     let side = |p: DVec2, q: DVec2, r: DVec2| (q - p).perp_dot(r - p);
     let (d1, d2) = (side(c, d, a), side(c, d, b));
     let (d3, d4) = (side(a, b, c), side(a, b, d));
@@ -45,17 +45,17 @@ pub(super) fn segments_cross(a: DVec2, b: DVec2, c: DVec2, d: DVec2) -> bool {
 
 /// One piece of a walk along a pavement path: lane `lane` from distance `a` to `b`.
 #[derive(Debug, Clone, Copy)]
-pub(super) struct Leg {
-    pub(super) lane: usize,
-    pub(super) a: f32,
-    pub(super) b: f32,
+pub struct Leg {
+    pub lane: usize,
+    pub a: f32,
+    pub b: f32,
 }
 
 impl Leg {
-    pub(super) fn len(&self) -> f32 {
+    pub fn len(&self) -> f32 {
         (self.b - self.a).abs()
     }
-    pub(super) fn dist(&self, p: f32) -> f32 {
+    pub fn dist(&self, p: f32) -> f32 {
         if self.b >= self.a {
             self.a + p
         } else {
@@ -63,7 +63,7 @@ impl Leg {
         }
     }
     /// Point and walking heading `p` metres into the leg.
-    pub(super) fn at(&self, net: &Network, p: f32) -> (DVec3, f64) {
+    pub fn at(&self, net: &Network, p: f32) -> (DVec3, f64) {
         let (q, h) = net.lanes[self.lane].at(self.dist(p.clamp(0.0, self.len())));
         (
             q,
@@ -75,7 +75,7 @@ impl Leg {
         )
     }
     /// How far into the leg the point nearest `pos` lies, looking around `hint`.
-    pub(super) fn project(&self, net: &Network, pos: DVec3, hint: f32) -> f32 {
+    pub fn project(&self, net: &Network, pos: DVec3, hint: f32) -> f32 {
         let (lo, hi) = ((hint - 1.5).max(0.0), (hint + 3.0).min(self.len()));
         let mut best = (hint, f64::MAX);
         let mut p = lo;
@@ -89,28 +89,28 @@ impl Leg {
         best.0
     }
     /// Whether the leg starts at an end of its lane (at a kerb or a junction).
-    pub(super) fn from_end(&self, net: &Network) -> bool {
+    pub fn from_end(&self, net: &Network) -> bool {
         self.a < 0.05 || self.a > net.lanes[self.lane].length() - 0.05
     }
 }
 
 /// A walk along the pavement network.
 #[derive(Debug, Clone)]
-pub(super) struct PedWalk {
-    pub(super) legs: Vec<Leg>,
-    pub(super) leg: usize,
+pub struct PedWalk {
+    pub legs: Vec<Leg>,
+    pub leg: usize,
     /// Metres walked into the current leg.
-    pub(super) s: f32,
+    pub s: f32,
     /// A stroll: goes on at random when the legs run out.
-    pub(super) roam: bool,
+    pub roam: bool,
     /// Keep-right offset (m).
-    pub(super) side: f32,
+    pub side: f32,
     /// Seconds spent waiting at the kerb before the current leg.
-    pub(super) held: f32,
+    pub held: f32,
 }
 
 impl PedWalk {
-    pub(super) fn new(legs: Vec<Leg>, roam: bool, side: f32) -> PedWalk {
+    pub fn new(legs: Vec<Leg>, roam: bool, side: f32) -> PedWalk {
         PedWalk {
             legs,
             leg: 0,
@@ -125,27 +125,27 @@ impl PedWalk {
 /// The pavement paths as a walking network: path ends closer than a metre are one
 /// junction, whatever their heading (the road network joins lane ends only when they
 /// continue in the same direction, which leaves every pavement corner open).
-pub(super) struct PedNet {
+pub struct PedNet {
     /// Per pavement lane: its start and end junction.
-    pub(super) ends: HashMap<usize, (usize, usize)>,
+    pub ends: HashMap<usize, (usize, usize)>,
     /// Per junction: (lane, walked forwards) leaving it.
-    pub(super) out: Vec<Vec<(usize, bool)>>,
+    pub out: Vec<Vec<(usize, bool)>>,
     /// Where each pavement lane crosses a carriageway (lazily), and the carriageway lanes
     /// it crosses.
-    pub(super) crossings: HashMap<usize, Vec<DVec2>>,
-    pub(super) crossed: HashMap<usize, Vec<usize>>,
+    pub crossings: HashMap<usize, Vec<DVec2>>,
+    pub crossed: HashMap<usize, Vec<usize>>,
     /// Pavement lanes by 50 m cell.
-    pub(super) grid: HashMap<(i32, i32), Vec<usize>>,
+    pub grid: HashMap<(i32, i32), Vec<usize>>,
     /// The junctions and a 1.5 m grid of them, for joining the paths of tiles loaded later.
-    pub(super) nodes: Vec<DVec3>,
-    pub(super) cells: HashMap<(i64, i64), Vec<usize>>,
+    pub nodes: Vec<DVec3>,
+    pub cells: HashMap<(i64, i64), Vec<usize>>,
     /// How many lanes of the traffic network are in (the network only grows: tiles bring
     /// their lanes and the indices stay).
-    pub(super) built: usize,
+    pub built: usize,
 }
 
 impl PedNet {
-    pub(super) fn build(net: &Network) -> PedNet {
+    pub fn build(net: &Network) -> PedNet {
         let mut p = PedNet {
             ends: HashMap::new(),
             out: Vec::new(),
@@ -166,7 +166,7 @@ impl PedNet {
     }
 
     /// Take in the lanes the network gained since the last call (tiles streamed in).
-    pub(super) fn extend(&mut self, net: &Network) -> usize {
+    pub fn extend(&mut self, net: &Network) -> usize {
         let from = self.built.min(net.lanes.len());
         let before = self.ends.len();
         for i in from..net.lanes.len() {
@@ -200,7 +200,7 @@ impl PedNet {
     }
 
     /// The junction at `p`, a new one when there is none within a metre.
-    pub(super) fn node_of(&mut self, p: DVec3) -> usize {
+    pub fn node_of(&mut self, p: DVec3) -> usize {
         let (cx, cy) = ((p.x / 1.5).floor() as i64, (p.y / 1.5).floor() as i64);
         for dx in -1..=1 {
             for dy in -1..=1 {
@@ -228,7 +228,7 @@ impl PedNet {
     /// a carriageway: (lane, distance along it, distance to it). The plain nearest one was
     /// often the pavement across the road - a passenger off a bus then walked straight
     /// over the carriageway through the traffic to it, or joined a crossing in the middle.
-    pub(super) fn nearest(&self, net: &Network, p: DVec3, reach: f64) -> Option<(usize, f32, f64)> {
+    pub fn nearest(&self, net: &Network, p: DVec3, reach: f64) -> Option<(usize, f32, f64)> {
         let (cx, cy) = ((p.x / 50.0).floor() as i32, (p.y / 50.0).floor() as i32);
         let mut cands: Vec<(usize, f32, f64)> = Vec::new();
         let mut seen = HashSet::new();
@@ -265,7 +265,7 @@ impl PedNet {
     }
 
     /// The junction a leg ends at, when it ends at one.
-    pub(super) fn end_node(&self, net: &Network, leg: &Leg) -> Option<usize> {
+    pub fn end_node(&self, net: &Network, leg: &Leg) -> Option<usize> {
         let (a, b) = *self.ends.get(&leg.lane)?;
         let len = net.lanes[leg.lane].length();
         if leg.b < 0.05 {
@@ -278,7 +278,7 @@ impl PedNet {
     }
 
     /// A leg leaving junction `node`, not back along `came` (unless it is a dead end).
-    pub(super) fn next_leg(&self, net: &Network, node: usize, came: usize, pick: u64) -> Option<Leg> {
+    pub fn next_leg(&self, net: &Network, node: usize, came: usize, pick: u64) -> Option<Leg> {
         let back = self.ends.get(&came).copied();
         let twin = |l: usize| -> bool {
             l == came
@@ -344,7 +344,7 @@ impl PedNet {
 
 
     /// Where pavement lane `lane` crosses a carriageway.
-    pub(super) fn crossings(&mut self, net: &Network, lane: usize) -> &[DVec2] {
+    pub fn crossings(&mut self, net: &Network, lane: usize) -> &[DVec2] {
         if !self.crossings.contains_key(&lane) {
             let l = &net.lanes[lane];
             let mut cand: Vec<usize> = Vec::new();
@@ -392,7 +392,7 @@ impl PedNet {
     }
 
     /// The carriageway lanes a pavement lane crosses.
-    pub(super) fn crossed_lanes(&mut self, net: &Network, lane: usize) -> &[usize] {
+    pub fn crossed_lanes(&mut self, net: &Network, lane: usize) -> &[usize] {
         self.crossings(net, lane);
         &self.crossed[&lane]
     }
@@ -403,10 +403,10 @@ impl PedNet {
 /// turns green once the pedestrian green is over. Lanes that have green now, or get it
 /// while the pedestrians still have theirs, are turning traffic that gives way. Without
 /// such a light, the pedestrian green `green_left` and two seconds.
-pub(super) fn pedestrian_window(
+pub fn pedestrian_window(
     ped: Option<&mut PedNet>,
     net: &Network,
-    traffic: &Traffic,
+    traffic: &TrafficSim,
     path: usize,
     green_left: f32,
 ) -> f32 {
@@ -434,7 +434,7 @@ pub(super) fn pedestrian_window(
     }
 }
 
-pub(super) fn seg_cross(a: DVec2, b: DVec2, c: DVec2, d: DVec2) -> Option<DVec2> {
+pub fn seg_cross(a: DVec2, b: DVec2, c: DVec2, d: DVec2) -> Option<DVec2> {
     let r = b - a;
     let s = d - c;
     let den = r.perp_dot(s);

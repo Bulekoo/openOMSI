@@ -1,9 +1,9 @@
 //! People coming and going: making somebody (`spawn`), taking them away, the pool they
-//! are counted against, and the setting up of `Humans`.
+//! are counted against, and the setting up of `PeopleSim`.
 
 use super::*;
 
-impl Humans {
+impl PeopleSim {
     /// LAN uses the room id as the shared source of randomness.  This keeps the
     /// initial pedestrian selection and their generated identities identical on
     /// the host and clients; subsequent movement remains simulation-local.
@@ -11,7 +11,8 @@ impl Humans {
         self.rng = (seed ^ 0xA5A5_5A5A_1F2E_3D4C) as u64 | 1;
     }
 
-    pub fn new(root: &Path) -> Humans {
+    /// `configured_people`: the `ai_max_humans` setting (see `max_people`).
+    pub fn new(root: &Path, configured_people: usize) -> PeopleSim {
         let mut types = Vec::new();
         // `Humans/<group>/*.hum` of every content root (an installed map or mod brings its
         // own people); a file of the same group and name higher up replaces the stock one
@@ -52,7 +53,7 @@ impl Humans {
             }
         }
         log::info!("humans: {} types", types.len());
-        if omsi_cfg::env::var_os("OMSI_DEBUG_HUMANS").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_HUMANS.is_set() {
             for t in &types {
                 let (mut lo, mut hi) = (f32::MAX, f32::MIN);
                 for m in &t.meshes {
@@ -67,12 +68,11 @@ impl Humans {
                 );
             }
         }
-        let configured_people = crate::settings::Settings::load().ai_max_humans as usize;
         let people_limit = bounded_people_limit(configured_people);
         if people_limit != configured_people {
             log::warn!("human pool limit {configured_people} adjusted to {people_limit} for safe spawning");
         }
-        Humans {
+        PeopleSim {
             types,
             people: Vec::new(),
             rng: 0x1234_5678_9ABC_DEF1,
@@ -94,7 +94,7 @@ impl Humans {
             pardon_max: 0,
             started: false,
             ped: None,
-            bodies: Bodies::new(),
+            bodies: BodyOps::default(),
             served_stop: None,
             ai_visits: HashMap::new(),
             last_door_open: HashMap::new(),
@@ -106,7 +106,6 @@ impl Humans {
             change_due: None,
             money: None,
             under_bus: hashbrown::HashSet::new(),
-            ticket_blocks: None,
             stop_request: false,
             tickets_sold: 0,
             ticket_cash: 0.0,
@@ -172,8 +171,8 @@ impl Humans {
     /// The map's tiles changed: a stop gone with its tile takes the people waiting there
     /// with it; a stop nobody waits at is set up again with what its tiles hold now (its
     /// waiting places come with the objects round it, sub_620c0c).
-    pub(super) fn tiles_changed(&mut self, world: &World) {
-        let present: HashSet<i64> = world.bus_stops.lock().iter().map(|s| s.0).collect();
+    pub fn tiles_changed(&mut self, world: &dyn World) {
+        let present: HashSet<i64> = world.bus_stops().iter().map(|s| s.0).collect();
         let bound = |st: &State| -> Option<i64> {
             match st {
                 State::Pax(p) if p.inside.is_none() => p.stop,
@@ -205,14 +204,14 @@ impl Humans {
         for id in idle {
             self.stops.remove(&id);
         }
-        if debug_pax() || (omsi_cfg::env::var_os("OMSI_PROFILE").is_some() && (removed > 0 || !gone.is_empty())) {
+        if debug_pax() || (omsi_cfg::flags::OMSI_PROFILE.is_set() && (removed > 0 || !gone.is_empty())) {
             log::info!("people: tiles changed: {} stops gone, {rebuilt} set up again, {removed} people taken away", gone.len());
         }
     }
 
     /// `limited`: said only when the same file has not been said for 10 s (greetings and
     /// complaints; the ticket asked for, "thanks" and the missing change always are).
-    pub(super) fn say_ex(&mut self, i: usize, name: &str, limited: bool) {
+    pub fn say_ex(&mut self, i: usize, name: &str, limited: bool) {
         // the player may have silenced them (settings), all but the ticket they ask for
         match self.voices {
             2 => return,
@@ -260,7 +259,7 @@ impl Humans {
         self.voice_lines.push(VoiceLine { position: self.people[i].position + DVec3::new(0.0, 0.0, 1.6), path });
     }
 
-    pub(super) fn rand(&mut self) -> u64 {
+    pub fn rand(&mut self) -> u64 {
         let mut x = self.rng;
         x ^= x >> 12;
         x ^= x << 25;
@@ -269,12 +268,12 @@ impl Humans {
         x.wrapping_mul(0x2545_F491_4F6C_DD1D)
     }
 
-    pub(super) fn rand_f(&mut self) -> f64 {
+    pub fn rand_f(&mut self) -> f64 {
         (self.rand() >> 11) as f64 / (1u64 << 53) as f64
     }
 
     /// Whether the player could see somebody standing at `p`.
-    pub(super) fn seen(&self, p: DVec3) -> bool {
+    pub fn seen(&self, p: DVec3) -> bool {
         match self.eye {
             None => (p - self.center).length() < 150.0,
             Some(e) => {
@@ -290,13 +289,13 @@ impl Humans {
 
     /// The people of OMSI's pool there are now (everybody but avatars and other players'
     /// people mirrored here).
-    pub(super) fn pool_used(&self) -> usize {
+    pub fn pool_used(&self) -> usize {
         self.people.iter().filter(|p| p.puppet.is_none() && !p.remote).count()
     }
 
     /// Room in the pool for one more person; when it is full somebody walking the street out
     /// of sight is taken for it, as Omsi.exe takes a task-8 person for a stop (0x61bd44).
-    pub(super) fn pool_room(&mut self) -> bool {
+    pub fn pool_room(&mut self) -> bool {
         if self.pool_used() < bounded_people_limit(self.max_people) {
             return true;
         }
@@ -316,7 +315,7 @@ impl Humans {
     }
 
     /// The cabin of a vehicle with the parts coupled behind it.
-    pub(super) fn cabin_for(&mut self, v: &VehicleInstance) -> Option<Arc<Cabin>> {
+    pub fn cabin_for(&mut self, v: &VehicleInstance) -> Option<Arc<Cabin>> {
         let parts = train_parts(v);
         let key: Vec<PathBuf> = parts.iter().map(|p| p.0.path.clone()).collect();
         if let Some(c) = self.cabins.get(&key) {
@@ -374,9 +373,9 @@ impl Humans {
         }
     }
 
-    pub(super) fn spawn(
+    pub fn spawn(
         &mut self,
-        world: &World,
+        world: &dyn World,
         position: DVec3,
         heading: f64,
         state: State,
@@ -391,9 +390,9 @@ impl Humans {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn spawn_as(
+    pub fn spawn_as(
         &mut self,
-        world: &World,
+        world: &dyn World,
         position: DVec3,
         heading: f64,
         state: State,
@@ -510,7 +509,7 @@ impl Humans {
     /// A ticket of the pack for a passenger of `age`: those whose age
     /// range holds it, weighted by their probability - a day ticket's by the time of day
     /// as well (`day_ticket_factor`). `max_stations` plays no part in the choice.
-    pub(super) fn pick_ticket(&mut self, age: f32) -> Option<usize> {
+    pub fn pick_ticket(&mut self, age: f32) -> Option<usize> {
         let r = self.rand_f() as f32;
         let day = day_ticket_factor(self.time_of_day);
         let t = self.tickets.as_ref()?;
@@ -538,7 +537,7 @@ impl Humans {
         None
     }
 
-    pub(super) fn free_seat(&mut self, bus: BusId, seat: usize) {
+    pub fn free_seat(&mut self, bus: BusId, seat: usize) {
         if let Some(t) = self.seats.get_mut(&bus).and_then(|v| v.get_mut(seat)) {
             *t = false;
         }
@@ -547,12 +546,12 @@ impl Humans {
     /// Keep only the people the map's `humans.txt` names, an entry listed twice counting
     /// twice, as OMSI draws a map's pedestrians and passengers from that list alone. A map
     /// without the file, or whose list names nobody to be found, keeps everybody.
-    pub(super) fn use_map_humans(&mut self, world: &World) {
+    pub fn use_map_humans(&mut self, world: &dyn World) {
         if self.map_humans_done {
             return;
         }
         self.map_humans_done = true;
-        let path = omsi_cfg::resolve_path(&world.map_dir, "humans.txt");
+        let path = omsi_cfg::resolve_path(world.map_dir(), "humans.txt");
         let list = omsi_map::ailists::load_list(&path);
         if list.is_empty() {
             return;
@@ -572,7 +571,7 @@ impl Humans {
             let want = key(line.trim());
             match self.types.iter().find(|t| key(&t.def.path.to_string_lossy()) == want) {
                 Some(t) => picked.push(t.clone()),
-                None => picked.extend(map_human_types(&world.root, std::slice::from_ref(line))),
+                None => picked.extend(map_human_types(world.root(), std::slice::from_ref(line))),
             }
         }
         // (a list that names nobody to be found keeps everybody: a map without people
@@ -631,7 +630,7 @@ impl Humans {
             if let State::Pax(x) = &self.people[i].state {
                 let (at, h, stop) = (x.pos, x.yaw.to_degrees(), x.stop);
                 self.release(i);
-                let world = None::<&World>;
+                let world = None::<&dyn World>;
                 let _ = world;
                 self.walk_street_plain(i, at, h, stop, &mut gone);
             }
@@ -646,7 +645,7 @@ impl Humans {
 
     /// `--riders n`: n passengers already in their places in the player's bus (a test
     /// start; OMSI's buses start empty), without a destination - they ride 1..20 km.
-    pub fn seed_riders(&mut self, n: usize, bus: &VehicleInstance, world: &World, renderer: &Renderer, scene: &mut Scene) {
+    pub fn seed_riders(&mut self, n: usize, bus: &VehicleInstance, world: &dyn World) {
         let Some(cabin) = self.cabin_for(bus) else { return };
         let trailers = part_frames(bus, &cabin);
         let rot = bus.body_rotation();
@@ -682,11 +681,10 @@ impl Humans {
             }
             self.people[i].place = Place::Bus(BusId::Player, s.pos);
         }
-        self.show_bodies(world, renderer, scene);
     }
 
     /// Give back what a person holds (a waiting place, a seat) before they change plans.
-    pub(super) fn release(&mut self, i: usize) {
+    pub fn release(&mut self, i: usize) {
         let id = self.people[i].id;
         let State::Pax(x) = &mut self.people[i].state else { return };
         let (stop, spot, bus, seat) = (x.stop, x.spot.take(), x.bus.or(x.inside), x.seat.take());

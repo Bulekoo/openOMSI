@@ -37,7 +37,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_DEBUG_FLOAT` | bool | off | use | app | Log objects floating over the ground while placing them. |
 | `OMSI_DEBUG_FOG_LAMPS` | bool | off | frame | render | Log the fog lamp passes per frame. |
 | `OMSI_DEBUG_FOOT` | bool | off | use | app | Log where the walking avatar is drawn. |
-| `OMSI_DEBUG_HUMANS` | bool | off | use | app | Log the people (passengers, pedestrians) and their placement. |
+| `OMSI_DEBUG_HUMANS` | bool | off | use | app, sim | Log the people (passengers, pedestrians) and their placement. |
 | `OMSI_DEBUG_IBIS` | bool | off | use | sim | Log the IBIS typist's reasoning. |
 | `OMSI_DEBUG_INTERIOR` | bool | off | use | app | Log the interior lamps of each vehicle type. |
 | `OMSI_DEBUG_JUNCTION` | bool | off | use | sim | Log why AI cars wait at a junction. |
@@ -56,7 +56,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_DEBUG_OBJMAT` | text | - | use | app | Log how the material slots of the objects whose file name contains this text are made. |
 | `OMSI_DEBUG_PARTICLES` | bool | off | use | app | Log the smoke particles. |
 | `OMSI_DEBUG_PASS` | bool | off | use | sim | Log twice a second why a car standing behind something does not go round it. |
-| `OMSI_DEBUG_PAX` | bool | off | use | app, sim | Log every change of state of the passengers. |
+| `OMSI_DEBUG_PAX` | bool | off | use | sim | Log every change of state of the passengers. |
 | `OMSI_DEBUG_PHYSICS` | num | off | use | app, sim | Log the player's pose, speed, wheel contacts and crashes (offscreen: =secs, the interval). |
 | `OMSI_DEBUG_POPULATION` | bool | off | use | sim | Log where cars appear and vanish relative to the view. |
 | `OMSI_DEBUG_PROPS` | bool | off | use | app | Log the destination-display (matrix) variables. |
@@ -93,7 +93,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_DEBUG_VARS_EVERY` | num | - | use | app | With OMSI_DEBUG_VARS: log them every this many seconds through the drive. |
 | `OMSI_DEBUG_VAR_SYNC` | text | - | use | app | LAN: log this variable, ours every two seconds and theirs as it comes. |
 | `OMSI_DEBUG_VIEW_LAMPS` | bool | off | frame | render | Log the view lamps value per frame. |
-| `OMSI_DEBUG_WALLS` | bool | off | use | app | Log the walls a walking player slides along. |
+| `OMSI_DEBUG_WALLS` | bool | off | use | sim | Log the walls a walking player slides along. |
 | `OMSI_DEBUG_WARP` | bool | off | use | app | Log crossings whose ground was moved by more than a metre. |
 | `OMSI_DEBUG_WHEELS` | bool | off | use | app | Log where the wheel meshes of every vehicle type turn. |
 | `OMSI_DUMP_CUT` | text | - | use | app | Directory: write each tile's road-cut alpha masks as images. |
@@ -135,7 +135,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_BUDGET_FROM` | text | - | use | app | Offscreen with OMSI_TEXTURE_MEMORY: x,y[,MB] - the texture budget is met as seen from that point. |
 | `OMSI_CAM_VEHICLE` | text | - | use | app | Offscreen: x,y,z,yaw,pitch[,fov] - a camera in the bus's own frame. |
 | `OMSI_CHECK_ENTRIES` | bool | off | use | app | Map check: is there ground to stand on where a player is put down. |
-| `OMSI_CHECK_GROUND` | bool | off | use | app | Check: people on foot with a walkable surface above their heads, every two seconds. |
+| `OMSI_CHECK_GROUND` | bool | off | use | sim | Check: people on foot with a walkable surface above their heads, every two seconds. |
 | `OMSI_CHECK_OBJECTS` | bool | off | use | app | Map check: report placed objects that float or are out of place while loading tiles. |
 | `OMSI_CHECK_OBSTACLES` | bool | off | use | app | Map check: sweep a bus-sized box along every lane and list the obstacle boxes it hits. |
 | `OMSI_CHECK_OVERLAP` | bool | off | use | sim | Check: every AI vehicle whose body has got into another's or into an obstacle. |
@@ -145,7 +145,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_CHECK_TPOSE` | bool | off | use | app | Check: people drawn in the rest (T) pose, wider than 1.3 m hand to hand. |
 | `OMSI_CHECK_TRIPS` | text | - | use | app | 1: build every trip's route on the loaded lanes and report breaks; a trip name: log every step of that trip. |
 | `OMSI_CHECK_TYPES` | bool | off | use | app | Map check: list the object types per folder that loading leaves out. |
-| `OMSI_CHECK_WALLS` | bool | off | use | app | Check: everybody inside a bus who stands away from its walkways. |
+| `OMSI_CHECK_WALLS` | bool | off | use | sim | Check: everybody inside a bus who stands away from its walkways. |
 | `OMSI_CHECK_WHEELS` | bool | off | use | app | Map check: probe the ground along every lane's wheel tracks (invisible walls, humps, holes). |
 | `OMSI_CHURN` | text | - | use | app | Offscreen: x,y - load the tiles round that point and unload/reload the start area (streaming test). |
 | `OMSI_CLICK_ALL` | bool | off | use | app | Check: aim at every clickable item of the cab and report which one would actually be operated. |
@@ -188,8 +188,8 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_ORBIT_DIST` | num | 18 | use | app | Offscreen: the outside camera's distance from the vehicle in metres. |
 | `OMSI_ORIGINAL` | text | - | test | sim | vehicle_vars example: the original OMSI folder. |
 | `OMSI_PAX_CAM` | num | - | use | app | Offscreen --view pax: the n-th passenger camera. |
-| `OMSI_PAX_CROSS` | text | - | use | app | x,y: send pedestrians across the signalised crossing nearest that point. |
-| `OMSI_PAX_WAITING` | num | - | use | app | Number of passengers waiting at each stop. |
+| `OMSI_PAX_CROSS` | text | - | use | sim | x,y: send pedestrians across the signalised crossing nearest that point. |
+| `OMSI_PAX_WAITING` | num | - | use | sim | Number of passengers waiting at each stop. |
 | `OMSI_POPULATION_SHOTS` | bool | off | use | app | Offscreen: pictures of the framed population spawns. |
 | `OMSI_PROBE` | text | - | use | app | x0,y0,x1,y1[,n]: print terrain and road surface heights along a line. |
 | `OMSI_PROBE_GRID` | text | - | use | app | x,y,half,step: the wheels' ground on a grid around a point. |

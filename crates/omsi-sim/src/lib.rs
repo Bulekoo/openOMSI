@@ -15,6 +15,7 @@ pub mod human;
 pub mod human_omsi;
 pub mod input;
 pub mod particles;
+pub mod people;
 pub mod physics;
 pub mod rigid;
 pub mod scenery;
