@@ -4,6 +4,27 @@ Every push to `main` is released as `MAJOR.MINOR.COMMIT` (see
 [docs/VERSIONING.md](docs/VERSIONING.md)); the downloads are on the
 [Releases](https://github.com/openOMSI-Project/openOMSI/releases) page.
 
+## 0.2.18 - 2026-10-08
+
+### New
+- **Quality presets for each graphics mode**, the same in the launcher and the in-game options; the mode is chosen first and a preset never switches it. Your current settings stay as they are [#1873](https://github.com/openOMSI-Project/openOMSI/pull/1873).
+- **Cloud quality** (Settings → Graphics): "Low" draws the same physical clouds with fewer steps, about 0.8 ms faster on an M4; the cloud noise is kept on disk so later starts make it no more [#1872](https://github.com/openOMSI-Project/openOMSI/pull/1872).
+- **"DXT/BC textures stay compressed on the GPU"** can be switched off for drivers that draw compressed textures wrongly (the textures then take about twice the video memory) [#1873](https://github.com/openOMSI-Project/openOMSI/pull/1873).
+- **Searchable vehicle lists**, and placing, swapping or reloading a vehicle loads it in the background instead of freezing the game (1.4 s less on an articulated bus) [#1867](https://github.com/openOMSI-Project/openOMSI/pull/1867).
+- **Support package** (Setup → Export diagnostics): a ZIP for a bug report with the versions, the graphics card and driver, the graphics settings, the controllers and the last map and bus - no folders, names, chat, LAN codes or addresses. It stays on your computer and its folder opens, so you can look inside before attaching it [#1870](https://github.com/openOMSI-Project/openOMSI/pull/1870).
+- Mods: `[matl_glow] <texture> <value>` lets a script make a material glare (an openOMSI extension; stock content is unchanged) [#1853](https://github.com/openOMSI-Project/openOMSI/pull/1853).
+- Performance captures: an `OMSI_PROFILE` run now logs the frame-time percentiles, `OMSI_PROFILE_JSON=<file>` saves them, and `scripts/compare-performance.py` compares two runs [#1869](https://github.com/openOMSI-Project/openOMSI/pull/1869).
+
+### Fixes
+- A duty started from the game menu starts at the current time, not at the first trip of the day [#1864](https://github.com/openOMSI-Project/openOMSI/pull/1864).
+- Articulated buses: every exit follows its own door, passengers on foot find the nearest section's doors [#1863](https://github.com/openOMSI-Project/openOMSI/pull/1863).
+- LAN: a weather change by the host reaches the other players at once [#1865](https://github.com/openOMSI-Project/openOMSI/pull/1865).
+- Launcher: a key binding keeps the Shift, Ctrl or Alt it was pressed with [#1866](https://github.com/openOMSI-Project/openOMSI/pull/1866).
+- HafenCity: the harbour backdrop no longer stands across the road at Landungsbrücken [#1861](https://github.com/openOMSI-Project/openOMSI/pull/1861).
+- Enhanced at night: lamp shadows are no longer looked up for surfaces facing away from the lamp (same picture, a little faster) [#1875](https://github.com/openOMSI-Project/openOMSI/pull/1875).
+- The launcher opens faster: its bus preview no longer prepares resources it doesn't use [#1871](https://github.com/openOMSI-Project/openOMSI/pull/1871).
+- Build: no compiler warnings left, and two examples no longer share an output name [#1862](https://github.com/openOMSI-Project/openOMSI/pull/1862); more content tests [#1868](https://github.com/openOMSI-Project/openOMSI/pull/1868).
+
 ## 0.2.17 - 2026-10-08
 
 A big one: early, mid and late seasons with trees that turn one by one, mouse steering to full
