@@ -3,23 +3,23 @@
 use super::*;
 
 /// The player's box as `player_in_way` sees it is this much longer at each end (m).
-pub(super) const PLAYER_BOX_MARGIN: f32 = 0.5;
+pub const PLAYER_BOX_MARGIN: f32 = 0.5;
 /// Somebody on foot more than this far above or below a car's way is not in it (m).
-pub(super) const PEOPLE_LEVEL: f64 = 2.5;
+pub const PEOPLE_LEVEL: f64 = 2.5;
 
 /// Another vehicle more than this far above or below a car's way (where the way passes it)
 /// is not in it (m): the road under a bridge is some 4.5 m below the deck.
-pub(super) const BODY_LEVEL: f64 = 3.0;
+pub const BODY_LEVEL: f64 = 3.0;
 
 /// How far ahead a car looks for other vehicles at least (m).
-pub(super) const LOOK_AHEAD: f32 = 70.0;
+pub const LOOK_AHEAD: f32 = 70.0;
 /// ... and at most, when it is fast.
-pub(super) const LOOK_AHEAD_MAX: f32 = 150.0;
+pub const LOOK_AHEAD_MAX: f32 = 150.0;
 
 /// How far ahead a driver at `speed` watches for something standing in the way: far enough
 /// to slow down gently for it. With a fixed 70 m a car at 50-65 km/h first saw the player's
 /// bus standing (or a bus at its stop) so late that the following model braked at 4-5 m/s².
-pub(super) fn look_ahead(speed: f32) -> f32 {
+pub fn look_ahead(speed: f32) -> f32 {
     (speed * speed / 3.0 + speed * 2.0 + 20.0).clamp(LOOK_AHEAD, LOOK_AHEAD_MAX)
 }
 
@@ -28,12 +28,12 @@ pub(super) fn look_ahead(speed: f32) -> f32 {
 /// for one going the same way (`way_dir` within 60 degrees of the bus's heading): with the
 /// bus behind it, that stretch ahead of the bus reached over the car itself and it braked
 /// for a bus that was only following it (#139).
-pub(super) fn player_reach_ahead(half_len: f32, speed: f32, horizon: f32, fwd: DVec2, way_dir: DVec2) -> f64 {
+pub fn player_reach_ahead(half_len: f32, speed: f32, horizon: f32, fwd: DVec2, way_dir: DVec2) -> f64 {
     let same_way = way_dir.length() > 0.5 && way_dir.normalize().dot(fwd) > 0.5;
     half_len as f64 + if same_way { 0.0 } else { (speed.max(0.0) * horizon) as f64 }
 }
 
-impl Traffic {
+impl TrafficSim {
     /// Where car `i` has to stop for somebody on foot (the distance of its front from its
     /// origin, as the other stops): anybody standing in the strip it is about to sweep, or
     /// stepping into it by the time the car gets there. Only the zebras and signalled
@@ -42,7 +42,7 @@ impl Traffic {
     /// somebody leaving a stop, or through anybody standing in the carriageway. A
     /// timetable bus ignores the people waiting at the kerb for it unless they stand well
     /// inside its path (it pulls up right beside them).
-    pub(super) fn people_stop(&self, i: usize, way: &[(usize, f32)]) -> Option<(f32, DVec2)> {
+    pub fn people_stop(&self, i: usize, way: &[(usize, f32)]) -> Option<(f32, DVec2)> {
         if self.people.is_empty() {
             return None;
         }
@@ -110,7 +110,7 @@ impl Traffic {
     /// each finding the other in its way - wait for each other for good. The one further
     /// along its lane (on the same lane; else the lower number) stops taking the other for
     /// its lead for a few seconds and drives off.
-    pub(super) fn break_lead_pairs(&mut self) {
+    pub fn break_lead_pairs(&mut self) {
         let index: HashMap<u64, usize> = self.cars.iter().enumerate().map(|(k, c)| (c.id, k)).collect();
         let mut pairs: Vec<(usize, u64)> = Vec::new();
         for (a, c) in self.cars.iter().enumerate() {
@@ -125,7 +125,7 @@ impl Traffic {
             pairs.push((go, other));
         }
         for (go, other) in pairs {
-            if omsi_cfg::env::var_os("OMSI_DEBUG_STUCK").is_some() {
+            if omsi_cfg::flags::OMSI_DEBUG_STUCK.is_set() {
                 log::info!("t={:.1}: cars {} and {} each waited for the other: {} drives off", self.time, self.cars[go].id, other, self.cars[go].id);
             }
             self.cars[go].ignore_lead = Some((other, self.time as f64 + 5.0));
@@ -133,7 +133,7 @@ impl Traffic {
     }
 
     /// The footprints of all AI vehicles, rear sections and trailers included.
-    pub(super) fn footprints(&self) -> Vec<Footprint> {
+    pub fn footprints(&self) -> Vec<Footprint> {
         let mut out = Vec::with_capacity(self.cars.len() + 8);
         for (i, c) in self.cars.iter().enumerate() {
             let st = &c.state;
@@ -154,7 +154,7 @@ impl Traffic {
                 if let Some(bb) = t.ty.def.bounding_box {
                     out.push(Footprint::from_obb(
                         i,
-                        &omsi_sim::collision::Obb::from_box(bb, t.position, t.body_heading()),
+                        &crate::collision::Obb::from_box(bb, t.position, t.body_heading()),
                         st.speed,
                     ));
                 }
@@ -233,7 +233,7 @@ impl Traffic {
     /// let a car turn right into the side of a bus that stood 1.7 m out in its bay).
     /// Two vehicles that each stand in the other's way are sorted out by `geo_prev`: the one
     /// with the higher id goes, the other waits.
-    pub(super) fn body_in_way(
+    pub fn body_in_way(
         &self,
         i: usize,
         feet: &[Footprint],
@@ -334,7 +334,7 @@ impl Traffic {
     /// along that way. The bus's box is stretched along its motion for the next second and
     /// a half, so a bus pulling out of a stop, turning across or reversing is seen before
     /// it is in the lane - the lanes alone saw it only once it stood in them.
-    pub(super) fn player_in_way(&self, i: usize, player: &PlayerBox) -> Option<Lead> {
+    pub fn player_in_way(&self, i: usize, player: &PlayerBox) -> Option<Lead> {
         let car = &self.cars[i];
         if (car.vehicle.position - player.0).length() > LOOK_AHEAD_MAX as f64 + 30.0 {
             return None;
@@ -349,7 +349,7 @@ impl Traffic {
     /// the road), as OMSI's traffic lets a bus leave its stop. Only a car going the bus's
     /// way that can still stop comfortably: one already beside the bus, or too close to
     /// stop, drives on. The gap from the car's front, or None.
-    pub(super) fn letting_out(&self, i: usize, player: &PlayerBox) -> Option<f32> {
+    pub fn letting_out(&self, i: usize, player: &PlayerBox) -> Option<f32> {
         let car = &self.cars[i];
         let st = &car.state;
         let (centre, heading, half_len, _, speed) = *player;
@@ -377,7 +377,7 @@ impl Traffic {
     /// way it only considers taking).
     /// `widen`: the box grown by this much (m) towards the traffic (the left, or the right
     /// on a left-hand-traffic map).
-    pub(super) fn player_on_way(&self, st: &AiState, half_width: f32, player: &PlayerBox, widen: f64) -> Option<Lead> {
+    pub fn player_on_way(&self, st: &AiState, half_width: f32, player: &PlayerBox, widen: f64) -> Option<Lead> {
         let (centre, heading, half_len, half_w, speed) = *player;
         let h = heading.to_radians();
         let fwd = DVec2::new(h.sin(), h.cos());
@@ -436,7 +436,7 @@ impl Traffic {
 /// either side, `ahead` in front and `behind` behind it) - on the same level only: a bus
 /// under a bridge held up the traffic on the bridge above it (#753). 4 m, as for the other
 /// vehicles' bodies.
-pub(super) fn in_player_box(p: DVec3, centre: DVec3, fwd: DVec2, right: DVec2, wide: f64, ahead: f64, behind: f64) -> bool {
+pub fn in_player_box(p: DVec3, centre: DVec3, fwd: DVec2, right: DVec2, wide: f64, ahead: f64, behind: f64) -> bool {
     let rel = p.truncate() - centre.truncate();
     let (x, y) = (rel.dot(right), rel.dot(fwd));
     x.abs() <= wide && y <= ahead && y >= -behind && (p.z - centre.z).abs() < 4.0

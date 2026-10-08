@@ -22,31 +22,34 @@ pub struct Viewer {
 }
 
 /// A car further away than this is below two pixels on a 900-line screen (m).
-pub(super) const VISIBLE_RANGE: f64 = 900.0;
+pub const VISIBLE_RANGE: f64 = 900.0;
 
 /// Within this distance of the camera no car appears or vanishes, seen or not: the mirrors
 /// and a turn of the head see what is near (see [`Traffic::may_appear`]).
-pub(super) const NEVER_VANISH_WITHIN: f64 = 150.0;
+pub const NEVER_VANISH_WITHIN: f64 = 150.0;
 /// Within this distance a vehicle appears or vanishes only behind something, wherever the
 /// player looks (see `Traffic::hidden`).
-pub(super) const NEAR_HIDE: f64 = 350.0;
+pub const NEAR_HIDE: f64 = 350.0;
 
 /// Within this distance of the camera an AI vehicle is animated and drawn even out of the
 /// view (m): the mirrors look behind, and a car beside the view throws its shadow into it.
-pub(super) const UNSEEN_NEAR: f64 = 80.0;
+pub const UNSEEN_NEAR: f64 = 80.0;
 
 impl Viewer {
-    pub fn new(cam: &omsi_render::Camera, aspect: f64, fog_range: f64) -> Viewer {
-        let tan_y = (cam.fov_deg as f64 * 0.5).to_radians().tan();
+    /// The view of a camera at `position` looking along `forward`, with a vertical field of
+    /// view of `fov_deg` and its far plane at `far`, a picture `aspect` wide to high, in fog
+    /// that hides everything beyond `fog_range`.
+    pub fn from_camera(position: DVec3, forward: DVec3, fov_deg: f32, far: f32, aspect: f64, fog_range: f64) -> Viewer {
+        let tan_y = (fov_deg as f64 * 0.5).to_radians().tan();
         Viewer {
-            pos: cam.position,
-            forward: cam.forward().as_dvec3().normalize_or_zero(),
+            pos: position,
+            forward: forward.normalize_or_zero(),
             tan_x: tan_y * aspect.max(0.2),
             tan_y,
-            range: fog_range.min(VISIBLE_RANGE).min(cam.far as f64),
+            range: fog_range.min(VISIBLE_RANGE).min(far as f64),
             min_size: 0.0,
             max_dist: 0.0,
-            fov: (cam.fov_deg as f64).to_radians(),
+            fov: (fov_deg as f64).to_radians(),
         }
     }
 

@@ -3459,6 +3459,7 @@ dependencies = [
  "omsi-cfg",
  "omsi-content",
  "omsi-geometry",
+ "omsi-map",
  "omsi-model",
  "omsi-o3d",
  "omsi-scenery",
@@ -3466,6 +3467,7 @@ dependencies = [
  "omsi-texture",
  "omsi-vehicle",
  "parking_lot",
+ "rayon",
 ]
 
 [[package]]

@@ -6,14 +6,14 @@ use super::*;
 /// Seconds a car held only by a full exit waits before it squeezes in (see `junction`).
 /// Seconds a car waits at a junction's line before it keeps a claim on its way through
 /// while waiting (see `Traffic::junction`).
-pub(super) const LONG_WAIT_CLAIM: f32 = 45.0;
-pub(super) const GRIDLOCK_WAIT: f32 = 45.0;
+pub const LONG_WAIT_CLAIM: f32 = 45.0;
+pub const GRIDLOCK_WAIT: f32 = 45.0;
 
 /// What `Traffic::weigh_crossings` found at a junction: somebody physically in the way
 /// (`hard`), only the rules in the way (`ruled`), the cars this one waits for that wait
 /// themselves (`soft`), why (for the debug output), where to stop, and whether anybody is
 /// near the crossing lanes at all (`contested`).
-pub(super) struct Weighing {
+pub struct Weighing {
     hard: bool,
     ruled: bool,
     soft: Vec<usize>,
@@ -25,35 +25,35 @@ pub(super) struct Weighing {
 /// Where a vehicle meets a crossing lane on its way: its lane in the sequence, the distance
 /// from its origin to that lane's start.
 #[derive(Debug, Clone)]
-pub(super) struct Junction {
+pub struct Junction {
     /// (lane, distance from the car's origin to its start) of the junction's lanes on the
     /// car's way; the first is where it has to wait.
-    pub(super) lanes: Vec<(usize, f32)>,
+    pub lanes: Vec<(usize, f32)>,
     /// The lane after the junction and the distance to its start.
-    pub(super) exit: Option<(usize, f32)>,
+    pub exit: Option<(usize, f32)>,
     /// The car is already on one of the junction's lanes.
-    pub(super) inside: bool,
+    pub inside: bool,
 }
 
 /// A vehicle the AI does not drive (the player's bus, a LAN player's) as the right of way
 /// sees it: Omsi.exe keeps the player's vehicle on the paths like any AI vehicle, so the
 /// cars give way to it by the same rules; here it is put onto the lanes where it is.
 #[derive(Debug, Clone)]
-pub(super) struct WayUser {
+pub struct WayUser {
     /// The lane it is on and those it may take next: (lane, distance from its centre to
     /// the lane's start - negative for the lane it is on).
-    pub(super) lanes: Vec<(usize, f32)>,
+    pub lanes: Vec<(usize, f32)>,
     /// Speed along its way (m/s), half its length (m), how long it has stood (s).
-    pub(super) speed: f32,
-    pub(super) half_len: f32,
-    pub(super) still: f32,
+    pub speed: f32,
+    pub half_len: f32,
+    pub still: f32,
     /// Its script claims priority (`TrafficPriority`).
-    pub(super) prio: bool,
+    pub prio: bool,
 }
 
 /// Seconds until a vehicle `dist` metres from a point gets its front there, from speed `v`
 /// with acceleration `a`.
-pub(super) fn time_to(dist: f32, v: f32, a: f32) -> f32 {
+pub fn time_to(dist: f32, v: f32, a: f32) -> f32 {
     if dist <= 0.0 {
         return 0.0;
     }
@@ -62,7 +62,7 @@ pub(super) fn time_to(dist: f32, v: f32, a: f32) -> f32 {
     (-v + (v * v + 2.0 * a * dist).sqrt()) / a
 }
 
-pub(super) fn crossing_arrival(st: &AiState, distance: f32, claimed: bool, waits_short: bool, stalled: bool) -> f32 {
+pub fn crossing_arrival(st: &AiState, distance: f32, claimed: bool, waits_short: bool, stalled: bool) -> f32 {
     if distance <= 0.3 {
         return 0.0;
     }
@@ -90,7 +90,7 @@ pub(super) fn crossing_arrival(st: &AiState, distance: f32, claimed: bool, waits
 /// `way` distances are measured from the car's present lane origin; `rear` is measured
 /// from the occupied lane's start. Combining both lets a queue be found across short,
 /// consecutive path objects instead of only on the first lane after a junction.
-pub(super) fn queued_exit_vehicle(
+pub fn queued_exit_vehicle(
     way: &[(usize, f32)],
     exit: (usize, f32),
     need: f32,
@@ -120,7 +120,7 @@ pub(super) fn queued_exit_vehicle(
 /// branch counts - the cars cannot know where the bus is going, and the autopilot's
 /// left turn without an indicator ran into a car that had taken the bus for going
 /// straight on. None off the lanes or reversing.
-pub(super) fn way_user_on(net: &Network, b: &PlayerBox, blinker: u8, still: f32, prio: bool) -> Option<WayUser> {
+pub fn way_user_on(net: &Network, b: &PlayerBox, blinker: u8, still: f32, prio: bool) -> Option<WayUser> {
     let (pos, heading, half_len, _, speed) = *b;
     if speed < -0.3 {
         return None;
@@ -159,7 +159,7 @@ pub(super) fn way_user_on(net: &Network, b: &PlayerBox, blinker: u8, still: f32,
 /// joint first goes first (a near tie to the bus), and the car keeps behind the bus as
 /// if it were ahead in its own lane. Before, the car only saw the bus once its box was in
 /// the car's way, and pulled out in front of it.
-pub(super) fn merging_lead(net: &Network, me: &AiState, users: &[WayUser]) -> Option<Lead> {
+pub fn merging_lead(net: &Network, me: &AiState, users: &[WayUser]) -> Option<Lead> {
     if users.is_empty() || me.change.is_some() {
         return None;
     }
@@ -213,7 +213,7 @@ pub(super) fn merging_lead(net: &Network, me: &AiState, users: &[WayUser]) -> Op
 
 /// What a vehicle the AI does not drive means for a car at a meeting place of its junction.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) enum Verdict {
+pub enum Verdict {
     /// Nothing: through already, far off, standing, or the car goes first.
     Free,
     /// It is in the meeting place, or in the junction and there first: wait (a car that
@@ -231,7 +231,7 @@ pub(super) enum Verdict {
 /// gap it wants after a long wait. Also when the vehicle arrives (s) and when the car
 /// would be through (s).
 #[allow(clippy::too_many_arguments)]
-pub(super) fn way_user_verdict(st: &AiState, u: &WayUser, dm: f32, c: &omsi_sim::traffic::Crossing, point: f32, inside: bool, committed: bool, me_prio: bool, must_yield: bool, patience: f32) -> (Verdict, f32, f32) {
+pub fn way_user_verdict(st: &AiState, u: &WayUser, dm: f32, c: &crate::traffic::Crossing, point: f32, inside: bool, committed: bool, me_prio: bool, must_yield: bool, patience: f32) -> (Verdict, f32, f32) {
     let (v, a_me) = (st.speed, st.accel);
     // (its centre to the meeting point, and its front to the meeting place)
     let dj = dm + c.other_at;
@@ -272,10 +272,10 @@ pub(super) fn way_user_verdict(st: &AiState, u: &WayUser, dm: f32, c: &omsi_sim:
     (verdict, t_j, t_clear)
 }
 
-impl Traffic {
+impl TrafficSim {
     /// The lanes of a car's way with their distance from its origin: the current lane (at
     /// minus `s`) and the plan, up to `within` metres.
-    pub(super) fn way_lanes(&self, st: &AiState, within: f32) -> Vec<(usize, f32)> {
+    pub fn way_lanes(&self, st: &AiState, within: f32) -> Vec<(usize, f32)> {
         let mut out = vec![(st.lane, -st.s)];
         let mut d = self.net.lanes[st.lane].length() - st.s;
         let plan: Vec<usize> = match st.change {
@@ -310,7 +310,7 @@ impl Traffic {
 
     /// The junction on car `i`'s way within `within` metres: its lanes that cross or meet
     /// others (or a footpath), and the lane after it.
-    pub(super) fn junction_ahead(&self, way: &[(usize, f32)]) -> Option<Junction> {
+    pub fn junction_ahead(&self, way: &[(usize, f32)]) -> Option<Junction> {
         let has = |l: usize| !self.net.crossings[l].is_empty() || !self.net.walks[l].is_empty();
         let object = |l: usize| {
             self.net.lanes[l]
@@ -356,7 +356,7 @@ impl Traffic {
     /// `way` is the car's own way: where its own path crosses itself nothing is to be
     /// given way to.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn junction_stop(
+    pub fn junction_stop(
         &mut self,
         i: usize,
         jn: &Junction,
@@ -403,7 +403,7 @@ impl Traffic {
         // and the car standing there used to count as one that could not stop any more)
         let cannot_stop = !jn.inside && v > 1.0 && room < v * v / (2.0 * MAX_BRAKE * 0.7);
         let cannot_stop_gently = !jn.inside && v > 1.0 && room < v * v / (2.0 * st.decel * 1.5);
-        let explain = omsi_cfg::env::var_os("OMSI_DEBUG_JUNCTION").is_some() || omsi_cfg::env::var_os("OMSI_DEBUG_STUCK").is_some();
+        let explain = omsi_cfg::flags::OMSI_DEBUG_JUNCTION.is_set() || omsi_cfg::flags::OMSI_DEBUG_STUCK.is_set();
         let stop_at = if jn.inside { None } else { Some(entry) };
         // A driver who has waited long accepts a shorter gap (the critical gap shrinks with
         // the wait, by up to a third after forty seconds): a bus that needed twelve seconds
@@ -456,7 +456,7 @@ impl Traffic {
         // the others' way, and the junction was locked for good, timetable buses and all)
         if blocked && exit_full && !hard && !ruled_before_exit && soft.is_empty() && wait > GRIDLOCK_WAIT && !contested {
             blocked = false;
-            if omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some() {
+            if omsi_cfg::flags::OMSI_DEBUG_TRAFFIC.is_set() {
                 log::info!("t={:.1}: car {} squeezes into a full exit after {wait:.0} s (gridlock)", self.time, self.cars[i].id);
             }
         }
@@ -470,7 +470,7 @@ impl Traffic {
             });
             if wins {
                 blocked = false;
-                if omsi_cfg::env::var_os("OMSI_DEBUG_TRAFFIC").is_some() {
+                if omsi_cfg::flags::OMSI_DEBUG_TRAFFIC.is_set() {
                     log::info!("t={:.1}: car {} ends a wait of {wait:.1} s at a junction ({} waiting on it)", self.time, self.cars[i].id, soft.len());
                 }
             }

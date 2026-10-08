@@ -3,8 +3,8 @@
 
 use super::*;
 
-impl Traffic {
-    pub(super) fn red_ahead(&self, i: usize) -> Option<f32> {
+impl TrafficSim {
+    pub fn red_ahead(&self, i: usize) -> Option<f32> {
         let st = &self.cars[i].state;
         let way = self.way_lanes(st, 200.0);
         for (k, &(_, d)) in way.iter().enumerate().skip(1) {
@@ -25,7 +25,7 @@ impl Traffic {
     }
 
     /// Seconds until the red light car `j` waits for may let it go (0 if none holds it).
-    pub(super) fn light_wait(&self, j: usize) -> f32 {
+    pub fn light_wait(&self, j: usize) -> f32 {
         let st = &self.cars[j].state;
         let way = self.way_lanes(st, 150.0);
         for (k, &(_, d)) in way.iter().enumerate().skip(1) {
@@ -50,7 +50,7 @@ impl Traffic {
     /// (the lanes before it, back to where it came into that object). A car turning right
     /// went on green and then stopped as it came round the corner, at the light of the
     /// cross traffic on the path its turn joins - a stop line in mid-junction nobody sees.
-    pub(super) fn light_at_entry(&self, way: &[(usize, f32)], k: usize) -> Option<(usize, usize)> {
+    pub fn light_at_entry(&self, way: &[(usize, f32)], k: usize) -> Option<(usize, usize)> {
         entry_light(&self.net, way, k)
     }
 
@@ -58,7 +58,7 @@ impl Traffic {
     /// origin), or None. A car that can stop comfortably stops at yellow; one too close
     /// drives on and remembers that it did, so the red that follows does not stop it in the
     /// middle of the junction.
-    pub(super) fn light_stop(&mut self, i: usize, way: &[(usize, f32)]) -> Option<f32> {
+    pub fn light_stop(&mut self, i: usize, way: &[(usize, f32)]) -> Option<f32> {
         let car = &self.cars[i];
         let st = &car.state;
         let v = st.speed;
@@ -137,7 +137,7 @@ impl Traffic {
         let mut trains: Vec<(i64, Vec<i64>)> = self
             .cars
             .iter()
-            .filter(|c| !c.state.route.is_empty() && self.net.lanes.get(c.state.lane).map(|l| l.kind == omsi_sim::traffic::LaneKind::Rail).unwrap_or(false))
+            .filter(|c| !c.state.route.is_empty() && self.net.lanes.get(c.state.lane).map(|l| l.kind == crate::traffic::LaneKind::Rail).unwrap_or(false))
             .map(|c| {
                 let here = self.net.lanes[c.state.lane].key.map(|k| k.id).unwrap_or(-1);
                 let ahead = c.state.route.iter().skip(c.state.route_index + 1).take(40).filter_map(|&l| self.net.lanes.get(l).and_then(|l| l.key).map(|k| k.id)).collect();
@@ -189,7 +189,7 @@ impl Traffic {
         let mut out = Vec::new();
         for c in &self.cars {
             let st = &c.state;
-            if st.route.is_empty() || self.net.lanes.get(st.lane).map(|l| l.kind != omsi_sim::traffic::LaneKind::Rail).unwrap_or(true) {
+            if st.route.is_empty() || self.net.lanes.get(st.lane).map(|l| l.kind != crate::traffic::LaneKind::Rail).unwrap_or(true) {
                 continue;
             }
             for &l in st.route.iter().skip(st.route_index).take(5) {
@@ -203,7 +203,7 @@ impl Traffic {
 
     /// `OMSI_DEBUG_LIGHTS`: every change of the lights of the chosen programs, with the
     /// game time and the program's cycle position.
-    pub(super) fn log_lights(&mut self) {
+    pub fn log_lights(&mut self) {
         let Some(sel) = self.light_log.as_deref() else {
             return;
         };
@@ -258,7 +258,7 @@ impl Traffic {
     /// onto within `reach` metres, each with the distance from the vehicle to its start
     /// (0 for the lane it is on): the way straight on and the gentle turns (within 60° of
     /// the lane before), not every branch of a junction.
-    pub(super) fn lanes_ahead_of(&self, pos: DVec3, heading: f64, reach: f32) -> Vec<(usize, f32)> {
+    pub fn lanes_ahead_of(&self, pos: DVec3, heading: f64, reach: f32) -> Vec<(usize, f32)> {
         let Some((lane, s, _)) = self.net.lane_along(pos, heading, LaneKind::Street, 4.0, 45.0) else {
             return Vec::new();
         };
@@ -297,7 +297,7 @@ impl Traffic {
                     ctl.request.get(li).copied().unwrap_or(false) as i32 as f32,
                 )
             })
-            .unwrap_or((omsi_sim::traffic::UNLINKED_PHASE as f32, 0.0))
+            .unwrap_or((crate::traffic::UNLINKED_PHASE as f32, 0.0))
     }
 
     /// The light programs of the crossings within `radius` of `near` (host): (crossing
@@ -340,7 +340,7 @@ impl Traffic {
     }
 }
 
-pub(super) fn mirror_light_tick(ctl: &mut TrafficLightController, dt: f32, day_time: f64) {
+pub fn mirror_light_tick(ctl: &mut TrafficLightController, dt: f32, day_time: f64) {
     ctl.request.fill(false);
     ctl.start(day_time);
     if !ctl.held {
@@ -348,7 +348,7 @@ pub(super) fn mirror_light_tick(ctl: &mut TrafficLightController, dt: f32, day_t
     }
 }
 
-pub(super) fn set_mirror_light_clock(ctl: &mut TrafficLightController, time: f64, held: bool) {
+pub fn set_mirror_light_clock(ctl: &mut TrafficLightController, time: f64, held: bool) {
     // A crossing may receive its first snapshot before its first tick. Mark its clock
     // started now, so the time-of-day seed cannot replace the host's position later.
     ctl.start(time - ctl.offset as f64);
@@ -356,7 +356,7 @@ pub(super) fn set_mirror_light_clock(ctl: &mut TrafficLightController, time: f64
     ctl.held = held;
 }
 
-pub(super) fn reset_light_runtime(ctl: &mut TrafficLightController, day_time: f64) {
+pub fn reset_light_runtime(ctl: &mut TrafficLightController, day_time: f64) {
     // Stop/jump bookkeeping belongs to the clock's previous owner. Keep the program
     // and current position, but discard its old requests and visited points.
     ctl.start(day_time);
@@ -369,7 +369,7 @@ pub(super) fn reset_light_runtime(ctl: &mut TrafficLightController, day_time: f6
 }
 
 /// A declared entry signal remains authoritative without scenery-object identity.
-pub(super) fn entry_light(net: &Network, way: &[(usize, f32)], k: usize) -> Option<(usize, usize)> {
+pub fn entry_light(net: &Network, way: &[(usize, f32)], k: usize) -> Option<(usize, usize)> {
     let l = way[k].0;
     let light = net.lanes[l].traffic_light?;
     let object = |x: usize| {

@@ -17,7 +17,7 @@ pub fn warm_up(world: &World, ty: &Arc<VehicleType>, hof: Option<Arc<omsi_vehicl
             .ok()
             .map(|i| (i.width, i.height, i.rgba))
     });
-    if omsi_cfg::env::var_os("OMSI_PROFILE").is_some() {
+    if omsi_cfg::flags::OMSI_PROFILE.is_set() {
         log::info!(
             "  first start of {}: {:.1} ms",
             ty.def.path.display(),
@@ -26,27 +26,7 @@ pub fn warm_up(world: &World, ty: &Arc<VehicleType>, hof: Option<Arc<omsi_vehicl
     }
 }
 
-/// The `OMSI_TRACE_AI` file, with its header written.
-pub(super) fn open_trace() -> Option<std::io::BufWriter<std::fs::File>> {
-    use std::io::Write;
-    let path = omsi_cfg::env::var_os("OMSI_TRACE_AI")?;
-    let mut f = std::io::BufWriter::new(
-        std::fs::File::create(&path)
-            .map_err(|e| log::warn!("OMSI_TRACE_AI: {e}"))
-            .ok()?,
-    );
-    writeln!(f, "t,id,type,x,y,z,heading,pitch,bank,steer,speed,lane,s,blinker,turn,lane_heading,lateral,at_station,acc,yielding,light_hold,passing,front,rear,half_width,scheduled,why,why_gap,phase,lane_z").ok()?;
-    Some(f)
-}
-
 impl Traffic {
-    /// Make the population deterministic for a LAN room.  The room's session id is
-    /// shared by the host and every client, so the same map/time produces the same
-    /// initial cars instead of each process inventing a different world.
-    pub fn set_lan_seed(&mut self, seed: u64) {
-        self.rng = seed | 1;
-    }
-
     /// Build the network from the lanes collected by `World::build_scene` and load the AI
     /// car types of the map's `ailists.cfg` (the `[aigroup_2]` groups that are not depots).
     pub fn new(root: &Path, world: &World, target: usize) -> Result<Traffic> {
@@ -68,7 +48,7 @@ impl Traffic {
         // the map's one bus type on every road of the map - on Grundorf that is a single
         // articulated GN92, which is why it seemed to be a type of our own choosing.
         log_debug_lanes(&net);
-        if omsi_cfg::env::var_os("OMSI_DEBUG_WHEELS").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_WHEELS.is_set() {
             for (t, ..) in &types {
                 let v = VehicleInstance::new(
                     t.clone(),
@@ -136,112 +116,7 @@ impl Traffic {
         let unsched_factor = crate::settings::Settings::load().ai_unsched_factor;
         let max_scheduled = crate::settings::Settings::load().ai_max_scheduled;
         let random = RandomTypes { types, groups, group_curves, group_uvg, uvg_defaults };
-        Ok(Traffic::assemble(root, net, random, lights, controller_of_object, (parked_cars, lane_tiles), density_curve, (unsched_factor, max_scheduled), target))
-    }
-
-    /// The traffic made of its parts: the linked network, the random traffic's types,
-    /// the light programs (and which crossing object has which), the parked cars and
-    /// tiles the network came from, the map's density curve and the options' share of
-    /// random traffic and number of timetable vehicles. Nothing in it needs a world or a
-    /// GPU (see `Traffic::new`).
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn assemble(
-        root: &Path,
-        net: Network,
-        random: RandomTypes,
-        lights: Vec<TrafficLightController>,
-        controller_of_object: HashMap<i64, usize>,
-        (parked_cars, lane_tiles): (Vec<(DVec3, f64)>, Tiles),
-        density_curve: Vec<(f32, f32)>,
-        (unsched_factor, max_scheduled): (f32, u32),
-        target: usize,
-    ) -> Traffic {
-        let RandomTypes { types, groups, group_curves, group_uvg, uvg_defaults } = random;
-        let parked: HashMap<usize, Vec<(f32, f32)>> = HashMap::new();
-        let light_log = omsi_cfg::env::var("OMSI_DEBUG_LIGHTS").ok();
-        let light_prev = lights.iter().map(|c| vec![-100; c.lights.len()]).collect();
-        let lanes = 0..net.lanes.len();
-        let street_weight = net.lanes.iter().filter_map(street_lane_weight).sum();
-        let mut t = Traffic {
-            net,
-            street_weight,
-            parked,
-            parked_waiting: Vec::new(),
-            lane_tiles: lane_tiles.into_iter().collect(),
-            lanes_generation: 0,
-            types,
-            groups,
-            group_curves,
-            group_uvg,
-            uvg_defaults: Arc::new(uvg_defaults),
-            cars: Vec::new(),
-            dormant: Vec::new(),
-            dormant_time: 0.0,
-            rng: 0x9E37_79B9_7F4A_7C15,
-            target,
-            lights_only: false,
-            spawn_radius: 400.0,
-            time: 0.0,
-            view: TrafficView::default(),
-            camera: None,
-            orphan_sounds: Vec::new(),
-            lights,
-            controller_of_object,
-            trailer_types: HashMap::new(),
-            sound_cfgs: HashMap::new(),
-            root: root.to_path_buf(),
-            held_at_red: 0,
-            stop_wishes: None,
-            player_still: 0.0,
-            day_time: 0.0,
-            time_scale: 1.0,
-            weekday: 0,
-            night: false,
-            daylight: None,
-            next_id: 1,
-            last_overtaker: None,
-            first_turner: None,
-            first_red: None,
-            first_yield: None,
-            first_passer: None,
-            density_curve,
-            unsched_factor,
-            max_scheduled,
-            no_timetable_buses: false,
-            viewer: None,
-            occluders: None,
-            walkers: Vec::new(),
-            people: Vec::new(),
-            initial: true,
-            last_dt: 0.0,
-            lamp_dt: 0.0,
-            trace: open_trace(),
-            logged_hard: Default::default(),
-            light_log,
-            light_prev,
-            debug_population: omsi_cfg::env::var_os("OMSI_DEBUG_POPULATION").is_some(),
-            framed_spawns: Vec::new(),
-            player: None,
-            player_priority: false,
-            player_blinker: 0,
-            player_signal_age: f32::MAX,
-            player_signalling: 0.0,
-            way_users: Vec::new(),
-            others: Vec::new(),
-            tick_split: [0.0; 3],
-            others_still: HashMap::new(),
-            geo_prev: Vec::new(),
-            index_of: HashMap::new(),
-            pull_out_rooms: HashMap::new(),
-            removed_scheduled: Vec::new(),
-            twinned: Default::default(),
-            keep_clear: Vec::new(),
-            mirror: false,
-            count_near: None,
-            lan_centers: Vec::new(),
-        };
-        t.sort_parked(parked_cars, lanes);
-        t
+        Ok(Traffic::with_sim(TrafficSim::assemble(root, net, random, lights, controller_of_object, (parked_cars, lane_tiles), density_curve, (unsched_factor, max_scheduled), target)))
     }
 
     /// Take in what the tiles loaded since the last call brought: their lanes (linked into
@@ -250,30 +125,30 @@ impl Traffic {
     pub fn add_tiles(&mut self, world: &World) -> usize {
         let (new, parked_cars, tiles) = take_from_tiles(world);
         let n = new.len();
-        let mut added = self.net.lanes.len()..self.net.lanes.len();
+        let mut added = self.sim.net.lanes.len()..self.sim.net.lanes.len();
         if n > 0 {
-            added = self.net.extend(new, 1.5);
-            self.street_weight += self.net.lanes[added.clone()].iter().filter_map(street_lane_weight).sum::<f64>();
+            added = self.sim.net.extend(new, 1.5);
+            self.sim.street_weight += self.sim.net.lanes[added.clone()].iter().filter_map(street_lane_weight).sum::<f64>();
             log::debug!(
                 "traffic: {} lanes added ({} in all)",
                 added.len(),
-                self.net.lanes.len()
+                self.sim.net.lanes.len()
             );
         }
         if !tiles.is_empty() {
-            self.lane_tiles.extend(tiles);
-            self.lanes_generation += 1;
+            self.sim.lane_tiles.extend(tiles);
+            self.sim.lanes_generation += 1;
         }
         self.sort_parked(parked_cars, added);
         // new crossings bring their light programs; the running ones keep their clocks
         // (a program is never taken away again: the world's list only grows)
         let lights = world.traffic_lights.lock();
-        if lights.len() > self.lights.len() {
-            let from = self.lights.len();
-            self.lights.extend(lights[from..].iter().cloned());
-            self.light_prev
+        if lights.len() > self.sim.lights.len() {
+            let from = self.sim.lights.len();
+            self.sim.lights.extend(lights[from..].iter().cloned());
+            self.sim.light_prev
                 .extend(lights[from..].iter().map(|c| vec![-100; c.lights.len()]));
-            self.controller_of_object = world.controller_of_object.lock().clone();
+            self.sim.controller_of_object = world.controller_of_object.lock().clone();
         }
         n
     }
@@ -319,19 +194,6 @@ pub(super) fn take_from_tiles(
     (new, parked, tiles)
 }
 
-/// Tiles by their grid position.
-pub(super) type Tiles = Vec<(i32, i32)>;
-
-/// The random traffic's vehicle types (with weight, the lanes they run on and their group),
-/// its groups with their density curves and the paths' density rules for them.
-pub(super) struct RandomTypes {
-    pub(super) types: Vec<(Arc<VehicleType>, f32, LaneKind, usize)>,
-    pub(super) groups: Vec<omsi_map::ailists::UnschedGroup>,
-    pub(super) group_curves: bool,
-    pub(super) group_uvg: Vec<Option<usize>>,
-    pub(super) uvg_defaults: Vec<i32>,
-}
-
 /// Load the AI car types of the map's `ailists.cfg` that make its random traffic.
 fn random_types(root: &Path, world: &World) -> RandomTypes {
     let mut types = Vec::new();
@@ -357,7 +219,7 @@ fn random_types(root: &Path, world: &World) -> RandomTypes {
         // though 865 paths ask for the one and 462 around Falkensee for the other.
         // `OMSI_TRAFFIC_ALL_GROUPS=1` lets such groups drive everywhere (and, on a map
         // without the file, every group, not only the default one).
-        let all_groups = omsi_cfg::env::var_os("OMSI_TRAFFIC_ALL_GROUPS").is_some();
+        let all_groups = omsi_cfg::flags::OMSI_TRAFFIC_ALL_GROUPS.is_set();
         let unscheduled: Option<Vec<(String, i32)>> =
             omsi_cfg::CfgFile::read(&world.map_dir.join("unsched_vehgroups.txt"))
                 .ok()
@@ -461,7 +323,7 @@ fn random_types(root: &Path, world: &World) -> RandomTypes {
 
 /// `OMSI_DEBUG_LANES`: the chosen lanes as the network has them.
 fn log_debug_lanes(net: &Network) {
-    if let Ok(list) = omsi_cfg::env::var("OMSI_DEBUG_LANES") {
+    if let Some(list) = omsi_cfg::flags::OMSI_DEBUG_LANES.var() {
         // lane indices, or `at:x,y,r` for the street lanes passing within r m of a point
         // (the indices change from run to run on a map whose tiles load in parallel)
         let chosen: Vec<usize> = match list.strip_prefix("at:") {

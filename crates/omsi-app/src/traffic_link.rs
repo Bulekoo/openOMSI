@@ -80,7 +80,7 @@ pub(crate) fn traffic_inputs(
 ) {
     if let Some(c) = cam {
         t.viewer = Some(
-            traffic::Viewer::new(c, aspect, fog)
+            traffic::Viewer::from_camera(c.position, c.forward().as_dvec3(), c.fov_deg, c.far, aspect, fog)
                 .with_extent(extent)
                 .with_culling(render.min_obj_size, render.max_obj_dist),
         );

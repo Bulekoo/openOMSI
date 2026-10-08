@@ -18,7 +18,7 @@ impl Traffic {
         muffled: bool,
     ) {
         let freed = audio.trim_clips(std::time::Duration::from_secs(60));
-        if freed > 0 && omsi_cfg::env::var_os("OMSI_PROFILE").is_some() {
+        if freed > 0 && omsi_cfg::flags::OMSI_PROFILE.is_set() {
             log::info!(
                 "sound clips: {:.1} MB nobody used for a minute let go",
                 freed as f64 / 1e6
@@ -28,15 +28,15 @@ impl Traffic {
             s.stop_all(audio);
         }
         let near = 250.0;
-        for c in &mut self.cars {
+        for c in &mut self.sim.cars {
             let d = (c.vehicle.position - listener).length();
             if d > near * 1.2 {
-                if let Some(mut s) = c.sounds.take() {
+                if let Some(mut s) = self.sounds.remove(&c.id) {
                     s.stop_all(audio);
                 }
                 continue;
             }
-            if c.sounds.is_none() && d < near {
+            if !self.sounds.contains_key(&c.id) && d < near {
                 let def = &c.vehicle.ty.def;
                 let Some(rel) = def.sound_ai.clone().or_else(|| def.sound.clone()) else {
                     continue;
@@ -90,7 +90,7 @@ impl Traffic {
                         }
                         ss.master = crate::sound_gain(&crate::SOUND_AI);
                         c.vehicle.host.snapshot_triggers = ss.curve_triggers().into_iter().collect();
-                        c.sounds = Some(ss);
+                        self.sounds.insert(c.id, ss);
                     }
                 }
             }
@@ -100,7 +100,7 @@ impl Traffic {
                 std::mem::take(&mut c.vehicle.host.fired_file_triggers);
             c.vehicle.host.street_cond = street_cond;
             c.vehicle.set_engine_var("StreetCond", street_cond);
-            if let Some(ss) = c.sounds.as_mut() {
+            if let Some(ss) = self.sounds.get_mut(&c.id) {
                 ss.set_muffled(muffled);
                 let xf = c.vehicle.world_transform();
                 let v = &c.vehicle;

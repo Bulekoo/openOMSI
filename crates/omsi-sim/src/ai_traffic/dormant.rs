@@ -2,20 +2,24 @@
 
 use super::*;
 
+/// How far from the player cars are kept (m) and how far out of sight one may be before it
+/// is taken off (m); in plain view a car stays until it is too small to see.
+pub const DESPAWN_FACTOR: f64 = 1.6;
+
 /// How many cars a whole map keeps at most, as a multiple of the number asked for around the
 /// player (memory: a dormant car is a few dozen bytes, but each one woken is a full vehicle).
-pub(super) const MAP_POPULATION_FACTOR: f32 = 8.0;
+pub const MAP_POPULATION_FACTOR: f32 = 8.0;
 
 
-pub(super) fn street_lane_weight(l: &omsi_sim::traffic::Lane) -> Option<f64> {
+pub fn street_lane_weight(l: &crate::traffic::Lane) -> Option<f64> {
     (l.kind == LaneKind::Street && !l.no_cars && l.density > 0.0 && l.length() >= 8.0)
         .then(|| l.length() as f64 * l.density.clamp(0.05, 4.0) as f64)
 }
 
-impl Traffic {
+impl TrafficSim {
     /// The cars out of range drive on: along their lanes at about the lanes' speed, taking
     /// a random way at every fork; one that reaches the end of the network has left the map.
-    pub(super) fn advance_dormant(&mut self) {
+    pub fn advance_dormant(&mut self) {
         let dt = (self.time - self.dormant_time).clamp(0.0, 10.0);
         self.dormant_time = self.time;
         if dt <= 0.0 || self.dormant.is_empty() {
@@ -82,7 +86,7 @@ impl Traffic {
 
     /// Fill the map: the streets the map has shown so far carry as many cars per metre as
     /// the ones around the player, the ones out of range as dormant cars (see `DormantCar`).
-    pub(super) fn fill_map(&mut self, center: DVec3, street_target: usize) {
+    pub fn fill_map(&mut self, center: DVec3, street_target: usize) {
         if street_target == 0 {
             return;
         }

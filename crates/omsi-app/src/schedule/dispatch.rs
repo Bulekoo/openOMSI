@@ -483,14 +483,14 @@ impl Schedule {
                     lanes.len(),
                     stops.len()
                 );
-                let car = &mut traffic.cars[ci];
+                let car = &mut traffic.sim.cars[ci];
                 car.state.route.extend(lanes);
                 if let Some(b) = car.bus.as_mut() {
                     b.stops.extend(stops.into_iter().map(crate::bus_service::Stop::from_tuple));
                 }
                 // (it may have stood waiting at the end of what it had)
                 car.state.planned_next = None;
-                car.state.plan_next(&traffic.net);
+                car.state.plan_next(&traffic.sim.net);
             }
             run.next += n;
             if run.next < run.steps.len() {
