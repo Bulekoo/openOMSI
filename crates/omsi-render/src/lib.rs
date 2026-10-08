@@ -1994,6 +1994,18 @@ fn vulkan_vram_mb(_adapter: &wgpu::Adapter) -> Option<u64> {
     None
 }
 
+/// The card's own memory in MB: wgpu's report on DirectX 12 (the adapter's DXGI
+/// `DedicatedVideoMemory`, the number [`dedicated_vram_mb`] reads), else what the system
+/// tells. (wgpu's Vulkan report sums every device-local heap where [`vulkan_vram_mb`] takes
+/// the largest, and Metal's is the working set the system recommends, not the card's own
+/// memory: those keep their own paths, so the texture budgets stay as they were.)
+fn adapter_vram_mb(adapter: &wgpu::Adapter, info: &wgpu::AdapterInfo, mem: Option<&wgpu::AdapterMemoryInfo>) -> Option<u64> {
+    match mem {
+        Some(m) if info.backend == wgpu::Backend::Dx12 => Some(m.dedicated_bytes >> 20),
+        _ => dedicated_vram_mb(info).or_else(|| vulkan_vram_mb(adapter)),
+    }
+}
+
 pub struct Renderer {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -2509,7 +2521,8 @@ impl Renderer {
         // a discrete card is taken for one of 2-4 GB, whose rest the pictures (the render
         // targets, the shadow maps) and the driver need; an integrated one shares the
         // system's memory, Apple's generously
-        let vram = dedicated_vram_mb(&info).or_else(|| vulkan_vram_mb(&adapter));
+        let mem = adapter.memory_info();
+        let vram = adapter_vram_mb(&adapter, &info, mem.as_ref());
         let guess_mb: u64 = match info.device_type {
             // (a card of 2 or 3 GB, where Windows says: half of it - 1600 MB of a GTX 1050's
             // 2 GB left too little for the rest, and its Vulkan device was lost at the start;
@@ -2524,6 +2537,10 @@ impl Renderer {
         let discrete_vram = vram.filter(|_| info.device_type == wgpu::DeviceType::DiscreteGpu).unwrap_or(0);
         ADAPTER_VRAM_MB.store(discrete_vram, std::sync::atomic::Ordering::Relaxed);
         log::info!("graphics adapter: {} ({:?}, {:?}{}), texture memory taken for it: {guess_mb} MB", info.name, info.device_type, info.backend, vram.map(|v| format!(", {v} MB of its own")).unwrap_or_default());
+        if let Some(m) = mem {
+            let mb = |b: Option<u64>| b.map_or_else(|| "-".to_string(), |b| format!("{} MB", b >> 20));
+            log::info!("graphics memory as {:?} reports it: {} MB its own, {} MB shared, budget {}, in use {}", info.backend, m.dedicated_bytes >> 20, m.shared_bytes >> 20, mb(m.budget_bytes), mb(m.usage_bytes));
+        }
         // The legacy Intel Windows Vulkan branch has repeatedly crashed inside igvk64.dll
         // while compiling the larger multisampled/SSAO pipeline set. This is a driver access
         // violation, so wgpu cannot turn it into a recoverable error. Start those adapters
