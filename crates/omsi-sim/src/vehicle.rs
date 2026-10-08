@@ -5457,6 +5457,48 @@ mod tests {
         compare(&v);
     }
 
+    #[test]
+    fn synthetic_material_plan_preserves_lightmap_thresholds_and_alpha_slots() {
+        let mut ty = coupling_test_type(None);
+        let ty = Arc::get_mut(&mut ty).unwrap();
+        ty.model = Model::parse(&omsi_cfg::CfgFile::from_str("synthetic.cfg",
+            include_str!("../../omsi-model/tests/fixtures/material-compatibility.cfg")));
+        ty.meshes.push(VehicleMesh {
+            def_index: 0, data: MeshData::default(), file: PathBuf::new(),
+            materials: (0..2).map(|_| omsi_o3d::Material {
+                texture: "display.dds".into(), ..Default::default()
+            }).collect(),
+            overrides: Vec::new(), pivot: Mat4::IDENTITY, viewpoint: 0,
+            skin: Vec::new(), keep_winding: false,
+        });
+        let mut index: HashMap<String, omsi_script::VarId> = ["display_alpha", "bright", "dim", "display_mode"]
+            .into_iter().enumerate().map(|(i, n)| (n.into(), i as omsi_script::VarId)).collect();
+        let mut plan = PropsPlan::default();
+        plan.refresh(ty, &index);
+        let mut got = Vec::new();
+        // Both lightmaps off, either on, both on, and the exact OMSI 0.5 threshold.
+        for (bright, dim, expected) in [(0.0, 0.0, 0.0), (1.0, 0.0, 1.0),
+            (0.0, 1.0, 1.0), (1.0, 1.0, 1.0), (0.49, 0.49, 0.0), (0.5, 0.0, 1.0)] {
+            for alpha in [0.0, 0.5, 1.0] {
+                for mode in [0.0, 1.0] {
+                    let vars = [alpha, bright, dim, mode];
+                    plan.apply(&vars, &mut got);
+                    let want = compute_mesh_props(ty, &|name| index.get(name).map(|&i| vars[i as usize]));
+                    assert_eq!(got[0].slot_light, vec![expected, 1.0]);
+                    assert_eq!(got[0].slot_alpha, vec![alpha, 1.0]);
+                    assert_eq!(got[0].slot_light, want[0].slot_light);
+                    assert_eq!(got[0].slot_alpha, want[0].slot_alpha);
+                }
+            }
+        }
+        // An undeclared lightmap variable stays on; rebuilding the existing plan
+        // must not keep the obsolete resolved variable index.
+        index.remove("dim");
+        plan.refresh(ty, &index);
+        plan.apply(&[0.5, 0.0, 0.0, 0.0], &mut got);
+        assert_eq!(got[0].slot_light, vec![1.0, 1.0]);
+    }
+
     /// A `[matl_lightmap]` whose variable the bus does not have is always on (Omsi.exe's
     /// index -1, 0x7fe4e7); one on a variable at 0.3 is off.
     #[test]
