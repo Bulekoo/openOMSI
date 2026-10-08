@@ -178,8 +178,32 @@ checked against it.
   wrappers (simulation + view) that dereference to them; every `OMSI_*` switch goes through
   `omsi_cfg::flags` (`docs/DEBUG_FLAGS.md`); `App`'s state is grouped by subsystem
   (`omsi-app/src/app/groups.rs`). Still to move: the render-free parts of the timetable
-  (`schedule/{times,ibis,duty}.rs` first) into `omsi-sim`, and the view sync of traffic and
-  people out of their wrappers into one place.
+  (`schedule/{times,ibis,duty}.rs` first) into `omsi-sim`.
+
+* **The view sync phase** (`omsi-app/src/view_sync/`): the code that turns the traffic's
+  and the people's state into renderer instances is in one module - `traffic.rs` (the AI
+  vehicles' renders, their drivers, the traffic lamps), `people.rs` (the people's meshes,
+  posing and skinning, the coins and ticket blocks) - with one entry point,
+  `view_sync::sync(ViewSync { traffic, people }, world, renderer, scene)`, traffic first.
+  It runs where each part was synced before, so that the renderer sees the same calls in
+  the same order:
+  * the window: the traffic at the end of `frame_traffic` (after its step and sound,
+    before the player and the people move: the cars that parked leave the traffic's list
+    there, and the people's step reads it), the people at the end of `frame_people` (after
+    their step and the coins handed out);
+  * the offscreen run: the traffic after each population (and before an
+    `OMSI_POPULATION_SHOTS` picture), the people every step while `OMSI_TRACE_PAX` traces,
+    both before each snapshot (the traffic, the player's pose, then the people from the
+    snapshot's camera) and in the closing reports.
+
+  Not yet in the phase: renders made or let go inside the wrappers' own calls, at the
+  moment the simulation needs them - a car's when the traffic puts it on the road or takes
+  it off (population, timetable departures, trains, the LAN mirror, `Traffic::view`), and
+  the people who appeared or went at the end of every `Humans` call that made them
+  (`BodyOp`s replayed by `Humans::show_bodies`). Their state (`TrafficView`, `Bodies`) is
+  therefore still held by the wrappers, whose calls are used across the app with the
+  renderer passed in. The traffic's sync also still does two pieces of simulation: parked
+  cars leave the list there, and the AI vehicles get `Envir_Brightness`.
 
 * **Global mutable state.** The introduction's "no global mutable state" is not true today:
   `omsi-app` has about 45 module-level `static`s with interior mutability (`Mutex`, atomics,
