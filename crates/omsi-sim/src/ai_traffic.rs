@@ -141,6 +141,12 @@ pub struct TrafficSim {
     pub unsched_factor: f32,
     /// The options' `[AIMaxCountScheduled]` (0 = no limit).
     pub max_scheduled: u32,
+    /// The `ai_wait_timed_stops_only` setting (off by default): an early timetable bus waits
+    /// for its departure only at the stops the timetable times itself
+    /// (`bus_service::BusService::waits_here`). Off, it waits at every stop it serves, as in
+    /// Omsi.exe, where the 20 s check (0x7d9bdc) runs against every station's time, the ones
+    /// shared out by distance too (0x616afc -> 0x73b474).
+    pub timed_waits_only: bool,
     /// `--no-timetable-buses`: the timetable runs for the player's duty, but puts no AI
     /// bus on the road (#1762).
     pub no_timetable_buses: bool,

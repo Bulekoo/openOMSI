@@ -107,7 +107,9 @@ impl PeopleSim {
                 let c = self.center;
                 self.populate_with(world, Some(n), c);
                 if !self.mirror {
-                    self.populate_on_foot(world, n, 1.0);
+                    if !self.players_only {
+                        self.populate_on_foot(world, n, 1.0);
+                    }
                     self.populate_lan_centers(world, n);
                 }
             }
@@ -152,12 +154,13 @@ impl PeopleSim {
         let mut remove: Vec<usize> = Vec::new();
         self.pax_frame(dt, world, &buses, &bus_ix, &at_stops, bus, &mut taken_ticket, &mut remove);
         stage!("passengers");
-        // the pedestrians: a crowd on the pavements
+        // the pedestrians: a crowd on the pavements (the cars around every player: the people
+        // around the other LAN players wait for them at the kerb too)
         let mut cars: Vec<(DVec2, DVec2, f64)> = Vec::new();
         let mut blocks: Vec<Block> = Vec::new();
         if let Some(t) = traffic {
             for c in &t.cars {
-                if (c.vehicle.position - self.center).length() > 320.0 {
+                if self.far_from_players(c.vehicle.position, 320.0) {
                     continue;
                 }
                 let h = c.vehicle.heading.to_radians();
@@ -177,7 +180,7 @@ impl PeopleSim {
             }
         }
         for o in world.parked_boxes().iter() {
-            if (o.center - self.center.truncate()).length() < 320.0 {
+            if self.anchors().any(|c| (o.center - c.truncate()).length() < 320.0) {
                 blocks.push(Block { center: o.center, half: o.half, heading: o.heading, vel: DVec2::ZERO });
             }
         }

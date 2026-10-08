@@ -62,7 +62,15 @@ pub struct TripTimes {
     /// `[profile_otherstopping]` per station (0 when not given): 1 and 4 stop whoever
     /// wants to get on or off, 2 is passed, 3 is served when the bus would be more than 20 s
     /// early (Omsi.exe 0x7da6f0 .. 0x7da8bf; see `bus_service::BusService::must_serve`).
+    /// This is the editor's per-station stop setting; whether the bus *waits* there is a
+    /// separate question (`bus_service::BusService::waits_here`).
     pub kinds: Vec<u8>,
+    /// The stations whose time the map wrote itself (`[profile_man_arr_time]` /
+    /// `[profile_man_dep_time]`): the bus waits there for its departure. A station whose
+    /// time is only shared out of the trip's duration is no time point - a bus that beat
+    /// its running time serves it and drives on, instead of standing there until its time
+    /// (which held up every bus behind it; see `bus_service::BusService::waits_here`).
+    pub holds: Vec<bool>,
     /// Seconds from the departure to the arrival at the last station.
     pub duration: f64,
 }

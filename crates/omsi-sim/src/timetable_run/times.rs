@@ -17,16 +17,19 @@ impl TripTimes {
         let mut dep: Vec<Option<f64>> = vec![None; n];
         let mut stops = vec![true; n];
         let mut kinds = vec![0u8; n];
+        let mut holds = vec![false; n];
         if let Some(p) = profile {
             let at = |i: i32| usize::try_from(i).ok().filter(|i| *i < n);
             for (i, m) in &p.man_arr_time {
                 if let Some(i) = at(*i) {
                     arr[i] = Some(*m as f64 * 60.0);
+                    holds[i] = true;
                 }
             }
             for (i, m) in &p.man_dep_time {
                 if let Some(i) = at(*i) {
                     dep[i] = Some(*m as f64 * 60.0);
+                    holds[i] = true;
                 }
             }
             for (i, v) in &p.other_stopping {
@@ -97,6 +100,7 @@ impl TripTimes {
             stations: out,
             stops,
             kinds,
+            holds,
             duration: duration.max(1.0),
         }
     }

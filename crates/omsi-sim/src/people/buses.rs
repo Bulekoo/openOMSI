@@ -243,7 +243,6 @@ impl PeopleSim {
             });
         }
         if let Some(t) = traffic {
-            let near = self.center;
             let riding: HashSet<u64> = self
                 .people
                 .iter()
@@ -255,7 +254,9 @@ impl PeopleSim {
             let mut visits = HashMap::new();
             for c in t.cars.iter().filter(|c| c.is_bus()) {
                 let from_eye = self.eye.map(|e| (c.vehicle.position - e.pos).length()).unwrap_or(f64::MAX);
-                if (c.vehicle.position - near).length().min(from_eye) > 400.0 && !riding.contains(&c.id) {
+                // (the timetable buses near every player: the people waiting around the other
+                // LAN players board them too)
+                if from_eye > 400.0 && self.far_from_players(c.vehicle.position, 400.0) && !riding.contains(&c.id) {
                     continue;
                 }
                 let Some(cabin) = self.cabin_for(&c.vehicle) else {

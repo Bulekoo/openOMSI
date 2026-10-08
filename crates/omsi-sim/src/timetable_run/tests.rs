@@ -222,6 +222,8 @@ fn trip_times_from_the_profile() {
     let arr: Vec<f64> = t.stations.iter().map(|s| s.0).collect();
     assert_eq!(arr, vec![0.0, 100.0, 200.0, 500.0, 600.0]);
     assert_eq!(t.duration, 600.0);
+    // no time of a stop's own: none of them is a time point the bus waits at
+    assert_eq!(t.holds, vec![false; 5]);
     // manual minutes win, the rest in between by length; a passed station stops nowhere
     let p = omsi_timetable::TripProfile {
         name: "p".into(),
@@ -238,6 +240,8 @@ fn trip_times_from_the_profile() {
     assert_eq!(t.stations[3], (360.0, 360.0));
     assert_eq!(t.duration, 540.0);
     assert_eq!(t.stops, vec![true, true, false, true, true]);
+    // the stops the map wrote a time for are the ones the bus waits at
+    assert_eq!(t.holds, vec![true, true, false, true, true]);
     // a profile without stations keeps its duration (flights on a track)
     assert_eq!(
         TripTimes::new(

@@ -95,3 +95,26 @@ fn the_pool_counts_local_people_and_never_recycles_riders_or_avatars() {
     assert_eq!(h.pool_used(), 1);
     assert!(h.people.iter().any(|p| p.id == 1));
 }
+
+/// A dedicated server's own place is the map's camera, where nobody plays: the stops and
+/// pavements there get no people (they took the whole pool, and the players around
+/// town met nobody); those around the LAN players do, and with nobody joined nowhere.
+#[test]
+fn a_dedicated_server_keeps_people_around_its_players_not_its_camera() {
+    let camera = DVec3::new(-1948.9, -174.7, 8.8);
+    let player = DVec3::new(-219.9, -995.5, 0.0);
+    let mut h = PeopleSim::new(Path::new("/nonexistent"), 200);
+    h.center = camera;
+    h.lan_centers = vec![player];
+    // a host plays at its own place too
+    assert!(!h.far_from_players(camera + DVec3::X * 100.0, STOP_RANGE));
+    assert!(!h.far_from_players(player + DVec3::Y * 100.0, STOP_RANGE));
+    h.players_only = true;
+    assert!(h.far_from_players(camera + DVec3::X * 100.0, STOP_RANGE));
+    assert!(h.far_from_players(camera, STROLL_RADIUS));
+    assert!(!h.far_from_players(player + DVec3::Y * 100.0, STOP_RANGE));
+    assert_eq!(h.anchors().collect::<Vec<_>>(), vec![player]);
+    h.lan_centers.clear();
+    assert!(h.far_from_players(camera, 1.0));
+    assert!(h.far_from_players(player, 1.0));
+}

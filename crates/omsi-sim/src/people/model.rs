@@ -418,6 +418,11 @@ pub struct PeopleSim {
     pub mirror: bool,
     /// LAN play: where the other players are (host): people are kept around them too.
     pub lan_centers: Vec<DVec3>,
+    /// A dedicated server: nobody plays at its own place (`center`, the map's camera), so
+    /// people are kept around the LAN players alone (`anchors`). Kept around the camera
+    /// too, the stops there took the whole pool (`max_people`) for people nobody saw, and
+    /// none were left for the stops and pavements around the players.
+    pub players_only: bool,
     /// LAN play: the other players' buses this frame (`set_remote_buses`), for their riders
     /// to sit in. Nobody of ours boards them: their doors count as shut.
     pub remote_now: Vec<BusNow>,

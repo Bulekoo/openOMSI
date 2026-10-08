@@ -122,15 +122,43 @@ pub(crate) fn game_info(app: &crate::App) -> Vec<(&'static str, InfoValue)> {
             // the bus reached the trip's last stop: the trip is over, though the duty moves on to
             // the next one only a minute before it leaves
             v.push(("trip_done", Bool(d.trip_done())));
-            if let Some(s) = trip.stops.get(d.next_stop) {
-                v.push(("next_stop", Text(s.name.trim().to_string())));
-                v.push(("next_stop_number", Num(d.next_stop as f64 + 1.0)));
-                v.push(("next_stop_arrival", Num(s.arr)));
-                v.push(("next_stop_departure", Num(s.dep)));
-            }
+            let bus = app.player.as_ref().map(|p| p.vehicle.position);
+            stop_info(&mut v, &trip.stops, d.next_stop, d.at_stop(), bus);
         }
     }
     v
+}
+
+/// `omsi.info()`'s keys of the next stop and the one before it: `stops` the trip's, `next`
+/// the index of the next one, `bus` where the player's bus is.
+fn stop_info(v: &mut Vec<(&'static str, InfoValue)>, stops: &[crate::schedule::PlannedStop], next: usize, at_stop: bool, bus: Option<glam::DVec3>) {
+    use InfoValue::{Bool, Num, Text};
+    // straight-line metres from the bus, where the stop's place is known
+    let distance = |s: &crate::schedule::PlannedStop| {
+        let (bus, stop) = (bus?, s.position?);
+        Some((stop.x - bus.x).hypot(stop.y - bus.y))
+    };
+    if let Some(s) = stops.get(next) {
+        v.push(("next_stop", Text(s.name.trim().to_string())));
+        v.push(("next_stop_number", Num(next as f64 + 1.0)));
+        v.push(("next_stop_arrival", Num(s.arr)));
+        v.push(("next_stop_departure", Num(s.dep)));
+        // the map's object ID of the stop, as the timetable and the map files name it:
+        // outside tools match the stop by it, the name can occur twice
+        v.push(("next_stop_id", Num(s.object_id as f64)));
+        v.push(("at_stop", Bool(at_stop)));
+        if let Some(m) = distance(s) {
+            v.push(("next_stop_distance", Num(m)));
+        }
+    }
+    // the last stop before the next one the trip calls at (passing stations left out)
+    if let Some(s) = stops.iter().take(next).rev().find(|s| s.stops) {
+        v.push(("previous_stop", Text(s.name.trim().to_string())));
+        v.push(("previous_stop_id", Num(s.object_id as f64)));
+        if let Some(m) = distance(s) {
+            v.push(("previous_stop_distance", Num(m)));
+        }
+    }
 }
 
 impl Io<'_> {
@@ -348,5 +376,35 @@ mod tests {
         let mut io = snapshot(vec![("clock", InfoValue::Num(32400.0)), ("map_path", InfoValue::Text("maps/example/global.cfg".into()))]);
         assert_eq!(io.var("openomsi_clock"), None);
         assert_eq!(io.string("openomsi_map_path"), None);
+    }
+
+    /// The next stop and the one before it, by object ID, with their distances: the stop
+    /// before skips a passing station, and a stop with no known place has no distance.
+    #[test]
+    fn info_names_the_stops_on_either_side_of_the_bus() {
+        let stop = |id: i64, name: &str, x: f64, stops: bool| crate::schedule::PlannedStop {
+            object_id: id,
+            name: name.into(),
+            arr: 0.0,
+            dep: 0.0,
+            position: (x >= 0.0).then_some(glam::DVec3::new(x, 0.0, 5.0)),
+            dir: Default::default(),
+            stops,
+        };
+        let stops = vec![stop(11, "A", 0.0, true), stop(12, "B", 100.0, false), stop(13, "C", -1.0, true)];
+        let mut v = Vec::new();
+        stop_info(&mut v, &stops, 2, true, Some(glam::DVec3::new(30.0, 40.0, 0.0)));
+        let get = |k: &str| v.iter().find(|(key, _)| *key == k).map(|(_, x)| x.clone());
+        assert_eq!(get("next_stop"), Some(InfoValue::Text("C".into())));
+        assert_eq!(get("next_stop_id"), Some(InfoValue::Num(13.0)));
+        assert_eq!(get("at_stop"), Some(InfoValue::Bool(true)));
+        assert_eq!(get("next_stop_distance"), None);
+        assert_eq!(get("previous_stop"), Some(InfoValue::Text("A".into())));
+        assert_eq!(get("previous_stop_id"), Some(InfoValue::Num(11.0)));
+        assert_eq!(get("previous_stop_distance"), Some(InfoValue::Num(50.0)));
+        // at the first stop there is none before it
+        let mut v = Vec::new();
+        stop_info(&mut v, &stops, 0, false, None);
+        assert!(v.iter().all(|(k, _)| !k.starts_with("previous_stop") && *k != "next_stop_distance"));
     }
 }

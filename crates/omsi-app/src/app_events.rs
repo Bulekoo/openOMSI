@@ -751,10 +751,10 @@ fn info_line(clock: &omsi_sim::SimClock, player: Option<&Player>, duty: Option<&
         if let Some(tank) = p.vehicle.var("tank_percent").filter(|v| v.is_finite()) {
             parts.push(format!("tank {:.0} %", (tank * 100.0).round()));
         }
-        // how many are aboard right now (None: the passengers are switched off for this
-        // drive, so there is nothing to count)
+        // how many are aboard right now, out of the bus's places (None: the passengers are
+        // switched off for this drive, so there is nothing to count)
         if let Some(n) = passengers {
-            parts.push(passengers_aboard(n));
+            parts.push(passengers_aboard(n, passenger_capacity(&p.vehicle)));
         }
         if let Some(d) = duty {
             if let Some(trip) = d.trips.get(d.trip_index) {
@@ -776,15 +776,36 @@ fn distance_driven(metres: f64) -> String {
     format!("{:.1} km", metres.max(0.0) / 1000.0)
 }
 
+/// The passenger places (`[passpos]`) in the player's bus and any coupled sections: nobody
+/// boards once they are all taken (None: no passenger cabin to count).
+fn passenger_capacity(vehicle: &omsi_sim::VehicleInstance) -> Option<usize> {
+    let sections =
+        std::iter::once(&vehicle.ty).chain(vehicle.trailers.iter().map(|trailer| &trailer.ty));
+    let mut capacity = 0;
+    let mut found_cabin = false;
+    for ty in sections {
+        if let Some(cabin) = crate::driver::cabin_of(&ty.def) {
+            capacity += cabin.pass_positions.len();
+            found_cabin = true;
+        }
+    }
+    found_cabin.then_some(capacity)
+}
+
 /// The bus's odometer to a hundred metres, as the stock cockpits show it (km and tenths).
 fn odometer_reading(km: f64) -> String {
     format!("{} {:.1} km", omsi_ui::tr("Odometer"), km.max(0.0))
 }
 
-/// `n` with the word for a passenger in the interface's language (singular for one; both
-/// words are keys of the tables - the whole line is too much of a sentence to translate).
-fn passengers_aboard(n: usize) -> String {
-    format!("{n} {}", omsi_ui::tr(if n == 1 { "Passenger" } else { "Passengers" }))
+/// `n` (out of `capacity` places, where known) with the word for a passenger in the
+/// interface's language (singular for one; both words are keys of the tables - the whole
+/// line is too much of a sentence to translate).
+fn passengers_aboard(n: usize, capacity: Option<usize>) -> String {
+    let count = capacity.map_or_else(|| n.to_string(), |capacity| format!("{n}/{capacity}"));
+    format!(
+        "{count} {}",
+        omsi_ui::tr(if n == 1 { "Passenger" } else { "Passengers" })
+    )
 }
 
 #[cfg(test)]
@@ -818,9 +839,14 @@ mod info_tests {
     /// tables' language; without a lookup the English key is drawn as it is).
     #[test]
     fn one_passenger_is_written_in_the_singular() {
-        assert_eq!(passengers_aboard(0), "0 Passengers");
-        assert_eq!(passengers_aboard(1), "1 Passenger");
-        assert_eq!(passengers_aboard(23), "23 Passengers");
+        assert_eq!(passengers_aboard(0, None), "0 Passengers");
+        assert_eq!(passengers_aboard(1, None), "1 Passenger");
+        assert_eq!(passengers_aboard(23, None), "23 Passengers");
+    }
+
+    #[test]
+    fn passenger_count_includes_the_bus_capacity() {
+        assert_eq!(passengers_aboard(4, Some(65)), "4/65 Passengers");
     }
 }
 

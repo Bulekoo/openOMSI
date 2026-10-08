@@ -102,6 +102,7 @@ impl TrafficSim {
             density_curve,
             unsched_factor,
             max_scheduled,
+            timed_waits_only: false,
             no_timetable_buses: false,
             viewer: None,
             occluders: None,

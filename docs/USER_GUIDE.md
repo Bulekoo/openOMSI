@@ -270,6 +270,10 @@ menu's, the timetable's, the plates under the notes - 0.2 to 1, the texts stayin
 as designed; `navigator_opacity` in older files),
 `navigator_corner` (`bottom-left` default, `bottom-right`, `top-left`, `top-right`),
 `nav_ai` (the other AI vehicles as dots on the navigator and the city map; on by default),
+`ai_wait_timed_stops_only` (an AI timetable bus ahead of its time waits for its departure only
+at its first and last stop, railway stations and the stops the timetable gives a time of their
+own, and drives on from the others once boarding is done; off by default: it waits at every
+stop it serves, as in OMSI),
 `boarding`, `detail_textures`, `exact_fare`, `enhanced`, `fullscreen`, `vsync`, `volume`
 and `drive_keys`, plus `render_scale` (`auto` or a fraction: the picture is drawn smaller
 and upscaled), `post_aa` (`fxaa`, the enhanced renderer's, or `off`), `view_distance` (m,

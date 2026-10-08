@@ -170,10 +170,9 @@ impl PeopleSim {
             });
         }
         for id in ids {
-            let center = self.center;
             let near = {
                 let s = &self.stops[&id];
-                (s.pos - center).length() < STOP_RANGE || self.lan_centers.iter().any(|c| (s.pos - *c).length() < STOP_RANGE)
+                self.anchors().any(|c| (s.pos - c).length() < STOP_RANGE)
             };
             let changed = {
                 let s = self.stops.get_mut(&id).unwrap();

@@ -885,6 +885,7 @@ impl TrafficSim {
                     passing: car.passing.is_some(),
                     kerb_swerve,
                     debug: debug || omsi_cfg::flags::OMSI_DEBUG_PAX.is_set(),
+                    timed_waits_only: self.timed_waits_only,
                 };
                 if let Some(at) = service.step(&mut car.state, &mut car.vehicle, &ctx) {
                     stop_at = Some(stop_at.map(|x| x.min(at)).unwrap_or(at));

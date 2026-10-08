@@ -82,9 +82,19 @@ impl PeopleSim {
             .collect()
     }
 
+    /// The places people are kept around: ours (the player's bus, else the camera) - not on
+    /// a dedicated server, where nobody plays there (`players_only`) - and every other LAN
+    /// player's.
+    pub fn anchors(&self) -> impl Iterator<Item = DVec3> + '_ {
+        (!self.players_only)
+            .then_some(self.center)
+            .into_iter()
+            .chain(self.lan_centers.iter().copied())
+    }
+
     /// Is `p` further than `r` from us and from every other LAN player?
     pub fn far_from_players(&self, p: DVec3, r: f64) -> bool {
-        (p - self.center).length() > r && self.lan_centers.iter().all(|c| (p - *c).length() > r)
+        self.anchors().all(|c| (p - c).length() > r)
     }
 
     /// The stops and pavements around the other players of a LAN session (host).
@@ -98,7 +108,8 @@ impl PeopleSim {
         }
         let mine = self.center;
         for c in self.lan_centers.clone() {
-            if (c - mine).length() < 150.0 {
+            // (near us they are there already - unless nobody plays here)
+            if !self.players_only && (c - mine).length() < 150.0 {
                 continue;
             }
             self.populate_with(world, Some(net), c);
