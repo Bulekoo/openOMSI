@@ -100,6 +100,7 @@ fn clip_polygon_to_triangle(
     clipped
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_clipped_crack_segment(
     mesh: &mut omsi_geometry::MeshData,
     start: glam::Vec3,
