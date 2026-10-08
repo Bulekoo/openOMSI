@@ -20,9 +20,9 @@ if errorlevel 1 goto :failed
 if not exist "dist\windows" mkdir "dist\windows"
 copy /y "target\%TARGET%\release\openomsi.exe" "dist\windows\openomsi.exe" >nul || goto :failed
 copy /y "target\%TARGET%\release\openomsi-launcher.exe" "dist\windows\openomsi-launcher.exe" >nul || goto :failed
-rem TODO: copy Google's ANGLE (BSD licence) here too - libEGL.dll and libGLESv2.dll for the
-rem target, with the Direct3D 11 renderer (the release of openOMSI-Project/angle-openomsi) - so that the
-rem "ANGLE (DirectX 11)" graphics API can be used (startup::backend_order skips it without them)
+rem (the release package also carries Google's ANGLE - libEGL.dll, libGLESv2.dll and
+rem LICENSE-ANGLE.txt from openOMSI-Project/angle-openomsi, see .github/workflows/release.yml -
+rem for the "ANGLE (DirectX 11)" graphics API; startup::backend_order skips it without them)
 rem (Steam's library, x64 only: an ARM64 build has no Steam, see crates\omsi-app\build.rs)
 if /i "%TARGET%"=="x86_64-pc-windows-msvc" copy /y "assets\steam_redist\steam_api64.dll" "dist\windows\steam_api64.dll" >nul || goto :failed
 echo.
