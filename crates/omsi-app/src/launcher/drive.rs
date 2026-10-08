@@ -1090,6 +1090,17 @@ fn joined_server_name(l: &Launcher) -> Option<String> {
     Some(entry.map(|e| e.name.clone()).filter(|n| !n.is_empty()).or_else(|| info.map(|i| i.name.clone())).unwrap_or_else(|| a.clone()))
 }
 
+/// After the season changed: a chosen weather that does not fit it goes, and the duty is saved.
+fn season_weather_fits(l: &mut Launcher) {
+    let w = l.state.choice.weather.clone();
+    if let Some(wi) = l.state.weathers.iter().find(|x| x.file == w).cloned() {
+        if !l.state.weather_fits(&wi) {
+            l.state.choice.weather.clear();
+        }
+    }
+    l.state.touched();
+}
+
 fn step_time(l: &mut Launcher, r: Rect) {
     let mut y = r.y;
     if let Some(name) = joined_server_name(l) {
@@ -1148,22 +1159,24 @@ fn step_time(l: &mut Launcher, r: Rect) {
     let mut s = seasons.iter().position(|x| *x == l.state.choice.season).unwrap_or(0);
     if l.ui.segmented("season", Rect::new(r.x, y, r.w, 34.0), &mut s, &["By date", "Spring", "Summer", "Autumn", "Winter"]) {
         l.state.choice.season = seasons[s].to_string();
-        if s > 0 {
-            let month = ["", "04", "07", "10", "01"][s];
-            let date = l.state.choice.date.clone();
-            let (yy, dd) = (date.get(0..4).unwrap_or("1989").to_string(), date.get(8..10).unwrap_or("15").to_string());
-            l.state.choice.date = format!("{yy}-{month}-{dd}");
-            l.state.load_lines();
-        }
-        let w = l.state.choice.weather.clone();
-        if let Some(wi) = l.state.weathers.iter().find(|x| x.file == w).cloned() {
-            if !l.state.weather_fits(&wi) {
-                l.state.choice.weather.clear();
-            }
-        }
-        l.state.touched();
+        // (a season: the date goes to its phase's typical day, see `season_phase`)
+        l.state.season_chosen();
+        season_weather_fits(l);
     }
     y += 46.0;
+    // a season chosen: its early, middle or late part, which the date and the plants'
+    // looks follow
+    if s > 0 {
+        let phases = ["early", "mid", "late"];
+        let mut p = phases.iter().position(|x| *x == l.state.choice.phase).unwrap_or(1);
+        let w = (r.w * 0.6).min(300.0);
+        if l.ui.segmented("season-phase", Rect::new(r.x + (r.w - w) * 0.5, y - 6.0, w, 28.0), &mut p, &["Early", "Mid", "Late"]) {
+            l.state.choice.phase = phases[p].to_string();
+            l.state.season_chosen();
+            season_weather_fits(l);
+        }
+        y += 34.0;
+    }
     let mut traffic = l.state.choice.traffic;
     if l.ui.slider("traffic", Rect::new(r.x, y, r.w, 34.0), &mut traffic, 0.0, 120.0, 1.0, "Cars around", &|v| format!("{v:.0}")) {
         l.state.choice.traffic = traffic;

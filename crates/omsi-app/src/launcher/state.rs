@@ -111,6 +111,8 @@ pub struct Choice {
     pub date: String,
     /// "auto", spring, summer, autumn, winter.
     pub season: String,
+    /// The season's phase: early, mid, late (with a season chosen).
+    pub phase: String,
     pub weather: String,
     pub traffic: f32,
     pub passengers: bool,
@@ -143,6 +145,7 @@ impl Default for Choice {
             start_trip: None,
             date: "1989-05-30".into(),
             season: "auto".into(),
+            phase: "mid".into(),
             weather: String::new(),
             traffic: 30.0,
             passengers: true,
@@ -653,7 +656,7 @@ impl State {
             profile: Some(self.config.profile.clone()).filter(|p| !p.is_empty()),
             lan: Some(lan),
             lan_name: None,
-            season: Some(c.season.clone()).filter(|s| s != "auto"),
+            season: Some(c.season.clone()).filter(|s| s != "auto").map(|s| self.season_word(&s)),
             tutorial: None,
             situation: None,
         }
@@ -1174,6 +1177,26 @@ impl State {
         self.lines.clear();
         self.load_lines();
         self.touched();
+    }
+
+    /// The chosen season with its phase as the game reads it (`autumn-late`, `autumn`).
+    fn season_word(&self, season: &str) -> String {
+        match crate::season_phase::SeasonChoice::parse(&format!("{season}-{}", self.choice.phase)) {
+            Some(c) => c.word(),
+            None => season.to_string(),
+        }
+    }
+
+    /// A season and its phase chosen: the date moves to the phase's typical day of the
+    /// chosen year (half a year later on a map south of the equator), see `season_phase`.
+    pub fn season_chosen(&mut self) {
+        let Some(c) = crate::season_phase::SeasonChoice::parse(&self.season_word(&self.choice.season.clone())) else { return };
+        let root = std::path::PathBuf::from(core::load_config().root);
+        let lat = crate::season_phase::map_latitude(&root, &self.choice.map);
+        let (m, d) = c.day(lat);
+        let year = self.choice.date.get(0..4).unwrap_or("1989").to_string();
+        self.choice.date = format!("{year}-{m:02}-{d:02}");
+        self.load_lines();
     }
 
     /// The season the chosen date (or the override) means.

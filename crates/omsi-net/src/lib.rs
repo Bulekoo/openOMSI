@@ -712,8 +712,10 @@ pub struct WorldInfo {
     pub time: f64,
     /// Weather file, empty for the map's default.
     pub weather: String,
-    /// The season the player chose (`spring`, `summer`, `autumn`, `winter`), empty when
-    /// the date decides as in OMSI.
+    /// The season the player chose (`spring`, `summer`, `autumn`, `winter`), with its
+    /// phase when not the middle (`autumn-late`, `spring-early`: an older version reads
+    /// no season in that and goes by the date, which is the host's phase date), empty
+    /// when the date decides as in OMSI.
     pub season: String,
 }
 

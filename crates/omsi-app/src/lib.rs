@@ -61,6 +61,7 @@ mod quit;
 mod condensation;
 mod rain;
 mod scene;
+mod season_phase;
 mod schedule;
 mod schedule_paper;
 mod real_time;
@@ -352,6 +353,9 @@ pub(crate) fn make_app(mut args: Args, server_cfg: Option<server::ServerCfg>) ->
     if settings::Settings::load().time_sync && args.lan_join.is_none() && args.server.is_none() && args.offscreen.is_none() {
         real_time::start_at_now(&mut args);
     }
+    // a season chosen with its phase moves the date into it (the sun, the weather and the
+    // timetable go by the date); a joining player takes the host's date below
+    season_phase::apply_season_date(&mut args);
     if args.export_glb.is_none() && args.lan_join.is_none() {
         place_on_duty(&mut args);
     }
