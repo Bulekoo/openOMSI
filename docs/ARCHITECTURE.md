@@ -17,7 +17,7 @@ change behaviour is checked is in [REFACTOR_CHECKS.md](REFACTOR_CHECKS.md).
 | `mc_complMapObj`, `mc_splines`         | `omsi-scenery`                | parser done |
 | `mc_mapclass`, `mc_terrain_2`, `mc_chrono`, `mc_fahrstrasse` | `omsi-map` | parser done; chrono folders applied (records patched by ID, lines taken off a date) |
 | `mc_roadvehicle`, `mc_vehicle`, `mc_train`, `mc_passcabin`, `mc_sound` | `omsi-vehicle` | parser done |
-| `mc_timetable`, `mc_station`           | `omsi-timetable`              | parser done; the runtime (duties, trips, layovers, departure boards) is `omsi-app::schedule` |
+| `mc_timetable`, `mc_station`           | `omsi-timetable`              | parser done; the runtime (duties, trips, layovers, departure boards) is `omsi-sim::timetable_run` (`ScheduleSim`), its buses put on the road by `omsi-app::schedule` |
 | `mc_weather`, `mc_himmel`, `mc_font`, `mc_language`, `mc_money`, `mc_human`, `mc_driver`, `mc_situation`, `mc_input`, options | `omsi-content` | parsers done |
 | `mc_texMan`                            | `omsi-texture`                | loading done incl. seasonal and `_LOW` variants; BC1-3 on the GPU (DXT as is, others compressed) and a texture budget |
 | `mc_sound` runtime, DirectSound        | `omsi-audio` (cpal)           | mixer, WAV, loop/one-shot sounds with volcurves, conditions, triggers, 3D |
@@ -150,7 +150,7 @@ Where the code is going (new code follows it, refactors move old code towards it
    `omsi-vehicle`, `omsi-timetable`, `omsi-content`): files in, plain data out. No GPU, no
    clock, no global state; each one testable on byte buffers.
 2. **Simulation** (`omsi-sim`: vehicles, `ai_traffic` (`TrafficSim`), `people` (`PeopleSim`),
-   physics, scripts; the timetable runtime still in `omsi-app::schedule`): advances
+   `timetable_run` (`ScheduleSim`), physics, scripts): advances
    the world by a time step. Knows nothing of the GPU or the window: it can run headless, in
    tests and on a server, and two runs with the same seed and inputs give the same states.
 3. **View sync**: the one place that turns simulation state into renderer instances
@@ -177,8 +177,22 @@ checked against it.
   `omsi-sim`, with `omsi-app::traffic::Traffic` and `omsi-app::humans::Humans` as thin
   wrappers (the simulation, with the cars' sounds) that dereference to them; every `OMSI_*` switch goes through
   `omsi_cfg::flags` (`docs/DEBUG_FLAGS.md`); `App`'s state is grouped by subsystem
-  (`omsi-app/src/app/groups.rs`). Still to move: the render-free parts of the timetable
-  (`schedule/{times,ibis,duty}.rs` first) into `omsi-sim`.
+  (`omsi-app/src/app/groups.rs`).
+
+* **The timetable** is `omsi-sim::timetable_run`: the trip times, the IBIS, the player's
+  duty, and `ScheduleSim` (`timetable_run/sim/`) - the day's departures and which are due,
+  queued, waiting for their tiles or awaiting their tour's bus, the tours' vehicles
+  (`choose`), the routes on the lanes and where on its route a due bus is
+  (`place_departure`), the routes carried on as tiles load, the tours, the duty taken
+  from one and the departure boards. It reads the map through `TimetableWorld` (omsi-app's
+  `World` implements it) and the traffic as `TrafficSim`. `omsi-app::schedule::Schedule`
+  holds it (`Deref` to `ScheduleSim`) as the GPU adapter: `fleet` reads and uploads the
+  vehicle sets of the next departures, `dispatch` and `spawn` put the buses on the road
+  (`Traffic::spawn_bus`, `set_trailers`, `attach_cars`, `turn_train`), hand a tour's bus
+  its next trip, and take buses off, each telling `ScheduleSim` what became of the
+  departure. Still in the adapter: the bus put on the road itself (its trailers and
+  cars, where it starts, whether it may appear there), which needs the app's `Traffic`
+  (`trailer_chain`, `may_appear`, `blocked`) besides the GPU.
 
 * **The view sync phase** (`omsi-app/src/view_sync/`): the code that turns the traffic's
   and the people's state into renderer instances is in one module - `traffic.rs` (the AI
