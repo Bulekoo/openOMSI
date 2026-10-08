@@ -18,12 +18,12 @@ impl App {
         let paint = p.vehicle.host.paint_scheme.flatten().and_then(|i| p.vehicle.ty.paint_schemes.get(i)).map(|s| s.name.clone());
         // (the depot file by its file name, as `find_hof` looks for it)
         let hof = p.vehicle.host.hof.as_ref().and_then(|h| h.path.file_stem().map(|s| s.to_string_lossy().to_string()).or_else(|| Some(h.name.clone())));
-        let before = p.uid;
+        let idle = self.menus.pending_placement.is_none();
         self.menus.swap_pending = true;
         self.place_vehicle(&bus, paint, hof);
-        if let Some(p) = self.player.as_ref().filter(|p| p.uid != before) {
-            let name = format!("{} {}", p.vehicle.ty.def.manufacturer, p.vehicle.ty.def.type_name);
-            self.service_msg = Some((format!("Reloaded from its files: {}", name.trim()), 4.0));
+        // (said when it is in place, see `poll_vehicle_placement`)
+        if let Some(p) = self.menus.pending_placement.as_mut().filter(|_| idle) {
+            p.reload = true;
         }
     }
 
@@ -54,7 +54,14 @@ impl App {
         }
     }
 
+    /// The vehicle is read and its meshes and textures made on a worker thread; the next
+    /// frames go on and `poll_vehicle_placement` puts it into the world when it is ready.
     pub(crate) fn place_vehicle(&mut self, bus: &str, paint: Option<String>, hof: Option<String>) {
+        if self.menus.pending_placement.is_some() {
+            self.menus.swap_pending = false;
+            self.service_msg = Some(("A vehicle is still loading".into(), 4.0));
+            return;
+        }
         // (in the driven vehicle's place, see `swap_pending`)
         let swap = std::mem::take(&mut self.menus.swap_pending) && self.player.is_some();
         let name = self.menus.vehicle_list.iter().find(|v| v.1 == bus).map(|v| v.0.clone()).unwrap_or_else(|| bus.to_string());
@@ -65,7 +72,7 @@ impl App {
             return;
         }
         let bus = bus.to_string();
-        let (Some(w), Some(r), Some(scene), Some(cam)) = (self.world.clone(), self.renderer.as_ref(), self.scene.as_mut(), self.camera.as_ref()) else { return };
+        let (Some(w), Some(r), Some(cam)) = (self.world.clone(), self.renderer.as_ref(), self.camera.as_ref()) else { return };
         let (x, y, heading) = match (self.view.as_str(), self.player.as_ref()) {
             (_, Some(p)) if swap => (p.vehicle.position.x, p.vehicle.position.y, p.vehicle.heading),
             ("free", _) | (_, None) => {
@@ -96,21 +103,89 @@ impl App {
             hof: hof.or(self.args.hof.clone()),
             ..self.args.clone()
         };
-        match spawn_player(&one, &w, r, scene) {
-            Ok(Some(q)) if swap => {
-                log::info!("{bus} takes the driven vehicle's place at ({x:.1}, {y:.1})");
+        let prefetch = w.placement_prefetch(r);
+        let worker_args = one.clone();
+        let (tx, receiver) = std::sync::mpsc::channel();
+        let worker = std::thread::Builder::new().name("vehicle-placement".into()).spawn(move || {
+            let start = Instant::now();
+            let result = crate::spawn::PreparedPlayer::load(&worker_args).map(|mut prepared| {
+                prepared.prefetch(prefetch, worker_args.paint.as_deref());
+                prepared
+            });
+            log::info!("vehicle placement: read in {:.3} s", start.elapsed().as_secs_f64());
+            let _ = tx.send(result);
+        });
+        match worker {
+            Ok(_) => {
+                log::info!("placing {bus} at ({x:.1}, {y:.1}){}", if swap { " in the driven vehicle's place" } else { "" });
+                self.menus.pending_placement = Some(crate::spawn::PendingPlacement {
+                    receiver,
+                    world: w,
+                    args: one,
+                    name,
+                    replace: self.player.as_ref().filter(|_| swap).map(|p| p.uid),
+                    reload: false,
+                    heading,
+                });
+                self.service_msg = Some(("Loading vehicle...".into(), 4.0));
+            }
+            Err(e) => self.service_msg = Some((format!("Could not place {name}: {e}"), 5.0)),
+        }
+    }
+
+    /// The vehicle `place_vehicle` reads, put into the world once it is ready (each frame,
+    /// paused or not; nothing here waits for the worker). It is dropped when another map was
+    /// loaded meanwhile or the vehicle it was to replace is no longer driven; a worker that
+    /// failed leaves everything as it was.
+    pub(crate) fn poll_vehicle_placement(&mut self) {
+        use std::sync::mpsc::TryRecvError;
+        let Some(mut pending) = self.menus.pending_placement.take() else { return };
+        let prepared = match pending.receiver.try_recv() {
+            Err(TryRecvError::Empty) => {
+                self.menus.pending_placement = Some(pending);
+                return;
+            }
+            Err(TryRecvError::Disconnected) => {
+                self.service_msg = Some(("Vehicle loading stopped unexpectedly".into(), 5.0));
+                return;
+            }
+            Ok(Err(e)) => {
+                self.service_msg = Some((format!("Could not place {}: {e:#}", pending.name), 5.0));
+                return;
+            }
+            Ok(Ok(prepared)) => prepared,
+        };
+        if self.world.as_ref().is_none_or(|w| !Arc::ptr_eq(w, &pending.world)) {
+            return;
+        }
+        if let Some(uid) = pending.replace {
+            let Some(p) = self.player.as_ref().filter(|p| p.uid == uid) else { return };
+            // (where the bus driven stands now: it may have moved while the other was read)
+            pending.args.spawn = Some(format!("{},{},{}", p.vehicle.position.x, p.vehicle.position.y, p.vehicle.heading));
+        }
+        let (Some(r), Some(scene)) = (self.renderer.as_ref(), self.scene.as_mut()) else { return };
+        let start = Instant::now();
+        let result = crate::spawn::spawn_player_prepared(&pending.args, &pending.world, r, scene, prepared);
+        log::info!("vehicle placement: put into the world in {:.3} s", start.elapsed().as_secs_f64());
+        match result {
+            Ok(Some(q)) if pending.replace.is_some() => {
+                let name = format!("{} {}", q.vehicle.ty.def.manufacturer, q.vehicle.ty.def.type_name);
                 self.replace_driven_vehicle(q);
+                self.service_msg = Some(if pending.reload {
+                    (format!("Reloaded from its files: {}", name.trim()), 4.0)
+                } else {
+                    ("Vehicle loaded".into(), 4.0)
+                });
             }
             Ok(Some(q)) => {
-                log::info!("placed {bus} at ({x:.1}, {y:.1})");
                 let uid = q.uid;
                 self.session.placed.push(q);
                 // (then put down with the mouse, where the player wants it)
-                self.begin_placing(uid, heading);
-                let _ = name;
+                self.begin_placing(uid, pending.heading);
+                self.service_msg = Some(("Vehicle loaded".into(), 4.0));
             }
             Ok(None) => {}
-            Err(e) => self.service_msg = Some((format!("Could not place {name}: {e:#}"), 5.0)),
+            Err(e) => self.service_msg = Some((format!("Could not place {}: {e:#}", pending.name), 5.0)),
         }
     }
 

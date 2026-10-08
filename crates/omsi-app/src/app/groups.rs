@@ -315,9 +315,15 @@ pub(crate) struct MenuState {
     /// The digits of a time being typed in the world page of the game menu (None: not typing).
     pub(crate) menu_edit: Option<String>,
     pub(crate) menu_edit_icao: bool,
+    /// `menu_edit` is the search of the open list being typed (see `game_lists::searchable`).
+    pub(crate) menu_edit_search: bool,
+    /// The search the open list is filtered by (empty: none).
+    pub(crate) menu_search: String,
     /// The vehicle being chosen in "Place a vehicle" takes the place of the one driven
     /// (the game menu's "Swap for another vehicle", #728).
     pub(crate) swap_pending: bool,
+    /// The vehicle chosen being read on a worker thread (see `App::place_vehicle`).
+    pub(crate) pending_placement: Option<crate::spawn::PendingPlacement>,
     /// The line of the open list whose slider the mouse button holds (it follows the cursor).
     pub(crate) menu_drag: Option<usize>,
     /// The keyboard chose the line of the menu last (the mouse moved since: false), so the
