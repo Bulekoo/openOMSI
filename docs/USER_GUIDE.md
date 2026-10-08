@@ -302,11 +302,23 @@ rest breathes and shifts its weight, and 0 of it is exactly as OMSI; most of it 
 the bus waits at a stop) and `head_idle_pace` (0.5..2: how fast that sway moves, 1 being the
 pace it is designed at), `collision_objects` (walls, poles and bridges stop the bus; off is OMSI's `no_collision`
 option and is taken from OMSI's options when openOMSI starts the first time), `graphics_api`
-(`auto`, `vulkan`, `dx12` on Windows, `gl`: which graphics interface the game asks first -
-with `auto` Vulkan, then DirectX 12, then OpenGL), `ctrl_off` (game controllers switched off
+(`auto`, `vulkan`, `dx12` on Windows, `gl`, `angle` on Windows: which graphics interface the
+game asks first - with `auto` on Windows DirectX 12, then Vulkan, then OpenGL, then ANGLE;
+elsewhere Vulkan, then OpenGL; see *Graphics API* below), `ctrl_off` (game controllers switched off
 on the Controllers page, by name, separated by `|`) and `language` (`ENG`, `DEU`, `FRA`: the language the HUD names cockpit switches
 in). The file also carries a `version`; older files that say
 `boarding=pay` because that was the launcher's old default are read as `auto`.
+
+**Graphics API** (Settings → Display, `graphics_api`): the interface named is asked first and
+the others follow, so a machine without it still starts. *ANGLE (DirectX 11)* (Windows) runs
+OpenGL ES through Google's ANGLE on the card's DirectX 11 driver: for graphics chips whose
+DirectX 12, Vulkan and OpenGL drivers are missing or broken (Intel HD Graphics 2000-4000, AMD
+Radeon HD 5000/6000). It is tried last, after the other three failed, and only when
+`libEGL.dll` and `libGLESv2.dll` (Google's ANGLE, BSD licence, with its Direct3D 11 renderer)
+are next to `openomsi.exe`; without them it is skipped (the log says so). Windows 7 also needs
+`d3dcompiler_47.dll` next to them (Windows 8.1 and later have it). The Windows package has to
+ship these DLLs for the option to do anything; the log then names the adapter
+`ANGLE (…Direct3D11…)` on the `Gl` backend.
 
 `drive_keys` is a control preset: `simple` (W/S/A/D and the arrow keys drive; the default),
 `wasd`, `arrows`, or `omsi` ("Custom controls") - only the layout of `Inputs/keyboard.cfg`
@@ -660,7 +672,7 @@ Environment variables, all off unless set. The useful ones:
 | `OMSI_PARKED_PULL_OUT=p` | the chance per population pass (about 2 s) that a parked car drives off (0.035 by default), with a log of why one does not |
 | `OMSI_NO_BRIDGE=1` | a LAN host leaves the internet alone (no UPnP port forward, no address posting) - for tests |
 | `OMSI_NO_LAN_MODS=1` | a LAN host serves no mods and a joining game fetches none |
-| `OMSI_BACKEND=vulkan\|dx12\|gl` | the graphics interface to ask first (the log lists every adapter each one offers) |
+| `OMSI_BACKEND=vulkan\|dx12\|gl\|angle` | the graphics interface to ask first (the log lists every adapter each one offers; `angle`, also `dx11`/`d3d11`: OpenGL ES on ANGLE over DirectX 11, Windows, with ANGLE's DLLs beside the game) |
 | `OMSI_GPU_LIMITS=default\|downlevel` | pretend the graphics card can only do this much (tests of old cards) |
 | `OMSI_GPU_ARRAYS=textures\|nostorage` | read the scene's arrays from textures, as on OpenGL chips without storage buffers in the vertex shader (or without any: no per-pixel lamp light) - tests of old cards |
 | `OMSI_GL_TEXTURE_UNITS=1` | with `OMSI_GPU_ARRAYS`, keep to the sixteen texture units OpenGL has there, as such a chip does: the enhanced graphics are left out (vanilla+ is drawn) |

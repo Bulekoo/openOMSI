@@ -243,7 +243,8 @@ pub struct Settings {
     /// window's width is the full lock).
     pub mouse_sens: f32,
     /// The graphics interface: `auto` (Vulkan, else DirectX 12, else OpenGL), `vulkan`,
-    /// `dx12` or `gl` (see `startup::graphics_instance`).
+    /// `dx12`, `gl` or `angle` (OpenGL ES on ANGLE over DirectX 11, Windows; see
+    /// `startup::backend_order`).
     pub graphics_api: String,
     /// Default motor polarity for wheels without a saved per-device direction.
     pub ff_invert: bool,
