@@ -142,7 +142,7 @@ impl ScheduleSim {
             }
         }
         // train groups: [aigroup_2] entries pointing at .zug files
-        let mut trains: HashMap<String, Vec<Vec<(Arc<VehicleType>, bool)>>> = HashMap::new();
+        let mut trains: HashMap<String, Vec<TrainCars>> = HashMap::new();
         {
             let lists = world.ailists();
             for g in lists.groups.iter().filter(|g| !g.is_depot) {

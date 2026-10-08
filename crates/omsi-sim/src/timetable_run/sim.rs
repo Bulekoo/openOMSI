@@ -110,6 +110,9 @@ pub struct Choice {
     pub train: Option<Vec<(Arc<VehicleType>, bool)>>,
 }
 
+/// A train's cars: (car type, reversed), the first car leads.
+pub type TrainCars = Vec<(Arc<VehicleType>, bool)>;
+
 /// A depot's vehicle: its type, its fleet from the ailists, its depot file.
 pub type DepotVehicle = (Arc<VehicleType>, Vec<omsi_map::DepotEntry>, Option<Arc<omsi_vehicle::Hof>>);
 
@@ -120,7 +123,7 @@ pub struct ScheduleSim {
     depots: HashMap<String, Vec<DepotVehicle>>,
     tile_coords: Vec<(i32, i32)>,
     /// Trains per AI group: list of (car type, reversed), first car leads.
-    trains: HashMap<String, Vec<Vec<(Arc<VehicleType>, bool)>>>,
+    trains: HashMap<String, Vec<TrainCars>>,
     /// Plain `[aigroup_2]` vehicle pools, loaded the first time a trip asks for one
     /// (the Tegel approaches are flown by the group's own aircraft, not by depot buses).
     pools: HashMap<String, Vec<Arc<VehicleType>>>,
