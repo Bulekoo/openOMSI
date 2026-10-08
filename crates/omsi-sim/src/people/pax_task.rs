@@ -423,9 +423,9 @@ impl PeopleSim {
         // stop again, for this bus only once it opens a door (they stood at its doors for
         // ten minutes and more).
         let at_shut_door = p.st == 2 && !bn.entry_open.iter().any(|o| *o);
-        let since = if at_shut_door { Some(p.door_since.unwrap_or(self.time)) } else { None };
+        let (since, give_up) = shut_door_wait(p.door_since, self.time, at_shut_door);
         self.pax_mut(i).unwrap().door_since = since;
-        if since.is_some_and(|t| self.time - t > DOOR_GIVE_UP) {
+        if give_up {
             if let Some(k) = p.seat {
                 self.free_seat(bn.id, k);
             }

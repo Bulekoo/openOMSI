@@ -839,3 +839,100 @@ fn a_doorway_is_busy_while_somebody_stands_in_it() {
     v.update(0.02);
     assert_eq!((v.var("PAX_Entry7_Busy"), v.var("PAX_Exit1_Busy")), (Some(0.0), Some(0.0)));
 }
+
+#[test]
+fn articulated_exits_do_not_share_the_last_front_animation() {
+    let dir = std::env::temp_dir().join(format!("omsi-articulated-doors-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("test.bus"), "[model]\nmodel.cfg\n[varnamelist]\n1\nvars.txt\n[script]\n1\nmain.osc\n").unwrap();
+    std::fs::write(dir.join("model.cfg"), "").unwrap();
+    std::fs::write(dir.join("vars.txt"), "door_7\ndoor_8\ndoor_9\nPAX_Exit7_Open\n").unwrap();
+    std::fs::write(dir.join("main.osc"), "{init}\n{end}\n").unwrap();
+    let ty = std::sync::Arc::new(crate::VehicleType::load(&dir, &dir.join("test.bus")).unwrap());
+    std::fs::remove_dir_all(&dir).ok();
+    let mut v = VehicleInstance::new(ty, crate::VehicleHost::new(Default::default()));
+    assert!(PeopleSim::reports_doors(&v, 2, 8), "rear-only state must disable the AI timer fallback");
+    v.set_var("door_7", 1.0);
+    let (_, exits) = PeopleSim::doors_open(&v, 2, 8);
+    assert!(exits[5]);
+    assert!(!exits[6], "door_8 is still closed");
+    assert!(!exits[7], "explicit PAX exit state is closed");
+    v.set_var("door_8", 1.0);
+    v.set_var("door_9", 1.0);
+    let (_, exits) = PeopleSim::doors_open(&v, 2, 8);
+    assert!(exits[6]);
+    assert!(!exits[7], "PAX state overrides the physical animation");
+    v.set_var("PAX_Exit7_Open", 1.0);
+    assert!(PeopleSim::doors_open(&v, 2, 8).1[7]);
+}
+
+/// A bus without animations past door_7 still opens its last exits with door_7, as before.
+#[test]
+fn exits_past_the_last_door_animation_open_with_door_7() {
+    let dir = std::env::temp_dir().join(format!("omsi-exits-door7-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("test.bus"), "[model]\nmodel.cfg\n[varnamelist]\n1\nvars.txt\n[script]\n1\nmain.osc\n").unwrap();
+    std::fs::write(dir.join("model.cfg"), "").unwrap();
+    let doors: String = (0..8).map(|i| format!("door_{i}\n")).collect();
+    std::fs::write(dir.join("vars.txt"), doors).unwrap();
+    std::fs::write(dir.join("main.osc"), "{init}\n{end}\n").unwrap();
+    let ty = std::sync::Arc::new(crate::VehicleType::load(&dir, &dir.join("test.bus")).unwrap());
+    std::fs::remove_dir_all(&dir).ok();
+    let mut v = VehicleInstance::new(ty, crate::VehicleHost::new(Default::default()));
+    v.set_var("door_7", 1.0);
+    let (_, exits) = PeopleSim::doors_open(&v, 2, 8);
+    assert_eq!(exits, [false, false, false, false, false, true, true, true]);
+}
+
+#[test]
+fn walking_can_find_a_biarticulated_bus_at_its_last_section() {
+    let dir = std::env::temp_dir().join(format!("omsi-walk-long-bus-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("test.bus"), "[passengercabin]\ncabin.cfg\n[paths]\npaths.cfg\n").unwrap();
+    std::fs::write(dir.join("paths.cfg"), "[pathpnt]\n0\n0\n0.5\n").unwrap();
+    std::fs::write(dir.join("cabin.cfg"), "[entry]\n0\n").unwrap();
+    let def = omsi_vehicle::Vehicle::load(&dir.join("test.bus")).unwrap();
+    let cabin = std::sync::Arc::new(Cabin::load_train(&[(&def, Vec3::ZERO, f32::INFINITY)]).unwrap());
+    std::fs::remove_dir_all(&dir).ok();
+    let part = |pos, offset, joint_y| PartFrame {
+        pos,
+        offset,
+        joint_y,
+        rot: Mat4::IDENTITY,
+        heading: 0.0,
+        half: DVec2::new(1.25, 6.0),
+        centre: DVec2::ZERO,
+    };
+    let bus = BusNow {
+        id: BusId::Ai(42),
+        cabin,
+        pos: DVec3::ZERO,
+        rot: Mat4::IDENTITY,
+        heading: 0.0,
+        speed: 0.0,
+        entry_open: vec![true],
+        exit_open: Vec::new(),
+        walk_open: None,
+        interior: 0.0,
+        air: CabinAir::default(),
+        half: DVec2::new(1.25, 6.0),
+        centre: DVec2::ZERO,
+        accel: DVec2::ZERO,
+        trailers: vec![
+            part(DVec3::new(0.0, -16.0, 0.0), Vec3::new(0.0, -16.0, 0.0), -8.0),
+            part(DVec3::new(8.0, -32.0, 0.0), Vec3::new(0.0, -32.0, 0.0), -24.0),
+        ],
+        terminus: None,
+        takes: Takes::Terminus,
+        next_stop: None,
+        places_off: Vec::new(),
+        served: None,
+    };
+    let mut people = PeopleSim::new(Path::new("/nonexistent"), 0);
+    people.last_buses.push(bus);
+    let at_rear = DVec3::new(9.0, -34.0, 0.0);
+    assert!(at_rear.truncate().length() > 25.0);
+    assert_eq!(people.bus_ids_near(at_rear, 25.0), [BusId::Ai(42)]);
+    assert!(people.bus_ids_near(DVec3::new(100.0, -34.0, 0.0), 25.0).is_empty());
+    assert_eq!(people.bus_ids_near(DVec3::ZERO, 25.0), [BusId::Ai(42)]);
+}

@@ -1,6 +1,25 @@
 use super::*;
 
 #[test]
+fn shut_door_give_up_uses_one_continuous_wait_and_resets_when_opened() {
+    let (since, expired) = shut_door_wait(None, 100.0, true);
+    assert_eq!(since, Some(100.0));
+    assert!(!expired);
+    let (since, expired) = shut_door_wait(since, 125.0, true);
+    assert_eq!(since, Some(100.0));
+    assert!(!expired, "the exact timeout boundary is still allowed");
+    let (since, expired) = shut_door_wait(since, 125.001, true);
+    assert_eq!(since, Some(100.0));
+    assert!(expired, "a continuous wait past the timeout gives up");
+    let (since, expired) = shut_door_wait(since, 130.0, false);
+    assert_eq!(since, None, "an open entry resets the old shut-door wait");
+    assert!(!expired);
+    let (since, expired) = shut_door_wait(since, 200.0, true);
+    assert_eq!(since, Some(200.0), "a later closure starts a fresh wait");
+    assert!(!expired);
+}
+
+#[test]
 fn arriving_ai_uses_the_timetable_stop_not_a_neighbour() {
     let dir = std::env::temp_dir().join(format!("omsi-ai-stop-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
