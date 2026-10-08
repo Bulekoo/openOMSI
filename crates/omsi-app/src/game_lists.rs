@@ -1071,6 +1071,7 @@ fn steps_of(verb: &str) -> Option<Vec<f32>> {
         "pedal_t" | "pedal_b" => PEDAL.to_vec(),
         "ctrl_deadzone" => (0..=30).map(|v| v as f32 * 0.01).collect(),
         "mouse_sens" => (10..=300).map(|v| v as f32 / 100.0).collect(),
+        "mouse_pedal_strength" => (10..=40).map(|v| v as f32 * 0.05).collect(),
         "look_sens" => (2..=40).map(|v| v as f32 * 0.05).collect(),
         "look_smoothing_ms" => (0..=20).map(|v| v as f32 * 10.0).collect(),
         "pad_steer_smooth" => (0..=30).map(|v| v as f32 * 10.0).collect(),
@@ -1200,6 +1201,7 @@ fn option_now(app: &App, verb: &str, arg: &str) -> Option<f32> {
         "pedal_t" => s.pedal_throttle,
         "pedal_b" => s.pedal_brake,
         "mouse_sens" => s.mouse_sens,
+        "mouse_pedal_strength" => s.mouse_pedal_strength,
         "look_sens" => s.look_sens,
         "look_smoothing_ms" => s.look_smoothing_ms,
         "pad_steer_smooth" => s.pad_steer_smooth,
@@ -1317,6 +1319,13 @@ fn option_set(app: &mut App, verb: &str, arg: &str, v: f32) -> Option<(&'static 
         "mouse_sens" => {
             app.settings.mouse_sens = (v * 100.0).round() / 100.0;
             Some(("mouse_sens", app.settings.mouse_sens.to_string()))
+        }
+        "mouse_pedal_strength" => {
+            app.settings.mouse_pedal_strength = ((v * 100.0).round() / 100.0).clamp(0.5, 2.0);
+            Some((
+                "mouse_pedal_strength",
+                app.settings.mouse_pedal_strength.to_string(),
+            ))
         }
         "ui_scale" => {
             app.settings.ui_scale = (v * 100.0).round() / 100.0;
@@ -2448,6 +2457,7 @@ fn options_pages(app: &App) -> Vec<Page> {
         switch_row(app, "mouse", "Steering with the mouse", "Steer and control the pedals using the mouse"),
         switch_row(app, "mouse_right", "A right click ends the mouse steering", "As in OMSI; off: the right button only looks round"),
         slider_row(app, "mouse_sens", "Mouse steering sensitivity", "Adjust how much the steering wheel turns based on mouse movement", &pct),
+        slider_row(app, "mouse_pedal_strength", "Mouse pedal strength", "Adjust how much mouse travel is needed to reach full throttle or braking", &|v| if (v - 1.0).abs() < 0.01 { "OMSI".to_string() } else { format!("{:.0}%", v * 100.0) }),
         switch_row(app, "mouse_smooth", "Smooth mouse steering", "The wheel eases after the cursor; off: it follows at once, as in OMSI"),
         switch_row(app, "steering_linear", "Steering linearity (keys at OMSI's steady pace)", "Keyboard steering at OMSI's steady pace"),
         switch_row(app, "old_steering", "Old Steering (the wheel stays, turn it back yourself)", "The wheel stays where the keys left it"),
@@ -3026,6 +3036,14 @@ mod tests {
         assert_eq!(super::next_step(&super::SPEEDS, 1.0), 2.0);
         assert_eq!(super::next_step(&super::SPEEDS, 15.0), 1.0);
         assert_eq!(super::next_step(&super::TRAFFIC, 35), 50);
+    }
+
+    #[test]
+    fn mouse_pedal_strength_steps_include_percentage_range_and_omsi_default() {
+        let steps = super::steps_of("mouse_pedal_strength").unwrap();
+        assert_eq!(steps.first(), Some(&0.5));
+        assert_eq!(steps.last(), Some(&2.0));
+        assert!(steps.contains(&1.0));
     }
 
     #[test]

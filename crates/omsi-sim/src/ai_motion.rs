@@ -188,6 +188,8 @@ pub struct AiBody {
     ground_rate: [f32; 3],
     /// Pose for the vehicle: origin, pitch and bank (deg, + = nose up / right side down).
     pub position: DVec3,
+    impact_offset: DVec2,
+    impact_velocity: DVec2,
     pub pitch_deg: f32,
     pub bank_deg: f32,
     /// Per axle (left, right): how far the wheel hangs below its rest position against
@@ -299,6 +301,8 @@ impl AiBody {
             ground: None,
             ground_rate: [0.0; 3],
             position: DVec3::ZERO,
+            impact_offset: DVec2::ZERO,
+            impact_velocity: DVec2::ZERO,
             pitch_deg: 0.0,
             bank_deg: 0.0,
             suspension: vec![[0.0; 2]; axle_count],
@@ -312,6 +316,8 @@ impl AiBody {
         self.started = false;
         self.ground = None;
         self.contact_z.clear();
+        self.impact_offset = DVec2::ZERO;
+        self.impact_velocity = DVec2::ZERO;
         self.last_speed = speed;
         self.step(0.0, speed, way, ground, contact);
     }
@@ -333,6 +339,52 @@ impl AiBody {
             MotionKind::Rail => self.ride(way),
             MotionKind::Air => self.fly(dt, speed, way),
         }
+        self.settle_collision(dt);
+    }
+
+    /// Give a road vehicle a velocity impulse in world space. Its path-following driver
+    /// recovers after the impact rather than teleporting the body back onto the lane.
+    pub fn collision_impulse(
+        &mut self,
+        direction: DVec2,
+        closing_speed: f32,
+        energy: f32,
+        mass: f32,
+    ) {
+        if self.kind != MotionKind::Road
+            || !direction.is_finite()
+            || !closing_speed.is_finite()
+            || !energy.is_finite()
+            || !mass.is_finite()
+            || closing_speed <= 0.0
+            || energy < 0.0
+            || mass <= 0.0
+        {
+            return;
+        }
+        let energy_speed = (2.0 * energy / mass).sqrt();
+        let recoil_speed = (closing_speed * 0.65).max(energy_speed * 0.65).min(12.0);
+        self.impact_velocity += direction.normalize_or_zero() * recoil_speed as f64;
+        self.impact_velocity = self.impact_velocity.clamp_length_max(12.0);
+    }
+
+    fn settle_collision(&mut self, dt: f32) {
+        if self.kind != MotionKind::Road || dt <= 0.0 {
+            return;
+        }
+        let steps = (dt / 0.015).ceil().clamp(1.0, 20.0) as usize;
+        let step = (dt / steps as f32).min(0.25) as f64;
+        for _ in 0..steps {
+            // A damped suspension-like response returns the displaced car to its planned
+            // path without cancelling its initial backwards or sideways impulse.
+            let acceleration = -self.impact_offset * 7.0 - self.impact_velocity * 5.0;
+            self.impact_velocity += acceleration * step;
+            self.impact_offset += self.impact_velocity * step;
+        }
+        self.impact_offset = self.impact_offset.clamp_length_max(4.0);
+        self.impact_velocity = self.impact_velocity.clamp_length_max(12.0);
+        self.position.x += self.impact_offset.x;
+        self.position.y += self.impact_offset.y;
     }
 
     /// Bicycle model: the rotation point follows the way, the front wheels steer towards a
@@ -654,6 +706,33 @@ mod tests {
         }
         // creeping round something: the old geometric length
         assert_eq!(back_in_ramp(3.0, 1.0, BACK_IN_LAT_ACCEL), 10.5);
+    }
+
+    #[test]
+    fn a_road_ai_vehicle_recoils_then_returns_to_its_path() {
+        let mut body = AiBody::new(&golf(), MotionKind::Road);
+        body.place(&|_| DVec3::ZERO, None, None, 0.0);
+        let origin = body.position;
+        body.collision_impulse(DVec2::new(0.0, -1.0), 5.0, 20_000.0, 1_000.0);
+        body.step(0.1, 0.0, &|_| DVec3::ZERO, None, None);
+        assert!(body.position.y < origin.y - 0.1, "the collision must move the car backwards");
+        for _ in 0..80 {
+            body.step(0.05, 0.0, &|_| DVec3::ZERO, None, None);
+        }
+        assert!((body.position.y - origin.y).abs() < 0.1, "the AI should settle back onto its path");
+    }
+
+    #[test]
+    fn a_higher_energy_collision_gives_the_ai_a_stronger_recoil() {
+        let recoil_speed = |energy| {
+            let mut body = AiBody::new(&golf(), MotionKind::Road);
+            body.place(&|_| DVec3::ZERO, None, None, 0.0);
+            body.collision_impulse(DVec2::new(0.0, -1.0), 3.0, energy, 1_000.0);
+            body.impact_velocity.length()
+        };
+        let light = recoil_speed(5_000.0);
+        let heavy = recoil_speed(80_000.0);
+        assert!(heavy > light * 1.5, "low energy {light:.3} m/s, high energy {heavy:.3} m/s");
     }
 
     fn golf() -> Vehicle {

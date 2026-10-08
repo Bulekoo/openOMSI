@@ -140,8 +140,8 @@ impl TrafficSim {
         (self.cars.len() - buses, buses, self.dormant.len(), self.parked.values().map(Vec::len).sum())
     }
 
-    /// Obstacle boxes of all AI vehicles (for the player's collisions), with the rear
-    /// sections of articulated buses and the trailers.
+    /// Front, rear and side collision zones of AI vehicles (for the player's collisions),
+    /// including the rear sections of articulated buses and trailers.
     pub fn boxes(&self, near: DVec3, radius: f64) -> Vec<crate::collision::Obb> {
         self.cars
             .iter()
@@ -153,24 +153,58 @@ impl TrafficSim {
                     .def
                     .bounding_box
                     .unwrap_or([2.0, 4.5, 1.6, 0.0, 0.0, 0.8]);
-                // moving, and with a mass of its own: a car that runs into the bus is no
-                // bulldozer
-                let h = c.vehicle.heading.to_radians();
+                // Moving, and with a mass of its own: a car that runs into the bus is no
+                // bulldozer. Use the model heading so reversed vehicles and buses agree
+                // with their visible body and impact zones.
+                let h = c.vehicle.body_heading().to_radians();
                 let v = glam::DVec2::new(h.sin(), h.cos()) * c.state.speed as f64;
                 let (mass, id) = (c.vehicle.physics.mass_kg, c.id);
                 let rear = c.vehicle.trailers.iter().filter_map(move |t| {
                     t.ty.def.bounding_box.map(|bb| {
-                        crate::collision::Obb::from_box(bb, t.position, t.body_heading())
-                            .moving(v, mass, id)
+                        impact_zones(bb, t.position, t.body_heading(), v, mass, id)
                     })
                 });
-                std::iter::once(
-                    crate::collision::Obb::from_box(bb, c.vehicle.position, c.vehicle.body_heading())
-                        .moving(v, mass, id),
-                )
+                std::iter::once(impact_zones(
+                    bb,
+                    c.vehicle.position,
+                    c.vehicle.body_heading(),
+                    v,
+                    mass,
+                    id,
+                ))
                 .chain(rear)
+                .flatten()
             })
             .collect()
+    }
+
+    /// Deliver the player's moving-vehicle contacts to the AI cars so their collision
+    /// scripts and per-instance damage visuals respond to the same impact.
+    pub fn player_impacts(&mut self, impacts: Vec<crate::vehicle::DynamicImpact>) {
+        for impact in impacts {
+            let Some(id) = impact
+                .obstacle_id
+                .checked_neg()
+                .and_then(|id| id.checked_sub(2))
+                .and_then(|id| u64::try_from(id).ok())
+            else {
+                continue;
+            };
+            let Some(car) = self.cars.iter_mut().find(|car| car.id == id) else {
+                continue;
+            };
+            car.body.collision_impulse(
+                impact.push.truncate(),
+                impact.speed,
+                impact.energy,
+                car.vehicle.physics.mass_kg,
+            );
+            let inverse = car.vehicle.body_rotation().inverse();
+            let point = inverse.transform_point3((impact.point - car.vehicle.position).as_vec3());
+            let push = inverse.transform_vector3(impact.push.as_vec3());
+            car.vehicle
+                .receive_dynamic_impact(point, push, impact.speed, impact.energy);
+        }
     }
 
     /// Position and heading of a car by id (None once it is gone).
@@ -195,4 +229,25 @@ impl TrafficSim {
             }
         }
     }
+}
+
+pub(super) fn impact_zones(
+    bb: [f32; 6],
+    position: glam::DVec3,
+    heading: f64,
+    velocity: glam::DVec2,
+    mass: f32,
+    id: u64,
+) -> [crate::collision::Obb; 4] {
+    let [width, length, height, cx, cy, cz] = bb;
+    let part = |w, l, x, y| {
+        crate::collision::Obb::from_box([w, l, height, x, y, cz], position, heading)
+            .moving(velocity, mass, id)
+    };
+    [
+        part(width, length * 0.25, cx, cy + length * 0.375),
+        part(width, length * 0.25, cx, cy - length * 0.375),
+        part(width * 0.5, length * 0.5, cx - width * 0.25, cy),
+        part(width * 0.5, length * 0.5, cx + width * 0.25, cy),
+    ]
 }

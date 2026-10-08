@@ -1234,10 +1234,18 @@ impl RigidBody {
                     continue;
                 }
             }
-            // out of the obstacle along the shortest way, a millimetre clear - out of a moving
-            // one only as far as the body itself ran into it this frame: a standing car is not
-            // ploughed through, and one that drives into the bus does not drag it along
-            let out = if o.mass > 0.0 { (c.depth as f32).min((-vn).max(0.0) * dt + 0.001) } else { c.depth as f32 + 0.001 };
+            if o.mass > 0.0 && vn_full > CRASH_SPEED {
+                continue;
+            }
+            let out = if o.mass > 0.0 {
+                if vn_full >= -CRASH_SPEED {
+                    c.depth as f32 + 0.001
+                } else {
+                    (c.depth as f32).min((-vn).max(0.0) * dt + 0.005)
+                }
+            } else {
+                c.depth as f32 + 0.001
+            };
             self.position += (n * out).as_dvec3();
             if vn_full >= 0.0 {
                 continue;
@@ -2285,6 +2293,36 @@ mod tests {
         let want = 0.5 * v * v * (1.0 - RESTITUTION * RESTITUTION) / k;
         assert!((hits[0].energy - want).abs() < 0.15 * want, "{} J, want about {want}", hits[0].energy);
         assert!(hits[0].energy < 100_000.0, "{hits:?}");
+    }
+
+    #[test]
+    fn moving_car_overlap_does_not_bulldoze_bus_and_clears_when_receding() {
+        let def = bus();
+        let bb = def.bounding_box.unwrap();
+        let mut rb = RigidBody::from_definition(&def, &[]);
+        rb.place(DVec3::ZERO, 0.0);
+        let g = road(1e9, 0.0);
+        run(&mut rb, 1.0, 0.0, 5000.0, &g);
+        let car = Obb::from_box(
+            [1.7, 4.2, 1.4, 0.0, 0.0, 0.7],
+            DVec3::new(-3.2, 0.0, 0.0),
+            90.0,
+        )
+        .moving(glam::DVec2::new(8.0, 0.0), 1000.0, 7);
+        assert!(rb.body_box(bb).overlaps(&car));
+
+        let impacts = rb.collide(bb, &[car], &|_| false, 1.0 / 30.0);
+
+        assert_eq!(impacts.len(), 1);
+        assert!(rb.body_box(bb).overlaps(&car));
+        assert!(rb.origin().x > 0.0 && rb.origin().x < 0.02, "{}", rb.origin().x);
+        let receding = Obb {
+            center: car.center - glam::DVec2::new(0.5, 0.0),
+            velocity: glam::DVec2::new(-8.0, 0.0),
+            ..car
+        };
+        rb.collide(bb, &[receding], &|_| false, 1.0 / 30.0);
+        assert!(!rb.body_box(bb).overlaps(&receding));
     }
 
     /// The scripts hear where the bodies meet - low down at the bumpers - not the height of

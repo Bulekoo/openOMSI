@@ -2957,6 +2957,10 @@ pub(crate) fn mouse_follow(fade: f32, dt: f32, smooth: bool) -> f32 {
     }
 }
 
+pub(crate) fn mouse_pedal_target(input: f32, strength: f32) -> f32 {
+    (input.clamp(0.0, 1.0) * strength.clamp(0.25, 4.0)).min(1.0)
+}
+
 /// A mouse pedal following the cursor, `k` of the way left behind each frame. The last bit
 /// is snapped: in f32 the easing stops one step short of the target (1 - 6e-8 at 60 fps), and
 /// the stock gearbox scripts kick down only at a throttle of exactly 1 - the cursor at the top
@@ -3004,7 +3008,7 @@ mod orbit_pivot_tests {
 
 #[cfg(test)]
 mod mouse_tests {
-    use super::{mouse_follow, mouse_pedal, mouse_steering};
+    use super::{mouse_follow, mouse_pedal, mouse_pedal_target, mouse_steering};
 
     /// The mouse's wheel eases after the cursor by default; with the smoothing off it is where
     /// the cursor says the same frame, as in OMSI (#1092) - only the first second after
@@ -3041,6 +3045,15 @@ mod mouse_tests {
         let k = (-(1.0 / 60.0f32) / 0.06).exp();
         let t = mouse_pedal(0.0, 1.0, k);
         assert!(t > 0.2 && t < 0.3, "{t}");
+    }
+
+    #[test]
+    fn mouse_pedal_strength_moves_the_full_pedal_threshold() {
+        assert_eq!(mouse_pedal_target(0.5, 1.0), 0.5);
+        assert_eq!(mouse_pedal_target(0.5, 2.0), 1.0);
+        assert_eq!(mouse_pedal_target(1.0, 0.5), 0.5);
+        assert_eq!(mouse_pedal_target(1.0, 2.0), 1.0);
+        assert_eq!(mouse_pedal_target(0.5, 0.5), 0.25);
     }
 
     #[test]

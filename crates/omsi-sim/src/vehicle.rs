@@ -921,6 +921,54 @@ pub struct AiFrame {
     pub engine_off: bool,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct DynamicImpact {
+    pub obstacle_id: i64,
+    pub point: DVec3,
+    pub push: DVec3,
+    pub speed: f32,
+    pub energy: f32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct VehicleDent {
+    pub mesh: usize,
+    pub point: Vec3,
+    pub push: Vec3,
+    pub depth: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BrokenGlass {
+    pub mesh: usize,
+    pub point: Vec3,
+    pub energy: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ImpactZone {
+    Front,
+    Rear,
+    Left,
+    Right,
+    Centre,
+}
+
+fn impact_zone(point: Vec3, bb: [f32; 6]) -> ImpactZone {
+    let (x, y) = (point.x - bb[3], point.y - bb[4]);
+    if y >= bb[1] * 0.25 {
+        ImpactZone::Front
+    } else if y <= -bb[1] * 0.25 {
+        ImpactZone::Rear
+    } else if x < 0.0 {
+        ImpactZone::Left
+    } else if x > 0.0 {
+        ImpactZone::Right
+    } else {
+        ImpactZone::Centre
+    }
+}
+
 pub struct VehicleInstance {
     /// `A_Trans_*` taken over OMSI's frames (see [`OmsiFrames`]).
     a_trans: OmsiFrames,
@@ -964,6 +1012,12 @@ pub struct VehicleInstance {
     pub collision: Option<Arc<crate::collision::CollisionWorld>>,
     /// Moving obstacles (AI vehicles) for this frame, set by the app.
     pub dynamic_boxes: Vec<crate::collision::Obb>,
+    /// Contacts with moving vehicles, handed back to traffic after the player's physics step.
+    pub dynamic_impacts: Vec<DynamicImpact>,
+    /// New dents waiting for their per-instance render mesh to be updated.
+    damage_dents: Vec<VehicleDent>,
+    broken_glass: Vec<BrokenGlass>,
+    glass_broken: Vec<bool>,
     /// A collision happened this frame: the `{trigger:collision}` block runs after physics.
     collided: bool,
     /// Energy of the last crash (J), for whoever wants to report it; cleared by the reader.
@@ -1274,6 +1328,10 @@ impl VehicleInstance {
             skin_rest: Vec::new(),
             collision: None,
             dynamic_boxes: Vec::new(),
+            dynamic_impacts: Vec::new(),
+            damage_dents: Vec::new(),
+            broken_glass: Vec::new(),
+            glass_broken: vec![false; n],
             collided: false,
             last_crash: 0.0,
             wheel_walls: true,
@@ -1531,7 +1589,7 @@ impl VehicleInstance {
         self.position.y += h.cos() * ds as f64;
         self.heading = (self.heading + dheading as f64).rem_euclid(360.0);
         // collisions: back out of obstacles and stop
-        if let (Some(cw), Some(bb)) = (&self.collision, self.ty.def.bounding_box) {
+        if let Some(bb) = self.ty.def.bounding_box {
             let obb = crate::collision::Obb::from_box(bb, self.position, self.body_heading());
             // an obstacle we were already inside before this step (spawned on it, pushed into
             // it) never blocks: only entering an obstacle does
@@ -1540,38 +1598,91 @@ impl VehicleInstance {
                 prev.0,
                 body_heading(&self.ty.def, prev.1, false),
             );
-            let hit = cw
-                .obstacles_near(&obb)
-                .into_iter()
-                .chain(self.dynamic_boxes.iter().copied())
-                .find(|b| {
-                    b.overlaps(&obb)
-                        && !b.overlaps(&prev_obb)
-                        && !(b.id >= 0 && self.knocked.contains(&b.id))
-                });
-            if let Some(hit) = hit {
-                let v = self.physics.speed;
-                if v.abs() > crate::rigid::CRASH_SPEED {
-                    let e = 0.5 * self.physics.mass_kg * v * v;
-                    let rel = hit.center - self.position.truncate();
-                    let body_h = body_heading(&self.ty.def, prev.1, false).to_radians();
-                    let (sh, ch) = (body_h.sin(), body_h.cos());
-                    self.host.coll_pos = [
-                        (rel.x * ch - rel.y * sh) as f32,
-                        (rel.x * sh + rel.y * ch) as f32,
-                        (crate::collision::impact_height(hit.z0.max(obb.z0), hit.z1.min(obb.z1))
-                            - self.position.z) as f32,
-                    ];
-                    // kJ, like the rigid model reports it
-                    self.host.coll_energy += e / 1000.0;
-                    self.last_crash += e;
-                    self.crashes += 1;
-                    self.last_impact = e;
-                    self.collided = true;
+            let mut obstacles = self
+                .collision
+                .as_ref()
+                .map(|cw| cw.obstacles_near(&obb))
+                .unwrap_or_default();
+            obstacles.extend(self.dynamic_boxes.iter().copied());
+            let hit = obstacles.iter().copied().find_map(|obstacle| {
+                let was_overlapping = if obstacle.mass > 0.0 {
+                    let mut previous = obstacle;
+                    previous.center -= obstacle.velocity * dt as f64;
+                    previous.overlaps(&prev_obb)
+                } else {
+                    obstacle.overlaps(&prev_obb)
+                };
+                if !obstacle.overlaps(&obb)
+                    || (was_overlapping && obstacle.mass <= 0.0)
+                    || (obstacle.id >= 0 && self.knocked.contains(&obstacle.id))
+                {
+                    return None;
                 }
-                self.position = prev.0;
-                self.heading = prev.1;
-                self.physics.speed = 0.0;
+                obb.contact(&obstacle)
+                    .map(|contact| (obstacle, contact, was_overlapping))
+            });
+            if let Some((hit, contact, was_overlapping)) = hit {
+                let body_h = body_heading(&self.ty.def, prev.1, false).to_radians();
+                let own_velocity =
+                    glam::DVec2::new(body_h.sin(), body_h.cos()) * self.physics.speed as f64;
+                let relative_velocity = own_velocity - hit.velocity;
+                let closing_speed = -relative_velocity.dot(contact.normal);
+                let speed = if hit.mass > 0.0 {
+                    closing_speed.max(0.0) as f32
+                } else {
+                    relative_velocity.length() as f32
+                };
+                if hit.mass <= 0.0 || closing_speed >= -(crate::rigid::CRASH_SPEED as f64) {
+                    if was_overlapping {
+                        let out = if hit.mass > 0.0 && speed > crate::rigid::CRASH_SPEED {
+                            (contact.depth).min(
+                                (-own_velocity.dot(contact.normal)).max(0.0) * dt as f64 + 0.005,
+                            )
+                        } else {
+                            contact.depth + 0.001
+                        };
+                        self.position += contact.normal.extend(0.0) * out;
+                        if speed > crate::rigid::CRASH_SPEED {
+                            self.physics.speed = 0.0;
+                        }
+                    } else if speed <= crate::rigid::CRASH_SPEED {
+                        self.position += contact.normal.extend(0.0) * (contact.depth + 0.001);
+                    } else {
+                        let e = 0.5 * self.physics.mass_kg * speed * speed;
+                        let point = glam::DVec3::new(
+                            contact.point.x,
+                            contact.point.y,
+                            crate::collision::impact_height(contact.z0, contact.z1),
+                        );
+                        let rel = point.truncate() - self.position.truncate();
+                        let (sh, ch) = (body_h.sin(), body_h.cos());
+                        let coll_pos = [
+                            (rel.x * ch - rel.y * sh) as f32,
+                            (rel.x * sh + rel.y * ch) as f32,
+                            (point.z - self.position.z) as f32,
+                        ];
+                        self.host.coll_pos = coll_pos;
+                        // kJ, like the rigid model reports it
+                        self.host.coll_energy += e / 1000.0;
+                        self.last_crash += e;
+                        self.crashes += 1;
+                        self.last_impact = e;
+                        self.collided = true;
+                        self.break_glass_for_impact(Vec3::from_array(coll_pos), speed, e);
+                        if hit.mass > 0.0 && hit.id <= -2 && e >= 1000.0 {
+                            self.dynamic_impacts.push(DynamicImpact {
+                                obstacle_id: hit.id,
+                                point,
+                                push: (-contact.normal).extend(0.0),
+                                speed,
+                                energy: e,
+                            });
+                        }
+                        self.position = prev.0;
+                        self.heading = prev.1;
+                        self.physics.speed = 0.0;
+                    }
+                }
             }
         }
         // ground under each wheel: height, terrain pitch and bank of the body
@@ -1841,6 +1952,18 @@ impl VehicleInstance {
                 {
                     continue;
                 }
+                self.break_glass_for_impact(hit.point, hit.speed, hit.energy);
+                if o.mass > 0.0 && o.id <= -2 {
+                    let point = rb.position
+                        + rb.orientation.mul_vec3(hit.point - rb.cog).as_dvec3();
+                    self.dynamic_impacts.push(DynamicImpact {
+                        obstacle_id: o.id,
+                        point,
+                        push: hit.push.as_dvec3(),
+                        speed: hit.speed,
+                        energy: hit.energy,
+                    });
+                }
                 energy += hit.energy;
                 if worst.map(|w| hit.energy > w.energy).unwrap_or(true) {
                     worst = Some(*hit);
@@ -1869,6 +1992,7 @@ impl VehicleInstance {
             self.last_impact = energy;
             self.crashes += 1;
             self.collided = true;
+            self.break_glass_for_impact(hit.point, hit.speed, hit.energy);
         }
         self.position = rb.origin();
         let (heading, pitch, bank) = rb.heading_pitch_bank();
@@ -2254,12 +2378,7 @@ impl VehicleInstance {
         self.host.clock.advance(dt);
         self.step_physics(dt);
         self.update_ground_probe();
-        if std::mem::take(&mut self.collided) {
-            // OMSI runs the vehicle's `collision` block on a crash (it damages the bus); the
-            // energy is that crash's, for as many reads as the block makes
-            self.trigger("collision");
-            self.host.coll_energy = 0.0;
-        }
+        self.run_collision_trigger();
         self.update_dirt(dt);
         // (signed, as Omsi.exe 0x7e5163 adds it: reversing takes it back)
         self.driven_km += (self.physics.velocity_kmh() as f64 / 3600.0) * dt as f64;
@@ -2269,6 +2388,153 @@ impl VehicleInstance {
         self.show_radio_text();
         self.clear_pax_requests();
         self.update_visuals(dt);
+    }
+
+    fn run_collision_trigger(&mut self) {
+        if std::mem::take(&mut self.collided) {
+            self.trigger("collision");
+            self.host.coll_energy = 0.0;
+        }
+    }
+
+    /// Drain collisions against moving vehicles so the traffic system can deliver each hit
+    /// to its AI vehicle after the player's physics step.
+    pub fn take_dynamic_impacts(&mut self) -> Vec<DynamicImpact> {
+        std::mem::take(&mut self.dynamic_impacts)
+    }
+
+    /// Apply a collision to an AI vehicle. Its own scripts receive the usual OMSI collision
+    /// event, and the nearest body mesh gets a localized, persistent dent.
+    pub fn receive_dynamic_impact(&mut self, point: Vec3, push: Vec3, speed: f32, energy: f32) {
+        if !point.is_finite()
+            || !push.is_finite()
+            || !speed.is_finite()
+            || !energy.is_finite()
+            || energy <= 0.0
+        {
+            return;
+        }
+
+        let bb = self.ty.def.bounding_box.unwrap_or([2.5, 12.0, 3.0, 0.0, 0.0, 1.5]);
+        let zone = impact_zone(point, bb);
+        let zone_id = match zone {
+            ImpactZone::Front => 1.0,
+            ImpactZone::Rear => 2.0,
+            ImpactZone::Left => 3.0,
+            ImpactZone::Right => 4.0,
+            ImpactZone::Centre => 5.0,
+        };
+        self.set_var("AI_CollisionZone", zone_id);
+        self.set_var("AI_CollisionSpeed", speed);
+        self.host.coll_pos = point.to_array();
+        self.host.coll_energy += energy / 1000.0;
+        self.collided = true;
+        self.last_crash += energy;
+        self.last_impact = energy;
+        self.crashes += 1;
+        self.break_glass_for_impact(point, speed, energy);
+
+        let mut nearest: Option<(f32, usize)> = None;
+        for (i, mesh) in self.ty.meshes.iter().enumerate() {
+            let Some(transform) = self.mesh_transforms.get(i) else { continue };
+            if !mesh.skin.is_empty()
+                || is_shadow_mesh(&self.ty, i)
+                || is_glass_mesh(&self.ty, mesh)
+                || self.ty.mesh_bounds.get(i).is_none_or(|(_, radius)| *radius <= 0.0)
+            {
+                continue;
+            }
+            let (mut lo, mut hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
+            let Some(&(mesh_lo, mesh_hi)) = self.ty.mesh_boxes.get(i) else { continue };
+            for x in [mesh_lo.x, mesh_hi.x] {
+                for y in [mesh_lo.y, mesh_hi.y] {
+                    for z in [mesh_lo.z, mesh_hi.z] {
+                        let p = transform.transform_point3(Vec3::new(x, y, z));
+                        lo = lo.min(p);
+                        hi = hi.max(p);
+                    }
+                }
+            }
+            let closest = point.clamp(lo, hi);
+            let distance = point.distance_squared(closest);
+            if nearest.map(|n| distance < n.0).unwrap_or(true) {
+                nearest = Some((distance, i));
+            }
+        }
+        if let Some((_, i)) = nearest {
+            let mut direction = push.normalize_or_zero();
+            if direction == Vec3::ZERO {
+                direction = match zone {
+                    ImpactZone::Front => -Vec3::Y,
+                    ImpactZone::Rear => Vec3::Y,
+                    ImpactZone::Left => Vec3::X,
+                    ImpactZone::Right => -Vec3::X,
+                    ImpactZone::Centre => Vec3::Z,
+                };
+            }
+            let depth = ((energy / 100_000.0).sqrt() * 0.12).clamp(0.06, 0.4);
+            let transform = self.mesh_transforms[i];
+            self.damage_dents.push(VehicleDent {
+                mesh: i,
+                point: transform.inverse().transform_point3(point),
+                push: -transform
+                    .inverse()
+                    .transform_vector3(direction)
+                    .normalize_or_zero(),
+                depth,
+            });
+        }
+    }
+
+    fn break_glass_for_impact(&mut self, point: Vec3, speed: f32, energy: f32) {
+        if speed < 8.0 || energy < 20_000.0 {
+            return;
+        }
+        let influence_radius = (0.45 + (energy / 100_000.0).sqrt() * 0.45).clamp(0.6, 1.5);
+        let nearby = self
+            .ty
+            .meshes
+            .iter()
+            .enumerate()
+            .filter_map(|(i, mesh)| {
+                if self.glass_broken.get(i).copied().unwrap_or(true)
+                    || !is_glass_mesh(&self.ty, mesh)
+                {
+                    return None;
+                }
+                let &(mesh_min, mesh_max) = self.ty.mesh_boxes.get(i)?;
+                let transform = *self.mesh_transforms.get(i)?;
+                let (mut lo, mut hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
+                for x in [mesh_min.x, mesh_max.x] {
+                    for y in [mesh_min.y, mesh_max.y] {
+                        for z in [mesh_min.z, mesh_max.z] {
+                            let p = transform.transform_point3(Vec3::new(x, y, z));
+                            lo = lo.min(p);
+                            hi = hi.max(p);
+                        }
+                    }
+                }
+                let distance = point.distance_squared(point.clamp(lo, hi));
+                (distance <= influence_radius * influence_radius).then_some((i, distance))
+            })
+            .collect::<Vec<_>>();
+        if nearby.is_empty() {
+            return;
+        }
+        for (i, _) in nearby {
+            self.glass_broken[i] = true;
+            self.broken_glass.push(BrokenGlass { mesh: i, point, energy });
+        }
+    }
+
+    /// Take the glass panes broken by an accident for per-instance visual shattering.
+    pub fn take_broken_glass(&mut self) -> Vec<BrokenGlass> {
+        std::mem::take(&mut self.broken_glass)
+    }
+
+    /// Drain new dents so the app can apply them to this AI instance's private render meshes.
+    pub fn take_damage_dents(&mut self) -> Vec<VehicleDent> {
+        std::mem::take(&mut self.damage_dents)
     }
 
     /// The station and the song on a radio whose display is a text of its script. OMSI has
@@ -2478,6 +2744,7 @@ impl VehicleInstance {
         for &(id, v) in inputs.iter().chain(pinned) {
             self.put(Some(id), v);
         }
+        self.run_collision_trigger();
         let p = self.ty.program.clone();
         if p.frame_ai.is_empty() {
             self.vm.run_frame(&p, &mut self.state, &mut self.host);
@@ -3193,6 +3460,27 @@ fn is_shadow_mesh(ty: &VehicleType, i: usize) -> bool {
     ty.meshes
         .get(i)
         .is_some_and(|m| ty.model.meshes[m.def_index].is_shadow)
+}
+
+fn is_glass_mesh(ty: &VehicleType, mesh: &VehicleMesh) -> bool {
+    let Some(def) = ty.model.meshes.get(mesh.def_index) else { return false };
+    let looks_like_glass = |text: &str| {
+        let text = text.to_ascii_lowercase();
+        ["glass", "glas", "fenster", "scheibe", "window", "windshield", "windscreen"]
+            .iter()
+            .any(|word| text.contains(word))
+    };
+    if def.mesh_ident.as_deref().is_some_and(|name| looks_like_glass(name))
+        || looks_like_glass(&def.file)
+        || looks_like_glass(&mesh.file.to_string_lossy())
+    {
+        return true;
+    }
+    if mesh.materials.len().max(def.materials.len()) > 1 {
+        return false;
+    }
+    mesh.materials.iter().any(|m| looks_like_glass(&m.texture))
+        || def.materials.iter().any(|m| looks_like_glass(&m.texture))
 }
 
 /// What one wheel of a body without a rigid body stands on at world `p` (the point on the
@@ -4315,6 +4603,142 @@ mod tests {
     }
 
     #[test]
+    fn ai_impact_points_are_classified_by_body_zone() {
+        let bb = [2.0, 4.0, 2.0, 0.0, 0.0, 1.0];
+        assert_eq!(impact_zone(Vec3::new(0.0, 1.1, 0.5), bb), ImpactZone::Front);
+        assert_eq!(impact_zone(Vec3::new(0.0, -1.1, 0.5), bb), ImpactZone::Rear);
+        assert_eq!(impact_zone(Vec3::new(-0.8, 0.0, 0.5), bb), ImpactZone::Left);
+        assert_eq!(impact_zone(Vec3::new(0.8, 0.0, 0.5), bb), ImpactZone::Right);
+        assert_eq!(impact_zone(Vec3::new(0.0, 0.0, 0.5), bb), ImpactZone::Centre);
+    }
+
+    #[test]
+    fn ai_dynamic_impact_records_script_collision_state() {
+        let mut v = VehicleInstance::new(
+            coupling_test_type(None),
+            VehicleHost::new(Default::default()),
+        );
+        v.receive_dynamic_impact(
+            Vec3::new(-0.7, 0.0, 0.6),
+            Vec3::X,
+            4.0,
+            20_000.0,
+        );
+        assert!(v.collided);
+        assert_eq!(v.host.coll_pos, [-0.7, 0.0, 0.6]);
+        assert_eq!(v.host.coll_energy, 20.0);
+        assert_eq!(v.last_impact, 20_000.0);
+        assert_eq!(v.crashes, 1);
+    }
+
+    #[test]
+    fn a_severe_accident_marks_named_glass_meshes_broken_once() {
+        let mut ty = coupling_test_type(None);
+        let ty_mut = Arc::get_mut(&mut ty).unwrap();
+        ty_mut.mesh_boxes.clear();
+        for (file, x) in [
+            ("windshield.o3d", 0.0),
+            ("side_window.o3d", 5.0),
+            ("rear_window.o3d", 1.2),
+        ] {
+            let def_index = ty_mut.model.meshes.len();
+            ty_mut.model.meshes.push(omsi_model::MeshDef {
+                file: file.into(),
+                ..Default::default()
+            });
+            ty_mut.meshes.push(VehicleMesh {
+                def_index,
+                data: MeshData::default(),
+                file: PathBuf::from(file),
+                materials: Vec::new(),
+                overrides: Vec::new(),
+                pivot: Mat4::IDENTITY,
+                viewpoint: 0,
+                skin: Vec::new(),
+                keep_winding: false,
+            });
+            ty_mut.mesh_boxes.push((
+                Vec3::new(x - 0.5, -0.5, 1.0),
+                Vec3::new(x + 0.5, 0.5, 2.0),
+            ));
+        }
+        let mut v = VehicleInstance::new(ty, VehicleHost::new(Default::default()));
+        let impact = Vec3::new(0.0, 0.0, 1.5);
+        v.break_glass_for_impact(impact, 7.9, 100_000.0);
+        assert!(v.take_broken_glass().is_empty());
+        v.break_glass_for_impact(impact, 8.0, 20_000.0);
+        assert_eq!(
+            v.take_broken_glass().as_slice(),
+            &[BrokenGlass {
+                mesh: 0,
+                point: impact,
+                energy: 20_000.0,
+            }]
+        );
+        v.break_glass_for_impact(impact, 12.0, 80_000.0);
+        assert_eq!(
+            v.take_broken_glass().as_slice(),
+            &[BrokenGlass {
+                mesh: 2,
+                point: impact,
+                energy: 80_000.0,
+            }]
+        );
+    }
+
+    #[test]
+    fn impact_with_a_fixed_object_breaks_only_the_nearby_window() {
+        let mut ty = coupling_test_type(None);
+        let ty_mut = Arc::get_mut(&mut ty).unwrap();
+        ty_mut.def.bounding_box = Some([2.0, 2.0, 2.0, 0.0, 0.0, 1.0]);
+        ty_mut.def.rolling_resistance = 0.0;
+        ty_mut.model.meshes.clear();
+        ty_mut.meshes.clear();
+        ty_mut.mesh_boxes.clear();
+        for (file, x, y) in [
+            ("front_window.o3d", 0.0, 1.0),
+            ("side_window.o3d", 5.0, 0.0),
+        ] {
+            let def_index = ty_mut.model.meshes.len();
+            ty_mut.model.meshes.push(omsi_model::MeshDef {
+                file: file.into(),
+                ..Default::default()
+            });
+            ty_mut.meshes.push(VehicleMesh {
+                def_index,
+                data: MeshData::default(),
+                file: PathBuf::from(file),
+                materials: Vec::new(),
+                overrides: Vec::new(),
+                pivot: Mat4::IDENTITY,
+                viewpoint: 0,
+                skin: Vec::new(),
+                keep_winding: false,
+            });
+            ty_mut.mesh_boxes.push((
+                Vec3::new(x - 0.4, y - 0.1, 1.0),
+                Vec3::new(x + 0.4, y + 0.1, 2.0),
+            ));
+        }
+        let mut bus = VehicleInstance::new(ty, VehicleHost::new(Default::default()));
+        bus.physics.mass_kg = 10_000.0;
+        bus.dynamic_boxes.push(crate::collision::Obb::from_box(
+            [1.0, 0.4, 2.0, 0.0, 0.0, 1.0],
+            DVec3::new(0.0, 1.4, 0.0),
+            0.0,
+        ));
+        bus.set_speed(10.0);
+
+        bus.step_physics(0.1);
+
+        let broken = bus.take_broken_glass();
+        assert_eq!(broken.len(), 1, "{broken:?}");
+        assert_eq!(broken[0].mesh, 0);
+        assert_eq!(broken[0].energy, 500_000.0);
+        assert!(broken[0].point.is_finite());
+    }
+
+    #[test]
     fn bogie_orientation_is_independent_of_consist_flags() {
         for bogies in [None, Some(5.0), Some(-5.0), Some(0.0)] {
             let ty = coupling_test_type(bogies);
@@ -4383,6 +4807,65 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn simple_physics_reports_a_moving_vehicle_striking_a_stationary_bus() {
+        let mut ty = coupling_test_type(None);
+        let def = &mut Arc::get_mut(&mut ty).unwrap().def;
+        def.bounding_box = Some([2.0, 2.0, 2.0, 0.0, 0.0, 1.0]);
+        def.rolling_resistance = 0.0;
+        let mut bus = VehicleInstance::new(ty, VehicleHost::new(Default::default()));
+        bus.physics.mass_kg = 10_000.0;
+        bus.dynamic_boxes.push(
+            crate::collision::Obb::from_box(
+                [0.8, 0.4, 2.0, 0.0, 0.0, 1.0],
+                DVec3::new(0.0, -1.1, 0.0),
+                0.0,
+            )
+            .moving(glam::DVec2::new(0.0, 10.0), 1_000.0, 7),
+        );
+
+        // The bus is stationary; the AI car moves into it during this tick.
+        bus.step_physics(0.1);
+
+        let impacts = bus.take_dynamic_impacts();
+        assert_eq!(impacts.len(), 1, "{impacts:?}");
+        let impact = impacts[0];
+        assert_eq!(impact.obstacle_id, -9);
+        assert!(impact.speed > crate::rigid::CRASH_SPEED, "{impact:?}");
+        assert!(impact.energy >= 1_000.0, "{impact:?}");
+        assert!(impact.point.y < 0.0, "{impact:?}");
+        assert!(impact.push.y < 0.0, "{impact:?}");
+        assert!(bus.collided);
+        assert_eq!(bus.physics.speed, 0.0);
+    }
+
+    #[test]
+    fn simple_physics_separates_persistent_overlap_with_a_moving_vehicle() {
+        let mut ty = coupling_test_type(None);
+        let def = &mut Arc::get_mut(&mut ty).unwrap().def;
+        def.bounding_box = Some([2.0, 2.0, 2.0, 0.0, 0.0, 1.0]);
+        def.rolling_resistance = 0.0;
+        let mut bus = VehicleInstance::new(ty, VehicleHost::new(Default::default()));
+        let car = crate::collision::Obb::from_box(
+            [1.0, 2.0, 2.0, 0.0, 0.0, 1.0],
+            DVec3::new(0.9, 0.0, 0.0),
+            0.0,
+        )
+        .moving(glam::DVec2::ZERO, 1_000.0, 7);
+        bus.dynamic_boxes.push(car);
+
+        bus.step_physics(0.01);
+
+        let body = crate::collision::Obb::from_box(
+            [2.0, 2.0, 2.0, 0.0, 0.0, 1.0],
+            bus.position,
+            bus.body_heading(),
+        );
+        assert!(!body.overlaps(&car), "position {:?}, car {:?}", bus.position, car);
+        assert!(bus.position.x < 0.0);
+        assert_eq!(bus.take_dynamic_impacts().len(), 0);
     }
 
     #[test]

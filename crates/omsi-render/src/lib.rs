@@ -10964,7 +10964,7 @@ mod tests {
     #[test]
     fn a_smoke_sprite_carries_its_spin_ground_and_z_offset() {
         let ro = DVec3::new(1000.0, 2000.0, 30.0);
-        let p = SmokeParticle { position: ro + DVec3::new(1.0, 2.0, 3.5), size: 1.0, color: [0.5; 3], alpha: 0.8, spin: std::f32::consts::FRAC_PI_2, z_offset: 0.1, ground: Some(33.0) };
+        let p = SmokeParticle { position: ro + DVec3::new(1.0, 2.0, 3.5), size: 1.0, color: [0.5; 3], alpha: 0.8, spin: std::f32::consts::FRAC_PI_2, z_offset: 0.1, ground: Some(33.0), ..Default::default() };
         let g = smoke_sprite(&p, ro).unwrap();
         assert_eq!(g.pos, [1.0, 2.0, 3.5]);
         assert_eq!(g.extra[3], 3.0);

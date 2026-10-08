@@ -354,6 +354,7 @@ impl Offscreen<'_> {
             }
         }
         player.vehicle.update(dt);
+        steps::deliver_player_impacts(player, self.traffic.as_mut());
         self.drive_diagnostics(i, t_s);
     }
 

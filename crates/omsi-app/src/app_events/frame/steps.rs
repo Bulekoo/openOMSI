@@ -43,6 +43,15 @@ pub(crate) fn traffic_boxes(t: &traffic::Traffic, player: Option<&mut Player>, c
     }
 }
 
+/// The player's hits on moving AI vehicles in its last step, handed to those cars (their
+/// recoil, their collision scripts, their dents).
+pub(crate) fn deliver_player_impacts(p: &mut Player, traffic: Option<&mut traffic::Traffic>) {
+    let impacts = p.vehicle.take_dynamic_impacts();
+    if let (false, Some(t)) = (impacts.is_empty(), traffic) {
+        t.player_impacts(impacts);
+    }
+}
+
 /// Rain, snow, fog or a closed cloud cover: the AI drives with its lights on by day.
 pub(crate) fn gloomy_weather(weather: Option<&omsi_content::weather::Weather>) -> bool {
     weather.map(|w| {

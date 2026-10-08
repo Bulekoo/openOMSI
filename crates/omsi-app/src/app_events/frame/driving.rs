@@ -59,6 +59,7 @@ impl App {
                 self.cam.in_cab,
                 !matches!(self.view.as_str(), "free" | "foot"),
             );
+            steps::deliver_player_impacts(p, self.session.traffic.as_mut());
             // After scripts: zero-movement `_drag` for a held switch. Running this
             // *before* `tick` cleared Aachen ibox momentary flags (incl. digit 0 /
             // `ibox_taste_D11`) before the frame could act when the click path had
@@ -150,6 +151,7 @@ impl App {
         }
         let inside = self.cam.in_cab;
         p.sync_transforms(r, scene, inside);
+        crate::scene::sync_vehicle_damage(r, scene, &mut p.vehicle, &mut p.render);
         // from the driver's seat the figure stays in the mirrors
         // (from the driver's seat only the mirrors show him)
         // (out of the seat: nobody at the wheel)

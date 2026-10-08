@@ -184,6 +184,15 @@ impl World {
             for (_, mesh, _) in &render.skinned {
                 renderer.free_mesh(scene, *mesh);
             }
+            for (_, mesh, _) in &render.damaged {
+                renderer.free_mesh(scene, *mesh);
+            }
+            for (_, instance, mesh) in &render.glass_cracks {
+                renderer.remove_instance(scene, *instance);
+                let slots = renderer.instance_slots(scene, *instance);
+                gpu.free_instances.entry(slots).or_default().push(*instance);
+                renderer.free_mesh(scene, *mesh);
+            }
             for i in render.instances {
                 renderer.remove_instance(scene, i);
                 let slots = renderer.instance_slots(scene, i);
@@ -814,6 +823,8 @@ impl World {
             displays_far: false,
             display_tick: 0,
             skinned: Vec::new(),
+            damaged: Vec::new(),
+            glass_cracks: Vec::new(),
             hidden: false,
             interior_lamps: std::cell::Cell::new(None),
             interior_blocks: std::cell::OnceCell::new(),

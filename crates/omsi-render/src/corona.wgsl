@@ -340,6 +340,12 @@ fn fs_enhanced(in: CoronaOut) -> @location(0) vec4<f32> {
 // scene's ambient and sun light, blended with its alpha (the particle's times the texture's),
 // faded out into the ground under it (see `vs_main`).
 fn smoke_color(in: CoronaOut) -> vec4<f32> {
+    if (in.kind > 1.5) {
+        let facet = select(0.72, 1.12, in.uv.x + in.uv.y > 1.0);
+        let edge = 0.72 + 0.28 * abs(in.uv.x - in.uv.y);
+        let over_ground = select(1.0, smoothstep(0.0, in.ground.y, in.ground.x), in.ground.y > 0.0);
+        return vec4<f32>(in.color.rgb * facet * edge, clamp(in.color.a * over_ground, 0.0, 1.0));
+    }
     // upside up, as the sprite's own picture above
     let t = textureSample(t_corona, s_corona, vec2<f32>(in.uv.x, 1.0 - in.uv.y));
     let light = min(camera.ambient.rgb + camera.sun_color.rgb * 0.6, vec3<f32>(1.2));
