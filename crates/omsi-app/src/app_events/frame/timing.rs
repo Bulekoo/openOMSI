@@ -69,6 +69,9 @@ impl App {
         let raw_dt = (now - self.last).as_secs_f32();
         self.log_frame(raw_dt);
         let profiling = omsi_cfg::flags::OMSI_PROFILE.is_set();
+        if profiling && self.perf.cpu_mark.is_some() && self.perf.frame_times.len() < crate::perf_report::MAX_FRAMES {
+            self.perf.frame_times.push(raw_dt);
+        }
         let waited: f64 = ["acquire", "present", "gpu"].iter()
             .map(|&k| self.perf.profile.get(k).copied().unwrap_or(0.0))
             .sum();

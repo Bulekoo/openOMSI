@@ -527,6 +527,7 @@ impl App {
         {
             self.perf.cpu_mark =
                 process_cpu_seconds().map(|c| (c, Instant::now(), self.perf.total_frames));
+            self.perf.profile_mark = Some(crate::perf_report::ProfileMark::take(&self.perf.profile, r));
         }
         if let (Some(limit), false) = (self.args.exit_after, self.exiting) {
             if self.started.elapsed().as_secs_f32() > limit {
@@ -575,6 +576,15 @@ impl App {
                         s.config.height,
                         r.options.msaa
                     );
+                    let frames = crate::perf_report::frame_summary(&self.perf.frame_times);
+                    log::info!("{}", crate::perf_report::log_line(&frames));
+                    if let Some(path) = omsi_cfg::flags::OMSI_PROFILE_JSON.var() {
+                        let report = crate::perf_report::report(crate::perf_report::Run { perf: &self.perf, settings: &self.settings, args: &self.args, lan: self.net.lan.is_some() }, r, (s.config.width, s.config.height), (sw, sh), frames);
+                        match serde_json::to_vec_pretty(&report).map_err(anyhow::Error::from).and_then(|b| Ok(std::fs::write(path, b)?)) {
+                            Ok(()) => log::info!("profile: the summary is in {path}"),
+                            Err(e) => log::warn!("profile: the summary could not be written to {path}: {e}"),
+                        }
+                    }
                 }
                 finish = true;
                 crate::platform::exit(event_loop);

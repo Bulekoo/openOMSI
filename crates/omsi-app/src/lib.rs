@@ -91,6 +91,7 @@ mod evdev_buttons;
 mod evdev_ff;
 mod cli;
 mod diagnostics;
+mod perf_report;
 mod support_bundle;
 mod duty_start;
 mod input_script;
@@ -633,6 +634,8 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             governor_low: 0,
             governor_wait_prev: 0.0,
             cpu_mark: None,
+            profile_mark: None,
+            frame_times: Vec::new(),
         },
         sound: SoundState {
             radio,
