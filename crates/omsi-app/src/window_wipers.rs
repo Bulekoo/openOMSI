@@ -349,8 +349,12 @@ impl WindowWipers {
                     );
                 }
                 let inverse = vehicle.mesh_transforms[film.mesh].inverse();
+                // (a dry pane with no drop on it has nothing to wipe: a blade sweeping it in
+                // the sun cost a quarter of a millisecond a frame)
+                let dry = !film.local && film.unwiped <= 0.004;
+                let drops = liquid && !film.drops.drops.is_empty();
                 for blade in &self.blades {
-                    if !vehicle.mesh_props[blade.mesh].visible {
+                    if !vehicle.mesh_props[blade.mesh].visible || (dry && !drops) {
                         continue;
                     }
                     let previous = blade.previous.map(|p| inverse.transform_point3(p));
@@ -369,8 +373,10 @@ impl WindowWipers {
                     };
                     for k in 0..steps {
                         let (from, to) = (at(k), at(k + 1));
-                        film.local |= wipe(&mut film.wet, &film.points, film.bounds, from, to);
-                        if liquid {
+                        if !dry {
+                            film.local |= wipe(&mut film.wet, &film.points, film.bounds, from, to);
+                        }
+                        if drops {
                             wipe_drops(film, from, to);
                         }
                     }
@@ -432,7 +438,12 @@ impl WindowWipers {
             let inst = instances[film.mesh];
             renderer.set_material(scene, inst, film.slot, if liquid { film.material } else { film.snow_material });
             let mut alpha = scene.instances[inst].slot_alpha.clone();
-            alpha[film.slot] = 1.0; // the mask owns wetness; scripts still own visibility
+            // the mask owns wetness; scripts still own visibility. A pane that shows nothing
+            // (dry, no drop on it, nothing wiped) keeps its alpha at 0, as its script had it on
+            // a dry day: the frame leaves such a layer out (`passes/batch.rs`), drawn it ran
+            // the rain shader over the whole windscreen for nothing.
+            let shows = film.local || film.unwiped > 0.0 || !film.drops.drops.is_empty();
+            alpha[film.slot] = if shows { 1.0 } else { 0.0 };
             let visible = scene.instances[inst].visible;
             renderer.set_params(
                 scene,
