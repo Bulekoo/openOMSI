@@ -7,6 +7,8 @@ impl App {
     /// The cursor moved, and the switch under it is named at once (touch input and
     /// `OMSI_INPUT` scripts read `hover` right after).
     pub(crate) fn on_cursor(&mut self, x: f32, y: f32) {
+        // (while the mouse steers its movement goes to the steering point first)
+        let Some((x, y)) = self.steer_cursor_event(x, y) else { return };
         if self.move_cursor(x, y) {
             self.update_hover();
         }
@@ -86,11 +88,21 @@ impl App {
             }
         }
         self.input.mouse_look = pressed;
+        // (looking round goes by the cursor: it is let go at once, and held again after)
+        self.sync_mouse_grab();
         // (the cursor shows it at once, not with the next look at what is under it)
         self.update_hover();
     }
 
     pub(crate) fn on_mouse_moved(&mut self, x: f32, y: f32) {
+        // (while the mouse steers its movement goes to the steering point first)
+        let Some((x, y)) = self.steer_cursor_event(x, y) else { return };
+        self.cursor_moved_to(x, y);
+    }
+
+    /// The cursor's new place in the window, as the window reported it or as the mouse
+    /// steering's point stands in it.
+    pub(super) fn cursor_moved_to(&mut self, x: f32, y: f32) {
         // a mirror panel being dragged follows the cursor (nothing else of the cursor's
         // work is done meanwhile, and outside a drag none of it is touched)
         if self.gfx.mirror_hud.dragging() {
@@ -183,29 +195,6 @@ impl App {
         if unsafe { windows::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut point) }.is_ok() {
             self.on_vr_cursor_moved((point.x - client_origin.x) as f32,
                                     (point.y - client_origin.y) as f32);
-        }
-    }
-
-    /// Mouse steering beyond the window's edge: with the cursor pinned at the left or right
-    /// edge, the mouse moving on outwards turns the wheel further (the whole width per full
-    /// lock, as standing); moving back gives that back first, the cursor held at the edge
-    /// until it is used up, so the wheel never jumps.
-    pub(crate) fn mouse_past_edge(&mut self, dx: f32) {
-        let Some(w) = self.gfx.surface.as_ref().map(|s| s.config.width as f32) else { return };
-        let per_px = 2.0 / w.max(1.0);
-        let (at_left, at_right) = (self.input.cursor.0 <= 2.0, self.input.cursor.0 >= w - 3.0);
-        let before = self.input.mouse_edge;
-        if (at_right && dx > 0.0) || (at_left && dx < 0.0) {
-            self.input.mouse_edge = (self.input.mouse_edge + dx * per_px).clamp(-2.0, 2.0);
-        } else if (self.input.mouse_edge > 0.0 && dx < 0.0) || (self.input.mouse_edge < 0.0 && dx > 0.0) {
-            let m = self.input.mouse_edge + dx * per_px;
-            self.input.mouse_edge = if m.signum() != before.signum() { 0.0 } else { m };
-            // (the cursor stays where it was: the move went into the wheel)
-            if let Some(win) = self.window.as_ref() {
-                let x = if before > 0.0 { w - 2.0 } else { 1.0 };
-                let _ = win.set_cursor_position(winit::dpi::PhysicalPosition::new(x as f64, self.input.cursor.1 as f64));
-                self.input.cursor.0 = x;
-            }
         }
     }
 

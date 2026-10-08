@@ -327,6 +327,9 @@ impl App {
             // to the wheel on the first frame.
             self.input.center_cursor = true;
         }
+        // (the mouse steers from the middle afresh; switched off, the cursor is let go)
+        self.input.mouse_grab.at = None;
+        self.sync_mouse_grab();
         if !on {
             crate::player::keep_wheel(self.player.as_mut());
             // the brake the mouse held stays on, as the brake key leaves it (OMSI has one
