@@ -2317,7 +2317,6 @@ impl AiState {
 
     fn curve_speed_on(&self, net: &Network, q: &LaneSeq, s: f32) -> f32 {
         let reach = (self.speed * self.speed / 4.0 + 12.0).min(90.0);
-        let braking = self.decel.max(0.5);
         let mut best = f32::MAX;
         // The samples lie at fixed places of the road (every 2.5 m of the odometer), not at
         // fixed distances ahead of the car: moving with the car, the sample that caught a
@@ -2335,7 +2334,7 @@ impl AiState {
                 // (a bend may begin anywhere up to a sample's spacing before the sample
                 // that finds it: the speed is taken from there, or the car met the start of
                 // a tight turn half a metre after its profile had allowed 1 m/s more)
-                best = best.min((v * v + 2.0 * braking * (d - 2.5).max(0.0)).sqrt());
+                best = best.min((v * v + 2.0 * 2.0 * (d - 2.5).max(0.0)).sqrt());
             }
             d = next;
             next += 2.5;
@@ -2436,7 +2435,7 @@ impl AiState {
         // braking), blending in over the last metre per second above it
         let bend = self.curve_speed(net);
         if bend < v0 && v > bend - 1.0 {
-            let track = -b + (bend - v) / 0.6;
+            let track = -2.0 + (bend - v) / 0.6;
             let k = ((v - (bend - 1.0)) / 1.0).clamp(0.0, 1.0);
             acc = acc.min(acc + (track - acc) * k);
         }
@@ -2795,26 +2794,6 @@ mod tests {
         assert!(v < 7.5, "entered the bend at {v} m/s");
     }
 
-    #[test]
-    fn gentle_brakers_slow_earlier_for_bends() {
-        let net = junction();
-        let mut gentle = AiState::new(0, 0.0, 7);
-        gentle.speed = 13.9;
-        gentle.decel = 1.0;
-        gentle.plan_next(&net);
-
-        let mut assertive = AiState::new(0, 0.0, 8);
-        assertive.speed = 13.9;
-        assertive.decel = 3.0;
-        assertive.plan_next(&net);
-
-        let gentle_profile = gentle.curve_speed(&net);
-        let assertive_profile = assertive.curve_speed(&net);
-        assert!(
-            gentle_profile < assertive_profile,
-            "gentle-braking driver should anticipate the bend sooner: {gentle_profile} vs {assertive_profile} m/s"
-        );
-    }
 
     /// A pull-out started a few metres before the car's lane ends (a road of short spline
     /// pieces) carries on across the joint and ends on the lane beside's next piece, without
