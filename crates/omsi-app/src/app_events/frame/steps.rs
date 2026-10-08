@@ -398,6 +398,8 @@ pub(crate) fn picture_lighting(
     // this mip level at most (`Settings::led_mips`)
     lighting.led_glow = settings.led_glow as f32 * 0.25;
     lighting.led_mips = settings.led_mips;
+    // the enhanced clouds marched in fewer steps (`Settings::cloud_quality`)
+    lighting.low_clouds = settings.cloud_quality == "low";
     lighting
 }
 

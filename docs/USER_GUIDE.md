@@ -183,7 +183,8 @@ again only when something changes; drag on it to turn the bus, scroll to zoom. I
   the session summaries the game writes to `~/.openomsi/sessions`.
 * **Settings** - everything in `settings.cfg` below, saved as it changes; keys the page
   does not manage are kept as they are. One tab for each thing one comes to change:
-  *Graphics* (the quality preset first, the screen, distances and memory), *Driving* (keys,
+  *Graphics* (the graphics mode and the quality presets for it first - a preset tunes the
+  mode chosen and keeps it - then the screen, distances and memory), *Driving* (keys,
   mouse, wheel and pedals, with the way to the Controls page), *Camera* (the seat, the views,
   head tracking, VR), *Sound*, *Gameplay* (passengers, traffic, collisions, the clock) and
   *General* (language, the game's interface size, navigator, Discord Rich Presence,
@@ -281,7 +282,10 @@ and `drive_keys`, plus `render_scale` (`auto` or a fraction: the picture is draw
 and upscaled), `post_aa` (`fxaa`, the enhanced renderer's, or `off`), `view_distance` (m,
 how far the tiles are kept loaded), `texture_memory` (MB - OMSI's `texmemlimit` is read
 under that name too; an eighth of the machine's memory when unset), `texture_compression`
-(BC1-BC3 on the GPU, on by default), `reflections` (the materials' reflection maps,
+(loose pictures compressed to BC1-BC3 on loading, on by default), `gpu_texture_compression`
+(DXT/BC textures kept compressed on the GPU, on by default; off decodes them to RGBA, for a
+driver that mishandles block formats, at four to eight times the memory - as
+`OMSI_NO_BC=1`), `reflections` (the materials' reflection maps,
 `[matl_envmap]` - off, paint, chrome and glass mirror nothing), `led_glow` (0..15: how
 bright an LED destination matrix's dots burn in the enhanced picture, 0 = off - they are
 the panel's own light, and the glow draws a halo around them), `led_mips` (0..4, 0.05 steps,
@@ -292,7 +296,11 @@ dots a couple of pixels across where the full chain has run them together; 4 is 
 calm of the full chain). The bus's own screens in Enhanced (the IBIS, ticket and
 html terminals, the dashboard's LCDs) dim at night as a real dashboard's do, and are never
 lifted over their own colour by the eye's adaptation to the dark cab; the gauges' backlight
-and the destination LED matrices (`led_glow`) are left as they are. `mouse_sens` (mouse steering,
+and the destination LED matrices (`led_glow`) are left as they are. A mod can also declare a
+material its own light outright - `[matl_glow] <texture> <value>` (openOMSI's own keyword, see
+docs/FORMATS.md): the texture is a greyscale mask of where it shines (the light is the
+material's own colour) and `value` is on this slider's scale, so `6` is as bright as its default
+and `20` brighter than its top; the slider does not change it. `mouse_sens` (mouse steering,
 1 = OMSI's), `mouse_smooth` (0: the mouse's wheel follows the cursor without easing),
 `ui_scale` (the size of the game's interface over the picture - its texts,
 the menu, the timetable, the navigator and the city map - from 0.5 to 2, 1 by default, on
@@ -370,7 +378,9 @@ milky sun, soft pale shadows); a passing cumulus takes the sun away from the str
 the clouds themselves brighten the sky light. The moon stands where it really is with its
 real phase and lights the night through the same atmosphere; the stars show where the sky
 is dark enough, and a city's lamps light its own haze and clouds (brightest on an overcast
-night). The camera exposes like one: for daylight, part of the way towards the light of the
+night). The clouds are a volume marched through in steps; `cloud_quality=low` (Graphics:
+Cloud quality) takes fewer of them - the same clouds a little grainier at their edges, for
+less of the GPU's time (on an M4 at 1080p about 0.8 ms of a frame). The camera exposes like one: for daylight, part of the way towards the light of the
 moment, with a camera's middle-tone contrast; street lamps are bright points with a little
 glare in clear air and wide halos in mist and rain.
 

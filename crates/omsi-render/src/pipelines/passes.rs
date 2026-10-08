@@ -50,7 +50,8 @@ impl PassKit<'_> {
     pub(crate) fn build(&self, format: wgpu::TextureFormat, hdr_format: wgpu::TextureFormat, options: &RenderOptions, adapter_name: &str) -> Passes {
         let pass = self.pass(format, PassShaders { scene: "fs_main", corona: "fs_main", corona_blend: SCREEN, smoke: "fs_smoke", snow: "fs_snow", sky: "fs_main" });
         // the enhanced path: its own lighting in all three
-        let leave_out_enhanced = options.no_enhanced && (cfg!(target_os = "android") || adapter_name.to_ascii_lowercase().contains("opengl") || GL_BACKEND.load(std::sync::atomic::Ordering::Relaxed));
+        // (and the launcher's preview, which always draws Vanilla+, leaves it out everywhere)
+        let leave_out_enhanced = options.preview_only || (options.no_enhanced && (cfg!(target_os = "android") || adapter_name.to_ascii_lowercase().contains("opengl") || GL_BACKEND.load(std::sync::atomic::Ordering::Relaxed)));
         // (its textures do not fit OpenGL's units here, see `sixteen_texture_units`)
         if sixteen_texture_units() && !options.no_enhanced {
             log::warn!("renderer: the enhanced graphics take more textures than OpenGL has units for on {adapter_name}; drawing vanilla+");

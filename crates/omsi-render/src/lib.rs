@@ -108,7 +108,8 @@ struct EnhancedUniform {
     sun_disc: [f32; 4],
     debug: [f32; 4],
     /// xyz where the sky cube was drawn from, relative to the camera (the dome looks the
-    /// clouds up through it with the parallax taken out)
+    /// clouds up through it with the parallax taken out); w the clouds' march steps
+    /// (`Lighting::low_clouds`)
     eye: [f32; 4],
     /// x how bright an LED panel's dots burn (`Lighting::led_glow`), y how much of the
     /// mip chain an LED panel is held at (`Lighting::led_mips`)
@@ -192,6 +193,11 @@ struct Probe {
     cube_eye: Option<DVec3>,
     cube_recapture: bool,
 }
+
+/// Steps of the enhanced clouds' march through their layer (sky_enhanced.wgsl
+/// `cloud_layer`), and with the low cloud quality (`Lighting::low_clouds`).
+const CLOUD_STEPS: u32 = 56;
+const CLOUD_STEPS_LOW: u32 = 20;
 
 /// Face size of the enhanced sky cube (see `Probe::cube_view`): about as many texels per
 /// degree as a 1600-pixel-wide picture has pixels at half its size (at 512 the clouds'
@@ -528,6 +534,9 @@ struct MaterialUniform {
     sway: [f32; 4],
     /// Window mask: mesh X/Z origin and inverse size; zero disables it.
     wipe_bounds: [f32; 4],
+    /// x: `[matl_glow]` strength (`MaterialExtra::glow`); 0 = the keyword is not there.
+    /// y/z/w free.
+    glow: [f32; 4],
 }
 
 /// The maps of a PBR set found beside a diffuse texture (`foo_n.png` and the rest, see
@@ -725,6 +734,11 @@ pub struct Lighting {
     /// chain has run them together, and what shimmer is left is a fraction of a
     /// full-resolution sample's; 4 is near the calm of the full chain.
     pub led_mips: f32,
+    /// Enhanced: the volumetric clouds marched in `CLOUD_STEPS_LOW` steps instead of
+    /// `CLOUD_STEPS` (the settings' cloud quality "low"): the same clouds, sampled more
+    /// coarsely - each redraw of the sky cube starts its steps elsewhere and is blended into
+    /// what is there, so the coarser grain mostly averages out.
+    pub low_clouds: bool,
     /// How much brighter the night is shown, in exposure steps after sunset (the settings' 0 .. 3).
     pub night_brightness: f32,
     /// The player's vehicle's velocity (m/s, world): at speed the airstream drives the drops
@@ -816,6 +830,7 @@ impl Default for Lighting {
             night_brightness: 0.0,
             led_glow: 1.5,
             led_mips: 1.3,
+            low_clouds: false,
             glass_wind: Vec3::ZERO,
             windy_trees: false,
             moon_dir: Vec3::new(0.0, -0.5, -0.866),
@@ -907,7 +922,9 @@ impl GpuTexture {
 struct BindKey {
     textures: [(usize, u64); 7],
     address: TexAddressing,
-    uniform: [u32; 48],
+    // 13 vec4: the MaterialUniform's own fields (see the count in
+    // `shaders_validate_and_match_the_uniforms`)
+    uniform: [u32; 52],
 }
 
 /// Bytes of a texture of `format` with `levels` mip levels.
@@ -1062,6 +1079,15 @@ pub struct MaterialExtra {
     /// crown leaves the trunk (nothing below it moves), of the crown's top, and how much the
     /// tree gives to the wind (1 a broadleaf). `None`: not foliage.
     pub sway: Option<[f32; 3]>,
+    /// `[matl_glow] <texture> <value>` (an openOMSI extension): the material is its own
+    /// light. The named picture - a greyscale mask of how much shines where - is bound in
+    /// the light map's slot (the shaders sample it as `t_light`) and the light is the
+    /// material's own colour; this is its strength in the shader's terms (the .cfg value
+    /// x0.25, the LED panels' `Lighting::led_glow` scale; 0 = the keyword is not there).
+    /// Only the enhanced picture draws it, as an emission like an LED panel's dots; its
+    /// halo comes from its brightness as any light's does. `params2.x` is left off, so the
+    /// classic picture draws the material as if the keyword were not there.
+    pub glow: f32,
 }
 
 /// The textures a material's bind group samples.
@@ -1643,8 +1669,10 @@ fn sixteen_texture_units() -> bool {
 }
 
 /// The camera group's entries on a device whose arrays take `path`, without the enhanced
-/// path's textures where it has `sixteen` texture units (see `sixteen_texture_units`).
-fn camera_layout_entries(path: ArrayPath, sixteen: bool) -> Vec<wgpu::BindGroupLayoutEntry> {
+/// path's textures where `omit_enhanced`: on the sixteen-texture-unit path (see
+/// `sixteen_texture_units`) and in the launcher's preview, which has no enhanced pipeline
+/// or reflection probe (`RenderOptions::preview_only`).
+fn camera_layout_entries(path: ArrayPath, omit_enhanced: bool) -> Vec<wgpu::BindGroupLayoutEntry> {
     let mut camera_entries = vec![
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
@@ -1775,7 +1803,7 @@ fn camera_layout_entries(path: ArrayPath, sixteen: bool) -> Vec<wgpu::BindGroupL
         camera_entries.push(array_layout_entry_on(path, 3, wgpu::ShaderStages::FRAGMENT, true));
         camera_entries.push(array_layout_entry_on(path, 4, wgpu::ShaderStages::FRAGMENT, false));
     }
-    if sixteen {
+    if omit_enhanced {
         camera_entries.retain(|e| !ENHANCED_CAMERA_TEXTURES.contains(&e.binding));
     }
     camera_entries
@@ -2279,6 +2307,11 @@ pub struct RenderOptions {
     /// where the device takes block formats and the result is close to the picture
     /// (DXT files always go up as blocks there).
     pub compress_textures: bool,
+    /// DXT/BC textures may stay compressed on the GPU (where it takes them); off, the
+    /// device is opened without block formats and every texture goes up as RGBA, as with
+    /// `OMSI_NO_BC=1` (the settings' `gpu_texture_compression`, for a driver that
+    /// mishandles them).
+    pub gpu_texture_compression: bool,
     /// FXAA over the enhanced path's tone-mapped picture.
     pub fxaa: bool,
     /// The original's `performance_minObjSize` (see `Lighting::min_obj_size`, which may
@@ -2303,6 +2336,10 @@ pub struct RenderOptions {
     /// Mali and Adreno drivers before the first frame, #364, #333, #316, #371). Asked for,
     /// they are built on every device and graphics API; a computer always builds them.
     pub no_enhanced: bool,
+    /// The launcher's preview (the showroom), which always draws Vanilla+ (see
+    /// `showroom::lighting_for`): no enhanced pipelines, reflection probe or cloud noise
+    /// are made for it, on any device.
+    pub preview_only: bool,
     /// Enhanced+: the enhanced path with ray-traced sun shadows, ambient occlusion and
     /// reflections, where the device can trace rays (hardware ray queries); elsewhere the
     /// enhanced picture as it is.
@@ -2318,6 +2355,7 @@ impl Default for RenderOptions {
             ssao: true,
             render_scale: 0.0,
             compress_textures: true,
+            gpu_texture_compression: true,
             fxaa: true,
             min_obj_size: 0.013,
             max_obj_dist: 0.0,
@@ -2325,6 +2363,7 @@ impl Default for RenderOptions {
             shadow_blobs: true,
             reflections: true,
             no_enhanced: false,
+            preview_only: false,
             ray_tracing: false,
         }
     }
@@ -2678,9 +2717,12 @@ impl Renderer {
             required_features |= adapter.features() & wgpu::Features::TIMESTAMP_QUERY;
         }
         // DXT textures stay compressed on the GPU where it takes them (Apple silicon does);
-        // OMSI_NO_BC=1 uploads everything as RGBA (the old way, for comparisons)
-        if !omsi_cfg::flags::OMSI_NO_BC.is_set() {
+        // OMSI_NO_BC=1 uploads everything as RGBA (the old way, for comparisons), and so does
+        // the settings' `gpu_texture_compression` off
+        if !omsi_cfg::flags::OMSI_NO_BC.is_set() && options.gpu_texture_compression {
             required_features |= adapter.features() & wgpu::Features::TEXTURE_COMPRESSION_BC;
+        } else if !options.gpu_texture_compression {
+            log::info!("GPU texture compression off in the settings: DXT/BC textures are decoded to RGBA");
         }
         if intel_vulkan_safe {
             // Keep vkCreateDevice entirely free of optional extensions. Compressed source
@@ -2898,14 +2940,14 @@ impl Renderer {
         let (msaa, shadow_size) = (options.msaa, options.shadow_size);
         RT_GBUF.store(options.ray_tracing, std::sync::atomic::Ordering::Relaxed);
         let errors = errors::install(&device, format, &options);
-        let scene = scene::SceneBase::new(&device);
+        let scene = scene::SceneBase::new(&device, sixteen_texture_units() || options.preview_only);
         let hdr_format = wgpu::TextureFormat::Rgba16Float;
         let shadows = shadows::build(&device, &scene, shadow_size);
         let defaults = defaults::build(&device, &queue, options.anisotropy);
         let (coronas, corona_texture) = coronas::Coronas::new(&device, &queue, &scene);
         let snow = coronas::Snow::new(&device, &scene.camera_layout);
         drop(corona_texture);
-        let sky = sky::SkyBase::new(&device, &queue, &scene.camera_layout);
+        let sky = sky::SkyBase::new(&device, &queue, &scene.camera_layout, options.preview_only);
         let passes = passes::PassKit { device: &device, scene: &scene, coronas: &coronas, snow: &snow, sky: &sky, msaa }
             .build(format, hdr_format, &options, &adapter_name);
         let (sky_sampler, sky_mesh) = sky::dome(&device, &queue);
@@ -2916,7 +2958,7 @@ impl Renderer {
         let prepass = scene::prepass(&device, &scene, msaa);
         let mip = mip::build(&device);
         let post = post::build(&device, format, hdr_format, &defaults.white_texture);
-        let enhanced = enhanced::build(&device, &queue, hdr_format, &defaults.camera_buf, &sky);
+        let enhanced = enhanced::build(&device, &queue, hdr_format, &defaults.camera_buf, &sky, !options.preview_only);
         let (overlay_pipeline_1x, xr_ui_pipeline) = overlays.single_sampled(&device, format);
         let upscale = upscale::build(&device, format);
         let gpu_timers = [GpuTimers::new(&device), GpuTimers::new(&device)];
@@ -2972,7 +3014,7 @@ impl Renderer {
             sky_lut: enhanced.sky_lut,
             sky_lut_view: enhanced.sky_lut_view,
             lin_sampler: enhanced.lin_sampler,
-            probe: Some(enhanced.probe),
+            probe: enhanced.probe,
             sky_state: None,
             city_glow: None,
             view_lamps: None,
@@ -4232,7 +4274,10 @@ impl Renderer {
                 },
             ],
             params2: [
-                if lightmap.is_some() { 1.0 } else { 0.0 },
+                // ([matl_glow]'s mask rides in the light map's slot, but the material is
+                // not a light-mapped one: `params2.x` stays off so the classic picture is as
+                // it was - the enhanced one draws the glow, see `MaterialExtra::glow`)
+                if lightmap.is_some() && extra.glow <= 0.0 { 1.0 } else { 0.0 },
                 envmap.map(|e| e.1).unwrap_or(0.0),
                 moisture,
                 // bit 1: a [matl_envmap_mask]; bit 2: a [matl_transmap]; bit 4: a vehicle's
@@ -4271,6 +4316,8 @@ impl Renderer {
                 [a[0], a[1], a[2], if extra.water { 2.0 } else if texture.is_none() { -1.0 } else { snow_texture_flag(scene, texture) }]
             },
             sway: extra.sway.map_or([0.0; 4], |s| [1.0, s[0], s[1], s[2]]),
+            // (no mask bound - its file missing - no glow: the slot would shine all over)
+            glow: [if lightmap.is_some() { extra.glow.max(0.0) } else { 0.0 }, 0.0, 0.0, 0.0],
         };
         let slot = |t: Option<TextureId>| {
             t.and_then(|t| scene.textures.get(t).map(|g| (t, g.gen)))
@@ -5692,7 +5739,7 @@ impl Renderer {
                 // the tone curve's contrast, which self-lit pictures undo (`display_level`)
                 tone_contrast(log_exposure),
             ],
-            eye: eye_off.extend(0.0).to_array(),
+            eye: eye_off.extend(if lighting.low_clouds { CLOUD_STEPS_LOW } else { CLOUD_STEPS } as f32).to_array(),
             // x how bright an LED panel's dots burn (see `MaterialExtra::led`; the settings'
             // 16 levels give 0 = off .. 3.75), y whether the LED panels' `\S:n` masks keep
             // their mip chain (0: at full resolution, the dots stay visible when small)
@@ -6017,24 +6064,8 @@ impl Renderer {
                     resource: self.enh_buf.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 12,
-                    resource: wgpu::BindingResource::TextureView(
-                        &self.probe.as_ref().expect("reflection probe").view,
-                    ),
-                },
-                wgpu::BindGroupEntry {
                     binding: 13,
                     resource: wgpu::BindingResource::Sampler(&self.lin_sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 14,
-                    resource: wgpu::BindingResource::TextureView(&self.sky_lut_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 17,
-                    resource: wgpu::BindingResource::TextureView(
-                        &self.probe.as_ref().expect("reflection probe").cube_view,
-                    ),
                 },
                 wgpu::BindGroupEntry {
                     binding: 18,
@@ -6050,8 +6081,14 @@ impl Renderer {
             entries.push(wgpu::BindGroupEntry { binding: 3, resource: light_buf.binding() });
             entries.push(wgpu::BindGroupEntry { binding: 4, resource: grid_buf.binding() });
         }
-        if sixteen_texture_units() {
-            entries.retain(|e| !ENHANCED_CAMERA_TEXTURES.contains(&e.binding));
+        // (the enhanced path's textures: not on the sixteen-texture-unit path, nor in the
+        // launcher's preview, which has no reflection probe - see `camera_layout_entries`)
+        if let (false, Some(probe)) = (sixteen_texture_units(), self.probe.as_ref()) {
+            entries.extend([
+                wgpu::BindGroupEntry { binding: 12, resource: wgpu::BindingResource::TextureView(&probe.view) },
+                wgpu::BindGroupEntry { binding: 14, resource: wgpu::BindingResource::TextureView(&self.sky_lut_view) },
+                wgpu::BindGroupEntry { binding: 17, resource: wgpu::BindingResource::TextureView(&probe.cube_view) },
+            ]);
         }
         let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("camera"),
@@ -8219,13 +8256,16 @@ fn lean_scene(src: String) -> String {
 
 /// The enhanced clouds' noise textures (clouds.rs), made once: the shape map (2-D RGBA8)
 /// and the detail volume (3-D R8), both with their mip chains, and a repeating sampler.
-fn cloud_noise_textures(device: &wgpu::Device, queue: &wgpu::Queue) -> (wgpu::TextureView, wgpu::TextureView, wgpu::Sampler, Vec<u8>) {
+/// Without `enhanced_noise` (the launcher's preview, which draws no enhanced sky) both are
+/// a texel each, and nothing is generated.
+fn cloud_noise_textures(device: &wgpu::Device, queue: &wgpu::Queue, enhanced_noise: bool) -> (wgpu::TextureView, wgpu::TextureView, wgpu::Sampler, Vec<u8>) {
     let t0 = std::time::Instant::now();
-    let (shape, detail) = std::thread::scope(|s| {
-        let a = s.spawn(clouds::shape_map);
-        let b = s.spawn(clouds::detail_volume);
-        (a.join().expect("cloud shape"), b.join().expect("cloud detail"))
-    });
+    // (made once a process, and kept on the disk between starts: see `clouds::noise`)
+    let none = (vec![vec![0, 0, 0, 255]], vec![vec![0]]);
+    let (shape, detail) = match enhanced_noise.then(clouds::noise) {
+        Some(n) => (&n.shape, &n.detail),
+        None => (&none.0, &none.1),
+    };
     let make = |label: &str, size: u32, dim: wgpu::TextureDimension, format: wgpu::TextureFormat, bpp: u32, levels: &[Vec<u8>]| {
         let depth = if dim == wgpu::TextureDimension::D3 { size } else { 1 };
         let tex = device.create_texture(&wgpu::TextureDescriptor {
@@ -8250,8 +8290,9 @@ fn cloud_noise_textures(device: &wgpu::Device, queue: &wgpu::Queue) -> (wgpu::Te
         }
         tex.create_view(&wgpu::TextureViewDescriptor::default())
     };
-    let shape_view = make("cloud shape", clouds::SHAPE_SIZE, wgpu::TextureDimension::D2, wgpu::TextureFormat::Rgba8Unorm, 4, &shape);
-    let detail_view = make("cloud detail", clouds::DETAIL_SIZE, wgpu::TextureDimension::D3, wgpu::TextureFormat::R8Unorm, 1, &detail);
+    let (shape_size, detail_size) = if enhanced_noise { (clouds::SHAPE_SIZE, clouds::DETAIL_SIZE) } else { (1, 1) };
+    let shape_view = make("cloud shape", shape_size, wgpu::TextureDimension::D2, wgpu::TextureFormat::Rgba8Unorm, 4, shape);
+    let detail_view = make("cloud detail", detail_size, wgpu::TextureDimension::D3, wgpu::TextureFormat::R8Unorm, 1, detail);
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some("cloud noise"),
         address_mode_u: wgpu::AddressMode::Repeat,
@@ -10983,6 +11024,29 @@ mod tests {
         assert!(smoke_sprite(&SmokeParticle { ground: Some(30.0 + 3.5 + 0.91), ..p }, ro).is_none());
         assert!(smoke_sprite(&SmokeParticle { ground: Some(30.0 + 3.5 + 0.89), ..p }, ro).is_some());
         assert!(smoke_sprite(&SmokeParticle { alpha: 0.0, ..p }, ro).is_none());
+    }
+
+    /// The launcher's preview (`RenderOptions::preview_only`) makes no enhanced pipeline,
+    /// reflection probe, ray tracer or cloud noise, its camera group leaves the enhanced
+    /// textures out, and it draws a frame with that group.
+    #[test]
+    fn launcher_preview_initializes_without_enhanced_or_ray_tracing_resources() {
+        let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
+        descriptor.backends = wgpu::Backends::NOOP;
+        descriptor.backend_options.noop = wgpu::NoopBackendOptions { enable: true };
+        let instance = wgpu::Instance::new(descriptor);
+        let mut renderer = pollster::block_on(Renderer::new_with(&instance, None, Some(wgpu::TextureFormat::Rgba8UnormSrgb), RenderOptions { msaa: 1, preview_only: true, no_enhanced: true, ray_tracing: false, ..Default::default() })).unwrap();
+        assert!(renderer.hdr_pass.is_none());
+        assert!(renderer.probe.is_none());
+        assert!(renderer.rt.is_none());
+        assert!(renderer.cloud_shape_cpu.is_empty());
+        let bindings: Vec<u32> = camera_layout_entries(ArrayPath::Storage, true).into_iter().map(|e| e.binding).collect();
+        for binding in ENHANCED_CAMERA_TEXTURES {
+            assert!(!bindings.contains(&binding), "preview camera layout must omit enhanced binding {binding}");
+        }
+        let mut scene = renderer.new_scene();
+        let camera = Camera { position: DVec3::new(0.0, -35.0, 30.0), yaw: 0.0, pitch: -40.0, roll: 0.0, fov_deg: 60.0, near: 0.1, far: 1000.0 };
+        renderer.render_to_image(&mut scene, 16, 16, &camera, &Lighting::default()).unwrap();
     }
 
     #[test]

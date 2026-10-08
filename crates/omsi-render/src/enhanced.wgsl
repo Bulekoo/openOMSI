@@ -273,6 +273,11 @@ fn lamp_light(p: vec3<f32>, n: vec3<f32>, v: vec3<f32>, sf: Surface, thin: bool,
         var irr = l.color.rgb * l.color.w * enh.lights.y * e;
         let nl = dot(n, ld);
         ground_e = ground_e + irr * max(ld.z, 0.0);
+        // Ground bounce is unshadowed. A lamp behind an ordinary surface contributes
+        // no direct light, so it must not sample its shadow map before being rejected.
+        if (!thin && nl <= 0.0) {
+            continue;
+        }
         // the lamps' own shadow maps (the few lighting the view most, see `lamp_shadow_at`)
         if (shadows) {
             irr = irr * lamp_shadow_at(li, p, n, thin);
@@ -281,9 +286,6 @@ fn lamp_light(p: vec3<f32>, n: vec3<f32>, v: vec3<f32>, sf: Surface, thin: bool,
             // a headlamp skims the grass: it lights the tips, not a crown's every side
             let wrap = select(0.45 + 0.25 * nl, 0.15 + 0.6 * max(nl, 0.0), l.extra.z != 0.0);
             sum = sum + irr * wrap * sf.albedo / PI;
-            continue;
-        }
-        if (nl <= 0.0) {
             continue;
         }
         let h = normalize(ld + v);
@@ -404,6 +406,18 @@ fn display_level(t: vec3<f32>) -> vec3<f32> {
     let c = max(enh.debug.w, 1.0);
     let x = 0.18 * pow(tk / 0.18 + vec3<f32>(1e-7), vec3<f32>(1.0 / c));
     return x + 0.04 * smoothstep(vec3<f32>(0.0), vec3<f32>(0.08), x);
+}
+
+// [matl_glow] (see MaterialExtra::glow): the material is its own light. `buv` is where its
+// mask is read (the light map's own coordinate, the slot it rides in) and `col` the colour
+// the light is drawn in - the material's own, so a destination panel keeps the colour its
+// display draws. The mask is a greyscale picture of how much shines where (white full, black
+// none). The strength is the mod's own (the .cfg value x0.25, on the scale of the LED
+// panels' `Led glow`) and is held against the metering as an LED panel's dots are; the
+// glare round it comes from how bright it is, as every light's does (post.wgsl).
+fn matl_glow_light(buv: vec2<f32>, col: vec3<f32>) -> vec3<f32> {
+    let gm = textureSample(t_light, s_diffuse, buv);
+    return col * dot(gm.rgb, vec3<f32>(0.299, 0.587, 0.114)) * material.glow.x * max(enh.exposure.z * 2.0, 0.8);
 }
 
 // How much of the light crossing the player's bus's pane at `world` its condensation
@@ -594,6 +608,8 @@ fn shade_enhanced(in: FsIn, puddle_weight: ptr<function, vec2<f32>>, capture: bo
         // ago, dark at night. Brightened like a display by the metering (up to 1.6 in the
         // dark) it showed a street far brighter than the one through the windscreen.
         let lift = select(display_dim(enh.exposure.y), min(enh.exposure.y, 1.0), material.params.y < 0.95);
+        // (no [matl_glow] here: an unlit slot is drawn at its own brightness already, and
+        // reading the light map's slot in this branch failed Metal's shader compiler)
         let c = display_level(t) * lift;
         return vec4<f32>(c * aer.a + aer.rgb * pre, alpha);
     }
@@ -1158,6 +1174,12 @@ fn shade_enhanced(in: FsIn, puddle_weight: ptr<function, vec2<f32>>, capture: bo
     } else if (material.emissive.w < -0.5) {
         // a display's text (see MaterialExtra::display)
         emit = emit + tex.rgb * 0.35 * max(enh.exposure.z * 2.0, 0.8) * display_dim(1.0);
+    }
+    if (material.glow.x > 0.0) {
+        // [matl_glow] (see `matl_glow_light`): the material is its own light, drawn in HDR.
+        // The classic picture does not know the keyword (`params2.x` is off, see
+        // `add_material_extra`).
+        emit = emit + matl_glow_light(buv, tex.rgb);
     }
     rgb = rgb + emit;
     if (enh.debug.x > 0.5) {

@@ -2046,8 +2046,9 @@ pub(crate) fn dropdown_for(app: &App, row: usize, id: &str) -> Option<Dropdown> 
             PRECIP_KINDS.iter().enumerate().map(|(i, n)| (tr(*n), format!("precip {i}"))).collect()
         }
         "preset" => {
-            current = preset_now(&settings_file());
-            presets().iter().enumerate().map(|(i, p)| (tr(p.0), format!("preset {i}"))).collect()
+            let file = settings_file();
+            current = preset_now(&file);
+            presets(&file).iter().enumerate().map(|(i, p)| (tr(p.0), format!("preset {i}"))).collect()
         }
         "gfxprofile" => omsi_launcher_lib::graphics_profiles().into_keys().map(|n| (n.clone(), format!("gfxprofile {n}"))).collect(),
         "reset" => vec![(tr("Cancel"), "noop".to_string()), (tr("Reset all settings"), "reset_all".to_string())],
@@ -2113,14 +2114,17 @@ pub(crate) fn dropdown_apply(app: &mut App, action: &str) {
             }
         }
         "preset" => {
-            if let Some(p) = arg.trim().parse::<usize>().ok().and_then(|i| presets().into_iter().nth(i)) {
+            if let Some(i) = arg.trim().parse::<usize>().ok().filter(|i| *i < 4) {
                 store_with(app, |v| {
+                    // (the preset of the mode the file has: it keeps the mode)
+                    let Some(p) = presets(v).into_iter().nth(i) else { return };
                     if let Some(o) = p.1.as_object() {
                         for (k, x) in o {
                             v[k.as_str()] = x.clone();
                         }
                     }
                 });
+                app.service_msg = Some((omsi_ui::tr("Takes effect when the game starts the next time").into_owned(), 5.0));
             }
         }
         "gfxprofile" => {
@@ -2198,6 +2202,7 @@ fn same_value(a: &str, b: &str) -> bool {
 
 fn select_options(key: &str) -> Vec<(&'static str, &'static str)> {
     match key {
+        "cloud_quality" => vec![("high", "High"), ("low", "Low")],
         "graphics" => vec![("vanilla", "Vanilla (as OMSI 2)"), ("vanilla_plus", "Vanilla+"), ("enhanced", "Enhanced"), ("enhanced_plus", "Enhanced+")],
         "msaa" => vec![("1", "Off"), ("2", "2x MSAA"), ("4", "4x MSAA"), ("8", "8x MSAA")],
         "render_scale" => vec![("auto", "Auto"), ("1", "100%"), ("0.85", "85%"), ("0.75", "75%"), ("0.67", "67%"), ("0.5", "50%")],
@@ -2243,23 +2248,20 @@ fn select_row(file: &serde_json::Value, key: &str, name: &str, desc: &str) -> Op
     Some((row(name, 'o', &label, desc, None), format!("sel {key}")))
 }
 
-fn presets() -> [(&'static str, serde_json::Value); 4] {
-    [
-        ("Low", serde_json::json!({"msaa": 1, "anisotropy": 2, "shadow_size": 1024, "ssao": false, "shadows": false, "detail_textures": false, "clouds": false, "view_distance": "600", "min_obj_size": 0.03, "max_obj_dist": "500", "mirror_size": 128, "render_scale": "0.75", "texture_memory": 800})),
-        ("Medium", serde_json::json!({"msaa": 2, "anisotropy": 4, "shadow_size": 2048, "ssao": false, "shadows": true, "detail_textures": true, "clouds": true, "view_distance": "900", "min_obj_size": 0.02, "max_obj_dist": "750", "mirror_size": 256, "render_scale": "auto", "texture_memory": 1200})),
-        ("High", serde_json::json!({"msaa": 4, "anisotropy": 8, "shadow_size": 2048, "ssao": true, "shadows": true, "detail_textures": true, "clouds": true, "view_distance": "auto", "min_obj_size": 0.013, "max_obj_dist": "auto", "mirror_size": 256, "render_scale": "auto", "texture_memory": 0})),
-        ("Ultra", serde_json::json!({"msaa": 4, "anisotropy": 8, "shadow_size": 4096, "ssao": true, "shadows": true, "detail_textures": true, "clouds": true, "view_distance": "2000", "min_obj_size": 0.005, "max_obj_dist": "1500", "mirror_size": 512, "render_scale": "auto", "texture_memory": 0})),
-    ]
+/// The quality presets for the graphics mode of `file` (`graphics_presets_for`, as the
+/// launcher's): they keep the mode.
+fn presets(file: &serde_json::Value) -> [(&'static str, serde_json::Value); 4] {
+    omsi_launcher_lib::graphics_presets_for(file.get("graphics").and_then(|v| v.as_str()).unwrap_or("vanilla_plus"))
 }
 
 fn preset_now(file: &serde_json::Value) -> Option<usize> {
-    presets().iter().position(|p| {
+    presets(file).iter().position(|p| {
         p.1.as_object().is_some_and(|o| o.iter().all(|(k, v)| same_value(&value_text(v), &value_text(file.get(k).unwrap_or(&serde_json::Value::Null)))))
     })
 }
 
 fn preset_row(file: &serde_json::Value, name: &str, desc: &str) -> Option<(String, String)> {
-    let label = omsi_ui::tr(preset_now(file).map(|i| presets()[i].0).unwrap_or("Custom")).into_owned();
+    let label = omsi_ui::tr(preset_now(file).map(|i| presets(file)[i].0).unwrap_or("Custom")).into_owned();
     Some((row(name, 'o', &label, desc, None), "preset".to_string()))
 }
 
@@ -2331,8 +2333,8 @@ fn options_pages(app: &App) -> Vec<Page> {
         .flatten()
         .collect();
     let graphics: Vec<(String, String)> = vec![
-        preset_row(&file, "Quality preset", "Sets most of the graphics options at once"),
         pick("graphics", "Graphics", later),
+        preset_row(&file, "Quality preset", "Sets most of the graphics options at once"),
         pick("msaa", "Anti-aliasing", later),
         pick("render_scale", "Render scale", later),
         pick("anisotropy", "Anisotropic", later),
@@ -2347,6 +2349,8 @@ fn options_pages(app: &App) -> Vec<Page> {
         slider_row(app, "led_mips", "LED mask mipmaps", "Keep the mip chain of the LED masks (smoother from a distance).", &|v| format!("{v:.2}")),
         switch_row(app, "reflections", "Reflection maps (paint, chrome, glass)", later).filter(|_| !app.settings.ray_tracing()),
         switch_row(app, "clouds", "Clouds", later),
+        pick("cloud_quality", "Cloud quality", "Enhanced: the volumetric clouds marched in fewer steps - faster, a little grainier")
+            .filter(|_| matches!(crate::settings::graphics_mode(&app.settings.graphics), "enhanced" | "enhanced_plus") && app.settings.clouds),
         switch_row(app, "windy_trees", "Windy trees", "The trees' leaves bend and sway in the wind and its gusts; with no wind they stand still"),
     ]
         .into_iter()
@@ -3013,6 +3017,22 @@ mod tests {
         assert!(super::search_matches("Curitiba", "hof Vehicles/Bus/curitiba.hof", "curitiba .hof"));
         assert!(!super::search_matches("Curitiba", "hof curitiba.hof", "recife"));
         assert!(super::search_matches("Anything", "bus x.bus", "  "));
+    }
+
+    /// The options page names the preset a file holds after the launcher saved it, in every
+    /// graphics mode, and "Custom" once one of its values is changed.
+    #[test]
+    fn the_preset_is_recognised_in_every_mode() {
+        for mode in ["vanilla", "vanilla_plus", "enhanced", "enhanced_plus"] {
+            for (i, (_, preset)) in omsi_launcher_lib::graphics_presets_for(mode).into_iter().enumerate() {
+                let mut file = omsi_launcher_lib::settings_from_text(None);
+                omsi_launcher_lib::apply_graphics_profile(&preset, &mut file);
+                let mut file = omsi_launcher_lib::settings_from_text(Some(&omsi_launcher_lib::settings_to_text(&file, None)));
+                assert_eq!(super::preset_now(&file), Some(i), "{mode}: {i}");
+                file["mirror_size"] = serde_json::json!(1024);
+                assert_eq!(super::preset_now(&file), None);
+            }
+        }
     }
 
     /// A destination picked from the list keeps the route number the bus shows, its letter
