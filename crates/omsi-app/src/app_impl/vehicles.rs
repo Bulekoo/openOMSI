@@ -19,7 +19,7 @@ impl App {
         // (the depot file by its file name, as `find_hof` looks for it)
         let hof = p.vehicle.host.hof.as_ref().and_then(|h| h.path.file_stem().map(|s| s.to_string_lossy().to_string()).or_else(|| Some(h.name.clone())));
         let before = p.uid;
-        self.swap_pending = true;
+        self.menus.swap_pending = true;
         self.place_vehicle(&bus, paint, hof);
         if let Some(p) = self.player.as_ref().filter(|p| p.uid != before) {
             let name = format!("{} {}", p.vehicle.ty.def.manufacturer, p.vehicle.ty.def.type_name);
@@ -31,17 +31,17 @@ impl App {
     /// one driven until now goes, with whoever rode in it (#728).
     fn replace_driven_vehicle(&mut self, q: Player) {
         let uid = q.uid;
-        self.placed.insert(0, q);
+        self.session.placed.insert(0, q);
         self.switch_vehicle();
         if !self.player.as_ref().is_some_and(|p| p.uid == uid) {
             return;
         }
-        let Some(mut old) = self.placed.pop() else { return };
-        if let (Some(a), Some(mut ss)) = (self.audio.as_ref(), old.sounds.take()) {
+        let Some(mut old) = self.session.placed.pop() else { return };
+        if let (Some(a), Some(mut ss)) = (self.sound.audio.as_ref(), old.sounds.take()) {
             ss.stop_all(a);
         }
         if let (Some(w), Some(r), Some(scene)) = (self.world.clone(), self.renderer.as_ref(), self.scene.as_mut()) {
-            if let Some(h) = self.humans.as_mut() {
+            if let Some(h) = self.session.humans.as_mut() {
                 h.evict(crate::humans::BusId::Ai(crate::humans::placed_bus_id(old.uid)), &w);
             }
             if let Some(mut d) = old.driver.take() {
@@ -56,8 +56,8 @@ impl App {
 
     pub(crate) fn place_vehicle(&mut self, bus: &str, paint: Option<String>, hof: Option<String>) {
         // (in the driven vehicle's place, see `swap_pending`)
-        let swap = std::mem::take(&mut self.swap_pending) && self.player.is_some();
-        let name = self.vehicle_list.iter().find(|v| v.1 == bus).map(|v| v.0.clone()).unwrap_or_else(|| bus.to_string());
+        let swap = std::mem::take(&mut self.menus.swap_pending) && self.player.is_some();
+        let name = self.menus.vehicle_list.iter().find(|v| v.1 == bus).map(|v| v.0.clone()).unwrap_or_else(|| bus.to_string());
         // (a server's own buses only - its `vehicles` list, #1183 - whoever asks: the lists,
         // a plugin, the input script)
         if crate::lan::server_offers().is_some_and(|o| !crate::lan::offers(&o, bus)) {
@@ -104,7 +104,7 @@ impl App {
             Ok(Some(q)) => {
                 log::info!("placed {bus} at ({x:.1}, {y:.1})");
                 let uid = q.uid;
-                self.placed.push(q);
+                self.session.placed.push(q);
                 // (then put down with the mouse, where the player wants it)
                 self.begin_placing(uid, heading);
                 let _ = name;
@@ -117,7 +117,7 @@ impl App {
     /// Drive another of the vehicles standing in the world (a situation's): the one driven
     /// now stays where it is with everything as it was, and its sounds go to the next one.
     pub(crate) fn switch_vehicle(&mut self) {
-        if self.placed.is_empty() {
+        if self.session.placed.is_empty() {
             self.service_msg = Some(("There is no other vehicle to drive".into(), 3.0));
             return;
         }
@@ -126,32 +126,32 @@ impl App {
             self.take_placed(0);
             return;
         };
-        if let (Some(a), Some(mut ss)) = (self.audio.as_ref(), now.sounds.take()) {
+        if let (Some(a), Some(mut ss)) = (self.sound.audio.as_ref(), now.sounds.take()) {
             ss.stop_all(a);
         }
-        let mut next = self.placed.remove(0);
-        if let Some(a) = self.audio.as_ref() {
+        let mut next = self.session.placed.remove(0);
+        if let Some(a) = self.sound.audio.as_ref() {
             next.load_sounds(a);
         }
         // the riders stay in the bus left; the people know the new one's cabin
-        if let Some(h) = self.humans.as_mut() {
+        if let Some(h) = self.session.humans.as_mut() {
             h.player_bus_swapped(now.uid, next.uid, &mut next.vehicle);
         }
         next.vehicle.host.auto_clutch = if self.settings.auto_clutch { 1.0 } else { 0.0 };
-        self.placed.push(now);
+        self.session.placed.push(now);
         let name = format!("{} {}", next.vehicle.ty.def.manufacturer, next.vehicle.ty.def.type_name);
         if let Some(cam) = self.camera.as_ref() {
             self.camera = Some(next.camera(&self.view, cam));
         }
         self.player = Some(next);
-        self.look = (0.0, 0.0);
+        self.cam.look = (0.0, 0.0);
         self.service_msg = Some((format!("Now driving: {}", name.trim()), 4.0));
     }
 
     /// Put the bus on the street nearest the world point `at` (the city map's Ctrl+click),
     /// facing along it.
     pub(crate) fn place_bus_at(&mut self, at: glam::DVec2) {
-        if self.lan.as_ref().is_some_and(|l| l.role == omsi_net::Role::Client) {
+        if self.net.lan.as_ref().is_some_and(|l| l.role == omsi_net::Role::Client) {
             self.service_msg = Some(("In a LAN session only the host moves vehicles on the map".into(), 4.0));
             return;
         }
@@ -160,7 +160,7 @@ impl App {
         // whole map: a street far off on a big map was "no street" until the bus had been
         // flown there (#235). (the height of the point does not matter: the nearest by the
         // ground plan)
-        let nets = [self.traffic.as_ref().map(|t| &t.net), self.navigator.as_ref().and_then(|n| n.map_net())];
+        let nets = [self.session.traffic.as_ref().map(|t| &t.net), self.menus.navigator.as_ref().and_then(|n| n.map_net())];
         let Some((net, (lane, s, _))) = nets
             .into_iter()
             .flatten()

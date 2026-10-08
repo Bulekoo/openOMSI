@@ -6,23 +6,23 @@ use super::*;
 impl App {
     /// The lighting the frame is drawn with.
     pub(super) fn frame_lighting(&mut self, dt: f32, daylight: omsi_sim::Daylight) -> omsi_render::Lighting {
-        if let Some(w) = self.weather.as_ref() {
-            self.wetness = road_wetness(precip_of(w).1, dt as f64, self.wetness);
+        if let Some(w) = self.session.weather.as_ref() {
+            self.session.wetness = road_wetness(precip_of(w).1, dt as f64, self.session.wetness);
         }
-        let inside = match self.inside_remote.and_then(|id| self.remotes.remotes.get(&id)) {
+        let inside = match self.net.inside_remote.and_then(|id| self.net.remotes.remotes.get(&id)) {
             // (in another player's bus: its box is the one the camera is in)
             Some(rv) => Some(rv.vehicle()),
             None => self.player.as_ref().map(|p| &p.vehicle),
         };
         steps::picture_lighting(
             &daylight,
-            self.weather.as_ref(),
-            self.cloud_drift,
-            self.wetness,
+            self.session.weather.as_ref(),
+            self.session.cloud_drift,
+            self.session.wetness,
             self.world.as_deref(),
             inside,
             self.player.as_ref().map(|p| &p.vehicle),
-            self.cabin_air.appearance(),
+            self.session.cabin_air.appearance(),
             &self.settings,
         )
     }
@@ -38,12 +38,12 @@ impl App {
     ) {
         let mut finish = false;
         let mut reconfigure = false;
-        let shot = self.shot.take();
-        if let Some(s) = self.surface.as_ref() {
+        let shot = self.perf.shot.take();
+        if let Some(s) = self.gfx.surface.as_ref() {
             let (w, h) = (s.config.width, s.config.height);
             self.touch_prepare(w, h);
         }
-        if self.surface.is_some()
+        if self.gfx.surface.is_some()
             && self.renderer.is_some()
             && self.scene.is_some()
             && self.camera.is_some()
@@ -66,7 +66,7 @@ impl App {
         if reconfigure {
             // the drawable went away under us (display change, lost surface)
             if let (Some(s), Some(r), Some(win)) = (
-                self.surface.as_mut(),
+                self.gfx.surface.as_mut(),
                 self.renderer.as_ref(),
                 self.window.as_ref(),
             ) {
@@ -82,7 +82,7 @@ impl App {
     /// `shot <file>` from the input script.
     fn frame_shot(&mut self, shot: (PathBuf, bool), lighting: &omsi_render::Lighting) {
         let (Some(s), Some(r), Some(scene), Some(cam)) = (
-            self.surface.as_ref(),
+            self.gfx.surface.as_ref(),
             self.renderer.as_mut(),
             self.scene.as_mut(),
             self.camera.as_ref(),
@@ -104,7 +104,7 @@ impl App {
             Ok(mut px) => match {
                 // (with the on-screen controls, when there are)
                 if include_touch {
-                    if let Some(over) = self.touch.picture(r, s.config.width, s.config.height) {
+                    if let Some(over) = self.input.touch.picture(r, s.config.width, s.config.height) {
                         crate::touch::composite(&mut px, &over);
                     }
                 }
@@ -133,7 +133,7 @@ impl App {
     /// The window's picture to draw into (none: the window is hidden; `reconfigure`: the
     /// drawable went away), and whether nothing is shown this frame.
     fn frame_acquire(&mut self, reconfigure: &mut bool) -> (Option<wgpu::SurfaceTexture>, Option<wgpu::TextureView>, bool) {
-        let (Some(s), Some(r)) = (self.surface.as_ref(), self.renderer.as_ref()) else {
+        let (Some(s), Some(r)) = (self.gfx.surface.as_ref(), self.renderer.as_ref()) else {
             return (None, None, true);
         };
         // A window that is hidden (another app covers it, another Space) gets
@@ -168,12 +168,12 @@ impl App {
                 {
                     let (w, h) = (s.config.width, s.config.height);
                     if self
-                        .stand_in
+                        .gfx.stand_in
                         .as_ref()
                         .map(|t| (t.width(), t.height()) != (w, h))
                         .unwrap_or(true)
                     {
-                        self.stand_in =
+                        self.gfx.stand_in =
                             Some(r.device.create_texture(&wgpu::TextureDescriptor {
                                 label: Some("hidden window"),
                                 size: wgpu::Extent3d {
@@ -191,7 +191,7 @@ impl App {
                     }
                     (
                         None,
-                        self.stand_in
+                        self.gfx.stand_in
                             .as_ref()
                             .map(|t| t.create_view(&Default::default())),
                     )
@@ -203,9 +203,9 @@ impl App {
             }
             _ => (None, None),
         };
-        *self.profile.entry("acquire").or_default() += __t.elapsed().as_secs_f64();
+        *self.perf.profile.entry("acquire").or_default() += __t.elapsed().as_secs_f64();
         if frame.is_none() {
-            self.hidden_frames += 1;
+            self.gfx.hidden_frames += 1;
         }
         let shown_nothing = frame.is_none() && stand_in.is_none();
         let view = frame
@@ -229,7 +229,7 @@ impl App {
         let _ = vr_nav_display;
         self.frame_mirrors(raw_dt, lighting);
         let (Some(s), Some(r), Some(scene), Some(cam), Some(win)) = (
-            self.surface.as_ref(),
+            self.gfx.surface.as_ref(),
             self.renderer.as_mut(),
             self.scene.as_mut(),
             self.camera.as_ref(),
@@ -243,10 +243,10 @@ impl App {
         #[cfg(not(windows))]
         let mirrored = false;
         #[cfg(windows)]
-        if let Some(vr) = self.vr.as_mut() {
+        if let Some(vr) = self.xr.vr.as_mut() {
             let menu_range = self.ui.as_ref().map(|u| u.menu_overlay_range.clone()).unwrap_or(0..0);
-            let cursor_overlay = self.ui.as_ref().and_then(|u| u.vr_cursor_overlay).filter(|_| self.vr_nav_edit.is_none());
-            let tooltip_overlay = self.ui.as_ref().and_then(|u| u.vr_tooltip_overlay).filter(|_| self.vr_nav_edit.is_none());
+            let cursor_overlay = self.ui.as_ref().and_then(|u| u.vr_cursor_overlay).filter(|_| self.xr.vr_nav_edit.is_none());
+            let tooltip_overlay = self.ui.as_ref().and_then(|u| u.vr_tooltip_overlay).filter(|_| self.xr.vr_nav_edit.is_none());
             match vr.render(
                 r,
                 scene,
@@ -257,30 +257,30 @@ impl App {
                 menu_range,
                 cursor_overlay,
                 tooltip_overlay,
-                self.cursor,
+                self.input.cursor,
                 self.player.as_ref().map(|p| (p.vehicle.position, p.vehicle.body_rotation())),
                 vr_nav_display.filter(|d| d.placement.enabled).and_then(|d| {
-                    self.navigator.as_ref().and_then(|n| n.panel_overlay).map(|index| (index, d))
+                    self.menus.navigator.as_ref().and_then(|n| n.panel_overlay).map(|index| (index, d))
                 }),
                 self.player.as_ref().map(|p| p.uid),
                 self.settings.vr_head_smoothing_ms,
-                !self.mouse_drive,
-                self.vr_zoom_active,
+                !self.input.mouse_drive,
+                self.xr.vr_zoom_active,
             ) {
                 Ok(visible) => mirrored = visible,
                 Err(e) => {
                     log::error!("OpenXR rendering stopped: {e:#}");
-                    self.vr = None;
+                    self.xr.vr = None;
                 }
             }
         }
-        if self.in_cab {
+        if self.cam.in_cab {
             if let Some(w) = self.world.as_ref() {
-                self.mirror_hud.ensure_frame(r, scene);
+                self.gfx.mirror_hud.ensure_frame(r, scene);
                 let hud = self
                     .settings
                     .hud_viewport((s.config.width, s.config.height));
-                steps::push_mirror_hud(&self.mirror_hud, scene, w, hud, (self.cursor.0 - hud[0], self.cursor.1));
+                steps::push_mirror_hud(&self.gfx.mirror_hud, scene, w, hud, (self.input.cursor.0 - hud[0], self.input.cursor.1));
             }
         }
         if !mirrored
@@ -290,7 +290,7 @@ impl App {
             let rig = self.settings.triple.zoomed(
                 s.config.width,
                 s.config.height,
-                self.view_zoom.get(&self.view).copied().unwrap_or(1.0),
+                self.cam.view_zoom.get(&self.view).copied().unwrap_or(1.0),
             );
             r.render_triple(
                 scene,
@@ -312,13 +312,13 @@ impl App {
             );
         }
         // the on-screen controls over the picture (a phone)
-        self.touch.render(r, &view, s.config.width, s.config.height);
-        *self.profile.entry("render").or_default() += __t.elapsed().as_secs_f64();
+        self.input.touch.render(r, &view, s.config.width, s.config.height);
+        *self.perf.profile.entry("render").or_default() += __t.elapsed().as_secs_f64();
         if omsi_cfg::flags::OMSI_PROFILE_GPU.is_set() {
             // wait for the GPU here, so that its time shows as a stage of its own
             let __t = Instant::now();
             let _ = omsi_render::wait_gpu(&r.device, None);
-            *self.profile.entry("gpu").or_default() += __t.elapsed().as_secs_f64();
+            *self.perf.profile.entry("gpu").or_default() += __t.elapsed().as_secs_f64();
         }
         let __t = Instant::now();
         match frame {
@@ -333,13 +333,13 @@ impl App {
                 let _ = omsi_render::wait_gpu(&r.device, None);
             }
         }
-        *self.profile.entry("present").or_default() += __t.elapsed().as_secs_f64();
+        *self.perf.profile.entry("present").or_default() += __t.elapsed().as_secs_f64();
     }
 
     /// The bus's mirrors redrawn, in turn, within their budget.
     fn frame_mirrors(&mut self, raw_dt: f32, lighting: &omsi_render::Lighting) {
         let (Some(s), Some(r), Some(scene), Some(cam)) = (
-            self.surface.as_ref(),
+            self.gfx.surface.as_ref(),
             self.renderer.as_mut(),
             self.scene.as_mut(),
             self.camera.as_ref(),
@@ -356,29 +356,29 @@ impl App {
         // street jerked past in them - up to two a frame then (each costs a
         // few milliseconds of the frame).
         if let (Some(p), Some(w)) = (self.player.as_ref(), self.world.as_ref()) {
-            steps::mirror_hud_sync(&mut self.mirror_hud, w, p, self.settings.mirror_hud);
+            steps::mirror_hud_sync(&mut self.gfx.mirror_hud, w, p, self.settings.mirror_hud);
         }
         if self.settings.mirror_size == 0 {
-            self.mirror_budget = 0.0;
-            self.mirrors_seen = 0;
+            self.gfx.mirror_budget = 0.0;
+            self.gfx.mirrors_seen = 0;
         } else if self.settings.mirror_refresh == "off" {
-            self.mirror_budget = 0.0;
+            self.gfx.mirror_budget = 0.0;
             if let (Some(w), Some(p)) = (self.world.as_ref(), self.player.as_ref()) {
-                let since = match &self.frozen_mirrors {
+                let since = match &self.gfx.frozen_mirrors {
                     Some(m) if m.bus == p.uid => m.since,
                     _ => -1.0,
                 };
                 let next = since.max(0.0) + raw_dt.min(0.1);
                 // (and while the driver turns a mirror, so it can be aimed)
                 if since < 0.0 || (since < MIRROR_FREEZE_REDRAW && next >= MIRROR_FREEZE_REDRAW) || p.mirrors_dirty {
-                    self.mirrors_seen = render_mirrors(r, scene, w, p, lighting, None, None);
+                    self.gfx.mirrors_seen = render_mirrors(r, scene, w, p, lighting, None, None);
                 }
-                self.frozen_mirrors = Some(FrozenMirrors { bus: p.uid, since: next });
+                self.gfx.frozen_mirrors = Some(FrozenMirrors { bus: p.uid, since: next });
             }
         } else {
             let mirrors = self.player.as_ref().map(|p| p.vehicle.ty.def.cameras_reflexion.len()).unwrap_or(0);
             #[cfg(windows)]
-            let vr_active = self.vr.is_some();
+            let vr_active = self.xr.vr.is_some();
             #[cfg(not(windows))]
             let vr_active = false;
             let rate = {
@@ -390,7 +390,7 @@ impl App {
                         .unwrap_or(self.settings.vr_mirror_rate)
                 } else {
                     let max_hz = if self.settings.mirror_refresh == "full" { MIRROR_MAX_HZ_FULL } else { MIRROR_MAX_HZ_ECO };
-                    MIRROR_RATE.max(mirrors as f32 * MIRROR_MIN_HZ).min(max_hz * self.mirrors_seen.max(1) as f32)
+                    MIRROR_RATE.max(mirrors as f32 * MIRROR_MIN_HZ).min(max_hz * self.gfx.mirrors_seen.max(1) as f32)
                 }
             };
             // The desktop camera does not follow the headset. Culling by
@@ -399,7 +399,7 @@ impl App {
             // within the configured budget; keep desktop visibility culling.
             let mirror_view = if vr_active
                 || self.settings.triple.enabled
-                || (self.mirror_hud.active() && self.in_cab)
+                || (self.gfx.mirror_hud.active() && self.cam.in_cab)
             {
                 None
             } else {
@@ -409,45 +409,45 @@ impl App {
             // mirrors are seen from the pavement and stood frozen)
             let near = self.player.as_ref().zip(self.camera.as_ref()).is_some_and(|(p, c)| (p.vehicle.position - c.position).length() < 12.0);
             let draw_limit = if vr_active {
-                if self.in_cab || near {
-                    vr_mirror_updates(&mut self.mirror_budget, raw_dt, rate, mirrors)
+                if self.cam.in_cab || near {
+                    vr_mirror_updates(&mut self.gfx.mirror_budget, raw_dt, rate, mirrors)
                 } else {
-                    self.mirror_budget = 0.0;
+                    self.gfx.mirror_budget = 0.0;
                     0
                 }
             } else {
-                self.mirror_budget = (self.mirror_budget + raw_dt.min(0.1) * rate).min(2.5);
-                self.mirrors_seen.clamp(1, 2)
+                self.gfx.mirror_budget = (self.gfx.mirror_budget + raw_dt.min(0.1) * rate).min(2.5);
+                self.gfx.mirrors_seen.clamp(1, 2)
             };
             let mut drawn = 0;
             if vr_active && draw_limit > 0 && draw_limit == mirrors {
                 // Prepare the cameras and textures only once when all
                 // mirrors are due, including the Every frame mode.
                 if let (Some(w), Some(p)) = (self.world.as_ref(), self.player.as_ref()) {
-                    self.mirror_turn = self.mirror_turn.wrapping_add(draw_limit);
-                    self.mirrors_seen = render_mirrors(r, scene, w, p, lighting, None, mirror_view);
+                    self.gfx.mirror_turn = self.gfx.mirror_turn.wrapping_add(draw_limit);
+                    self.gfx.mirrors_seen = render_mirrors(r, scene, w, p, lighting, None, mirror_view);
                     drawn = draw_limit;
                 }
             }
-            while (self.in_cab || near) && drawn < (if vr_active { draw_limit } else { self.mirrors_seen.clamp(1, 2) }) && (vr_active || self.mirror_budget >= 1.0) {
+            while (self.cam.in_cab || near) && drawn < (if vr_active { draw_limit } else { self.gfx.mirrors_seen.clamp(1, 2) }) && (vr_active || self.gfx.mirror_budget >= 1.0) {
                 let (Some(w), Some(p)) = (self.world.as_ref(), self.player.as_ref()) else { break };
                 if !vr_active {
-                    self.mirror_budget -= 1.0;
+                    self.gfx.mirror_budget -= 1.0;
                 }
                 drawn += 1;
-                self.mirror_turn = self.mirror_turn.wrapping_add(1);
-                self.mirrors_seen = render_mirrors(
+                self.gfx.mirror_turn = self.gfx.mirror_turn.wrapping_add(1);
+                self.gfx.mirrors_seen = render_mirrors(
                     r,
                     scene,
                     w,
                     p,
                     lighting,
-                    Some(self.mirror_turn),
+                    Some(self.gfx.mirror_turn),
                     mirror_view,
                 );
             }
         }
-        *self.profile.entry("mirrors").or_default() += __t.elapsed().as_secs_f64();
+        *self.perf.profile.entry("mirrors").or_default() += __t.elapsed().as_secs_f64();
     }
 
     /// Nothing to draw into: what was uploaded let go, the simulation at a display's pace.
@@ -462,7 +462,7 @@ impl App {
         let __t = Instant::now();
         r.queue.submit(std::iter::empty::<wgpu::CommandBuffer>());
         let _ = r.device.poll(wgpu::PollType::Poll);
-        *self.profile.entry("present").or_default() += __t.elapsed().as_secs_f64();
+        *self.perf.profile.entry("present").or_default() += __t.elapsed().as_secs_f64();
         if let Some(rest) =
             std::time::Duration::from_millis(16).checked_sub(now.elapsed())
         {
@@ -492,7 +492,7 @@ impl App {
         // (OMSI_RENDER_OCCLUDED, which draws them anyway, keeps its pace)
         let max_fps = if shown_nothing { if max_fps == 0 { 30 } else { max_fps.min(30) } } else { max_fps };
         #[cfg(windows)]
-        let vr_active = self.vr.is_some();
+        let vr_active = self.xr.vr.is_some();
         #[cfg(not(windows))]
         let vr_active = false;
         if max_fps > 0 && !vr_active {
@@ -502,7 +502,7 @@ impl App {
             {
                 std::thread::sleep(rest);
             }
-            *self.profile.entry("limiter").or_default() += __t.elapsed().as_secs_f64();
+            *self.perf.profile.entry("limiter").or_default() += __t.elapsed().as_secs_f64();
         }
     }
 
@@ -510,7 +510,7 @@ impl App {
     /// the window's title once a second.
     fn frame_count(&mut self, event_loop: &ActiveEventLoop) -> bool {
         let (Some(s), Some(r), Some(cam), Some(win)) = (
-            self.surface.as_ref(),
+            self.gfx.surface.as_ref(),
             self.renderer.as_mut(),
             self.camera.as_ref(),
             self.window.as_ref(),
@@ -518,31 +518,31 @@ impl App {
             return false;
         };
         let mut finish = false;
-        self.frames += 1;
+        self.perf.frames += 1;
         let profiling = omsi_cfg::flags::OMSI_PROFILE.is_set();
         if profiling
-            && self.cpu_mark.is_none()
+            && self.perf.cpu_mark.is_none()
             && self.started.elapsed().as_secs_f32() > 15.0
         {
-            self.cpu_mark =
-                process_cpu_seconds().map(|c| (c, Instant::now(), self.total_frames));
+            self.perf.cpu_mark =
+                process_cpu_seconds().map(|c| (c, Instant::now(), self.perf.total_frames));
         }
         if let (Some(limit), false) = (self.args.exit_after, self.exiting) {
             if self.started.elapsed().as_secs_f32() > limit {
                 self.exiting = true;
-                log::info!("exit after {limit} s: {} frames total ({} with the window hidden{}), {:.1} fps average, {} frames over 50 ms, worst {:.0} ms", self.total_frames, self.hidden_frames, if omsi_cfg::flags::OMSI_RENDER_OCCLUDED.is_set() { ", drawn off-screen" } else { ", not drawn" }, self.total_frames as f32 / self.started.elapsed().as_secs_f32(), self.spikes, self.worst_ms);
+                log::info!("exit after {limit} s: {} frames total ({} with the window hidden{}), {:.1} fps average, {} frames over 50 ms, worst {:.0} ms", self.perf.total_frames, self.gfx.hidden_frames, if omsi_cfg::flags::OMSI_RENDER_OCCLUDED.is_set() { ", drawn off-screen" } else { ", not drawn" }, self.perf.total_frames as f32 / self.started.elapsed().as_secs_f32(), self.perf.spikes, self.perf.worst_ms);
                 if let (Some(st), Some(w)) =
-                    (self.streamer.as_ref(), self.world.as_ref())
+                    (self.gfx.streamer.as_ref(), self.world.as_ref())
                 {
                     log::info!("tile streaming: {} tiles loaded now, {} loaded and {} unloaded in all, {:.1} s preparing on the worker, slowest upload {:.0} ms, streaming over 16 ms in {} frames (worst {:.0} ms); {} objects + {} trees, {} rows, {} attached ({} without parent), {} unresolved", w.loaded_tiles().len(), st.loaded_total, st.unloaded_total, st.prepare_secs, st.worst_upload_ms, st.slow_frames, st.worst_frame_ms, st.stats.objects, st.stats.trees, st.stats.rows, st.stats.attached, st.stats.unattached, st.stats.failed_objects);
                     st.stats.log_ground();
                 }
                 if omsi_cfg::flags::OMSI_PROFILE.is_set() {
-                    let n = self.total_frames.max(1) as f64;
-                    for (k, v) in &self.profile {
+                    let n = self.perf.total_frames.max(1) as f64;
+                    for (k, v) in &self.perf.profile {
                         log::info!("profile {k:10}: {:.1} ms/frame", v / n * 1000.0);
                     }
-                    if let Some(h) = self.humans.as_ref() {
+                    if let Some(h) = self.session.humans.as_ref() {
                         log::info!(
                             "profile people: {} ({})",
                             h.people.len(),
@@ -562,9 +562,9 @@ impl App {
                         log::info!("profile gpu pass {pass:12}: {ms:.2} ms ({frames} frames measured)");
                     }
                     if let (Some((c0, t0, f0)), Some(c1)) =
-                        (self.cpu_mark, process_cpu_seconds())
+                        (self.perf.cpu_mark, process_cpu_seconds())
                     {
-                        let frames = self.total_frames.saturating_sub(f0).max(1) as f64;
+                        let frames = self.perf.total_frames.saturating_sub(f0).max(1) as f64;
                         log::info!("profile: since 15 s {:.1} ms wall and {:.1} ms CPU (all threads) per frame, {:.1} cores busy", t0.elapsed().as_secs_f64() / frames * 1000.0, (c1 - c0) / frames * 1000.0, (c1 - c0) / t0.elapsed().as_secs_f64().max(1e-3));
                     }
                     let (sw, sh) = r.scene_size(s.config.width, s.config.height);
@@ -579,28 +579,28 @@ impl App {
                 crate::platform::exit(event_loop);
             }
         }
-        self.total_frames += 1;
-        if self.fps_t.elapsed().as_secs_f32() >= 1.0 {
+        self.perf.total_frames += 1;
+        if self.perf.fps_t.elapsed().as_secs_f32() >= 1.0 {
             if omsi_cfg::flags::OMSI_PROFILE.is_set() {
-                let secs = self.fps_t.elapsed().as_secs_f32();
-                log::info!("profile interval: {:.1} fps over {secs:.2} s", self.frames as f32 / secs);
+                let secs = self.perf.fps_t.elapsed().as_secs_f32();
+                log::info!("profile interval: {:.1} fps over {secs:.2} s", self.perf.frames as f32 / secs);
             }
             let speed = self
                 .player
                 .as_ref()
                 .map(|p| format!(" - {:.0} km/h", p.vehicle.physics.velocity_kmh()))
                 .unwrap_or_default();
-            self.fps = self.frames as f32;
+            self.perf.fps = self.perf.frames as f32;
             win.set_title(&format!(
                 "openOMSI - {} fps{speed} - {:.0},{:.0},{:.0} yaw {:.0}",
-                self.frames,
+                self.perf.frames,
                 cam.position.x,
                 cam.position.y,
                 cam.position.z,
                 cam.yaw.rem_euclid(360.0)
             ));
-            self.frames = 0;
-            self.fps_t = Instant::now();
+            self.perf.frames = 0;
+            self.perf.fps_t = Instant::now();
         }
         finish
     }

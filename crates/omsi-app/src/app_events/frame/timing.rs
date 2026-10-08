@@ -6,25 +6,25 @@ use super::*;
 impl App {
     /// The frame's time, or none when the session ends (the graphics device is gone).
     pub(super) fn frame_timing(&mut self, event_loop: &ActiveEventLoop) -> Option<FrameTime> {
-        if self.vr_nav_edit.is_some() && (!self.vr_active() || self.view != "driver") {
+        if self.xr.vr_nav_edit.is_some() && (!self.vr_active() || self.view != "driver") {
             self.finish_vr_nav_edit();
         }
         if (!self.vr_active() || self.player.is_none())
-            && matches!(self.list_kind, Some(crate::game_lists::ListKind::Options(_)))
-            && self.admin_list.as_ref().is_some_and(|rows| rows.iter().any(|(_, action)| action.starts_with("vr_nav_")))
+            && matches!(self.menus.list_kind, Some(crate::game_lists::ListKind::Options(_)))
+            && self.menus.admin_list.as_ref().is_some_and(|rows| rows.iter().any(|(_, action)| action.starts_with("vr_nav_")))
         {
             self.open_list(crate::game_lists::ListKind::Options(0));
         }
         #[cfg(windows)]
         self.poll_vr_cursor_position();
         // OMSI's autosave of the last situation: every five minutes of play
-        if !self.paused && self.player.is_some() && self.clock.run_time - self.autosave_t >= 300.0 {
-            self.autosave_t = self.clock.run_time;
+        if !self.paused && self.player.is_some() && self.clock.run_time - self.session.autosave_t >= 300.0 {
+            self.session.autosave_t = self.clock.run_time;
             self.save_last_situation();
         }
         // the time of day a script set last frame (the nearer way round the clock)
         // (not with the real-time sync on: the clock stays the device's)
-        if let Some(t) = self.pending_time.take().filter(|_| !self.real_time_locked()) {
+        if let Some(t) = self.session.pending_time.take().filter(|_| !self.real_time_locked()) {
             let d = (t - self.clock.time + 43_200.0).rem_euclid(86_400.0) - 43_200.0;
             self.shift_clock(d);
         }
@@ -51,16 +51,16 @@ impl App {
             return None;
         }
         let desktop_vsync = self.settings.vsync && !self.vr_active();
-        if let (Some(surface), Some(renderer)) = (self.surface.as_mut(), self.renderer.as_ref()) {
+        if let (Some(surface), Some(renderer)) = (self.gfx.surface.as_mut(), self.renderer.as_ref()) {
             surface.set_vsync(renderer, desktop_vsync);
         }
         // in the own bus's cab: at the wheel, a passenger's view, or sitting in a
         // seat of it after getting up (its inside is drawn and heard from inside)
-        self.in_cab = matches!(self.view.as_str(), "driver" | "pax")
+        self.cam.in_cab = matches!(self.view.as_str(), "driver" | "pax")
             || (self.view == "foot" && self.foot_bus() == Some(crate::humans::BusId::Player));
         // standing or sitting in another player's bus: that bus is drawn and heard
         // from inside (its interior meshes, not the outside ones over them)
-        self.inside_remote = match self.foot_bus() {
+        self.net.inside_remote = match self.foot_bus() {
             Some(crate::humans::BusId::Ai(x)) if self.view == "foot" => crate::humans::remote_bus_player(x),
             _ => None,
         };
@@ -69,22 +69,22 @@ impl App {
         self.log_frame(raw_dt);
         let profiling = omsi_cfg::flags::OMSI_PROFILE.is_set();
         let waited: f64 = ["acquire", "present", "gpu"].iter()
-            .map(|&k| self.profile.get(k).copied().unwrap_or(0.0))
+            .map(|&k| self.perf.profile.get(k).copied().unwrap_or(0.0))
             .sum();
-        let wait_this_frame = (waited - self.governor_wait_prev).max(0.0) as f32;
-        self.governor_wait_prev = waited;
-        if self.total_frames > 60 {
+        let wait_this_frame = (waited - self.perf.governor_wait_prev).max(0.0) as f32;
+        self.perf.governor_wait_prev = waited;
+        if self.perf.total_frames > 60 {
             if raw_dt > 0.05 {
-                self.spikes += 1;
+                self.perf.spikes += 1;
                 if profiling {
                     // where the slow frame went: the stages that took more than 2 ms,
                     // and what no stage accounts for (waiting for the window, the
                     // system, other processes)
                     let mut parts: Vec<(&'static str, f64)> = self
-                        .profile
+                        .perf.profile
                         .iter()
                         .map(|(k, v)| {
-                            (*k, v - self.profile_prev.get(k).copied().unwrap_or(0.0))
+                            (*k, v - self.perf.profile_prev.get(k).copied().unwrap_or(0.0))
                         })
                         .collect();
                     let staged: f64 = parts
@@ -100,14 +100,14 @@ impl App {
                         .collect();
                     log::info!(
                         "stutter: frame {} took {:.0} ms ({}; outside the stages {:.0} ms)",
-                        self.total_frames,
+                        self.perf.total_frames,
                         raw_dt * 1000.0,
                         list.join(", "),
                         (raw_dt as f64 - staged).max(0.0) * 1000.0
                     );
                 }
             }
-            self.worst_ms = self.worst_ms.max(raw_dt * 1000.0);
+            self.perf.worst_ms = self.perf.worst_ms.max(raw_dt * 1000.0);
             // Reduce resolution only when slow frames spend substantial time waiting
             // for presentation or the GPU. Traffic, scripts and tile work can drop
             // the frame rate too, but fewer pixels cannot make those stages faster.
@@ -115,14 +115,14 @@ impl App {
             // A fast V-synced frame can wait for the next refresh without being
             // GPU-bound. Count presentation wait only on slow frames.
             if raw_dt > 0.02 {
-                self.governor.2 += wait_this_frame;
+                self.perf.governor.2 += wait_this_frame;
             }
-            self.governor.0 += raw_dt;
-            self.governor.1 += 1;
-            if self.governor.0 >= 5.0 {
-                let fps = self.governor.1 as f32 / self.governor.0;
-                let wait_share = self.governor.2 / self.governor.0;
-                self.governor = (0.0, 0, 0.0);
+            self.perf.governor.0 += raw_dt;
+            self.perf.governor.1 += 1;
+            if self.perf.governor.0 >= 5.0 {
+                let fps = self.perf.governor.1 as f32 / self.perf.governor.0;
+                let wait_share = self.perf.governor.2 / self.perf.governor.0;
+                self.perf.governor = (0.0, 0, 0.0);
                 let free = self.settings.render_scale <= 0.0
                     && (self.settings.max_fps == 0 || self.settings.max_fps >= 50)
                     && !omsi_cfg::flags::OMSI_FIXED_SCALE.is_set();
@@ -132,14 +132,14 @@ impl App {
                     r.set_dynamic_scale(s + step);
                     if (r.dynamic_scale() - s).abs() > 1e-3 {
                         log::info!("frame rate {fps:.0} fps (presentation wait {:.0}%): the 3D picture is drawn at {:.0} % of the window now", wait_share * 100.0, r.dynamic_scale() * 100.0);
-                        self.governor_low = 0;
+                        self.perf.governor_low = 0;
                     } else if step < 0.0 {
                         // at the smallest scale and still waiting for the card: after
                         // two such readings the picture gets lighter itself (a weak or
                         // old graphics chip keeps a playable frame rate)
-                        self.governor_low += 1;
-                        if self.governor_low >= 2 && fps < 30.0 {
-                            self.governor_low = 0;
+                        self.perf.governor_low += 1;
+                        if self.perf.governor_low >= 2 && fps < 30.0 {
+                            self.perf.governor_low = 0;
                             // (SSAO first, then the shadows; for this drive only)
                             let what = r.lighten().or_else(|| {
                                 std::mem::replace(&mut self.settings.shadows, false).then_some("shadows off")
@@ -154,7 +154,7 @@ impl App {
             }
         }
         if profiling {
-            self.profile_prev.clone_from(&self.profile);
+            self.perf.profile_prev.clone_from(&self.perf.profile);
         }
         let dt = raw_dt.min(0.1);
         self.last = now;
@@ -165,12 +165,12 @@ impl App {
     /// loading: false when the frame ends here.
     pub(super) fn frame_menus(&mut self, event_loop: &ActiveEventLoop, dt: f32) -> bool {
         // (the cursor over the game menu: a hand over what can be clicked)
-        if self.game_menu.is_some() {
+        if self.menus.game_menu.is_some() {
             let kind = self.menu_cursor_kind();
             self.set_cursor_kind(kind);
         }
         self.run_input_script(event_loop);
-        if let Some(m) = self.menu.as_ref() {
+        if let Some(m) = self.menus.menu.as_ref() {
             if let Some(limit) = self.args.exit_after {
                 if self.started.elapsed().as_secs_f32() > limit {
                     log::info!(
@@ -183,8 +183,8 @@ impl App {
             }
             let lines = m.lines();
             if let (Some(hud), Some(s), Some(r), Some(scene), Some(win)) = (
-                self.hud.as_mut(),
-                self.surface.as_ref(),
+                self.menus.hud.as_mut(),
+                self.gfx.surface.as_ref(),
                 self.renderer.as_mut(),
                 self.scene.as_mut(),
                 self.window.as_ref(),
@@ -225,7 +225,7 @@ impl App {
         if !self.drive_start(event_loop) {
             // the session goes on while the map loads: a big map's first area took
             // longer than the host waits for a silent player
-            if let Some(l) = self.lan.as_mut() {
+            if let Some(l) = self.net.lan.as_mut() {
                 let planned = omsi_net::Pose {
                     bus: self.args.bus.clone().unwrap_or_default().replace('\\', "/"),
                     ..Default::default()

@@ -61,8 +61,8 @@ impl ApplicationHandler for App {
     /// A phone put the app into the background: its window's surface goes (made again on
     /// `resumed`), the fingers and the held keys are let go.
     fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
-        self.surface = None;
-        self.touch.drop_gpu();
+        self.gfx.surface = None;
+        self.input.touch.drop_gpu();
         self.input_lost();
         self.save_last_situation();
     }
@@ -75,36 +75,36 @@ impl ApplicationHandler for App {
                 crate::platform::exit(event_loop);
             }
             WindowEvent::Resized(size) => {
-                if let (Some(s), Some(r)) = (self.surface.as_mut(), self.renderer.as_ref()) {
+                if let (Some(s), Some(r)) = (self.gfx.surface.as_mut(), self.renderer.as_ref()) {
                     s.resize(r, size.width, size.height);
                 }
                 // (minimised, Windows makes the window 0 x 0)
                 let hidden = size.width == 0 || size.height == 0;
-                if hidden && !self.window_hidden {
+                if hidden && !self.gfx.window_hidden {
                     self.input_lost();
                 }
-                self.window_hidden = hidden;
+                self.gfx.window_hidden = hidden;
             }
             // (minimised or covered entirely, macOS and Wayland: the focus goes with it, and a
             // window merely covered by another may still be the one the player drives with)
-            WindowEvent::Occluded(hidden) => self.window_hidden = hidden,
+            WindowEvent::Occluded(hidden) => self.gfx.window_hidden = hidden,
             WindowEvent::Focused(true) => {
-                self.window_focused = true;
-                if let Some(ctl) = self.controllers.as_mut() {
+                self.input.window_focused = true;
+                if let Some(ctl) = self.input.controllers.as_mut() {
                     ctl.set_focus(true);
                 }
                 self.input_back();
             }
             WindowEvent::Focused(false) => {
                 self.finish_vr_nav_edit();
-                self.window_focused = false;
-                if let Some(ctl) = self.controllers.as_mut() {
+                self.input.window_focused = false;
+                if let Some(ctl) = self.input.controllers.as_mut() {
                     ctl.set_focus(false);
                 }
                 #[cfg(windows)]
                 {
-                    self.vr_cursor_physical = None;
-                    self.vr_cursor_warp_pending = None;
+                    self.xr.vr_cursor_physical = None;
+                    self.xr.vr_cursor_warp_pending = None;
                 }
                 // No key-up reaches us for whatever was held when focus left (alt-tab, a
                 // click outside the window, an OS dialog popping up): without this, a held
@@ -120,19 +120,19 @@ impl ApplicationHandler for App {
             // in the background (a wheel turned over a window behind another one zoomed;
             // the keys a system sends again for what is still held when the focus comes
             // back count only when pressed anew)
-            WindowEvent::KeyboardInput { is_synthetic, ref event, .. } if self.input_away || (is_synthetic && event.state == ElementState::Pressed) => {}
-            WindowEvent::MouseInput { .. } | WindowEvent::MouseWheel { .. } if self.input_away => {}
+            WindowEvent::KeyboardInput { is_synthetic, ref event, .. } if self.input.input_away || (is_synthetic && event.state == ElementState::Pressed) => {}
+            WindowEvent::MouseInput { .. } | WindowEvent::MouseWheel { .. } if self.input.input_away => {}
             WindowEvent::KeyboardInput { event, .. } => {
-                if event.state == ElementState::Pressed && self.menu_edit_icao {
+                if event.state == ElementState::Pressed && self.menus.menu_edit_icao {
                     if let Some(text)=event.text.as_deref(){ self.icao_edit_text(text); }
                 }
                 // Route numbers are free display text in OMSI. Take the text produced by
                 // the keyboard layout (rather than only the physical key) so '-', shifted
                 // symbols and non-US layouts reach the destination display unchanged.
                 if event.state == ElementState::Pressed
-                    && self.menu_edit.is_some()
-                    && !self.menu_edit_icao
-                    && matches!(self.list_kind, Some(crate::game_lists::ListKind::RouteNumbers))
+                    && self.menus.menu_edit.is_some()
+                    && !self.menus.menu_edit_icao
+                    && matches!(self.menus.list_kind, Some(crate::game_lists::ListKind::RouteNumbers))
                 {
                     if let Some(text) = event.text.as_deref() {
                         if text.chars().any(|c| !c.is_control()) {
@@ -149,13 +149,13 @@ impl ApplicationHandler for App {
                 if event.state == ElementState::Pressed
                     && event.text.as_deref() == Some("/")
                     && event.physical_key != PhysicalKey::Code(KeyCode::NumpadDivide)
-                    && self.game_keys.iter().any(|b| b.action.eq_ignore_ascii_case("chat_open") && b.scan_code == 53 && b.chord() == 0)
-                    && self.lan.is_some()
-                    && !lan::chat_open(&self.remotes)
+                    && self.input.game_keys.iter().any(|b| b.action.eq_ignore_ascii_case("chat_open") && b.scan_code == 53 && b.chord() == 0)
+                    && self.net.lan.is_some()
+                    && !lan::chat_open(&self.net.remotes)
                 {
-                    self.remotes.chat.open();
+                    self.net.remotes.chat.open();
                     if let PhysicalKey::Code(code) = event.physical_key {
-                        lan::chat_swallow(&mut self.remotes, code);
+                        lan::chat_swallow(&mut self.net.remotes, code);
                     }
                     return;
                 }
@@ -163,14 +163,14 @@ impl ApplicationHandler for App {
                 if let (Some(text), true, true) = (
                     event.text.as_deref(),
                     event.state == ElementState::Pressed,
-                    lan::chat_open(&self.remotes),
+                    lan::chat_open(&self.net.remotes),
                 ) {
-                    lan::chat_type(&mut self.remotes, text);
+                    lan::chat_type(&mut self.net.remotes, text);
                 }
                 // (the Lua plugins' `key` event; a key held down repeats nothing)
                 if let (PhysicalKey::Code(code), false) = (event.physical_key, event.repeat) {
-                    if self.plugin_keys.len() < 64 {
-                        self.plugin_keys.push((format!("{code:?}"), event.state == ElementState::Pressed));
+                    if self.integrations.plugin_keys.len() < 64 {
+                        self.integrations.plugin_keys.push((format!("{code:?}"), event.state == ElementState::Pressed));
                     }
                 }
                 // a phone's back key is Escape (the game menu, out of the city map ...)
@@ -194,22 +194,22 @@ impl ApplicationHandler for App {
                 button: winit::event::MouseButton::Right,
                 ..
             } => {
-                if let Some(edit) = self.vr_nav_edit.as_mut() {
+                if let Some(edit) = self.xr.vr_nav_edit.as_mut() {
                     edit.rotating = state == ElementState::Pressed;
                     return;
                 }
-                if self.navigator.as_ref().map(|n| n.map_open()).unwrap_or(false) {
+                if self.menus.navigator.as_ref().map(|n| n.map_open()).unwrap_or(false) {
                     return;
                 }
                 if self.vr_active() {
                     #[cfg(windows)]
-                    if state == ElementState::Pressed && self.game_menu.is_none()
-                        && self.chooser.is_none() {
-                        if self.mouse_drive {
+                    if state == ElementState::Pressed && self.menus.game_menu.is_none()
+                        && self.menus.chooser.is_none() {
+                        if self.input.mouse_drive {
                             self.set_mouse_drive(false);
                             self.service_msg = Some(("Mouse steering off".into(), 3.0));
                         } else {
-                            self.vr_zoom_active = !self.vr_zoom_active;
+                            self.xr.vr_zoom_active = !self.xr.vr_zoom_active;
                         }
                     }
                 } else {
@@ -222,12 +222,12 @@ impl ApplicationHandler for App {
                 button: winit::event::MouseButton::Middle,
                 ..
             } => {
-                if self.vr_nav_edit.is_some() { return; }
-                if self.navigator.as_ref().map(|n| n.map_open()).unwrap_or(false) {
+                if self.xr.vr_nav_edit.is_some() { return; }
+                if self.menus.navigator.as_ref().map(|n| n.map_open()).unwrap_or(false) {
                     return;
                 }
-                self.mouse_look = state == ElementState::Pressed;
-                self.mmb_held = state == ElementState::Pressed;
+                self.input.mouse_look = state == ElementState::Pressed;
+                self.input.mmb_held = state == ElementState::Pressed;
                 self.update_hover();
             }
             WindowEvent::MouseWheel { delta, .. } => {
@@ -238,11 +238,11 @@ impl ApplicationHandler for App {
                 self.wheel(amount);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                if self.vr_nav_edit.is_some() { return; }
+                if self.xr.vr_nav_edit.is_some() { return; }
                 // (both physical pixels)
-                if let Some((x, y)) = self.cursor_hidden {
+                if let Some((x, y)) = self.input.cursor_hidden {
                     if (position.x as f32 - x).abs() + (position.y as f32 - y).abs() > 8.0 {
-                        self.cursor_hidden = None;
+                        self.input.cursor_hidden = None;
                         if let Some(win) = self.window.as_ref() {
                             win.set_cursor_visible(true);
                         }
@@ -250,15 +250,15 @@ impl ApplicationHandler for App {
                 }
                 // (the on-screen controls on a computer, `OMSI_TOUCH=1`: the mouse is a
                 // finger on them - from #202)
-                if self.touch.enabled {
+                if self.input.touch.enabled {
                     self.finger_move(0, glam::Vec2::new(position.x as f32, position.y as f32));
                 }
                 #[cfg(windows)]
-                let vr_cockpit = self.vr.is_some() && self.game_menu.is_none()
+                let vr_cockpit = self.xr.vr.is_some() && self.menus.game_menu.is_none()
                     && matches!(self.view.as_str(), "driver" | "pax");
                 #[cfg(not(windows))]
                 let vr_cockpit = false;
-                if vr_cockpit && !self.mouse_look && !self.mouse_drive {
+                if vr_cockpit && !self.input.mouse_look && !self.input.mouse_drive {
                     #[cfg(windows)]
                     self.on_vr_cursor_moved(position.x as f32, position.y as f32);
                 } else {
@@ -275,8 +275,8 @@ impl ApplicationHandler for App {
                     self.plugin_click(state == ElementState::Pressed);
                     return;
                 }
-                if self.touch.enabled {
-                    let p = glam::Vec2::new(self.cursor.0, self.cursor.1);
+                if self.input.touch.enabled {
+                    let p = glam::Vec2::new(self.input.cursor.0, self.input.cursor.1);
                     if state == ElementState::Pressed {
                         self.finger_down(event_loop, 0, p);
                     } else {
@@ -284,17 +284,17 @@ impl ApplicationHandler for App {
                     }
                 } else {
                     let pressed = state == ElementState::Pressed;
-                    self.buttons_held.0 = pressed;
+                    self.input.buttons_held.0 = pressed;
                     // the right button already down (looking round): both held zoom, and
                     // the click works nothing in the cab
-                    if pressed && self.buttons_held.1 && self.start_both_drag() {
+                    if pressed && self.input.buttons_held.1 && self.start_both_drag() {
                         return;
                     }
                     // (the right button still held goes on zooming by itself, unless with
                     // `[altView]` it turns the view)
-                    if !pressed && self.both_drag.is_some() && !(self.buttons_held.1 && self.right_zooms()) {
-                        self.both_drag = None;
-                        self.mouse_look = self.buttons_held.1;
+                    if !pressed && self.input.both_drag.is_some() && !(self.input.buttons_held.1 && self.right_zooms()) {
+                        self.input.both_drag = None;
+                        self.input.mouse_look = self.input.buttons_held.1;
                         self.update_hover();
                     }
                     self.left_button(event_loop, pressed);
@@ -314,35 +314,35 @@ impl ApplicationHandler for App {
         event: DeviceEvent,
     ) {
         if matches!(&event, DeviceEvent::Added | DeviceEvent::Removed) {
-            if let Some(controllers) = self.controllers.as_ref() {
+            if let Some(controllers) = self.input.controllers.as_ref() {
                 controllers.refresh_devices();
             }
         }
         if let DeviceEvent::MouseMotion { delta } = event {
-            if self.vr_nav_edit.is_some() {
-                if self.window_focused { self.vr_nav_drag(delta.0 as f32, delta.1 as f32); }
+            if self.xr.vr_nav_edit.is_some() {
+                if self.input.window_focused { self.vr_nav_drag(delta.0 as f32, delta.1 as f32); }
                 return;
             }
             // (in a view of the bus the cursor's own way turns it: move_cursor)
-            if self.mouse_look {
+            if self.input.mouse_look {
                 if !self.cursor_looks() {
                     if self.view == "outside" {
                         // F3 chase orbits at its own gain, not the head's.
                         self.sync_view_look();
                         let (y, p) = crate::input_script::chase_orbit_step(
-                            self.look.0,
-                            self.look.1,
+                            self.cam.look.0,
+                            self.cam.look.1,
                             delta.0 as f32,
                             delta.1 as f32,
                         );
-                        self.look.0 = y;
-                        self.look.1 = p;
+                        self.cam.look.0 = y;
+                        self.cam.look.1 = p;
                     } else {
                         let k = 0.15 * self.settings.look_sens;
                         self.look_by(delta.0 as f32 * k, delta.1 as f32 * k);
                     }
                 }
-            } else if self.mouse_drive && self.game_menu.is_none() {
+            } else if self.input.mouse_drive && self.menus.game_menu.is_none() {
                 self.mouse_past_edge(delta.0 as f32);
             }
         }
@@ -350,14 +350,14 @@ impl ApplicationHandler for App {
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         // the server sent us away (kick, ban): the game ends, the launcher says why
-        if self.lan.as_ref().and_then(crate::lan::turned_away).is_some() {
+        if self.net.lan.as_ref().and_then(crate::lan::turned_away).is_some() {
             self.finish_session();
             crate::platform::exit(event_loop);
             return;
         }
         crate::game_lists::flush_settings(false);
-        if self.mouse_edge != 0.0 && !self.mouse_drive {
-            self.mouse_edge = 0.0;
+        if self.input.mouse_edge != 0.0 && !self.input.mouse_drive {
+            self.input.mouse_edge = 0.0;
         }
         if let Some(w) = &self.window {
             w.request_redraw();
@@ -380,8 +380,8 @@ impl ApplicationHandler for App {
         crate::game_lists::flush_settings(true);
         self.finish_session();
         // ("playing now" ends with the game)
-        self.presence = None;
-        if let Some(lan) = self.lan.take() {
+        self.integrations.presence = None;
+        if let Some(lan) = self.net.lan.take() {
             // dropping the session says goodbye (BYE) to the host or the players
             drop(lan);
             log::info!("LAN: left the session");
@@ -399,7 +399,7 @@ impl ApplicationHandler for App {
 impl App {
     /// The window's size in pixels, while the mirror panels can be worked (in the cab, no menu).
     pub(crate) fn mirror_hud_size(&self) -> Option<(f32, f32)> {
-        if !self.in_cab || self.game_menu.is_some() || !self.mirror_hud.editing() {
+        if !self.cam.in_cab || self.menus.game_menu.is_some() || !self.gfx.mirror_hud.editing() {
             return None;
         }
         Some(self.hud_size())
@@ -407,48 +407,48 @@ impl App {
 
     /// The mouse wheel (or a pinch of two fingers): `amount` notches, up positive.
     pub(crate) fn wheel(&mut self, amount: f32) {
-        if self.vr_nav_edit.is_some() { self.vr_nav_scroll(amount); return; }
+        if self.xr.vr_nav_edit.is_some() { self.vr_nav_scroll(amount); return; }
         // over a mirror panel the wheel resizes it (Shift: wider or narrower)
         if let Some(size) = self.mirror_hud_size() {
             let shift =
-                self.keys.contains(&KeyCode::ShiftLeft) || self.keys.contains(&KeyCode::ShiftRight);
+                self.input.keys.contains(&KeyCode::ShiftLeft) || self.input.keys.contains(&KeyCode::ShiftRight);
             if self
-                .mirror_hud
+                .gfx.mirror_hud
                 .wheel(amount, shift, self.hud_cursor(), size)
             {
                 return;
             }
         }
         // the object editor: the wheel turns (Shift: lifts) the object
-        if self.game_menu.is_none() && self.editor_wheel(amount) {
+        if self.menus.game_menu.is_none() && self.editor_wheel(amount) {
             return;
         }
         // placing a vehicle: the wheel turns it
-        if self.placing.is_some() && self.game_menu.is_none() {
+        if self.menus.placing.is_some() && self.menus.game_menu.is_none() {
             self.placing_wheel(amount);
             return;
         }
         // the game menu and its lists scroll with the wheel
-        if self.game_menu.is_some() {
+        if self.menus.game_menu.is_some() {
             self.menu_wheel(amount);
             return;
         }
         // the city map takes the wheel while it is open
-        if let Some(n) = self.navigator.as_mut().filter(|n| n.map_open()) {
-            n.map_wheel(amount, self.cursor.0, self.cursor.1);
+        if let Some(n) = self.menus.navigator.as_mut().filter(|n| n.map_open()) {
+            n.map_wheel(amount, self.input.cursor.0, self.input.cursor.1);
             return;
         }
         // the wheel over the chat (or while typing) scrolls its history
         if let Some(ui) = self.ui.as_mut() {
-            if self.lan.is_some() && (ui.chat.hovered || lan::chat_open(&self.remotes)) {
+            if self.net.lan.is_some() && (ui.chat.hovered || lan::chat_open(&self.net.remotes)) {
                 // Ctrl + the wheel makes the chat larger or smaller (kept for the next game)
-                if self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight) {
+                if self.input.keys.contains(&KeyCode::ControlLeft) || self.input.keys.contains(&KeyCode::ControlRight) {
                     let to = ((self.settings.chat_size + amount.signum() * 0.1) * 10.0).round() / 10.0;
                     self.settings.chat_size = to.clamp(0.5, 3.0);
                     crate::game_lists::remember_setting("chat_size", &self.settings.chat_size.to_string());
                     return;
                 }
-                ui.chat.wheel(self.remotes.chat.lines.len(), amount);
+                ui.chat.wheel(self.net.remotes.chat.lines.len(), amount);
                 return;
             }
         }
@@ -456,8 +456,8 @@ impl App {
         // original fires while the mouse is dragged, with the notch as the
         // movement. Knobs, the sun blind and the ignition key are far easier to
         // set that way than by holding the button down and moving the mouse.
-        if self.hover.is_some() && self.view != "free" {
-            let ray = self.camera.as_ref().zip(self.surface.as_ref())
+        if self.menus.hover.is_some() && self.view != "free" {
+            let ray = self.camera.as_ref().zip(self.gfx.surface.as_ref())
                 .map(|(cam, s)| self.cockpit_cursor_ray(cam, (s.config.width, s.config.height)));
             if let (Some(p), Some((o, d, spread))) = (
                 self.player.as_mut(),
@@ -473,13 +473,13 @@ impl App {
                 }
             }
         }
-        let ctrl = self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight);
+        let ctrl = self.input.keys.contains(&KeyCode::ControlLeft) || self.input.keys.contains(&KeyCode::ControlRight);
         if self.view == "outside" && self.player.is_some() && ctrl {
             // Ctrl+wheel: the outside camera stays where it is and narrows its field of view
             // (a telephoto; OMSI's own zoom there only moves the camera, as the wheel does)
             self.zoom_by(amount);
         } else if self.view == "outside" && self.player.is_some() {
-            self.orbit = (self.orbit - amount * 1.5).clamp(ORBIT_MIN, ORBIT_MAX);
+            self.cam.orbit = (self.cam.orbit - amount * 1.5).clamp(ORBIT_MIN, ORBIT_MAX);
         } else if matches!(self.view.as_str(), "driver" | "pax") && self.player.is_some() {
             // inside the bus the wheel zooms, as in OMSI (the camera itself stays in the seat)
             self.zoom_by(amount);
@@ -495,60 +495,60 @@ impl App {
 
     /// The left mouse button (or a finger's tap) where the cursor is.
     pub(crate) fn left_button(&mut self, event_loop: &ActiveEventLoop, pressed: bool) {
-        if let Some(edit) = self.vr_nav_edit.as_mut() { edit.moving = pressed; return; }
+        if let Some(edit) = self.xr.vr_nav_edit.as_mut() { edit.moving = pressed; return; }
         // a mirror panel is dragged with the left button (a release always ends a drag)
         if let Some(size) = self
             .mirror_hud_size()
             .or_else(|| (!pressed).then(|| self.hud_size()))
         {
-            if self.mirror_hud.press(pressed, self.hud_cursor(), size) {
+            if self.gfx.mirror_hud.press(pressed, self.hud_cursor(), size) {
                 return;
             }
         }
         let state = if pressed { ElementState::Pressed } else { ElementState::Released };
         // placing a vehicle: a click sets it down
-        if self.placing.is_some() && self.game_menu.is_none() {
+        if self.menus.placing.is_some() && self.menus.game_menu.is_none() {
             if state == ElementState::Pressed {
                 self.placing_click();
             }
             return;
         }
         // the game menu takes the clicks while it is open
-        if self.game_menu.is_some() {
+        if self.menus.game_menu.is_some() {
             if state == ElementState::Pressed {
                 // (a tap or a click: only what is under the finger or the mouse is lit)
-                self.menu_kbd = false;
+                self.menus.menu_kbd = false;
             }
             // Releasing the mouse button finishes scrollbar dragging.
             if state == ElementState::Released {
-                self.menu_drag = None;
-                self.dd_scroll_drag = None;
-                self.pane_scroll_drag = None;
-                if self.menu_scroll_drag {
-                    self.menu_scroll_drag = false;
-                    self.menu_top = self.menu_top.map(f32::round);
+                self.menus.menu_drag = None;
+                self.menus.dd_scroll_drag = None;
+                self.menus.pane_scroll_drag = None;
+                if self.menus.menu_scroll_drag {
+                    self.menus.menu_scroll_drag = false;
+                    self.menus.menu_top = self.menus.menu_top.map(f32::round);
                 }
                 return;
             }
 
             // an open drop-down takes the click: an entry is chosen, anywhere else closes it
-            if self.dropdown.is_some() {
-                let inside = |r: &[f32; 4]| self.cursor.0 >= r[0] && self.cursor.0 <= r[2] && self.cursor.1 >= r[1] && self.cursor.1 <= r[3];
+            if self.menus.dropdown.is_some() {
+                let inside = |r: &[f32; 4]| self.input.cursor.0 >= r[0] && self.input.cursor.0 <= r[2] && self.input.cursor.1 >= r[1] && self.input.cursor.1 <= r[3];
                 let hit = self.ui.as_ref().and_then(|u| u.dd_rects.iter().position(|r| inside(r)).map(|i| i + u.dd_top));
                 // its scroll bar is dragged (a press on the track beside the thumb takes the
                 // thumb there by its middle); before, the press closed the list (#794)
                 if let Some((track, thumb)) = self.ui.as_ref().and_then(|u| u.dd_scroll).filter(|_| hit.is_none()) {
                     let bar = [thumb[0], track[1], thumb[2], track[3]];
                     if inside(&bar) {
-                        let grab = if inside(&thumb) { self.cursor.1 - thumb[1] } else { (thumb[3] - thumb[1]) * 0.5 };
-                        self.dd_scroll_drag = Some(grab);
-                        self.drag_dropdown(self.cursor.1);
+                        let grab = if inside(&thumb) { self.input.cursor.1 - thumb[1] } else { (thumb[3] - thumb[1]) * 0.5 };
+                        self.menus.dd_scroll_drag = Some(grab);
+                        self.drag_dropdown(self.input.cursor.1);
                         return;
                     }
                 }
                 match hit {
                     Some(i) => self.dropdown_pick(i),
-                    None => self.dropdown = None,
+                    None => self.menus.dropdown = None,
                 }
                 return;
             }
@@ -560,24 +560,24 @@ impl App {
                     .as_ref()
                     .and_then(|u| u.menu_scroll_thumb)
                 {
-                    if self.cursor.0 >= thumb[0]
-                        && self.cursor.0 <= thumb[2]
-                        && self.cursor.1 >= thumb[1]
-                        && self.cursor.1 <= thumb[3]
+                    if self.input.cursor.0 >= thumb[0]
+                        && self.input.cursor.0 <= thumb[2]
+                        && self.input.cursor.1 >= thumb[1]
+                        && self.input.cursor.1 <= thumb[3]
                     {
-                        self.menu_scroll_drag = true;
+                        self.menus.menu_scroll_drag = true;
                         return;
                     }
                 }
 
                 // The sidebar of a settings window: a page, or the way back.
-                if self.chooser.is_some() {
+                if self.menus.chooser.is_some() {
                     let side = self.ui.as_ref().and_then(|u| {
                         u.menu_side.iter().position(|r| {
-                            self.cursor.0 >= r[0]
-                                && self.cursor.0 <= r[2]
-                                && self.cursor.1 >= r[1]
-                                && self.cursor.1 <= r[3]
+                            self.input.cursor.0 >= r[0]
+                                && self.input.cursor.0 <= r[2]
+                                && self.input.cursor.1 >= r[1]
+                                && self.input.cursor.1 <= r[3]
                         })
                     });
                     if let Some(i) = side {
@@ -587,20 +587,20 @@ impl App {
                 }
 
                 // The timetable beside a line's tours: a stop to start from, or the button.
-                if self.chooser.is_some() {
+                if self.menus.chooser.is_some() {
                     // its scroll bar is dragged (a press on the track beside the thumb takes
                     // the thumb there by its middle)
                     if let Some((track, thumb, _, _)) = self.ui.as_ref().and_then(|u| u.menu_pane_scroll) {
-                        let inside = |r: &[f32; 4]| self.cursor.0 >= r[0] && self.cursor.0 <= r[2] && self.cursor.1 >= r[1] && self.cursor.1 <= r[3];
+                        let inside = |r: &[f32; 4]| self.input.cursor.0 >= r[0] && self.input.cursor.0 <= r[2] && self.input.cursor.1 >= r[1] && self.input.cursor.1 <= r[3];
                         if inside(&[thumb[0], track[1], thumb[2], track[3]]) {
-                            let grab = if inside(&thumb) { self.cursor.1 - thumb[1] } else { (thumb[3] - thumb[1]) * 0.5 };
-                            self.pane_scroll_drag = Some(grab);
-                            self.drag_pane(self.cursor.1);
+                            let grab = if inside(&thumb) { self.input.cursor.1 - thumb[1] } else { (thumb[3] - thumb[1]) * 0.5 };
+                            self.menus.pane_scroll_drag = Some(grab);
+                            self.drag_pane(self.input.cursor.1);
                             return;
                         }
                     }
                     let pane = self.ui.as_ref().and_then(|u| {
-                        let inside = |r: &[f32; 4]| self.cursor.0 >= r[0] && self.cursor.0 <= r[2] && self.cursor.1 >= r[1] && self.cursor.1 <= r[3];
+                        let inside = |r: &[f32; 4]| self.input.cursor.0 >= r[0] && self.input.cursor.0 <= r[2] && self.input.cursor.1 >= r[1] && self.input.cursor.1 <= r[3];
                         if u.menu_pane_go.as_ref().is_some_and(inside) {
                             return Some(usize::MAX);
                         }
@@ -618,10 +618,10 @@ impl App {
                 // Otherwise check whether a menu row was clicked.
                 let hit = self.ui.as_ref().and_then(|u| {
                     u.menu_rects.iter().position(|r| {
-                        self.cursor.0 >= r[0]
-                            && self.cursor.0 <= r[2]
-                            && self.cursor.1 >= r[1]
-                            && self.cursor.1 <= r[3]
+                        self.input.cursor.0 >= r[0]
+                            && self.input.cursor.0 <= r[2]
+                            && self.input.cursor.1 >= r[1]
+                            && self.input.cursor.1 <= r[3]
                     })
                 });
 
@@ -641,26 +641,26 @@ impl App {
                     }
 
                     if let Some(c) = ctl {
-                        if self.chooser.is_some() && self.cursor.0 >= c[0] && self.cursor.0 <= c[2] {
-                            let fx = ((self.cursor.0 - c[0]) / (c[2] - c[0]).max(1.0)).clamp(0.0, 1.0);
-                            self.chooser = Some(k);
+                        if self.menus.chooser.is_some() && self.input.cursor.0 >= c[0] && self.input.cursor.0 <= c[2] {
+                            let fx = ((self.input.cursor.0 - c[0]) / (c[2] - c[0]).max(1.0)).clamp(0.0, 1.0);
+                            self.menus.chooser = Some(k);
                             // (a slider is held: it follows the cursor till the button is let go)
                             if self.list_click(k, fx) {
-                                self.menu_drag = Some(k);
+                                self.menus.menu_drag = Some(k);
                             }
                             return;
                         }
                     }
 
-                    if self.chooser.is_none() {
-                        self.game_menu = Some(k);
+                    if self.menus.chooser.is_none() {
+                        self.menus.game_menu = Some(k);
                     }
 
                     // (a click on a tour shows its stops: the trip starts with the button)
-                    if matches!(self.list_kind, Some(crate::game_lists::ListKind::Tours(..))) && crate::game_lists::tour_at(self, k).is_some() {
-                        self.chooser = Some(k);
-                        if let Some(crate::game_lists::ListKind::Tours(line, _)) = self.list_kind.clone() {
-                            self.list_kind = Some(crate::game_lists::ListKind::Tours(line, None));
+                    if matches!(self.menus.list_kind, Some(crate::game_lists::ListKind::Tours(..))) && crate::game_lists::tour_at(self, k).is_some() {
+                        self.menus.chooser = Some(k);
+                        if let Some(crate::game_lists::ListKind::Tours(line, _)) = self.menus.list_kind.clone() {
+                            self.menus.list_kind = Some(crate::game_lists::ListKind::Tours(line, None));
                         }
                         return;
                     }
@@ -669,8 +669,8 @@ impl App {
                     // the line as Enter
                     let arrows = self.ui.as_ref().and_then(|u| u.menu_arrows.get(row).copied().flatten());
                     match arrows {
-                        Some([from, to, _]) if self.cursor.0 >= from && self.cursor.0 < to => self.chooser_adjust(k, "-"),
-                        Some([_, _, plus]) if self.cursor.0 >= plus => self.chooser_adjust(k, "+"),
+                        Some([from, to, _]) if self.input.cursor.0 >= from && self.input.cursor.0 < to => self.chooser_adjust(k, "-"),
+                        Some([_, _, plus]) if self.input.cursor.0 >= plus => self.chooser_adjust(k, "+"),
                         _ => self.menu_choose(event_loop, k),
                     }
                 }

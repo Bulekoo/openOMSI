@@ -15,86 +15,86 @@ impl App {
             let step = 60.0 * dt;
             let ctrl_alt = self.frame_mirror_keys(dt);
             // a controller's look buttons (Settings → Controllers: view_look_*)
-            self.look.0 += step * 1.5 * (self.pad_look[1] as i32 - self.pad_look[0] as i32) as f32;
-            self.look.1 = (self.look.1 + step * 0.7 * (self.pad_look[2] as i32 - self.pad_look[3] as i32) as f32).clamp(-85.0, 85.0);
+            self.cam.look.0 += step * 1.5 * (self.input.pad_look[1] as i32 - self.input.pad_look[0] as i32) as f32;
+            self.cam.look.1 = (self.cam.look.1 + step * 0.7 * (self.input.pad_look[2] as i32 - self.input.pad_look[3] as i32) as f32).clamp(-85.0, 85.0);
             // with a wheel steering, the arrow keys look around as in OMSI
-            if !ctrl_alt && !self.settings.arrows_switch_cams && self.controllers.as_ref().is_some_and(|c| c.wheel_steering()) && !self.keys.contains(&KeyCode::ControlLeft) && !self.keys.contains(&KeyCode::ControlRight) {
+            if !ctrl_alt && !self.settings.arrows_switch_cams && self.input.controllers.as_ref().is_some_and(|c| c.wheel_steering()) && !self.input.keys.contains(&KeyCode::ControlLeft) && !self.input.keys.contains(&KeyCode::ControlRight) {
                 // a glance: held, the head turns (in the driver's seat to 140 degrees
                 // at most, or no further than the mouse had it); let go, it comes back
                 // to the road - held, it went round and round, and the other key never
                 // brought it back straight
-                let (l, r) = (self.keys.contains(&KeyCode::ArrowLeft), self.keys.contains(&KeyCode::ArrowRight));
+                let (l, r) = (self.input.keys.contains(&KeyCode::ArrowLeft), self.input.keys.contains(&KeyCode::ArrowRight));
                 if l || r {
-                    let y = self.look.0 + step * 1.5 * (r as i32 - l as i32) as f32;
-                    self.look.0 = if self.view == "pax" { y } else { y.clamp(self.look.0.min(-140.0), self.look.0.max(140.0)) };
-                    self.arrow_glance = true;
-                } else if self.arrow_glance {
-                    self.look.0 *= (-6.0 * dt).exp();
+                    let y = self.cam.look.0 + step * 1.5 * (r as i32 - l as i32) as f32;
+                    self.cam.look.0 = if self.view == "pax" { y } else { y.clamp(self.cam.look.0.min(-140.0), self.cam.look.0.max(140.0)) };
+                    self.input.arrow_glance = true;
+                } else if self.input.arrow_glance {
+                    self.cam.look.0 *= (-6.0 * dt).exp();
                     // (down to a hundredth of a degree before it is set to 0: at half a
                     // degree the last step was a visible snap of several pixels)
-                    if self.look.0.abs() < 0.02 {
-                        self.look.0 = 0.0;
-                        self.arrow_glance = false;
+                    if self.cam.look.0.abs() < 0.02 {
+                        self.cam.look.0 = 0.0;
+                        self.input.arrow_glance = false;
                     }
                 }
-                if self.keys.contains(&KeyCode::ArrowUp) {
-                    self.look.1 = (self.look.1 + step * 0.7).min(85.0);
+                if self.input.keys.contains(&KeyCode::ArrowUp) {
+                    self.cam.look.1 = (self.cam.look.1 + step * 0.7).min(85.0);
                 }
-                if self.keys.contains(&KeyCode::ArrowDown) {
-                    self.look.1 = (self.look.1 - step * 0.7).max(-85.0);
+                if self.input.keys.contains(&KeyCode::ArrowDown) {
+                    self.cam.look.1 = (self.cam.look.1 - step * 0.7).max(-85.0);
                 }
             }
-            let alt = self.keys.contains(&KeyCode::AltLeft)
-                || self.keys.contains(&KeyCode::AltRight);
-            if alt && self.keys.contains(&KeyCode::KeyJ) {
-                self.look.0 -= step;
+            let alt = self.input.keys.contains(&KeyCode::AltLeft)
+                || self.input.keys.contains(&KeyCode::AltRight);
+            if alt && self.input.keys.contains(&KeyCode::KeyJ) {
+                self.cam.look.0 -= step;
             }
-            if alt && self.keys.contains(&KeyCode::KeyL) {
-                self.look.0 += step;
+            if alt && self.input.keys.contains(&KeyCode::KeyL) {
+                self.cam.look.0 += step;
             }
-            if alt && self.keys.contains(&KeyCode::KeyI) {
-                self.look.1 = (self.look.1 + step * 0.7).min(85.0);
+            if alt && self.input.keys.contains(&KeyCode::KeyI) {
+                self.cam.look.1 = (self.cam.look.1 + step * 0.7).min(85.0);
             }
-            if alt && self.keys.contains(&KeyCode::KeyK) {
-                self.look.1 = (self.look.1 - step * 0.7).max(-85.0);
+            if alt && self.input.keys.contains(&KeyCode::KeyK) {
+                self.cam.look.1 = (self.cam.look.1 - step * 0.7).max(-85.0);
             }
             if self.view != "outside" {
-                self.look.0 = crate::input_script::cab_look_yaw(self.look.0);
+                self.cam.look.0 = crate::input_script::cab_look_yaw(self.cam.look.0);
             }
             // Ctrl+Shift+Page Up / Page Down held: the clock runs forwards / backwards,
             // a quarter of an hour per second at first, faster the longer it is held
             // (the menu's whole hours were the only way)
             {
-                let ctrl = self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight);
-                let shift = self.keys.contains(&KeyCode::ShiftLeft) || self.keys.contains(&KeyCode::ShiftRight);
-                let dir = match (self.keys.contains(&KeyCode::PageUp), self.keys.contains(&KeyCode::PageDown)) {
+                let ctrl = self.input.keys.contains(&KeyCode::ControlLeft) || self.input.keys.contains(&KeyCode::ControlRight);
+                let shift = self.input.keys.contains(&KeyCode::ShiftLeft) || self.input.keys.contains(&KeyCode::ShiftRight);
+                let dir = match (self.input.keys.contains(&KeyCode::PageUp), self.input.keys.contains(&KeyCode::PageDown)) {
                     (true, false) => 1.0,
                     (false, true) => -1.0,
                     _ => 0.0,
                 };
-                let client = self.lan.as_ref().is_some_and(|l| l.role == omsi_net::Role::Client);
+                let client = self.net.lan.as_ref().is_some_and(|l| l.role == omsi_net::Role::Client);
                 if ctrl && shift && dir != 0.0 && !client {
-                    if self.clock_hold == 0.0 && self.real_time_locked() {
+                    if self.input.clock_hold == 0.0 && self.real_time_locked() {
                         // (says once why the clock stays)
                         self.shift_clock(dir as f64);
                     }
-                    self.clock_hold += dt;
+                    self.input.clock_hold += dt;
                     if !self.real_time_locked() {
-                        let rate = 900.0 * (1.0 + self.clock_hold * 1.5).min(8.0);
+                        let rate = 900.0 * (1.0 + self.input.clock_hold * 1.5).min(8.0);
                         self.shift_clock(dir * rate as f64 * dt as f64);
                     }
                 } else {
-                    if self.clock_hold > 0.0 {
-                        self.clock_hold = 0.0;
+                    if self.input.clock_hold > 0.0 {
+                        self.input.clock_hold = 0.0;
                         self.timetable_after_clock_jump();
                     }
-                    self.clock_hold = 0.0;
+                    self.input.clock_hold = 0.0;
                 }
             }
             // = and - zoom inside the bus (the numpad's are door keys there), unless
             // the player bound them to something of their own (#701)
-            let zoom_in = self.keys.contains(&KeyCode::Equal) && !self.own_keys.contains(&13);
-            let zoom_out = self.keys.contains(&KeyCode::Minus) && !self.own_keys.contains(&12);
+            let zoom_in = self.input.keys.contains(&KeyCode::Equal) && !self.input.own_keys.contains(&13);
+            let zoom_out = self.input.keys.contains(&KeyCode::Minus) && !self.input.own_keys.contains(&12);
             if matches!(self.view.as_str(), "driver" | "pax") {
                 if zoom_in {
                     self.zoom_by(3.0 * dt);
@@ -105,27 +105,27 @@ impl App {
             }
             // W/S and the wheel pull the outside camera in and out
             if self.view == "outside" {
-                if zoom_in || self.keys.contains(&KeyCode::NumpadAdd)
+                if zoom_in || self.input.keys.contains(&KeyCode::NumpadAdd)
                 {
-                    self.orbit = (self.orbit - 12.0 * dt).max(ORBIT_MIN);
+                    self.cam.orbit = (self.cam.orbit - 12.0 * dt).max(ORBIT_MIN);
                 }
-                if zoom_out || self.keys.contains(&KeyCode::NumpadSubtract)
+                if zoom_out || self.input.keys.contains(&KeyCode::NumpadSubtract)
                 {
-                    self.orbit = (self.orbit + 12.0 * dt).min(ORBIT_MAX);
+                    self.cam.orbit = (self.cam.orbit + 12.0 * dt).min(ORBIT_MAX);
                 }
             }
             // Home held recentres the view - unless keyboard.cfg gives it a job (the
             // stock file makes it the ticket desk camera, which this then turned
             // straight ahead again whenever it was switched to, #733)
-            if self.keys.contains(&KeyCode::Home) && !self.game_keys.iter().any(|b| Some(b.scan_code) == crate::keys::dik_code(KeyCode::Home)) {
-                self.look = (0.0, 0.0);
-                self.orbit = ORBIT_DEFAULT;
-                self.view_zoom.remove(&self.view);
-                self.f1_reset = None;
+            if self.input.keys.contains(&KeyCode::Home) && !self.input.game_keys.iter().any(|b| Some(b.scan_code) == crate::keys::dik_code(KeyCode::Home)) {
+                self.cam.look = (0.0, 0.0);
+                self.cam.orbit = ORBIT_DEFAULT;
+                self.cam.view_zoom.remove(&self.view);
+                self.cam.f1_reset = None;
             }
         }
         if self.view != "free" {
-            self.ego = false;
+            self.cam.ego = false;
         }
         self.frame_free_camera(dt);
     }
@@ -138,10 +138,10 @@ impl App {
         // the mirror editor: an arrow held over a panel aims that panel's mirror
         // (kept per bus like Ctrl+Alt+arrows below)
         if let (Some(size), Some(a)) =
-            (self.mirror_hud_size(), self.mirror_hud.turning())
+            (self.mirror_hud_size(), self.gfx.mirror_hud.turning())
         {
             if let (Some(i), Some(p)) = (
-                self.mirror_hud.cam_under(self.hud_cursor(), size),
+                self.gfx.mirror_hud.cam_under(self.hud_cursor(), size),
                 self.player.as_mut(),
             ) {
                 let n = p.vehicle.ty.def.cameras_reflexion.len();
@@ -156,7 +156,7 @@ impl App {
                 if p.mirror_fovs.len() < n {
                     p.mirror_fovs.resize(n, 0.0);
                 }
-                let alt = self.keys.contains(&KeyCode::AltLeft) || self.keys.contains(&KeyCode::AltRight);
+                let alt = self.input.keys.contains(&KeyCode::AltLeft) || self.input.keys.contains(&KeyCode::AltRight);
                 let along = (a[4] as i32 - a[5] as i32) as f32;
                 let zoom = (a[7] as i32 - a[6] as i32) as f32;
                 if zoom != 0.0 {
@@ -187,8 +187,8 @@ impl App {
                 }
             }
         }
-        let ctrl_alt = (self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight)) && (self.keys.contains(&KeyCode::AltLeft) || self.keys.contains(&KeyCode::AltRight));
-        let arrows = [KeyCode::ArrowLeft, KeyCode::ArrowRight, KeyCode::ArrowUp, KeyCode::ArrowDown].map(|k| self.keys.contains(&k));
+        let ctrl_alt = (self.input.keys.contains(&KeyCode::ControlLeft) || self.input.keys.contains(&KeyCode::ControlRight)) && (self.input.keys.contains(&KeyCode::AltLeft) || self.input.keys.contains(&KeyCode::AltRight));
+        let arrows = [KeyCode::ArrowLeft, KeyCode::ArrowRight, KeyCode::ArrowUp, KeyCode::ArrowDown].map(|k| self.input.keys.contains(&k));
         if let (true, Some(p), Some(cam)) = (ctrl_alt && self.view == "driver" && arrows.iter().any(|a| *a), self.player.as_mut(), self.camera.as_ref()) {
             let cams = &p.vehicle.ty.def.cameras_reflexion;
             let f = cam.forward();
@@ -222,35 +222,35 @@ impl App {
         // frame, and walking jumped about, the more so the lower the frame rate, #807)
         if let (Some(cam), true) = (
             self.camera.as_mut(),
-            self.view == "free" || (self.player.is_none() && self.on_foot.is_none()),
+            self.view == "free" || (self.player.is_none() && self.session.on_foot.is_none()),
         ) {
             let mut v = Vec3::ZERO;
             let f = cam.forward();
             let r = cam.right();
-            if self.keys.contains(&KeyCode::KeyW) {
+            if self.input.keys.contains(&KeyCode::KeyW) {
                 v += f;
             }
-            if self.keys.contains(&KeyCode::KeyS) {
+            if self.input.keys.contains(&KeyCode::KeyS) {
                 v -= f;
             }
-            if self.keys.contains(&KeyCode::KeyD) {
+            if self.input.keys.contains(&KeyCode::KeyD) {
                 v += r;
             }
-            if self.keys.contains(&KeyCode::KeyA) {
+            if self.input.keys.contains(&KeyCode::KeyA) {
                 v -= r;
             }
-            if self.keys.contains(&KeyCode::KeyE) || self.keys.contains(&KeyCode::Space) {
+            if self.input.keys.contains(&KeyCode::KeyE) || self.input.keys.contains(&KeyCode::Space) {
                 v += Vec3::Z;
             }
-            if self.keys.contains(&KeyCode::KeyQ) {
+            if self.input.keys.contains(&KeyCode::KeyQ) {
                 v -= Vec3::Z;
             }
-            let boost = if self.keys.contains(&KeyCode::ShiftLeft) {
+            let boost = if self.input.keys.contains(&KeyCode::ShiftLeft) {
                 5.0
             } else {
                 1.0
             };
-            if self.ego {
+            if self.cam.ego {
                 // walking: along the ground at eye height, 1.4 m/s (running 4.5)
                 let flat = Vec3::new(v.x, v.y, 0.0).normalize_or_zero();
                 let pace = if boost > 1.0 { 4.5 } else { 1.4 };
@@ -259,18 +259,18 @@ impl App {
                     cam.position.z = g + 1.7;
                 }
             } else {
-                cam.position += (v.normalize_or_zero() * self.speed * boost * dt).as_dvec3();
+                cam.position += (v.normalize_or_zero() * self.cam.speed * boost * dt).as_dvec3();
             }
-            if self.keys.contains(&KeyCode::ArrowLeft) {
+            if self.input.keys.contains(&KeyCode::ArrowLeft) {
                 cam.yaw -= 60.0 * dt;
             }
-            if self.keys.contains(&KeyCode::ArrowRight) {
+            if self.input.keys.contains(&KeyCode::ArrowRight) {
                 cam.yaw += 60.0 * dt;
             }
-            if self.keys.contains(&KeyCode::ArrowUp) {
+            if self.input.keys.contains(&KeyCode::ArrowUp) {
                 cam.pitch = (cam.pitch + 40.0 * dt).min(89.0);
             }
-            if self.keys.contains(&KeyCode::ArrowDown) {
+            if self.input.keys.contains(&KeyCode::ArrowDown) {
                 cam.pitch = (cam.pitch - 40.0 * dt).max(-89.0);
             }
         }

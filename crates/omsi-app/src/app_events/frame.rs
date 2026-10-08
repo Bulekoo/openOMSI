@@ -38,7 +38,7 @@ impl App {
         }
         let __t = Instant::now();
         self.drive_streaming();
-        *self.profile.entry("streaming").or_default() += __t.elapsed().as_secs_f64();
+        *self.perf.profile.entry("streaming").or_default() += __t.elapsed().as_secs_f64();
         self.frame_traffic(dt);
         // The player's vehicle moves before the passengers are placed: they sit in
         // the bus frame, and placing them on the pose of the frame before made everyone
@@ -49,7 +49,7 @@ impl App {
         self.frame_pad_actions(analog, actions);
         self.frame_player(dt);
         self.frame_audio(dt);
-        *self.profile.entry("player").or_default() += __t.elapsed().as_secs_f64();
+        *self.perf.profile.entry("player").or_default() += __t.elapsed().as_secs_f64();
         self.frame_people(dt);
         self.frame_duty(dt);
         self.frame_integrations(event_loop, dt);

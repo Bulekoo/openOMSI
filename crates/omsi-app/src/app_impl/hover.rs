@@ -5,7 +5,7 @@ use super::*;
 impl App {
     pub(crate) fn hud_size(&self) -> (f32, f32) {
         let v = self
-            .surface
+            .gfx.surface
             .as_ref()
             .map(|s| {
                 self.settings
@@ -17,26 +17,26 @@ impl App {
 
     pub(crate) fn hud_cursor(&self) -> (f32, f32) {
         let x = self
-            .surface
+            .gfx.surface
             .as_ref()
             .map(|s| {
                 self.settings
                     .hud_viewport((s.config.width, s.config.height))[0]
             })
             .unwrap_or(0.0);
-        (self.cursor.0 - x, self.cursor.1)
+        (self.input.cursor.0 - x, self.input.cursor.1)
     }
 
     pub(crate) fn cockpit_cursor_ray(&self, cam: &Camera, size: (u32, u32)) -> (glam::DVec3, glam::Vec3, f32) {
         #[cfg(windows)]
-        if let Some(ray) = self.vr.as_ref().and_then(|vr| vr.cursor_ray(self.cursor.0, self.cursor.1, size)) {
+        if let Some(ray) = self.xr.vr.as_ref().and_then(|vr| vr.cursor_ray(self.input.cursor.0, self.input.cursor.1, size)) {
             return (ray.0, ray.1, ray.2 * 6.0);
         }
         if let Some(rig) = self.triple_rig(size) {
-            let (o, d, spread) = rig.cursor_ray(cam, self.cursor, size);
+            let (o, d, spread) = rig.cursor_ray(cam, self.input.cursor, size);
             return (o, d, spread * 6.0);
         }
-        let (o, d) = cursor_ray(cam, self.cursor.0, self.cursor.1, size.0 as f32, size.1 as f32);
+        let (o, d) = cursor_ray(cam, self.input.cursor.0, self.input.cursor.1, size.0 as f32, size.1 as f32);
         (o, d, pixel_angle(cam, size.1 as f32) * 6.0)
     }
 
@@ -44,7 +44,7 @@ impl App {
     /// and no headset is asked for.
     pub(crate) fn triple_rig(&self, size: (u32, u32)) -> Option<omsi_render::TripleScreen> {
         (self.settings.triple.enabled && !self.settings.vr_requested()).then(|| {
-            self.settings.triple.zoomed(size.0, size.1, self.view_zoom.get(&self.view).copied().unwrap_or(1.0))
+            self.settings.triple.zoomed(size.0, size.1, self.cam.view_zoom.get(&self.view).copied().unwrap_or(1.0))
         })
     }
 
@@ -53,10 +53,10 @@ impl App {
     pub(crate) fn world_cursor_ray(&self, cam: &Camera, size: (u32, u32)) -> (glam::DVec3, glam::Vec3) {
         match self.triple_rig(size) {
             Some(rig) => {
-                let (o, d, _) = rig.cursor_ray(cam, self.cursor, size);
+                let (o, d, _) = rig.cursor_ray(cam, self.input.cursor, size);
                 (o, d)
             }
-            None => cursor_ray(cam, self.cursor.0, self.cursor.1, size.0 as f32, size.1 as f32),
+            None => cursor_ray(cam, self.input.cursor.0, self.input.cursor.1, size.0 as f32, size.1 as f32),
         }
     }
 
@@ -70,18 +70,18 @@ impl App {
     }
 
     pub(crate) fn update_hover(&mut self) {
-        if self.vr_nav_edit.is_some() || self.cursor_hidden.is_some() {
-            self.hover = None;
-            self.hover_part = None;
-            self.hover_hand = false;
+        if self.xr.vr_nav_edit.is_some() || self.input.cursor_hidden.is_some() {
+            self.menus.hover = None;
+            self.menus.hover_part = None;
+            self.menus.hover_hand = false;
             return;
         }
         #[cfg(windows)]
-        if !self.mouse_drive && self.vr.as_ref().is_some_and(|vr| vr.needs_cursor_surface(
-            self.cursor, self.game_menu.is_some() || self.chooser.is_some())) {
+        if !self.input.mouse_drive && self.xr.vr.as_ref().is_some_and(|vr| vr.needs_cursor_surface(
+            self.input.cursor, self.menus.game_menu.is_some() || self.menus.chooser.is_some())) {
             let surface = self.player.as_ref()
                 .zip(self.camera.as_ref())
-                .zip(self.surface.as_ref())
+                .zip(self.gfx.surface.as_ref())
                 .filter(|_| matches!(self.view.as_str(), "driver" | "pax"))
                 .map(|((player, camera), window)| {
                     let (origin, direction, _) = self.cockpit_cursor_ray(camera,
@@ -89,7 +89,7 @@ impl App {
                     (player.surface_hit(origin, direction),
                      (player.vehicle.position, player.vehicle.body_rotation()))
                 });
-            if let Some(vr) = self.vr.as_mut() {
+            if let Some(vr) = self.xr.vr.as_mut() {
                 vr.set_cursor_surface(surface.as_ref().and_then(|s| s.0),
                                       surface.map(|s| s.1));
             }
@@ -101,11 +101,11 @@ impl App {
         let found = match (
             self.player.as_ref(),
             self.camera.as_ref(),
-            self.surface.as_ref(),
+            self.gfx.surface.as_ref(),
         ) {
             (Some(p), Some(cam), Some(s)) if self.view != "free"
                 && (self.view != "foot" || self.foot_reaches_bus())
-                && !(self.vr_active() && self.mouse_drive
+                && !(self.vr_active() && self.input.mouse_drive
                 && matches!(self.view.as_str(), "driver" | "pax")) => {
                 let (o, d, spread) = self.cockpit_cursor_ray(cam, (s.config.width, s.config.height));
                 p.hovered_part(o, d, spread)
@@ -114,19 +114,19 @@ impl App {
             _ => (None, false),
         };
         let (found, hand) = found;
-        self.hover_hand = hand;
+        self.menus.hover_hand = hand;
         match found {
             Some((name, true)) => {
-                self.hover = Some(name);
-                self.hover_part = None;
+                self.menus.hover = Some(name);
+                self.menus.hover_part = None;
             }
             Some((name, false)) => {
-                self.hover = None;
-                self.hover_part = Some(name);
+                self.menus.hover = None;
+                self.menus.hover_part = Some(name);
             }
             None => {
-                self.hover = None;
-                self.hover_part = None;
+                self.menus.hover = None;
+                self.menus.hover_part = None;
             }
         }
         // the cursor itself says when it is over something that can be operated
@@ -135,24 +135,24 @@ impl App {
         // (zooming with the mouse: the up-down arrows, Omsi's crSizeNS)
         // SIZENS only while the right button really zooms (with `alt_view`
         // it turns the view instead, and keeps the four arrows).
-        let rmb_zoom = self.buttons_held.1
-            && !self.mmb_held
+        let rmb_zoom = self.input.buttons_held.1
+            && !self.input.mmb_held
             && !self.settings.alt_view
             && self.player.is_some()
-            && self.both_drag.is_none()
+            && self.input.both_drag.is_none()
             && matches!(self.view.as_str(), "driver" | "outside" | "pax" | "free");
-        let kind: u8 = if self.both_drag.is_some() && self.game_menu.is_none() {
+        let kind: u8 = if self.input.both_drag.is_some() && self.menus.game_menu.is_none() {
             4
-        } else if rmb_zoom && self.game_menu.is_none() {
+        } else if rmb_zoom && self.menus.game_menu.is_none() {
             4
-        } else if self.mouse_look && self.game_menu.is_none() {
+        } else if self.input.mouse_look && self.menus.game_menu.is_none() {
             3
-        } else if self.mouse_drive && self.mouse_steers_in_view() && self.game_menu.is_none() {
+        } else if self.input.mouse_drive && self.mouse_steers_in_view() && self.menus.game_menu.is_none() {
             2
-        } else if self.game_menu.is_some() {
+        } else if self.menus.game_menu.is_some() {
             // (the game menu's own cursor: not overwritten here, or it flips back and forth)
             self.menu_cursor_kind()
-        } else if self.hover.is_some() || self.hover_hand {
+        } else if self.menus.hover.is_some() || self.menus.hover_hand {
             1
         } else {
             0
@@ -162,8 +162,8 @@ impl App {
 
     /// Show the mouse cursor `kind` (0 arrow, 1 pointing hand, 2 cross, 3 arrows, 4 closed hand).
     pub(crate) fn set_cursor_kind(&mut self, kind: u8) {
-        if kind != self.cursor_kind {
-            self.cursor_kind = kind;
+        if kind != self.input.cursor_kind {
+            self.input.cursor_kind = kind;
             if let Some(w) = self.window.as_ref() {
                 w.set_cursor(match kind {
                     4 => winit::window::CursorIcon::NsResize,
@@ -180,11 +180,11 @@ impl App {
     /// a page, a control, the scroll bar), the closed hand while a slider or the scroll bar
     /// is held.
     pub(crate) fn menu_cursor_kind(&self) -> u8 {
-        if self.menu_drag.is_some() || self.menu_scroll_drag || self.dd_scroll_drag.is_some() || self.pane_scroll_drag.is_some() {
+        if self.menus.menu_drag.is_some() || self.menus.menu_scroll_drag || self.menus.dd_scroll_drag.is_some() || self.menus.pane_scroll_drag.is_some() {
             return 4;
         }
         let Some(u) = self.ui.as_ref() else { return 0 };
-        let (x, y) = self.cursor;
+        let (x, y) = self.input.cursor;
         let inside = |r: &[f32; 4]| x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3];
         let clickable = u.menu_scroll_thumb.is_some_and(|r| inside(&r))
             || u.menu_side.iter().any(|r| inside(r))

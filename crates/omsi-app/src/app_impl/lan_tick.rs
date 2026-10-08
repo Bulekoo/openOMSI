@@ -8,45 +8,45 @@ impl App {
     pub(crate) fn tick_lan(&mut self, dt: f32) {
         let walker = self.walker_pose();
         let radio_keyed = self.voice_radio_held();
-        let Some(lan) = self.lan.as_mut() else {
+        let Some(lan) = self.net.lan.as_mut() else {
             // (the session is over: the plugin is told so)
-            self.voice = None;
+            self.sound.voice = None;
             return;
         };
         let duty = self
-            .duty
+            .session.duty
             .as_ref()
             .map(|d| &d.trips[d.trip_index])
             .map(|t| (t.line.as_str(), t.terminus.as_str()));
         let frame = lan::Frame {
-            audio: self.audio.as_ref(),
+            audio: self.sound.audio.as_ref(),
             listener: self.camera.as_ref().map(|c| c.position),
-            muffled: self.in_cab || self.inside_remote.is_some(),
-            riders: self.humans.as_ref().map(|h| h.riding()).unwrap_or(0),
+            muffled: self.cam.in_cab || self.net.inside_remote.is_some(),
+            riders: self.session.humans.as_ref().map(|h| h.riding()).unwrap_or(0),
             clock: Some(&self.clock),
-            tour: self.duty.as_ref().map(|d| format!("{}/{}", d.line, d.tour)),
+            tour: self.session.duty.as_ref().map(|d| format!("{}/{}", d.line, d.tour)),
             walker,
-            inside_of: self.inside_remote,
+            inside_of: self.net.inside_remote,
             radio_keyed,
         };
         let updates = lan::tick(
             lan,
-            &mut self.remotes,
+            &mut self.net.remotes,
             dt,
             &self.args,
             self.player.as_mut(),
             self.world.as_deref(),
             self.renderer.as_ref(),
             self.scene.as_mut(),
-            self.traffic.as_mut(),
-            self.humans.as_mut(),
+            self.session.traffic.as_mut(),
+            self.session.humans.as_mut(),
             duty,
             &frame,
         );
         for u in updates {
             self.apply_world_update(u);
         }
-        let cmds = self.lan.as_mut().map(|l| l.take_commands()).unwrap_or_default();
+        let cmds = self.net.lan.as_mut().map(|l| l.take_commands()).unwrap_or_default();
         for (from, text) in cmds {
             self.lan_command(from, &text);
         }
@@ -55,7 +55,7 @@ impl App {
 
     /// A command another player's game sent ours (`LanSession::command`).
     pub(crate) fn lan_command(&mut self, from: u32, text: &str) {
-        let Some(lan) = self.lan.as_ref() else { return };
+        let Some(lan) = self.net.lan.as_ref() else { return };
         let my_id = lan.my_id;
         if let Some(ev) = text.strip_prefix("trigger ") {
             // a switch worked by a passenger of ours: only by one who is in our bus
@@ -74,7 +74,7 @@ impl App {
         if text == "voice?" {
             if lan.role == omsi_net::Role::Host {
                 let answer = crate::voice::VoiceServer::command(crate::voice::hosted().as_ref());
-                if let Some(l) = self.lan.as_mut() {
+                if let Some(l) = self.net.lan.as_mut() {
                     l.command(from, &answer);
                 }
             }
@@ -82,7 +82,7 @@ impl App {
         }
         if text.starts_with("voice ") {
             if from == 1 {
-                if let (Some(v), Some(server)) = (self.voice.as_mut(), crate::voice::VoiceServer::parse_command(text)) {
+                if let (Some(v), Some(server)) = (self.sound.voice.as_mut(), crate::voice::VoiceServer::parse_command(text)) {
                     v.set_server(server);
                 }
             }
@@ -103,13 +103,13 @@ impl App {
                 self.clock.year = year;
                 self.clock.day_of_year = day_of_year;
                 self.clock.time = time;
-                if let Some(t) = self.traffic.as_mut() {
+                if let Some(t) = self.session.traffic.as_mut() {
                     t.day_time = time;
                 }
             }
             lan::WorldUpdate::Slew(s) => {
                 self.clock.time = (self.clock.time + s).clamp(0.0, 86399.999);
-                if let Some(t) = self.traffic.as_mut() {
+                if let Some(t) = self.session.traffic.as_mut() {
                     t.day_time += s;
                 }
             }
@@ -123,7 +123,7 @@ impl App {
                 self.change_weather(w, false, 240.0);
             }
             lan::WorldUpdate::Tours(tours) => {
-                if let Some(s) = self.schedule.as_mut() {
+                if let Some(s) = self.session.schedule.as_mut() {
                     s.set_lan_tours(tours);
                 }
             }

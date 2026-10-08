@@ -15,22 +15,22 @@ impl App {
             crate::app::report_missing_content(&w, &mut none);
         }
         // PluginFinalize, as OMSI calls it on the way out
-        if let Some(mut p) = self.plugins.take() {
+        if let Some(mut p) = self.integrations.plugins.take() {
             p.finalize();
         }
-        if self.player.is_none() || self.career.seconds <= 0.0 {
+        if self.player.is_none() || self.session.career.seconds <= 0.0 {
             return;
         }
         // the situation to continue next time (OMSI writes it when a map is left; once, as
         // the rest: `career.seconds` is zero after the first time)
         self.save_last_situation();
-        if self.career.path.is_some() {
-            if let Err(e) = self.career.save() {
+        if self.session.career.path.is_some() {
+            if let Err(e) = self.session.career.save() {
                 log::warn!("writing the personnel file: {e}");
             }
         }
         let bus = self.args.bus.clone().unwrap_or_default();
-        if let Err(e) = self.career.write_session(
+        if let Err(e) = self.session.career.write_session(
             &self.args.map,
             &bus,
             self.args.line.as_deref(),
@@ -38,7 +38,7 @@ impl App {
         ) {
             log::warn!("writing the session summary: {e}");
         }
-        self.career.seconds = 0.0;
+        self.session.career.seconds = 0.0;
     }
 
     /// Start the game again on the quicksave (`Situations/quicksave.osn` of the content
@@ -81,7 +81,7 @@ impl App {
     /// written), as OMSI keeps it: the launcher offers to continue it. Not
     /// in a tutorial, a LAN session or without a bus of one's own.
     pub(crate) fn save_last_situation(&mut self) -> Option<std::path::PathBuf> {
-        if self.tutorial.is_some() || self.lan.is_some() || self.player.is_none() {
+        if self.menus.tutorial.is_some() || self.net.lan.is_some() || self.player.is_none() {
             return None;
         }
         let (Some(w), Some(cam)) = (self.world.as_ref(), self.camera.as_ref()) else { return None };
@@ -90,7 +90,7 @@ impl App {
         let dir = base.join(dir);
         let _ = std::fs::create_dir_all(&dir);
         let out = dir.join("laststn.osn");
-        let sit = build_situation(&self.args, w, &self.clock, self.args.weather.as_deref(), self.player.as_ref(), &self.placed, cam, self.duty.as_ref(), "Last situation");
+        let sit = build_situation(&self.args, w, &self.clock, self.args.weather.as_deref(), self.player.as_ref(), &self.session.placed, cam, self.session.duty.as_ref(), "Last situation");
         match sit.save(&out) {
             Ok(()) => {
                 log::info!("saved the last situation {}", out.display());
@@ -151,7 +151,7 @@ impl App {
         // --situation find it there as they find a mod's files)
         let dir = crate::startup::content_dir().unwrap_or_else(|| self.args.root.clone()).join("Situations");
         let out = dir.join("quicksave.osn");
-        let sit = build_situation(&self.args, w, &self.clock, self.args.weather.as_deref(), self.player.as_ref(), &self.placed, cam, self.duty.as_ref(), "Quicksave");
+        let sit = build_situation(&self.args, w, &self.clock, self.args.weather.as_deref(), self.player.as_ref(), &self.session.placed, cam, self.session.duty.as_ref(), "Quicksave");
         match save_or_fallback(&sit, &out, Path::new("Situations").join("quicksave.osn").as_path()) {
             Ok(out) => {
                 log::info!("saved situation {} ({} vehicles)", out.display(), sit.vehicles.len());
@@ -186,13 +186,13 @@ impl App {
             if d.type_name.trim().is_empty() { d.path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default() } else { d.type_name.trim().to_string() }
         });
         let t = self.clock.time;
-        let what = match (bus, self.duty.as_ref()) {
+        let what = match (bus, self.session.duty.as_ref()) {
             (Some(b), Some(d)) => format!("{b}, line {} / {}", d.line.trim(), d.tour.trim()),
             (Some(b), None) => b,
             (None, _) => "on foot".to_string(),
         };
         let name = format!("Slot {n}: {what}, {:02}:{:02}", (t / 3600.0) as i32 % 24, ((t % 3600.0) / 60.0) as i32);
-        let sit = build_situation(&self.args, w, &self.clock, self.args.weather.as_deref(), self.player.as_ref(), &self.placed, cam, self.duty.as_ref(), &name);
+        let sit = build_situation(&self.args, w, &self.clock, self.args.weather.as_deref(), self.player.as_ref(), &self.session.placed, cam, self.session.duty.as_ref(), &name);
         match save_or_fallback(&sit, &out, rel_dir.join(format!("Slot {n}.osn")).as_path()) {
             Ok(out) => {
                 log::info!("saved situation {} ({} vehicles)", out.display(), sit.vehicles.len());

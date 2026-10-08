@@ -9,7 +9,7 @@ pub(crate) fn is_controller_list(kind: Option<&ListKind>) -> bool {
 }
 
 fn configurations(app: &App) -> Vec<DeviceCfg> {
-    app.controllers.as_ref().map(|c| c.configuration()).unwrap_or_else(|| crate::controllers::read_cfg(&app.args.root))
+    app.input.controllers.as_ref().map(|c| c.configuration()).unwrap_or_else(|| crate::controllers::read_cfg(&app.args.root))
 }
 
 fn index(devices: &[DeviceCfg], name: &str) -> Option<usize> {
@@ -117,7 +117,7 @@ fn action_rows(events: Vec<(String, String)>) -> Rows {
 
 pub(crate) fn items(app: &App, kind: &ListKind) -> Rows {
     let devices = configurations(app);
-    let connected = app.controllers.as_ref().map(|c| c.connected()).unwrap_or_default();
+    let connected = app.input.controllers.as_ref().map(|c| c.connected()).unwrap_or_default();
     let mut out = Vec::new();
     match kind {
         ListKind::ControllerDevices(tab) => match (*tab).min(COMMON_TABS.len() - 1) {
@@ -261,8 +261,8 @@ fn switched(now: bool, mv: Move) -> bool {
 fn save(app: &mut App, devices: Vec<DeviceCfg>) {
     match crate::controllers::save_cfg(&devices) {
         Ok(()) => {
-            if let Some(c) = app.controllers.as_mut() { c.install_cfg(devices); }
-            app.last_ctl_steer = None;
+            if let Some(c) = app.input.controllers.as_mut() { c.install_cfg(devices); }
+            app.input.last_ctl_steer = None;
             app.service_msg = Some(("Controller configuration saved and applied".into(), 3.0));
         }
         Err(e) => app.service_msg = Some((format!("Controller configuration was not saved: {e}"), 6.0)),
@@ -280,8 +280,8 @@ pub(crate) fn run(app: &mut App, kind: &ListKind, action: &str, mv: Move) -> Opt
             "reload_controllers" => {
                 match crate::controllers::read_cfg_checked(&app.args.root) {
                     Ok(devices) => {
-                        if let Some(c) = app.controllers.as_mut() { c.install_cfg(devices); }
-                        app.last_ctl_steer = None;
+                        if let Some(c) = app.input.controllers.as_mut() { c.install_cfg(devices); }
+                        app.input.last_ctl_steer = None;
                         app.service_msg = Some(("Saved controller mappings reloaded".into(), 3.0));
                     }
                     Err(e) => app.service_msg = Some((format!("Controller mappings were not reloaded: {e}"), 6.0)),
@@ -378,7 +378,7 @@ pub(crate) fn run(app: &mut App, kind: &ListKind, action: &str, mv: Move) -> Opt
 
 /// Called after the existing controller's single poll for this frame.
 pub(crate) fn frame(app: &mut App) {
-    if matches!(app.list_kind, Some(ListKind::ControllerDevices(_) | ListKind::Controller(..) | ListKind::ControllerAxis(..))) {
+    if matches!(app.menus.list_kind, Some(ListKind::ControllerDevices(_) | ListKind::Controller(..) | ListKind::ControllerAxis(..))) {
         thread_local! {
             static LAST_REFRESH: std::cell::RefCell<std::time::Instant> = std::cell::RefCell::new(std::time::Instant::now());
         }
@@ -391,8 +391,8 @@ pub(crate) fn frame(app: &mut App) {
         if refresh { app.refresh_list(); }
         return;
     }
-    let Some(ListKind::ControllerCapture(name)) = app.list_kind.clone() else { return };
-    let pressed = app.controllers.as_ref().and_then(|c| c.raw_buttons.iter().find(|(n, b, down)|
+    let Some(ListKind::ControllerCapture(name)) = app.menus.list_kind.clone() else { return };
+    let pressed = app.input.controllers.as_ref().and_then(|c| c.raw_buttons.iter().find(|(n, b, down)|
         *down && *b < crate::controllers::HAT_BUTTONS + 16 && crate::controllers::names_match(n, &name)).map(|(_, b, _)| *b));
     if let Some(button) = pressed {
         app.open_list(ListKind::ControllerButtonSettings(name, button));

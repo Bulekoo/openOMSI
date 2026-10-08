@@ -68,8 +68,8 @@ pub(crate) fn game_info(app: &crate::App) -> Vec<(&'static str, InfoValue)> {
     v.push(("year", Num(app.clock.year as f64)));
     v.push(("view", Text(app.view.clone())));
     v.push(("paused", Bool(app.paused)));
-    v.push(("on_foot", Bool(app.on_foot.is_some())));
-    v.push(("multiplayer", Bool(app.lan.is_some())));
+    v.push(("on_foot", Bool(app.session.on_foot.is_some())));
+    v.push(("multiplayer", Bool(app.net.lan.is_some())));
     // the situation the game started from (the launcher's "continue": `laststn.osn`)
     // (relative to the OMSI folder, `/`-separated, whether the launcher passed it absolute or not)
     if let Some(s) = app.args.situation.as_ref() {
@@ -78,10 +78,10 @@ pub(crate) fn game_info(app: &crate::App) -> Vec<(&'static str, InfoValue)> {
         v.push(("situation", Text(rel.to_string_lossy().replace('\\', "/"))));
     }
     // this session's, as the personnel file counts them
-    v.push(("crashes", Num(app.career.crashes[0] as f64)));
-    v.push(("heavy_crashes", Num(app.career.crashes[3] as f64)));
-    v.push(("pedestrians_hit", Num(app.career.crashes[1] as f64)));
-    if let Some(t) = app.traffic.as_ref() {
+    v.push(("crashes", Num(app.session.career.crashes[0] as f64)));
+    v.push(("heavy_crashes", Num(app.session.career.crashes[3] as f64)));
+    v.push(("pedestrians_hit", Num(app.session.career.crashes[1] as f64)));
+    if let Some(t) = app.session.traffic.as_ref() {
         v.push(("traffic", Num(t.cars.len() as f64)));
     }
     if let Some(w) = app.world.as_ref() {
@@ -108,9 +108,9 @@ pub(crate) fn game_info(app: &crate::App) -> Vec<(&'static str, InfoValue)> {
             _ => None,
         };
         v.push(("destination", Text(shown.unwrap_or_default())));
-        v.push(("passengers", Num(app.humans.as_ref().map(|h| h.riding()).unwrap_or(0) as f64)));
+        v.push(("passengers", Num(app.session.humans.as_ref().map(|h| h.riding()).unwrap_or(0) as f64)));
     }
-    if let Some(d) = app.duty.as_ref() {
+    if let Some(d) = app.session.duty.as_ref() {
         v.push(("line", Text(d.line.trim().to_string())));
         v.push(("tour", Text(d.tour.trim().to_string())));
         if let Some(trip) = d.trips.get(d.trip_index) {
