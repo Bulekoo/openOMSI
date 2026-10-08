@@ -149,7 +149,8 @@ Where the code is going (new code follows it, refactors move old code towards it
 1. **Parsers** (`omsi-cfg`, `omsi-script`, `omsi-o3d`, `omsi-model`, `omsi-scenery`, `omsi-map`,
    `omsi-vehicle`, `omsi-timetable`, `omsi-content`): files in, plain data out. No GPU, no
    clock, no global state; each one testable on byte buffers.
-2. **Simulation** (`omsi-sim`, the schedule, traffic and people logic of `omsi-app`): advances
+2. **Simulation** (`omsi-sim`: vehicles, `ai_traffic` (`TrafficSim`), `people` (`PeopleSim`),
+   physics, scripts; the timetable runtime still in `omsi-app::schedule`): advances
    the world by a time step. Knows nothing of the GPU or the window: it can run headless, in
    tests and on a server, and two runs with the same seed and inputs give the same states.
 3. **View sync**: the one place that turns simulation state into renderer instances
@@ -170,6 +171,15 @@ read once, through one registry that names each flag, its meaning and its type, 
 checked against it.
 
 ## Known debt
+
+* **What is already in place.** The window and the offscreen run share the frame's steps
+  (`omsi-app/src/app_events/frame/steps.rs`); the AI traffic and the people simulate in
+  `omsi-sim`, with `omsi-app::traffic::Traffic` and `omsi-app::humans::Humans` as thin
+  wrappers (simulation + view) that dereference to them; every `OMSI_*` switch goes through
+  `omsi_cfg::flags` (`docs/DEBUG_FLAGS.md`); `App`'s state is grouped by subsystem
+  (`omsi-app/src/app/groups.rs`). Still to move: the render-free parts of the timetable
+  (`schedule/{times,ibis,duty}.rs` first) into `omsi-sim`, and the view sync of traffic and
+  people out of their wrappers into one place.
 
 * **Global mutable state.** The introduction's "no global mutable state" is not true today:
   `omsi-app` has about 45 module-level `static`s with interior mutability (`Mutex`, atomics,
