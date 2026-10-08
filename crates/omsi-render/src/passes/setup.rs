@@ -7,9 +7,12 @@ impl Renderer {
     /// The test hooks and the fallbacks after a GPU error. False: the device is gone and
     /// nothing is drawn.
     pub(crate) fn frame_hooks(&mut self, scene: &mut Scene, env: &FrameEnv, with_overlays: bool) -> bool {
+        #[cfg(not(feature = "test-hooks"))]
+        let _ = (env, with_overlays);
         // test hook for a lost device (a driver reset): its resources are taken away and
         // the session has to end in order
-        if env.fake_gpu_error.as_deref() == Some("lost")
+        #[cfg(feature = "test-hooks")]
+        if env.fake_gpu_error == Some("lost")
             && with_overlays
             && self.started.elapsed().as_secs_f32() > 3.0
             && self.device_lost().is_none()
@@ -24,7 +27,8 @@ impl Renderer {
         if self.device_lost.lock().unwrap_or_else(|e| e.into_inner()).is_some() {
             return false;
         }
-        if env.fake_gpu_error.as_deref() == Some("frame")
+        #[cfg(feature = "test-hooks")]
+        if env.fake_gpu_error == Some("frame")
             && self.options.msaa > 1
             && self.started.elapsed().as_secs_f32() > 3.0
         {

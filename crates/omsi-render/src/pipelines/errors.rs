@@ -56,7 +56,10 @@ pub(crate) fn install(device: &wgpu::Device, format: wgpu::TextureFormat, option
             }
         }));
     }
-    if omsi_cfg::env::var("OMSI_FAKE_GPU_ERROR").as_deref() == Ok("build") && msaa > 1 {
+    #[cfg(not(feature = "test-hooks"))]
+    let _ = format;
+    #[cfg(feature = "test-hooks")]
+    if omsi_cfg::flags::OMSI_FAKE_GPU_ERROR.var() == Some("build") && msaa > 1 {
         // test hook for the fallback in `new_with`: a sample count no device takes
         let _ = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("invalid"),

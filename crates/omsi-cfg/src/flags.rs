@@ -265,7 +265,7 @@ flags! {
     OMSI_ENHANCED: Bool, Tuning, Use, "settings", "Enhanced graphics for this run.";
     OMSI_ENHANCED_PLUS: Bool, Tuning, Use, "settings", "Enhanced+ (ray traced) graphics for this run.";
     OMSI_ENV_PHOTO: Num, Debug, Use, "1", "0 leaves the environment photo out of the debug views.";
-    OMSI_FAKE_GPU_ERROR: Text, Test, Frame, "-", "Fault injection: open, open-panic, pipeline, lost-build, build, lost, frame - the GPU error to simulate.";
+    OMSI_FAKE_GPU_ERROR: Text, Test, Frame, "-", "Fault injection: open, open-panic, pipeline, lost-build, build, lost, frame - the GPU error to simulate. Only in builds with omsi-render's `test-hooks` feature (on by default).";
     OMSI_FIXED_SCALE: Bool, Switch, Use, "off", "Keep the render scale fixed (no dynamic resolution).";
     OMSI_FLEET_AHEAD: Num, Test, Use, "FLEET_AHEAD", "Minutes ahead the timetable fleet is planned (for tests).";
     OMSI_FLEET_IDLE: Num, Test, Use, "FLEET_IDLE", "Seconds a fleet vehicle idles (shortened for tests).";
@@ -398,7 +398,6 @@ flags! {
     OMSI_ROAD_PHOTO_SIDE: Num, Test, Use, "0", "With OMSI_ROAD_PHOTO: metres to either side of the carriageway.";
     OMSI_ROAD_PHOTO_SLANT: Num, Test, Use, "-", "With OMSI_ROAD_PHOTO: from a driver's eye this far back instead of from above.";
     OMSI_ROOT: Text, Setup, Use, "found", "The OMSI 2 installation folder (also the content root for tests that need real content).";
-    OMSI_RT: Bool, Test, Test, "-", "Set by the rt_smoke test before opening the renderer; no code reads it.";
     OMSI_RT_REFL_HALF: Bool, Switch, Use, "off", "Trace reflections at half size.";
     OMSI_SAFE_GPU: Num, Setup, Use, "0", "Restarts after a lost graphics device: lighter on the card each time. Set at runtime on Android and by the restart.";
     OMSI_SEED: Num, Test, Use, "random", "Seed of the scripts' random numbers (repeat a session).";

@@ -761,14 +761,14 @@ impl Lighting {
             && self.sun_dir.normalize_or_zero().z < -0.1
             && self.moon_dir.normalize_or_zero().z > 0.1
             && self.moon_illum > 0.25
-            && omsi_cfg::env::var_os("OMSI_NO_SHADOWS").is_none()
+            && !omsi_cfg::flags::OMSI_NO_SHADOWS.is_set()
     }
 
     pub fn casts_sun_shadows(&self) -> bool {
         self.shadows
             && self.sun_dir.normalize_or_zero().z > -0.02
             && self.sun_intensity > 0.05
-            && omsi_cfg::env::var_os("OMSI_NO_SHADOWS").is_none()
+            && !omsi_cfg::flags::OMSI_NO_SHADOWS.is_set()
     }
 }
 
@@ -1632,7 +1632,7 @@ const ENHANCED_CAMERA_TEXTURES: [u32; 3] = [12, 14, 17];
 /// (vanilla and vanilla+ draw as everywhere). OMSI_GL_TEXTURE_UNITS=1 takes this layout on
 /// any device (with OMSI_GPU_ARRAYS, to try it without such a chip).
 fn sixteen_texture_units() -> bool {
-    array_path() != ArrayPath::Storage && (gl_backend() || omsi_cfg::env::var_os("OMSI_GL_TEXTURE_UNITS").is_some())
+    array_path() != ArrayPath::Storage && (gl_backend() || omsi_cfg::flags::OMSI_GL_TEXTURE_UNITS.is_set())
 }
 
 /// The camera group's entries on a device whose arrays take `path`, without the enhanced
@@ -2350,7 +2350,7 @@ static RT_GBUF: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::n
 /// asks for it.
 static BASIC_PIPELINES: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 fn basic_pipelines() -> bool {
-    BASIC_PIPELINES.load(std::sync::atomic::Ordering::Relaxed) || omsi_cfg::env::var_os("OMSI_BASIC_PIPELINES").is_some()
+    BASIC_PIPELINES.load(std::sync::atomic::Ordering::Relaxed) || omsi_cfg::flags::OMSI_BASIC_PIPELINES.is_set()
 }
 /// The file that remembers, per graphics adapter, the reduced renderer that worked there
 /// (`~/.openomsi/gpu-fallback.cfg`, lines `adapter|msaa|basic`).
@@ -2499,9 +2499,10 @@ impl Renderer {
         let info = adapter.get_info();
         let (asked_format, asked_options) = (format, options);
         // test hooks for an adapter that cannot be opened: an error, or wgpu going down
-        match omsi_cfg::env::var("OMSI_FAKE_GPU_ERROR").as_deref() {
-            Ok("open") => return Err(anyhow!("test: {} refused (OMSI_FAKE_GPU_ERROR=open)", info.name)),
-            Ok("open-panic") => panic!("test: {} went down while being opened (OMSI_FAKE_GPU_ERROR=open-panic)", info.name),
+        #[cfg(feature = "test-hooks")]
+        match omsi_cfg::flags::OMSI_FAKE_GPU_ERROR.var() {
+            Some("open") => return Err(anyhow!("test: {} refused (OMSI_FAKE_GPU_ERROR=open)", info.name)),
+            Some("open-panic") => panic!("test: {} went down while being opened (OMSI_FAKE_GPU_ERROR=open-panic)", info.name),
             _ => {}
         }
         // What the textures may take on this adapter (wgpu does not tell a card's memory):
@@ -2531,7 +2532,7 @@ impl Renderer {
         let intel_vulkan_safe = cfg!(windows)
             && info.backend == wgpu::Backend::Vulkan
             && info.vendor == 0x8086
-            && omsi_cfg::env::var_os("OMSI_INTEL_FULL_GPU").is_none();
+            && !omsi_cfg::flags::OMSI_INTEL_FULL_GPU.is_set();
         let options = if intel_vulkan_safe {
             log::warn!(
                 "Intel Vulkan adapter detected ({}): using the stable driver profile (1x MSAA, 1x anisotropy, SSAO and runtime texture compression off); set OMSI_INTEL_FULL_GPU=1 after updating the Intel driver to retry the requested settings",
@@ -2554,7 +2555,7 @@ impl Renderer {
         // memory or at a dozen frames a second.) OMSI_FULL_GPU=1 asks for the settings as
         // they are.
         GL_BACKEND.store(info.backend == wgpu::Backend::Gl, std::sync::atomic::Ordering::Relaxed);
-        let full = omsi_cfg::env::var_os("OMSI_FULL_GPU").is_some();
+        let full = omsi_cfg::flags::OMSI_FULL_GPU.is_set();
         let weak = !full
             && (info.backend == wgpu::Backend::Gl
                 // (a phone's chip, whatever type its driver reports: some say "other")
@@ -2594,9 +2595,9 @@ impl Renderer {
         }
         // OMSI_GPU_LIMITS=default|downlevel: the WebGPU defaults (or the downlevel ones) and
         // nothing more, whatever this machine could do - to find what a stricter driver refuses
-        match omsi_cfg::env::var("OMSI_GPU_LIMITS").as_deref() {
-            Ok("default") => limits = wgpu::Limits::default(),
-            Ok("downlevel") => limits = wgpu::Limits::downlevel_defaults(),
+        match omsi_cfg::flags::OMSI_GPU_LIMITS.var() {
+            Some("default") => limits = wgpu::Limits::default(),
+            Some("downlevel") => limits = wgpu::Limits::downlevel_defaults(),
             _ => {}
         }
         // the shadow atlas is two maps wide: no wider than the card draws
@@ -2648,12 +2649,12 @@ impl Renderer {
         } else {
             wgpu::Features::empty()
         };
-        if omsi_cfg::env::var_os("OMSI_GPU_TIMERS").is_some() {
+        if omsi_cfg::flags::OMSI_GPU_TIMERS.is_set() {
             required_features |= adapter.features() & wgpu::Features::TIMESTAMP_QUERY;
         }
         // DXT textures stay compressed on the GPU where it takes them (Apple silicon does);
         // OMSI_NO_BC=1 uploads everything as RGBA (the old way, for comparisons)
-        if omsi_cfg::env::var_os("OMSI_NO_BC").is_none() {
+        if !omsi_cfg::flags::OMSI_NO_BC.is_set() {
             required_features |= adapter.features() & wgpu::Features::TEXTURE_COMPRESSION_BC;
         }
         if intel_vulkan_safe {
@@ -2669,7 +2670,7 @@ impl Renderer {
             && !intel_vulkan_safe
             && info.backend != wgpu::Backend::Noop
             && adapter.features().contains(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
-            && omsi_cfg::env::var_os("OMSI_NO_RT").is_none();
+            && !omsi_cfg::flags::OMSI_NO_RT.is_set();
         if ray_query {
             required_features |= wgpu::Features::EXPERIMENTAL_RAY_QUERY;
             limits = limits.using_acceleration_structure_values(adapter.limits());
@@ -2681,9 +2682,9 @@ impl Renderer {
         // OMSI_GPU_ARRAYS=textures|nostorage takes those paths on any device
         let downlevel = adapter.get_downlevel_capabilities().flags;
         let storage = limits.max_storage_buffers_per_shader_stage;
-        let path = match omsi_cfg::env::var("OMSI_GPU_ARRAYS").as_deref() {
-            Ok("textures") => ArrayPath::VertexTextures,
-            Ok("nostorage") => ArrayPath::NoStorage,
+        let path = match omsi_cfg::flags::OMSI_GPU_ARRAYS.var() {
+            Some("textures") => ArrayPath::VertexTextures,
+            Some("nostorage") => ArrayPath::NoStorage,
             _ if !downlevel.contains(wgpu::DownlevelFlags::FRAGMENT_STORAGE) || storage < 2 => ArrayPath::NoStorage,
             _ if !downlevel.contains(wgpu::DownlevelFlags::VERTEX_STORAGE) || storage < 3 => ArrayPath::VertexTextures,
             _ => ArrayPath::Storage,
@@ -2752,7 +2753,7 @@ impl Renderer {
             .features()
             .contains(wgpu::Features::TEXTURE_COMPRESSION_BC);
         let compress =
-            bc && options.compress_textures && omsi_cfg::env::var_os("OMSI_NO_TEXCOMPRESS").is_none();
+            bc && options.compress_textures && !omsi_cfg::flags::OMSI_NO_TEXCOMPRESS.is_set();
         omsi_texture::set_gpu_options(omsi_texture::GpuOptions { bc, compress });
         log::info!("renderer: {} ({:?}), {:?}, {}x MSAA{}, anisotropy {}, shadow map {}, SSAO {}, render scale {}, textures {}", info.name, info.backend, format, options.msaa, if adapter_table { " (adapter format table)" } else { "" }, options.anisotropy, options.shadow_size, options.ssao, if options.render_scale > 0.0 { format!("{:.2}", options.render_scale.clamp(0.5, 1.0)) } else { "auto".to_string() }, match (bc, compress) { (false, _) => "RGBA (no BC on this device)", (true, false) => "DXT as blocks, others RGBA", (true, true) => "DXT as blocks, others compressed where close" });
         // Every pipeline is built under an error scope of every kind and the renderer built
@@ -2773,7 +2774,8 @@ impl Renderer {
         // the ones a picture can do without (`basic_pipelines`); lost even so, the next
         // graphics interface is tried.
         // (test hook: OMSI_FAKE_GPU_ERROR=lost-build loses the first device so)
-        if let (Ok(r), Ok("lost-build")) = (made.as_ref(), omsi_cfg::env::var("OMSI_FAKE_GPU_ERROR").as_deref()) {
+        #[cfg(feature = "test-hooks")]
+        if let (Ok(r), Some("lost-build")) = (made.as_ref(), omsi_cfg::flags::OMSI_FAKE_GPU_ERROR.var()) {
             if !basic_pipelines() {
                 *r.device_lost.lock().unwrap_or_else(|e| e.into_inner()) = Some("test (OMSI_FAKE_GPU_ERROR=lost-build)".into());
             }
@@ -2831,7 +2833,8 @@ impl Renderer {
             let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
             let renderer = Self::build(device.clone(), queue.clone(), name.to_string(), format, RenderOptions { msaa, ..options });
             // (test hook: OMSI_FAKE_GPU_ERROR=pipeline fails a pipeline until the basic ones)
-            if !basic && omsi_cfg::env::var("OMSI_FAKE_GPU_ERROR").as_deref() == Ok("pipeline") {
+            #[cfg(feature = "test-hooks")]
+            if !basic && omsi_cfg::flags::OMSI_FAKE_GPU_ERROR.var() == Some("pipeline") {
                 let _ = device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some("test"), source: wgpu::ShaderSource::Wgsl("fn broken( {".into()) });
             }
             let errors = [validation.pop().await, memory.pop().await, internal.pop().await];
@@ -2958,7 +2961,7 @@ impl Renderer {
             // (OMSI_RENDER_CLOCK=<s>: the animations' clock starts that far on - offscreen
             // stills of moving things, the windy trees, at different moments)
             started: std::time::Instant::now()
-                .checked_sub(std::time::Duration::from_secs_f64(omsi_cfg::env::var("OMSI_RENDER_CLOCK").ok().and_then(|v| v.trim().parse::<f64>().ok()).filter(|s| s.is_finite() && *s >= 0.0).unwrap_or(0.0)))
+                .checked_sub(std::time::Duration::from_secs_f64(omsi_cfg::flags::OMSI_RENDER_CLOCK.var().and_then(|v| v.trim().parse::<f64>().ok()).filter(|s| s.is_finite() && *s >= 0.0).unwrap_or(0.0)))
                 .unwrap_or_else(std::time::Instant::now),
             tree_gust_drift: std::cell::Cell::new((glam::DVec2::ZERO, 0.0)),
             ao: None,
@@ -3022,9 +3025,9 @@ impl Renderer {
             gpu_timers,
             stats: Default::default(),
             counts: Default::default(),
-            profiling: omsi_cfg::env::var_os("OMSI_PROFILE").is_some(),
+            profiling: omsi_cfg::flags::OMSI_PROFILE.is_set(),
             draw_audit_at: std::time::Instant::now(),
-            encoding_pool: if omsi_cfg::env::var_os("OMSI_NO_RENDER_POOL").is_some() {
+            encoding_pool: if omsi_cfg::flags::OMSI_NO_RENDER_POOL.is_set() {
                 None
             } else {
                 let workers = std::thread::available_parallelism().map(|n| n.get() / 2).unwrap_or(2).clamp(2, 8);
@@ -3163,7 +3166,7 @@ impl Renderer {
             mesh_pages: Vec::new(),
             changed_mark: Vec::new(),
             origin_moved: false,
-            cache_bounds: omsi_cfg::env::var_os("OMSI_NO_BOUNDS_CACHE").is_none(),
+            cache_bounds: !omsi_cfg::flags::OMSI_NO_BOUNDS_CACHE.is_set(),
             bounds_meshes: Vec::new(),
             bounds_known: Vec::new(),
             bounds_users: Vec::new(),
@@ -5417,7 +5420,7 @@ impl Renderer {
                 depth_or_array_layers: 1,
             },
         );
-        if omsi_cfg::env::var_os("OMSI_DEBUG_SKY").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_SKY.is_set() {
             log::info!("sky: sun {:?} (altitude {:.1}°) sky {:?} ground {:?} exposure {:.3} table scale {:.4} haze {:.2} overcast {:.2} rain {:.2} sun visibility {:.2} moon {:?} (altitude {:.1}°, lit {:.2}) city glow {:.2}", st.sun, st.input.sun_dir.z.asin().to_degrees(), st.sky_horizontal, st.ground, st.exposure, st.lut_scale, st.input.haze, st.input.overcast, st.input.rain, st.input.sun_visibility, st.moon_light, st.input.moon_dir.normalize_or_zero().z.asin().to_degrees(), st.input.moon_illum, st.input.city_glow);
         }
         if let Some(p) = self.probe.as_mut() {
@@ -5474,7 +5477,7 @@ impl Renderer {
                 1.0
             };
             let k = if self.instant_exposure || dt <= 0.0 { 1.0 } else { 1.0 - (-dt / 0.7).exp() };
-            if omsi_cfg::env::var_os("OMSI_DEBUG_SKY").is_some() {
+            if omsi_cfg::flags::OMSI_DEBUG_SKY.is_set() {
                 // (what share of the sky's directions are clear, against the cover asked for)
                 let mut clear = 0;
                 let mut n = 0;
@@ -5609,12 +5612,9 @@ impl Renderer {
             sun_disc: st.sun_disc.extend(dt).to_array(),
             debug: [
                 debug_view(),
-                omsi_cfg::env::var("OMSI_PUDDLE_F0")
-                    .ok().and_then(|v| v.parse::<f32>().ok())
+                omsi_cfg::flags::OMSI_PUDDLE_F0.parse::<f32>()
                     .filter(|v| v.is_finite()).unwrap_or(0.08).clamp(0.02, 0.2),
-                omsi_cfg::env::var("OMSI_ENV_PHOTO")
-                    .ok()
-                    .and_then(|v| v.parse().ok())
+                omsi_cfg::flags::OMSI_ENV_PHOTO.parse()
                     .unwrap_or(1.0),
                 // the tone curve's contrast, which self-lit pictures undo (`display_level`)
                 tone_contrast(log_exposure),
@@ -5776,7 +5776,7 @@ impl Renderer {
         if !scene.dirty {
             // only what moved or changed since the last frame
             if !scene.changed.is_empty() {
-                if omsi_cfg::env::var_os("OMSI_DEBUG_DRAWS").is_some() {
+                if omsi_cfg::flags::OMSI_DEBUG_DRAWS.is_set() {
                     log::info!(
                         "prepare: {} changed instances of {}",
                         scene.changed.len(),
@@ -6075,7 +6075,7 @@ impl Renderer {
                         .position(|v| *v == u32::MAX)
                     {
                         grid[base + slot] = idx;
-                    } else if omsi_cfg::env::var_os("OMSI_DEBUG_LIGHT_GRID").is_some() {
+                    } else if omsi_cfg::flags::OMSI_DEBUG_LIGHT_GRID.is_set() {
                         log::info!("light grid: cell ({x}, {y}) full, light at ({:.1}, {:.1}) radius {:.0} {} left out", p.x, p.y, l.radius, if l.direction.length_squared() > 0.5 { "spot" } else { "point" });
                     }
                 }
@@ -6196,7 +6196,7 @@ impl GpuTimers {
             // before the pass in front of it has finished its fragments: measured from their
             // own first stamps the post passes of the enhanced path overlapped and added up
             // to 25 ms of a 10 ms frame.
-            if omsi_cfg::env::var_os("OMSI_GPU_TIMERS_RAW").is_some() {
+            if omsi_cfg::flags::OMSI_GPU_TIMERS_RAW.is_set() {
                 log::info!(
                     "gpu stamps: {:?}",
                     t.pending
@@ -6369,7 +6369,7 @@ impl Renderer {
             }
         }
         let order: Vec<&Corona> = order.into_iter().map(|(_, c)| c).collect();
-        if omsi_cfg::env::var_os("OMSI_DEBUG_CONES").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_CONES.is_set() {
             log::info!("coronas: {} in {} runs {:?}, {} beams", order.len(), runs.len(), runs, order.iter().filter(|c| c.beam).count());
         }
         scene.corona_runs = runs;
@@ -7519,9 +7519,7 @@ fn gpu_light(l: &PointLight, p: Vec3) -> GpuPointLight {
 fn debug_view() -> f32 {
     static VIEW: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
     *VIEW.get_or_init(|| {
-        omsi_cfg::env::var("OMSI_DEBUG_ENHANCED")
-            .ok()
-            .and_then(|v| v.parse().ok())
+        omsi_cfg::flags::OMSI_DEBUG_ENHANCED.parse()
             .unwrap_or(0.0)
     })
 }
@@ -7541,7 +7539,7 @@ fn meter_tuning() -> [f32; 6] {
             0.0,
             NIGHT_VISION,
         ];
-        if let Ok(v) = omsi_cfg::env::var("OMSI_METER") {
+        if let Some(v) = omsi_cfg::flags::OMSI_METER.var() {
             for (k, x) in v.split(',').take(6).enumerate() {
                 if let Ok(x) = x.trim().parse() {
                     m[k] = x;
@@ -7561,7 +7559,7 @@ fn tone_contrast(log_pre: f32) -> f32 {
     static OVERRIDE: std::sync::OnceLock<Option<(f32, f32)>> = std::sync::OnceLock::new();
     let (day, night) = OVERRIDE
         .get_or_init(|| {
-            let v = omsi_cfg::env::var("OMSI_TONE_CONTRAST").ok()?;
+            let v = omsi_cfg::flags::OMSI_TONE_CONTRAST.var()?;
             let mut it = v.split(',').map(|x| x.trim().parse::<f32>().ok());
             Some((it.next()??, it.next().flatten().unwrap_or(1.0)))
         })
@@ -7943,7 +7941,7 @@ struct DayAir {
 fn day_air(lighting: &Lighting) -> DayAir {
     static FIXED: std::sync::OnceLock<Option<Vec<f32>>> = std::sync::OnceLock::new();
     let fixed = FIXED.get_or_init(|| {
-        let v = omsi_cfg::env::var("OMSI_DAY_AIR").ok()?;
+        let v = omsi_cfg::flags::OMSI_DAY_AIR.var()?;
         Some(v.split(',').filter_map(|x| x.trim().parse::<f32>().ok()).collect())
     });
     let hash = |k: u32| {
@@ -8350,7 +8348,7 @@ impl ExposureLog {
             started: std::time::Instant::now(),
             pending: (0.0, [0.0; 6]),
             ev: 0.0,
-            log: omsi_cfg::env::var_os("OMSI_DEBUG_EXPOSURE").is_some(),
+            log: omsi_cfg::flags::OMSI_DEBUG_EXPOSURE.is_set(),
         })
     }
 
@@ -8445,7 +8443,7 @@ const GPU_TIMER_PASSES: u32 = 16;
 
 impl GpuTimers {
     fn new(device: &wgpu::Device) -> Option<GpuTimers> {
-        if omsi_cfg::env::var_os("OMSI_GPU_TIMERS").is_none()
+        if !omsi_cfg::flags::OMSI_GPU_TIMERS.is_set()
             || !device.features().contains(wgpu::Features::TIMESTAMP_QUERY)
         {
             return None;
@@ -8815,7 +8813,7 @@ fn one_sided_primitive(cull: bool) -> wgpu::PrimitiveState {
 fn culls_back_faces(scene: &Scene, inst: &Instance) -> bool {
     static NO_CULL: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     scene.meshes[inst.mesh].one_sided
-        && !*NO_CULL.get_or_init(|| omsi_cfg::env::var_os("OMSI_NO_CULL").is_some())
+        && !*NO_CULL.get_or_init(|| omsi_cfg::flags::OMSI_NO_CULL.is_set())
         && glam::Mat3::from_mat4(inst.transform).determinant() > 0.0
 }
 
@@ -8831,7 +8829,7 @@ impl DevicePoller {
         // loads, a slow chip's frame) this thread gave up with wgpu-hal's panic "Could not
         // lock adapter context" (#898, after #843). It is not needed there: every submit
         // of the frame runs the same upkeep (wgpu-core's `maintain` after `queue.submit`).
-        if cfg!(target_arch = "wasm32") || gl_backend() || omsi_cfg::env::var_os("OMSI_NO_POLL_THREAD").is_some() {
+        if cfg!(target_arch = "wasm32") || gl_backend() || omsi_cfg::flags::OMSI_NO_POLL_THREAD.is_set() {
             return None;
         }
         let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));

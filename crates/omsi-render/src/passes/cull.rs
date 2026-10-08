@@ -288,7 +288,7 @@ impl Renderer {
     /// `OMSI_DEBUG_CULL=x,y,radius`: the instances there, with what the culling sees of them
     fn debug_cull_dump(&self, scene: &Scene, f: &FrameCtx, fr: &Frustum) {
         let Frustum { view, tan_x, tan_y, fog_far, .. } = *fr;
-        if let Some(p) = f.env.debug_cull_at.as_deref().and_then(|v| {
+        if let Some(p) = f.env.debug_cull_at.and_then(|v| {
             let f: Vec<f64> = v.split(',').filter_map(|x| x.trim().parse().ok()).collect();
             (f.len() == 3).then(|| (DVec3::new(f[0], f[1], 0.0), f[2]))
         }) {

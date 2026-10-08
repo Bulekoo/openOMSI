@@ -19,10 +19,11 @@ pub(crate) use batch::DrawPlan;
 pub(crate) use shadow_plan::ShadowPlan;
 
 /// The frame's switches from the environment: read once at the start of every frame
-/// (`omsi_cfg::env`), not wherever they are tested.
+/// (`omsi_cfg::flags`), not wherever they are tested.
 pub(crate) struct FrameEnv {
     /// `OMSI_FAKE_GPU_ERROR`: `lost` / `frame`, the device-loss and fallback test hooks
-    pub fake_gpu_error: Option<String>,
+    #[cfg(feature = "test-hooks")]
+    pub fake_gpu_error: Option<&'static str>,
     pub no_enhanced: bool,
     pub no_fxaa: bool,
     pub no_glass_picture: bool,
@@ -38,13 +39,13 @@ pub(crate) struct FrameEnv {
     pub debug_draws: bool,
     /// `OMSI_DEBUG_CULL`: set at all, and its value (`x,y,radius`: the instances to dump)
     pub debug_cull: bool,
-    pub debug_cull_at: Option<String>,
+    pub debug_cull_at: Option<&'static str>,
     /// `OMSI_DEBUG_SHADOW`: set at all, and its value (the smallest radius logged)
     pub debug_shadow: bool,
-    pub debug_shadow_r: Option<String>,
+    pub debug_shadow_r: Option<&'static str>,
     pub debug_flicker: bool,
     pub only_surfaces: bool,
-    pub skip_pipe: Option<String>,
+    pub skip_pipe: Option<&'static str>,
     pub no_bundles: bool,
     pub no_msaa_prepass: bool,
     pub no_main_split: bool,
@@ -58,41 +59,38 @@ pub(crate) struct FrameEnv {
 
 impl FrameEnv {
     pub(crate) fn read() -> FrameEnv {
-        let set = |name: &str| omsi_cfg::env::var_os(name).is_some();
-        let value = |name: &str| omsi_cfg::env::var(name).ok();
-        let debug_cull_at = omsi_cfg::env::var_os("OMSI_DEBUG_CULL");
-        let debug_shadow_r = omsi_cfg::env::var_os("OMSI_DEBUG_SHADOW");
         FrameEnv {
-            fake_gpu_error: value("OMSI_FAKE_GPU_ERROR"),
-            no_enhanced: set("OMSI_NO_ENHANCED"),
-            no_fxaa: set("OMSI_NO_FXAA"),
-            no_glass_picture: set("OMSI_NO_GLASS_PICTURE"),
-            mirror_enhanced: set("OMSI_MIRROR_ENHANCED"),
-            no_puddle_reflections: set("OMSI_NO_PUDDLE_REFLECTIONS"),
-            no_rt_frame: set("OMSI_NO_RT_FRAME"),
-            no_ao: set("OMSI_NO_AO"),
-            shadow_near_every_frame: set("OMSI_SHADOW_NEAR_EVERY_FRAME"),
-            shadow_far_every_frame: set("OMSI_SHADOW_FAR_EVERY_FRAME"),
-            debug_shadow_far: set("OMSI_DEBUG_SHADOW_FAR"),
-            debug_view_lamps: set("OMSI_DEBUG_VIEW_LAMPS"),
-            debug_sky: set("OMSI_DEBUG_SKY"),
-            debug_draws: set("OMSI_DEBUG_DRAWS"),
-            debug_cull: debug_cull_at.is_some(),
-            debug_cull_at: debug_cull_at.and_then(|v| v.into_string().ok()),
-            debug_shadow: debug_shadow_r.is_some(),
-            debug_shadow_r: debug_shadow_r.and_then(|v| v.into_string().ok()),
-            debug_flicker: set("OMSI_DEBUG_FLICKER"),
-            only_surfaces: set("OMSI_ONLY_SURFACES"),
-            skip_pipe: value("OMSI_SKIP_PIPE"),
-            no_bundles: set("OMSI_NO_BUNDLES"),
-            no_msaa_prepass: set("OMSI_NO_MSAA_PREPASS"),
-            no_main_split: set("OMSI_NO_MAIN_SPLIT"),
-            no_smoke: set("OMSI_NO_SMOKE"),
-            no_snowfall: set("OMSI_NO_SNOWFALL"),
-            no_coronas: set("OMSI_NO_CORONAS"),
-            no_glare: set("OMSI_NO_GLARE"),
-            debug_fog_lamps: set("OMSI_DEBUG_FOG_LAMPS"),
-            no_rt_grade: set("OMSI_NO_RT_GRADE"),
+            #[cfg(feature = "test-hooks")]
+            fake_gpu_error: omsi_cfg::flags::OMSI_FAKE_GPU_ERROR.var(),
+            no_enhanced: omsi_cfg::flags::OMSI_NO_ENHANCED.is_set(),
+            no_fxaa: omsi_cfg::flags::OMSI_NO_FXAA.is_set(),
+            no_glass_picture: omsi_cfg::flags::OMSI_NO_GLASS_PICTURE.is_set(),
+            mirror_enhanced: omsi_cfg::flags::OMSI_MIRROR_ENHANCED.is_set(),
+            no_puddle_reflections: omsi_cfg::flags::OMSI_NO_PUDDLE_REFLECTIONS.is_set(),
+            no_rt_frame: omsi_cfg::flags::OMSI_NO_RT_FRAME.is_set(),
+            no_ao: omsi_cfg::flags::OMSI_NO_AO.is_set(),
+            shadow_near_every_frame: omsi_cfg::flags::OMSI_SHADOW_NEAR_EVERY_FRAME.is_set(),
+            shadow_far_every_frame: omsi_cfg::flags::OMSI_SHADOW_FAR_EVERY_FRAME.is_set(),
+            debug_shadow_far: omsi_cfg::flags::OMSI_DEBUG_SHADOW_FAR.is_set(),
+            debug_view_lamps: omsi_cfg::flags::OMSI_DEBUG_VIEW_LAMPS.is_set(),
+            debug_sky: omsi_cfg::flags::OMSI_DEBUG_SKY.is_set(),
+            debug_draws: omsi_cfg::flags::OMSI_DEBUG_DRAWS.is_set(),
+            debug_cull: omsi_cfg::flags::OMSI_DEBUG_CULL.is_set(),
+            debug_cull_at: omsi_cfg::flags::OMSI_DEBUG_CULL.var(),
+            debug_shadow: omsi_cfg::flags::OMSI_DEBUG_SHADOW.is_set(),
+            debug_shadow_r: omsi_cfg::flags::OMSI_DEBUG_SHADOW.var(),
+            debug_flicker: omsi_cfg::flags::OMSI_DEBUG_FLICKER.is_set(),
+            only_surfaces: omsi_cfg::flags::OMSI_ONLY_SURFACES.is_set(),
+            skip_pipe: omsi_cfg::flags::OMSI_SKIP_PIPE.var(),
+            no_bundles: omsi_cfg::flags::OMSI_NO_BUNDLES.is_set(),
+            no_msaa_prepass: omsi_cfg::flags::OMSI_NO_MSAA_PREPASS.is_set(),
+            no_main_split: omsi_cfg::flags::OMSI_NO_MAIN_SPLIT.is_set(),
+            no_smoke: omsi_cfg::flags::OMSI_NO_SMOKE.is_set(),
+            no_snowfall: omsi_cfg::flags::OMSI_NO_SNOWFALL.is_set(),
+            no_coronas: omsi_cfg::flags::OMSI_NO_CORONAS.is_set(),
+            no_glare: omsi_cfg::flags::OMSI_NO_GLARE.is_set(),
+            debug_fog_lamps: omsi_cfg::flags::OMSI_DEBUG_FOG_LAMPS.is_set(),
+            no_rt_grade: omsi_cfg::flags::OMSI_NO_RT_GRADE.is_set(),
         }
     }
 }
