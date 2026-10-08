@@ -10059,7 +10059,7 @@ mod tests {
             indices: vec![0, 1, 2], ranges: vec![(0, 3, 0)], ..Default::default()
         };
         let (skinned, plain) = (renderer.add_mesh(&mut scene, &data), renderer.add_mesh(&mut scene, &data));
-        let mut add = |scene: &mut Scene, mesh, x: f64| renderer.add_instance(scene, mesh, DVec3::new(x, 0.0, 0.0), Mat4::IDENTITY, vec![material]);
+        let add = |scene: &mut Scene, mesh, x: f64| renderer.add_instance(scene, mesh, DVec3::new(x, 0.0, 0.0), Mat4::IDENTITY, vec![material]);
         let first = add(&mut scene, skinned, 0.0);
         let others: Vec<usize> = (0..300).map(|k| add(&mut scene, plain, k as f64 * 10.0)).collect();
         renderer.prepare(&mut scene);
