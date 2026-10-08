@@ -319,6 +319,7 @@ impl crate::App {
         let eye = *self.camera.as_ref()?;
         #[cfg(windows)]
         let eye = self
+            .xr
             .vr
             .as_ref()
             .and_then(|vr| vr.navigator_edit_camera())
