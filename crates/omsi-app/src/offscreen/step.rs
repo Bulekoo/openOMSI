@@ -845,6 +845,9 @@ impl Offscreen<'_> {
             let eye = player.as_ref().filter(|_| args.cam.is_none()).map(|p| p.vehicle.position).unwrap_or(camera.position);
             let tyres = crate::road_snow::tyres(player.as_ref(), traffic.as_ref(), remotes_off);
             snow_tracks.update(renderer, eye, traffic.as_ref().map(|t| &t.net), &tyres, road_snow.cover, road_snow.fallen);
+            let vehicles = crate::road_snow::roof_vehicles(player.as_ref(), traffic.as_ref());
+            let (cover, fallen) = (road_snow.cover, road_snow.fallen);
+            road_snow.roofs.step(&vehicles, cover, fallen);
         }
     }
 
@@ -929,6 +932,7 @@ impl Offscreen<'_> {
                 );
                 if crate::road_snow::enabled() {
                     road_snow.light(&mut lighting, snow_tracks);
+                    crate::road_snow::show_roofs(renderer, scene, &road_snow.roofs, player.as_ref(), traffic.as_ref(), &sim_view.traffic);
                 }
                 world.finish_texture_upgrades(renderer, scene);
                 let pixels = renderer.render_to_image(scene, w, h, &cam, &lighting)?;

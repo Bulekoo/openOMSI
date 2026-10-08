@@ -75,6 +75,15 @@ impl App {
                 let (cover, fallen) = (self.session.road_snow.cover, self.session.road_snow.fallen);
                 self.session.snow_tracks.update(r, cam.position, net, &tyres, cover, fallen);
             }
+            // the snow on the roofs of the player's bus and of the traffic
+            {
+                let vehicles = crate::road_snow::roof_vehicles(self.player.as_ref(), self.session.traffic.as_ref());
+                let (cover, fallen) = (self.session.road_snow.cover, self.session.road_snow.fallen);
+                self.session.road_snow.roofs.step(&vehicles, cover, fallen);
+            }
+            if let (Some(r), Some(scene)) = (self.renderer.as_ref(), self.scene.as_mut()) {
+                crate::road_snow::show_roofs(r, scene, &self.session.road_snow.roofs, self.player.as_ref(), self.session.traffic.as_ref(), &self.gfx.sim_view.traffic);
+            }
             *self.perf.profile.entry("lights.road_snow").or_default() += __tr.elapsed().as_secs_f64();
         }
         if let (Some(w), Some(scene), Some(cam)) = (

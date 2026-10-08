@@ -59,6 +59,8 @@ pub(crate) struct RoadSnow {
     /// tyre track remembers it and fills as more falls.
     pub fallen: f64,
     started: bool,
+    /// The snow on the roofs of the vehicles around the camera.
+    pub roofs: Roofs,
 }
 
 impl RoadSnow {
@@ -93,6 +95,133 @@ impl RoadSnow {
         lighting.snow_fallen = self.fallen;
         lighting.snow_ruts = RUTS;
         lighting.snow_tracks = tracks.ready();
+    }
+}
+
+/// The snow fallen on a roof that closes it (thousandths of a road cover, as `fallen`): a
+/// roof is white a little before the road, which the traffic keeps down.
+const ROOF_FILL: f64 = 700.0;
+/// Speed (m/s) above which the airstream takes snow off a roof, and how much a metre at
+/// 12 m/s above it: some 400 m at 50 km/h, 200 m at 80.
+const ROOF_BLOW_FROM: f32 = 6.0;
+const ROOF_BLOW: f32 = 0.004;
+
+/// The snow on one vehicle's roof: it gathers what falls, is blown off by the airstream
+/// when the vehicle goes fast, and thaws as the roads' snow does. Kept by the snow fallen
+/// and the way driven, not by the clock, so a run that renders only now and then (the
+/// offscreen pictures) keeps it as the window does.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct RoofSnow {
+    /// How much lies on it (0..1).
+    pub amount: f32,
+    fallen: f64,
+    cover: f32,
+    at: DVec3,
+}
+
+impl RoofSnow {
+    fn new(amount: f32, fallen: f64, cover: f32, at: DVec3) -> Self {
+        RoofSnow { amount: amount.clamp(0.0, 1.0), fallen, cover, at }
+    }
+
+    fn step(&mut self, fallen: f64, cover: f32, at: DVec3, speed: f32) {
+        // what has fallen since
+        self.amount += ((fallen - self.fallen).max(0.0) / ROOF_FILL) as f32;
+        self.fallen = fallen;
+        // the airstream, over the way driven (a jump - a car put elsewhere - blows nothing)
+        let way = (at - self.at).truncate().length() as f32;
+        self.at = at;
+        if way < 50.0 && speed.abs() > ROOF_BLOW_FROM {
+            self.amount -= way * (speed.abs() - ROOF_BLOW_FROM) / 12.0 * ROOF_BLOW;
+        }
+        // the thaw: as the roads' snow goes, the roofs' goes a little faster
+        if cover < self.cover {
+            self.amount -= (self.cover - cover) * 1.3;
+        }
+        self.cover = cover;
+        if cover <= 0.0 {
+            self.amount = self.amount.min(0.0);
+        }
+        self.amount = self.amount.clamp(0.0, 1.0);
+    }
+}
+
+/// The roofs' snow of the vehicles around the camera, by the spray's keys (0 the player's).
+#[derive(Default)]
+pub(crate) struct Roofs {
+    map: HashMap<u64, RoofSnow>,
+}
+
+impl Roofs {
+    /// One step of `vehicles` (key, vehicle): one seen for the first time starts with as
+    /// much as has settled on the roads (the player's bus) or a little less (the traffic,
+    /// which has been driving); one no longer there is forgotten.
+    pub fn step(&mut self, vehicles: &[(u64, &omsi_sim::VehicleInstance)], cover: f32, fallen: f64) {
+        let mut next = HashMap::with_capacity(vehicles.len());
+        for &(key, v) in vehicles {
+            let mut r = self.map.get(&key).copied().unwrap_or_else(|| {
+                RoofSnow::new(if key == 0 { cover } else { cover * 0.6 }, fallen, cover, v.position)
+            });
+            r.step(fallen, cover, v.position, v.physics.speed);
+            next.insert(key, r);
+        }
+        self.map = next;
+    }
+
+    /// How much snow lies on vehicle `key`'s roof.
+    pub fn amount(&self, key: u64) -> f32 {
+        self.map.get(&key).map_or(0.0, |r| r.amount)
+    }
+}
+
+/// The vehicles whose roofs gather snow: the player's bus (key 0) and the traffic.
+pub(crate) fn roof_vehicles<'a>(
+    player: Option<&'a crate::player::Player>,
+    traffic: Option<&'a crate::traffic::Traffic>,
+) -> Vec<(u64, &'a omsi_sim::VehicleInstance)> {
+    let mut out = Vec::new();
+    if let Some(p) = player {
+        out.push((0, &p.vehicle));
+    }
+    if let Some(t) = traffic {
+        out.extend(t.cars.iter().map(|c| (c.id.wrapping_add(1), &c.vehicle)));
+    }
+    out
+}
+
+/// Show the roof's snow on every part of a vehicle's render (its coupled parts' too).
+pub(crate) fn show_roof(
+    r: &Renderer,
+    scene: &mut omsi_render::Scene,
+    body: &crate::scene::VehicleRender,
+    trailers: &[crate::scene::VehicleRender],
+    amount: f32,
+) {
+    for render in std::iter::once(body).chain(trailers) {
+        for &i in &render.instances {
+            r.set_roof_snow(scene, i, amount);
+        }
+    }
+}
+
+/// The roofs' snow of the player's bus and the traffic's cars on their renders.
+pub(crate) fn show_roofs(
+    r: &Renderer,
+    scene: &mut omsi_render::Scene,
+    roofs: &Roofs,
+    player: Option<&crate::player::Player>,
+    traffic: Option<&crate::traffic::Traffic>,
+    view: &crate::view_sync::traffic::TrafficView,
+) {
+    if let Some(p) = player {
+        show_roof(r, scene, &p.render, &p.trailer_renders, roofs.amount(0));
+    }
+    if let Some(t) = traffic {
+        for c in &t.cars {
+            if let Some(cr) = view.car(c.id) {
+                show_roof(r, scene, &cr.body, &cr.trailers, roofs.amount(c.id.wrapping_add(1)));
+            }
+        }
     }
 }
 
@@ -407,6 +536,27 @@ mod tests {
             let n = SNOW_TRACK_TEXELS as i64;
             assert_eq!((x as i64, y as i64), (gx.rem_euclid(n), gy.rem_euclid(n)));
         }
+    }
+
+    #[test]
+    fn a_roof_gathers_snow_and_the_airstream_takes_it() {
+        let mut r = RoofSnow::new(0.0, 0.0, 0.5, DVec3::ZERO);
+        // standing in the snow: 700 thousandths fallen close it
+        r.step(350.0, 0.5, DVec3::ZERO, 0.0);
+        assert!((r.amount - 0.5).abs() < 1e-4, "{}", r.amount);
+        // slow through town: it stays
+        r.step(350.0, 0.5, DVec3::new(30.0, 0.0, 0.0), 5.0);
+        assert!((r.amount - 0.5).abs() < 1e-4);
+        // 50 km/h for 120 m: a good part of it goes
+        let mut x = 30.0;
+        for _ in 0..12 {
+            x += 10.0;
+            r.step(350.0, 0.5, DVec3::new(x, 0.0, 0.0), 13.9);
+        }
+        assert!(r.amount < 0.25 && r.amount > 0.0, "{}", r.amount);
+        // the thaw takes the rest with the roads' snow
+        r.step(350.0, 0.0, DVec3::new(x, 0.0, 0.0), 0.0);
+        assert_eq!(r.amount, 0.0);
     }
 
     #[test]

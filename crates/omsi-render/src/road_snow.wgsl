@@ -62,6 +62,21 @@ fn snow_track_at(world: vec2<f32>) -> vec2<f32> {
     return mix(mix(a00, a10, f.x), mix(a01, a11, f.x), f.y);
 }
 
+// The snow on a vehicle's part (`code`: its instance's surface code, below -500, whose ten
+// thousands carry how much snow its roof has gathered, 0..40, see lib.rs `roof_snow`),
+// at `local`, the point in the part's own mesh: patches at first, a closed layer as it
+// goes on, laid out on the vehicle so that they ride with it.
+fn vehicle_snow(code: f32, local: vec3<f32>) -> f32 {
+    let amount = floor(-code / 10000.0) / 40.0;
+    if (amount <= 0.0) {
+        return 0.0;
+    }
+    let p = local.xy;
+    let p2 = vec2<f32>(p.x * 0.8 - p.y * 0.6, p.x * 0.6 + p.y * 0.8);
+    let patches = vnoise_f(p, 0.9, vec2<f32>(4.3, 1.9)) * 0.65 + vnoise_f(p2, 3.1, vec2<f32>(8.1, 6.7)) * 0.35;
+    return smoothstep(patches - 0.3, patches + 0.08, amount * 1.3 - 0.12);
+}
+
 // Whether the roads' snow is the built-up kind (`state.x` at or above 0) rather than the
 // weather's on/off "snow on road".
 fn road_snow_dynamic() -> bool {

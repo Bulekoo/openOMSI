@@ -867,7 +867,13 @@ fn shade_enhanced(in: FsIn, puddle_weight: ptr<function, vec2<f32>>, capture: bo
     if (carriageway && snow_ok > 0.0) {
         rs = road_snow(in.world);
     }
-    let snow = select(enh.weather.y, rs.x, carriageway) * snow_ok;
+    // a vehicle's part: the snow its own roof has gathered, where that is kept
+    let vehicle = in.params2.w < -500.0 && road_snow_dynamic();
+    var on_vehicle = 0.0;
+    if (vehicle && snow_ok > 0.0) {
+        on_vehicle = vehicle_snow(in.params2.w, in.local);
+    }
+    let snow = select(select(enh.weather.y, rs.x, carriageway), on_vehicle, vehicle) * snow_ok;
     if (rs.y > 0.0) {
         // the slush in the ruts and the tracks: wet and grey, darker than the snow, glossy
         let slush = rs.y * snow_ok;
@@ -882,7 +888,8 @@ fn shade_enhanced(in: FsIn, puddle_weight: ptr<function, vec2<f32>>, capture: bo
         // roads white exactly when the weather says they are cleared, #1362; built-up snow
         // brings its own cover)
         let cleared = select(1.0, 0.0, !carriageway && camera.post.z > 0.5 && !terrain && material.params2.z > 0.0);
-        let cover = cleared * snow * clamp(max(ground, smoothstep(0.78, 0.95, up) * 0.8), 0.0, 1.0) * (0.55 + 0.35 * tex.a);
+        // (a vehicle's gathered snow lies thick enough to hide the paint)
+        let cover = min(cleared * snow * clamp(max(ground, smoothstep(0.78, 0.95, up) * 0.8), 0.0, 1.0) * select(0.55 + 0.35 * tex.a, 1.2, vehicle), 1.0);
         albedo = mix(albedo, vec3<f32>(0.82, 0.84, 0.88), cover);
         ambient_albedo = mix(ambient_albedo, vec3<f32>(0.82, 0.84, 0.88), cover);
         // fresh snow is all but matte: it scatters the light and shows no highlight

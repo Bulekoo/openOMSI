@@ -1281,6 +1281,8 @@ pub struct Instance {
     /// it. (Only the vehicle the camera is in was spared, by its box; every other bus showed
     /// its saloon under snow through the windows.)
     pub roof: Option<f32>,
+    /// How much snow lies on the vehicle's roof (0..1, see road_snow.wgsl `vehicle_snow`).
+    pub roof_snow: f32,
     /// Drawn with every slot in model order among the blended draws, as Omsi.exe draws a
     /// model: mesh after mesh, each material subset with its own states and depth write
     /// (0x7c32c4 -> 0x7fd6c4, DrawSubset), not its opaque parts first. Set on the models
@@ -4811,6 +4813,7 @@ impl Renderer {
             ordered: false,
             casts_shadow: true,
             roof: None,
+            roof_snow: 0.0,
         });
         if scene.bounds_known.get(mesh).copied().unwrap_or(false) {
             scene.bounds_users.push(scene.instances.len() - 1);
@@ -4865,6 +4868,7 @@ impl Renderer {
             ordered: false,
             casts_shadow: false,
             roof: None,
+            roof_snow: 0.0,
         });
         if scene.bounds_known.get(mesh).copied().unwrap_or(false) {
             scene.bounds_users.push(scene.instances.len() - 1);
@@ -4967,6 +4971,17 @@ impl Renderer {
     pub fn set_casts_shadow(&self, scene: &mut Scene, instance: usize, on: bool) {
         if let Some(i) = scene.instances.get_mut(instance) {
             i.casts_shadow = on;
+        }
+    }
+
+    /// How much snow lies on the roof of an instance's vehicle (see [`Instance::roof_snow`]).
+    pub fn set_roof_snow(&self, scene: &mut Scene, instance: usize, snow: f32) {
+        if let Some(i) = scene.instances.get_mut(instance) {
+            // (a fortieth: the steps the shader tells apart)
+            if (i.roof_snow - snow).abs() >= 0.0125 {
+                i.roof_snow = snow;
+                Self::mark_changed(scene, instance);
+            }
         }
     }
 
@@ -5874,10 +5889,12 @@ impl Renderer {
                 // the surface flag: 1 ground, 2 a vehicle's shadow blob (no snow on it),
                 // 1.25 a legacy pulled decal, 0.9 an OMSI-ordered surface (weather
                 // classification without view-space pull), 0.75 a painted ground layer;
-                // below -500 a vehicle part, -(5000 + the roof height relative to origin)
+                // below -500 a vehicle part, -(5000 + the roof height relative to origin),
+                // in steps of 10000 the snow on its roof (0..40)
                 if let Some(roof) = i.roof.filter(|_| !i.blob && !i.surface) {
                     let z = (i.origin - ro).z as f32 + i.transform.transform_point3(Vec3::new(0.0, 0.0, roof)).z;
-                    -(5000.0 + z.clamp(-4000.0, 4000.0))
+                    let snow = (i.roof_snow.clamp(0.0, 1.0) * 40.0).round();
+                    -(5000.0 + z.clamp(-4000.0, 4000.0) + 10000.0 * snow)
                 } else {
                     surface_instance_code(
                         i.blob,

@@ -164,7 +164,9 @@ fn weather_outside_n(world: vec3<f32>, n: vec3<f32>, terrain: bool, surface: f32
     // enhanced picture, dry in the rain - with a hard seam round the body 0.3 m under the
     // roof where the sky's light began, #805)
     if (surface < -500.0) {
-        let roof = -surface - 5000.0;
+        // (the code carries the roof's snow in its ten thousands, see lib.rs)
+        let code = -surface;
+        let roof = code - 10000.0 * floor(code / 10000.0) - 5000.0;
         if (world.z < roof - 0.3 && n.z > 0.5) {
             return 0.0;
         }
@@ -479,6 +481,9 @@ struct VsOut {
     // where a [matl_envmap] reads its sphere map, made at the vertex (see `sphere_map_uv`)
     @location(7) env_uv: vec2<f32>,
     @location(8) wipe_uv: vec3<f32>,
+    // the vertex as its mesh has it: a vehicle's snow lies on the vehicle, not on the
+    // world it drives through (road_snow.wgsl `vehicle_snow`)
+    @location(9) local: vec3<f32>,
 };
 // What the fragment shaders take: VsOut without the invariant on the position. The
 // invariant belongs to the vertex output; on a fragment input naga's GLSL writer turns it
@@ -494,6 +499,7 @@ struct FsIn {
     @location(6) spec_sky: vec3<f32>,
     @location(7) env_uv: vec2<f32>,
     @location(8) wipe_uv: vec3<f32>,
+    @location(9) local: vec3<f32>,
 };
 
 // Direct3D's D3DTSS_TCI_SPHEREMAP, by which Omsi.exe's environment stage reads the sphere
@@ -657,6 +663,7 @@ fn vs_main(in: VsIn) -> VsOut {
     }
     out.clip = camera.view_proj * vec4<f32>(cp, 1.0);
     out.world = wp.xyz;
+    out.local = in.pos;
     out.normal = safe_normal((m * vec4<f32>(in.normal, 0.0)).xyz);
     let sp = vertex_specular(wp.xyz, out.normal);
     out.spec_sun = sp[0];
@@ -2138,7 +2145,13 @@ fn shade_vanilla(in: FsIn, puddle_weight: ptr<function, f32>, eye: vec3<f32>) ->
     if (carriageway && snow_ok > 0.0) {
         rs = road_snow(in.world);
     }
-    let snow = select(camera.ambient.w, rs.x, carriageway) * snow_ok;
+    // a vehicle's part: the snow its own roof has gathered, where that is kept
+    let vehicle = in.params2.w < -500.0 && road_snow_dynamic();
+    var on_vehicle = 0.0;
+    if (vehicle && snow_ok > 0.0) {
+        on_vehicle = vehicle_snow(in.params2.w, in.local);
+    }
+    let snow = select(select(camera.ambient.w, rs.x, carriageway), on_vehicle, vehicle) * snow_ok;
     if (snow > 0.0 || rs.y > 0.0) {
         let up = clamp(n.z, 0.0, 1.0);
         let ground = select(0.0, 1.0, material.extra.x > 0.5 || material.params2.z > 0.0);
@@ -2150,7 +2163,9 @@ fn shade_vanilla(in: FsIn, puddle_weight: ptr<function, f32>, eye: vec3<f32>) ->
         let cover = cleared * snow * clamp(max(ground, smoothstep(0.78, 0.95, up) * 0.8), 0.0, 1.0);
         let light = camera.sun_color.rgb * camera.sun_dir.w * ndl * shadow * 0.6 + camera.sky_color.rgb * 0.7 + camera.ambient.xyz;
         let white = vec3<f32>(0.92, 0.94, 0.98) * light * ao;
-        lit = mix(lit, white, cover * (0.55 + 0.35 * tex.a));
+        // (a vehicle's gathered snow lies thick enough to hide the paint: the ground's
+        // dusting lets the texture show through)
+        lit = mix(lit, white, min(cover * select(0.55 + 0.35 * tex.a, 1.2, vehicle), 1.0));
         // the slush in the ruts and the tracks: wet, grey, darker than the snow beside it
         lit = mix(lit, lit * 0.6 + white * 0.12, rs.y * snow_ok);
     }
