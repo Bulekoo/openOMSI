@@ -1118,6 +1118,44 @@ pub fn load_texchanges(base: &Path, files: &[String]) -> Vec<TexChangeMaster> {
 mod tests {
 
     #[test]
+    fn compatibility_fixture_preserves_material_slots_and_variant_inheritance() {
+        let file = omsi_cfg::CfgFile::from_str(
+            "synthetic-material.cfg",
+            include_str!("../tests/fixtures/material-compatibility.cfg"),
+        );
+        // OMSI's known keywords require their original spelling. A typo in a
+        // synthetic fixture must not masquerade as missing material support.
+        for line in file.lines.iter().filter(|l| l.starts_with('[')) {
+            assert!(omsi_cfg::keyword_of(line).is_some(), "invalid fixture keyword: {line}");
+        }
+        let model = super::Model::parse(&file);
+        let materials = &model.meshes[0].materials;
+        assert_eq!(materials.len(), 4);
+        let base = &materials[0];
+        assert_eq!((base.alpha, base.alpha_set), (2, true));
+        assert!(base.no_z_write && base.no_z_check);
+        assert_eq!(base.z_bias, 1);
+        assert_eq!(base.alphascale.as_deref(), Some("display_alpha"));
+        assert_eq!(base.freetex, Some(("display.dds".into(), "display_texture".into())));
+        assert_eq!(base.lightmaps, vec![("bright.dds".into(), "bright".into()), ("dim.dds".into(), "dim".into())]);
+        assert_eq!(base.lightmap, base.lightmaps.last().cloned());
+        let other = &materials[1];
+        assert_eq!((other.texture.as_str(), other.index), ("display.dds", 1));
+        assert!(!other.alpha_set && other.lightmaps.is_empty());
+        let variant = &materials[3];
+        assert!(variant.item);
+        assert_eq!(variant.change, Some(("DISPLAY.dds".into(), 0, "display_mode".into())));
+        assert_eq!(variant.alpha, base.alpha);
+        assert_eq!((variant.no_z_write, variant.no_z_check, variant.z_bias),
+            (base.no_z_write, base.no_z_check, base.z_bias));
+        assert_eq!(variant.alphascale, base.alphascale);
+        assert_eq!(variant.freetex, base.freetex);
+        assert_eq!(variant.lightmaps, base.lightmaps);
+        assert_eq!(variant.transmap.as_deref(), Some("mask.dds"));
+        assert!(base.transmap.is_none(), "variant changes must not mutate the base slot");
+    }
+
+    #[test]
     fn terrain_hole_meshes_are_independent_of_render_meshes() {
         let mut model = super::Model::parse(&omsi_cfg::CfgFile::from_str(
             "cutters.cfg",

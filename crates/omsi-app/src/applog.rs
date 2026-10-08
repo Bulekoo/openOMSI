@@ -13,6 +13,8 @@ pub(crate) struct LogState {
     t: f32,
     frames: u32,
     worst_dt: f32,
+    /// The support snapshot of this game is kept (see `support_bundle::record`).
+    support_recorded: bool,
 }
 
 /// The machine, the program and its settings, once at the start.
@@ -31,7 +33,13 @@ pub(crate) fn log_system(settings: &crate::settings::Settings) {
     log::info!("all settings: {settings:?}");
 }
 
-fn os_version() -> String {
+/// The system's name and version (asked once: on macOS and Windows a program is run for it).
+pub(crate) fn os_version() -> String {
+    static VERSION: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    VERSION.get_or_init(ask_os_version).clone()
+}
+
+fn ask_os_version() -> String {
     #[cfg(target_os = "macos")]
     {
         if let Ok(o) = std::process::Command::new("sw_vers").arg("-productVersion").output() {
@@ -58,6 +66,10 @@ fn os_version() -> String {
 impl App {
     /// Once a frame: what changed on the screen, and every minute where things stand.
     pub(crate) fn log_frame(&mut self, dt: f32) {
+        if !self.perf.log_state.support_recorded && self.renderer.is_some() {
+            crate::support_bundle::record(self);
+            self.perf.log_state.support_recorded = true;
+        }
         let msg = self.service_msg.as_ref().map(|m| m.0.clone());
         if msg.is_some() && msg != self.perf.log_state.last_msg {
             log::info!("on screen: {}", msg.as_deref().unwrap_or_default());

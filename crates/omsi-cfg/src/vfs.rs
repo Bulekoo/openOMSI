@@ -692,4 +692,37 @@ mod tests {
         assert_eq!(decode_name(&[b'S', b't', b'r', b'a', 0xE1, b'e'], false), "Straße");
         assert_eq!(normalize("a\\B/./c/../D"), "a/b/d");
     }
+
+    #[test]
+    fn repaint_relative_common_paths_resolve_across_archive_and_installation() {
+        let dir = std::env::temp_dir().join(format!("omsi-repaint-common-{}", std::process::id()));
+        let content = dir.join("content");
+        let install = dir.join("install");
+        let package = "SyntheticCommonCompatibility";
+        let base_rel = format!("Vehicles/{package}/Texture/Repaints");
+        let common_rel = format!("Vehicles/{package}/common");
+        std::fs::create_dir_all(content.join("Archives")).unwrap();
+        std::fs::create_dir_all(install.join(&base_rel)).unwrap();
+        std::fs::create_dir_all(install.join(&common_rel)).unwrap();
+        std::fs::write(install.join(&common_rel).join("Stock.DDS"), b"stock").unwrap();
+        let archive = content.join("Archives/compat.zip");
+        let anchor = format!("{base_rel}/anchor.cti");
+        let texture = format!("{common_rel}/Paint.DDS");
+        write_zip(&archive, &[(anchor.as_str(), b"synthetic".to_vec(), false),
+            (texture.as_str(), b"archive".to_vec(), true)]);
+        crate::add_content_root(content.clone());
+        mount_dir_zips(&content.join("Archives"));
+        crate::add_content_root(install.clone());
+        // Same resolver for a repaint based in an archive or in an installation.
+        for base in [archive.join(&base_rel), install.join(&base_rel)] {
+            let paint = crate::resolve_path(&base, "..\\..\\COMMON\\paint.dds");
+            assert_eq!(read(&paint).unwrap(), b"archive", "{}", paint.display());
+            let stock = crate::resolve_path(&base, "../../common/STOCK.dds");
+            assert_eq!(read(&stock).unwrap(), b"stock", "{}", stock.display());
+        }
+        crate::remove_content_root(&content);
+        crate::remove_content_root(&archive);
+        crate::remove_content_root(&install);
+        std::fs::remove_dir_all(dir).ok();
+    }
 }

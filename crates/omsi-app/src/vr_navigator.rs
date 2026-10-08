@@ -180,10 +180,12 @@ fn driver_origin(camera: &omsi_vehicle::Camera) -> Vec3 {
 #[derive(Clone, Copy)]
 pub(crate) struct Display {
     pub placement: Placement,
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub local_center: Vec3,
 }
 
 impl Display {
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub fn transform(
         &self,
         bus: DVec3,

@@ -42,6 +42,7 @@ impl App {
             }
         }
         if let Some(why) = self.renderer.as_ref().and_then(|r| r.device_lost()) {
+            crate::support_bundle::record(self);
             if self.restart_after_device_loss() {
                 log::warn!("device lost ({why}): the game goes on in a new start");
             } else {
@@ -68,6 +69,9 @@ impl App {
         let raw_dt = (now - self.last).as_secs_f32();
         self.log_frame(raw_dt);
         let profiling = omsi_cfg::flags::OMSI_PROFILE.is_set();
+        if profiling && self.perf.cpu_mark.is_some() && self.perf.frame_times.len() < crate::perf_report::MAX_FRAMES {
+            self.perf.frame_times.push(raw_dt);
+        }
         let waited: f64 = ["acquire", "present", "gpu"].iter()
             .map(|&k| self.perf.profile.get(k).copied().unwrap_or(0.0))
             .sum();
