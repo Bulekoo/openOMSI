@@ -7,7 +7,7 @@ use super::*;
 /// stops (`stops`, the trip's station names) follow, [`pick_route`] - and the IBIS
 /// variables the bus scripts render are set as if the driver had typed them.
 pub fn set_ai_destination(
-    v: &mut omsi_sim::VehicleInstance,
+    v: &mut crate::VehicleInstance,
     hof: Option<&omsi_vehicle::Hof>,
     line: &str,
     terminus: &str,
@@ -18,7 +18,7 @@ pub fn set_ai_destination(
 
 /// The same with terminus number `ti` of the depot file itself (its `AI_target_index`).
 pub fn set_ai_destination_at(
-    v: &mut omsi_sim::VehicleInstance,
+    v: &mut crate::VehicleInstance,
     hof: &omsi_vehicle::Hof,
     line: &str,
     ti: usize,
@@ -28,7 +28,7 @@ pub fn set_ai_destination_at(
 }
 
 /// The same for the player's bus, done the driver's way: a typing job
-/// (`omsi_sim::ibis::Typist`) that works the bus's own IBIS keys - or its ticket machine's
+/// (`crate::ibis::Typist`) that works the bus's own IBIS keys - or its ticket machine's
 /// - as a driver would, so that the IBIS script itself sets the displays, the stop list,
 /// the announcements and the ticket printer. `stop` is the stop of the trip the bus is at.
 /// None when the depot file has no such destination. The electrics must be on; when the
@@ -39,7 +39,7 @@ pub fn set_ai_destination_at(
 /// electrics off again.
 #[allow(clippy::too_many_arguments)]
 pub fn player_ibis(
-    v: &mut omsi_sim::VehicleInstance,
+    v: &mut crate::VehicleInstance,
     hof: Option<&omsi_vehicle::Hof>,
     line: &str,
     terminus: &str,
@@ -47,7 +47,7 @@ pub fn player_ibis(
     stop: Option<(usize, &str)>,
     operable: &dyn Fn(&str) -> bool,
     background: bool,
-) -> Option<omsi_sim::ibis::Typist> {
+) -> Option<crate::ibis::Typist> {
     let h = hof?;
     let Some(target) = ibis_target(h, line, terminus, stops, stop) else {
         log::info!(
@@ -79,13 +79,13 @@ pub fn player_ibis(
         target.terminus_code,
         target.stop
     );
-    Some(omsi_sim::ibis::Typist::new(v, target, operable, background))
+    Some(crate::ibis::Typist::new(v, target, operable, background))
 }
 
 /// The player's IBIS set without typing: the IBIS variables written as the IBIS script
 /// would leave them.
 pub fn set_player_destination_directly(
-    v: &mut omsi_sim::VehicleInstance,
+    v: &mut crate::VehicleInstance,
     hof: Option<&omsi_vehicle::Hof>,
     line: &str,
     terminus: &str,
@@ -100,7 +100,7 @@ pub fn set_player_destination_directly(
 /// of them (#738). On a bus with a hand-cranked roller blind, what the blind is to be
 /// turned to ([`turn_roller_blind`]).
 pub fn set_player_destination_at(
-    v: &mut omsi_sim::VehicleInstance,
+    v: &mut crate::VehicleInstance,
     hof: &omsi_vehicle::Hof,
     line: &str,
     ti: usize,
@@ -127,7 +127,7 @@ pub struct BlindPick {
 /// (`starting`) is done, as for a duty ([`player_ibis`]): the stock trigger switches the
 /// main switch on itself, and the start-up's toggle then switched the electrics off again.
 /// A bus picked for cold keeps the pick until it is switched on.
-pub fn turn_roller_blind(v: &mut omsi_sim::VehicleInstance, pick: &mut Option<BlindPick>, starting: bool) {
+pub fn turn_roller_blind(v: &mut crate::VehicleInstance, pick: &mut Option<BlindPick>, starting: bool) {
     if pick.is_none() || starting || !v.var("elec_busbar_main_sw").is_some_and(|x| x > 0.5) {
         return;
     }
@@ -143,7 +143,7 @@ pub fn turn_roller_blind(v: &mut omsi_sim::VehicleInstance, pick: &mut Option<Bl
 /// (`rlbnd_steckschild_Termindex`, put up for a code above 1000) where it names a row with a
 /// sign text, else the row the blind is turned to (`rlbnd_ziel_target`). None for a bus
 /// without one or without the blind's variable.
-pub(crate) fn roller_blind_row(v: &omsi_sim::VehicleInstance, hof: &omsi_vehicle::Hof) -> Option<usize> {
+pub(crate) fn roller_blind_row(v: &crate::VehicleInstance, hof: &omsi_vehicle::Hof) -> Option<usize> {
     if !has_roller_blind(v) {
         return None;
     }
@@ -159,8 +159,8 @@ pub(crate) fn roller_blind_row(v: &omsi_sim::VehicleInstance, hof: &omsi_vehicle
 /// a route pick turned the blind back to the IBIS's empty row) - else the IBIS's, by its place
 /// in the depot file (by name it was the first of that name), else the first of the IBIS's
 /// code, else the first with a name.
-pub(crate) fn shown_destination(
-    v: &omsi_sim::VehicleInstance,
+pub fn shown_destination(
+    v: &crate::VehicleInstance,
     hof: &omsi_vehicle::Hof,
     pick: Option<&BlindPick>,
 ) -> Option<usize> {
@@ -182,7 +182,7 @@ pub fn ibis_target(
     terminus: &str,
     stops: &[&str],
     stop: Option<(usize, &str)>,
-) -> Option<omsi_sim::ibis::Target> {
+) -> Option<crate::ibis::Target> {
     let (codes, ti) = ibis_codes(hof, line, terminus, stops)?;
     let code = hof.termini[ti].code;
     // the IBIS looks the codes up itself: the first route of the typed code, the first
@@ -218,7 +218,7 @@ pub fn ibis_target(
         (Some(r), Some((k, name))) => ibis_stop_index(hof, r as usize, name, k).unwrap_or(0),
         _ => 0,
     };
-    Some(omsi_sim::ibis::Target {
+    Some(crate::ibis::Target {
         line: line_number,
         suffix,
         route: codes.route,
@@ -230,7 +230,7 @@ pub fn ibis_target(
 }
 
 /// A hand-cranked roller blind (SD79 or SD83 type), known by its own keys.
-pub(crate) fn has_roller_blind(v: &omsi_sim::VehicleInstance) -> bool {
+pub fn has_roller_blind(v: &crate::VehicleInstance) -> bool {
     ["rollband_sync", "rlbnd_ziel_start"]
         .iter()
         .any(|t| v.ty.program.trigger(t).is_some())
@@ -240,7 +240,7 @@ pub(crate) fn has_roller_blind(v: &omsi_sim::VehicleInstance) -> bool {
 /// hundreds, tens, units, with the letter suffixes only on the later rollers - so its
 /// line is right-aligned to three places ("  5", " 5E"); the matrix scripts take the line
 /// as it is.
-pub(super) fn set_line_to(v: &mut omsi_sim::VehicleInstance, line: &str) {
+pub(crate) fn set_line_to(v: &mut crate::VehicleInstance, line: &str) {
     let digits: String = line.trim().chars().take_while(|c| c.is_ascii_digit()).collect();
     let text = if has_roller_blind(v) {
         format!("{:>3}", line.trim())
@@ -256,7 +256,7 @@ pub(super) fn set_line_to(v: &mut omsi_sim::VehicleInstance, line: &str) {
     }
 }
 
-pub(super) fn complex_line_text(line: &str, line_num: f32) -> String {
+pub(crate) fn complex_line_text(line: &str, line_num: f32) -> String {
     let line = line.trim();
     if line.chars().all(|c| c.is_ascii_digit()) {
         format!("{:03}  ", line_num as i32)
@@ -266,7 +266,7 @@ pub(super) fn complex_line_text(line: &str, line_num: f32) -> String {
 }
 
 /// The letter and digits of a line named letter first ("X10", "M41"), else None.
-pub(super) fn line_prefix(line: &str) -> Option<(char, &str)> {
+pub(crate) fn line_prefix(line: &str) -> Option<(char, &str)> {
     let line = line.trim();
     let first = line.chars().next().filter(|c| c.is_ascii_alphabetic())?;
     let digits = &line[1..];
@@ -274,7 +274,7 @@ pub(super) fn line_prefix(line: &str) -> Option<(char, &str)> {
         .then_some((first.to_ascii_uppercase(), digits))
 }
 
-pub(super) fn line_suffix_from_text(line: &str) -> u32 {
+pub(crate) fn line_suffix_from_text(line: &str) -> u32 {
     // the stock MAN matrices' and X10 Berlin's IBIS's "letter then number" codes
     if let Some((letter, _)) = line_prefix(line) {
         return match letter {
@@ -312,7 +312,7 @@ pub(super) fn line_suffix_from_text(line: &str) -> u32 {
 /// separate route selector, not automatically a display-letter code. For a
 /// timetable line such as `5E`, the display suffix must therefore come from
 /// the text (`10` in the stock matrix scripts), while a plain `5` stays `500`.
-pub(super) fn line_code_from_text(line: &str, route_code: Option<u32>) -> Option<u32> {
+pub(crate) fn line_code_from_text(line: &str, route_code: Option<u32>) -> Option<u32> {
     // a lettered line's IBIS number is the depot file's (X10 Berlin types X10 as 510)
     if let (Some(_), Some(code)) = (line_prefix(line), route_code) {
         return Some(code / 100 * 100 + line_suffix_from_text(line));
@@ -331,7 +331,7 @@ pub(super) fn line_code_from_text(line: &str, route_code: Option<u32>) -> Option
 }
 
 /// The line's number: its leading digits, or the digits after a prefix letter ("X10" → 10).
-pub(super) fn line_number_digits(line: &str) -> String {
+pub(crate) fn line_number_digits(line: &str) -> String {
     match line_prefix(line) {
         Some((_, digits)) => digits.to_string(),
         None => line
@@ -362,7 +362,7 @@ pub struct IbisCodes {
 /// first line of its sign) counts before another of its lines that reads the same: the
 /// district line of Spandau's Machandelweg reads RUHLEBEN, the sign of U Ruhleben, and
 /// U Ruhleben by its sign text (what a LAN player's bus says it shows) was Machandelweg.
-pub(super) fn terminus_match_score(t: &omsi_vehicle::hof::Terminus, wanted: &str) -> u8 {
+pub(crate) fn terminus_match_score(t: &omsi_vehicle::hof::Terminus, wanted: &str) -> u8 {
     let wanted = wanted.split_whitespace().collect::<Vec<_>>().join(" ");
     if wanted.is_empty() {
         return 0;
@@ -392,7 +392,7 @@ pub(super) fn terminus_match_score(t: &omsi_vehicle::hof::Terminus, wanted: &str
 /// is the name (Omsi.exe TRoadVehicleInst.virtual_10: that row is `AI_target_index`); else
 /// the best of the looser matches - the first of equals, not the last (a depot file whose
 /// codes are not in row order put the AI bus's matrix on another terminus's picture, #110).
-pub(super) fn find_terminus(hof: &omsi_vehicle::Hof, wanted: &str) -> Option<usize> {
+pub(crate) fn find_terminus(hof: &omsi_vehicle::Hof, wanted: &str) -> Option<usize> {
     termini_named(hof, wanted).first().copied()
 }
 
@@ -400,7 +400,7 @@ pub(super) fn find_terminus(hof: &omsi_vehicle::Hof, wanted: &str) -> Option<usi
 /// ident is the name, else those of the best looser match. A depot file may give one
 /// destination a row per route, each with a code of its own (four "ul. Xutorskaya" of
 /// codes 92, 120, 123 and 124, #738).
-pub(super) fn termini_named(hof: &omsi_vehicle::Hof, wanted: &str) -> Vec<usize> {
+pub(crate) fn termini_named(hof: &omsi_vehicle::Hof, wanted: &str) -> Vec<usize> {
     let exact = wanted.trim();
     let rows: Vec<usize> = (0..hof.termini.len()).filter(|&i| hof.termini[i].texture_id == exact).collect();
     if !rows.is_empty() {
@@ -417,7 +417,7 @@ pub(super) fn termini_named(hof: &omsi_vehicle::Hof, wanted: &str) -> Vec<usize>
 /// IBIS got the first's code, a route of the line to it or none at all, whichever route
 /// the trip drove (line 39 to "ul. Xutorskaya" typed destination 92, where its route ends
 /// at 120). The first row when no route of the line goes to any of them.
-pub(super) fn trip_terminus(
+pub(crate) fn trip_terminus(
     hof: &omsi_vehicle::Hof,
     line: &str,
     terminus: &str,
@@ -474,7 +474,7 @@ pub fn ibis_codes(
 /// The depot file's routes of `line` to a terminus with one of `codes`, in file order. The
 /// route code is the line's number and two digits: a driver types those, whatever the
 /// route's line string says (Grundorf's 7601 to Krankenhaus has "TML").
-pub(super) fn routes_to(hof: &omsi_vehicle::Hof, line: &str, codes: &[i32]) -> Vec<usize> {
+pub(crate) fn routes_to(hof: &omsi_vehicle::Hof, line: &str, codes: &[i32]) -> Vec<usize> {
     let line_digits: String = line
         .trim()
         .chars()
@@ -503,7 +503,7 @@ pub(super) fn routes_to(hof: &omsi_vehicle::Hof, line: &str, codes: &[i32]) -> V
 /// and a line often has several routes to one terminus; taking the first whose first stop
 /// was spelt as the timetable spells it typed the wrong one whenever the spellings
 /// differed. None without routes; the first route when no stop matches any.
-pub(super) fn pick_route(hof: &omsi_vehicle::Hof, routes: &[usize], stops: &[&str]) -> Option<usize> {
+pub(crate) fn pick_route(hof: &omsi_vehicle::Hof, routes: &[usize], stops: &[&str]) -> Option<usize> {
     let trip: Vec<(String, Vec<String>)> = stops
         .iter()
         .map(|s| (s.trim().to_lowercase(), stop_words(s)))
@@ -553,7 +553,7 @@ pub(super) fn pick_route(hof: &omsi_vehicle::Hof, routes: &[usize], stops: &[&st
 /// The names a stop of a route's list goes by: its ident (before a `#`) and the strings
 /// the depot file's `[addbusstop]` of that ident gives it, each lowercased and as its
 /// [`stop_words`].
-pub(super) fn ident_names(hof: &omsi_vehicle::Hof, ident: &str) -> Vec<(String, Vec<String>)> {
+pub(crate) fn ident_names(hof: &omsi_vehicle::Hof, ident: &str) -> Vec<(String, Vec<String>)> {
     let ident = ident.split('#').next().unwrap_or("").trim();
     let mut names = vec![ident.to_string()];
     for b in &hof.bus_stops {
@@ -571,7 +571,7 @@ pub(super) fn ident_names(hof: &omsi_vehicle::Hof, ident: &str) -> Vec<(String, 
 /// One stop of a route (its [`ident_names`]) and a timetable stop (lowercased, and its
 /// [`stop_words`]) are the same: a name equal, one the start of the other, or the same
 /// words.
-pub(super) fn same_stop(names: &[(String, Vec<String>)], stop: &(String, Vec<String>)) -> bool {
+pub(crate) fn same_stop(names: &[(String, Vec<String>)], stop: &(String, Vec<String>)) -> bool {
     names.iter().any(|(raw, words)| {
         !raw.is_empty()
             && (*raw == stop.0
@@ -584,7 +584,7 @@ pub(super) fn same_stop(names: &[(String, Vec<String>)], stop: &(String, Vec<Str
 /// A stop name as the set of its words, so that the map's and the depot file's spellings
 /// of one stop meet: in any order ("Nordstadt Bhf", "Bhf Nordstadt"), with any punctuation
 /// ("Bhf. Nordstadt") and without one-letter prefixes ("F_Kirchweg", "Kirchweg").
-pub(super) fn stop_words(name: &str) -> Vec<String> {
+pub(crate) fn stop_words(name: &str) -> Vec<String> {
     let mut w: Vec<String> = name
         .split(|c: char| !c.is_alphanumeric())
         .filter(|w| w.chars().count() > 1)
@@ -594,8 +594,8 @@ pub(super) fn stop_words(name: &str) -> Vec<String> {
     w
 }
 
-pub(super) fn set_destination(
-    v: &mut omsi_sim::VehicleInstance,
+pub(crate) fn set_destination(
+    v: &mut crate::VehicleInstance,
     hof: Option<&omsi_vehicle::Hof>,
     line: &str,
     terminus: &str,
@@ -643,8 +643,8 @@ pub(super) fn set_destination(
 }
 
 /// [`set_destination`] with the depot file's terminus `ti` itself.
-pub(super) fn set_destination_at(
-    v: &mut omsi_sim::VehicleInstance,
+pub(crate) fn set_destination_at(
+    v: &mut crate::VehicleInstance,
     hof: &omsi_vehicle::Hof,
     line: &str,
     ti: usize,
@@ -698,7 +698,7 @@ pub(super) fn set_destination_at(
         route_index.map(|r| r as f32).unwrap_or(-1.0),
     );
     v.set_var("IBIS_mode", 0.0);
-    let set_str = |v: &mut omsi_sim::VehicleInstance, name: &str, val: String| {
+    let set_str = |v: &mut crate::VehicleInstance, name: &str, val: String| {
         if let Some(i) = v.ty.program.str_var(name) {
             v.state.str_vars[i as usize] = val;
         }
@@ -720,4 +720,23 @@ pub(super) fn set_destination_at(
         "IBIS_terminus_texture",
         hof.termini[ti].texture_id.clone(),
     );
+}
+
+/// What a bus's displays call its terminus: the depot file's first string for it (what the
+/// IBIS shows, in capitals - the stock departure display's font has no small letters, and
+/// the trip's "Bauernhof" came out as a lone "B"), else the timetable's name in capitals
+/// (a train has no depot file).
+pub fn terminus_text(hof: Option<&omsi_vehicle::Hof>, terminus: &str) -> String {
+    let name = terminus.trim();
+    hof.and_then(|h| {
+        h.termini.iter().find(|t| {
+            t.texture_id.trim().eq_ignore_ascii_case(name)
+                || t.strings
+                .iter()
+                .any(|s| s.trim().eq_ignore_ascii_case(name))
+        })
+    })
+        .and_then(|t| t.strings.first())
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|| name.to_uppercase())
 }

@@ -3,7 +3,7 @@
 use super::*;
 
 impl StopDir {
-    pub(super) fn takes(self, fwd: glam::DVec2) -> bool {
+    pub(crate) fn takes(self, fwd: glam::DVec2) -> bool {
         if self.inbound.is_none() && self.outbound.is_none() {
             return true;
         }
@@ -13,23 +13,23 @@ impl StopDir {
 
 /// The unit vector of the ground plane a bus heading `deg` drives along (degrees clockwise
 /// from north, as `VehicleInstance::heading`).
-pub(super) fn forward_of(deg: f64) -> glam::DVec2 {
+pub(crate) fn forward_of(deg: f64) -> glam::DVec2 {
     let h = deg.to_radians();
     glam::DVec2::new(h.sin(), h.cos())
 }
 
 /// How far apart two stops of a trip must stand before the line between them is taken as
 /// the way the trip runs between them (m).
-pub(super) const DIR_REACH: f64 = 20.0;
+pub(crate) const DIR_REACH: f64 = 20.0;
 
 /// How far off the way a trip runs through a stop a bus may head and still be taken as
 /// running that way: the cosine of the angle, 60 degrees either side.
-pub(super) const DIR_COS: f64 = 0.5;
+pub(crate) const DIR_COS: f64 = 0.5;
 
 impl PlannedTrip {
     /// Give every stop the way the trip runs through it: in from the stop before, out to
     /// the stop after.
-    pub(super) fn set_dirs(&mut self) {
+    pub fn set_dirs(&mut self) {
         let p: Vec<Option<glam::DVec3>> = self.stops.iter().map(|s| s.position).collect();
         let dir = |a: Option<glam::DVec3>, b: Option<glam::DVec3>| -> Option<glam::DVec2> {
             let v = (b? - a?).truncate();
@@ -59,7 +59,7 @@ pub fn ibis_stop_index(hof: &omsi_vehicle::Hof, route: usize, name: &str, k: usi
 }
 
 /// Route index the unit's stop list uses: stock `IBIS_RouteIndex`, or Aachen's `ibox_routenindex`.
-pub(super) fn script_route_index(bus: &omsi_sim::VehicleInstance) -> Option<usize> {
+pub(crate) fn script_route_index(bus: &crate::VehicleInstance) -> Option<usize> {
     bus.var("IBIS_RouteIndex")
         .or_else(|| bus.var("ibox_routenindex"))
         .filter(|r| *r >= 0.0)
@@ -74,7 +74,7 @@ pub(super) fn script_route_index(bus: &omsi_sim::VehicleInstance) -> Option<usiz
 /// so on a forward step the value is left at the previous route index and that `+ 1` lands
 /// on the new one. A backward step (or a resume) writes the index itself and freezes the
 /// ibox's "last TT index" so the frame does not announce again.
-pub(super) fn sync_script_busstop(bus: &mut omsi_sim::VehicleInstance, tt: usize, name: &str, prev_tt: i32) {
+pub(crate) fn sync_script_busstop(bus: &mut crate::VehicleInstance, tt: usize, name: &str, prev_tt: i32) {
     let Some(hof) = bus.host.hof.clone() else { return };
     let Some(route) = script_route_index(bus) else { return };
     let Some(idx) = ibis_stop_index(&hof, route, name, tt) else { return };
@@ -94,7 +94,7 @@ pub(super) fn sync_script_busstop(bus: &mut omsi_sim::VehicleInstance, tt: usize
 
 /// The trip the player picked: "HH:MM" - the first trip leaving at that minute or later -
 /// or its number in the tour (1 = the first).
-pub(super) fn chosen_trip(trips: &[PlannedTrip], pick: &str) -> Option<usize> {
+pub fn chosen_trip(trips: &[PlannedTrip], pick: &str) -> Option<usize> {
     if let Some((h, m)) = pick.split_once(':') {
         let (h, m) = (h.trim().parse::<f64>().ok()?, m.trim().parse::<f64>().ok()?);
         let at = h * 3600.0 + m * 60.0;
@@ -106,7 +106,7 @@ pub(super) fn chosen_trip(trips: &[PlannedTrip], pick: &str) -> Option<usize> {
 
 /// The trip of a duty that fits the time of day: the one under way, else the next to leave
 /// (the last one once all are over).
-pub(super) fn starting_trip(trips: &[PlannedTrip], now: f64) -> usize {
+pub fn starting_trip(trips: &[PlannedTrip], now: f64) -> usize {
     trips.iter().position(|t| t.end > now).unwrap_or_else(|| {
         // every trip over for today: a tour after midnight (the night line 13N's runs from
         // 0:49) picked in the evening is tonight's, and starts at its first trip
@@ -119,17 +119,54 @@ pub(super) fn starting_trip(trips: &[PlannedTrip], now: f64) -> usize {
 
 /// GetTTTerminusIndex as Omsi.exe answers it: the first depot terminus whose name is the
 /// trip's terminus (the second [trip] line), else -1.
-pub(super) fn tt_terminus_index(hof: Option<&omsi_vehicle::hof::Hof>, terminus: &str) -> i32 {
+pub(crate) fn tt_terminus_index(hof: Option<&omsi_vehicle::hof::Hof>, terminus: &str) -> i32 {
     hof.and_then(|h| h.termini.iter().position(|t| t.texture_id == terminus)).map_or(-1, |i| i as i32)
 }
 
 impl PlayerDuty {
+    /// A duty of `trips` (where they begin in the tour: `first_trip`) that starts with trip
+    /// `trip_index`, before the bus has been placed on it; `picked` when the player picked
+    /// the trip.
+    pub fn new(line: String, tour: String, trips: Vec<PlannedTrip>, trip_index: usize, first_trip: usize, picked: bool) -> PlayerDuty {
+        PlayerDuty {
+            line,
+            tour,
+            trips,
+            trip_index,
+            first_trip,
+            next_stop: 0,
+            at_stop: false,
+            arrived_late: None,
+            done: false,
+            served_terminus: None,
+            left_late: None,
+            held_back: false,
+            placed: false,
+            trip_changed: false,
+            skipped: None,
+            picked,
+            first_update: None,
+            heading: 0.0,
+        }
+    }
+
     pub fn trip(&self) -> &PlannedTrip {
         &self.trips[self.trip_index]
     }
 
     pub fn trip_done(&self) -> bool {
         self.done
+    }
+
+    /// True while the bus stands at the next stop.
+    pub fn at_stop(&self) -> bool {
+        self.at_stop
+    }
+
+    /// How late (s, negative = early) the bus left the last stop it served on this trip;
+    /// None while it has not left one.
+    pub fn left_late(&self) -> Option<f64> {
+        self.left_late
     }
 
     /// Service/depot legs have no public line and use the HOF's
@@ -215,7 +252,7 @@ impl PlayerDuty {
 
     /// Time to drive from `pos` to `to` (s), roughly: roads are longer than the straight
     /// line, a bus in town makes some 25 km/h, and it takes a minute or two to get going.
-    pub(super) fn approach_time(pos: glam::DVec3, to: glam::DVec3) -> f64 {
+    pub(crate) fn approach_time(pos: glam::DVec3, to: glam::DVec3) -> f64 {
         let d = (to - pos).truncate().length();
         if d < AT_STOP {
             return 0.0;
@@ -230,7 +267,7 @@ impl PlayerDuty {
     /// along the line - and ran late from the first second). When no trip of the tour
     /// can be reached in time any more, the last one is driven from its first stop that
     /// can (else its first stop), late as that is.
-    pub(super) fn place(&mut self, pos: glam::DVec3, now: f64) {
+    pub(crate) fn place(&mut self, pos: glam::DVec3, now: f64) {
         let trip = &self.trips[self.trip_index];
         // of two stops within AT_STOP of the bus - the two sides of a street on a circular
         // route - the one the bus drives the way the trip runs through it, else the nearer
@@ -382,7 +419,7 @@ impl PlayerDuty {
     /// The duty of a resumed situation: at its saved stop (an older save without one is
     /// placed by where the bus stands), with the timetable on the host before the first
     /// script frame.
-    pub fn resume(&mut self, bus: &mut omsi_sim::VehicleInstance, day_time: f64, saved_stop: Option<usize>) {
+    pub fn resume(&mut self, bus: &mut crate::VehicleInstance, day_time: f64, saved_stop: Option<usize>) {
         match saved_stop {
             Some(stop) => self.restore_progress(stop, bus.position),
             None => {
@@ -443,7 +480,7 @@ impl PlayerDuty {
         self.skip_to(self.next_stop + 1).then_some(name)
     }
 
-    pub(super) fn set_trip(&mut self, index: usize) {
+    pub(crate) fn set_trip(&mut self, index: usize) {
         self.trip_index = index;
         self.next_stop = 0;
         self.at_stop = false;
@@ -479,7 +516,7 @@ impl PlayerDuty {
     /// The clock's time of day as the duty counts it: the day before or after when that is
     /// nearer the trip under way, so a duty across midnight (picked at 23:00 for trips from
     /// 0:49, or running from 23:40 into the night) is neither 22 hours late nor early.
-    pub(super) fn duty_time(&self, day_time: f64) -> f64 {
+    pub(crate) fn duty_time(&self, day_time: f64) -> f64 {
         let t = self.trip();
         let centre = (t.departure + t.end) / 2.0;
         [day_time - DAY, day_time, day_time + DAY]
@@ -493,7 +530,7 @@ impl PlayerDuty {
     /// the personnel file counts.
     /// Returns, when the bus has just left a stop it had to serve, how late it arrived
     /// there and how late it left (seconds; negative: early).
-    pub fn update(&mut self, bus: &mut omsi_sim::VehicleInstance, day_time: f64) -> Option<(f64, f64)> {
+    pub fn update(&mut self, bus: &mut crate::VehicleInstance, day_time: f64) -> Option<(f64, f64)> {
         let day_time = self.duty_time(day_time);
         self.heading = bus.heading;
         let served = self.advance(bus.position, day_time);
@@ -534,7 +571,7 @@ impl PlayerDuty {
         served
     }
 
-    pub(super) fn doors_open(bus: &omsi_sim::VehicleInstance) -> bool {
+    pub(crate) fn doors_open(bus: &crate::VehicleInstance) -> bool {
         let mut reports_passenger_doors = false;
         let mut passenger_door_open = false;
         for i in 0..16 {
@@ -565,13 +602,13 @@ impl PlayerDuty {
     }
 
     /// Supply restored timetable data before the first resumed script frame.
-    pub fn restore_host(&self, bus: &mut omsi_sim::VehicleInstance, day_time: f64) {
+    pub fn restore_host(&self, bus: &mut crate::VehicleInstance, day_time: f64) {
         self.feed_host(bus, day_time);
         bus.host.schedule_active = 1.0;
         bus.set_var("schedule_active", 1.0);
     }
 
-    pub(super) fn feed_host(&self, bus: &mut omsi_sim::VehicleInstance, day_time: f64) {
+    pub(crate) fn feed_host(&self, bus: &mut crate::VehicleInstance, day_time: f64) {
         let delay = self.delay(day_time);
         let trip = &self.trips[self.trip_index];
         let prev_tt = bus.host.tt_busstop_index;
@@ -608,7 +645,7 @@ impl PlayerDuty {
     /// have to agree: the trip runs through the stop the way the bus heads ([`StopDir`]);
     /// the bus stands nearer to it than to the stop it is due at; and it has driven away
     /// from the stop it served last.
-    pub(super) fn catch_up(&mut self, pos: glam::DVec3, fwd: glam::DVec2) {
+    pub(crate) fn catch_up(&mut self, pos: glam::DVec3, fwd: glam::DVec2) {
         if self.held_back {
             return;
         }
@@ -650,7 +687,7 @@ impl PlayerDuty {
     }
 
     /// The duty's progress with the bus at `pos` (see [`PlayerDuty::update`]).
-    pub(super) fn advance(&mut self, pos: glam::DVec3, day_time: f64) -> Option<(f64, f64)> {
+    pub(crate) fn advance(&mut self, pos: glam::DVec3, day_time: f64) -> Option<(f64, f64)> {
         if !self.placed {
             // (stops beyond the loaded tiles have no place yet: a few seconds for the
             // navigator's map, unless the bus stands at a stop of its trip)

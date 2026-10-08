@@ -3465,6 +3465,7 @@ dependencies = [
  "omsi-scenery",
  "omsi-script",
  "omsi-texture",
+ "omsi-timetable",
  "omsi-vehicle",
  "parking_lot",
  "rayon",

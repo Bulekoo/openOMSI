@@ -1,6 +1,6 @@
 use super::*;
 use glam::DVec3;
-use omsi_sim::traffic::{LaneBuilder, LaneKind};
+use crate::traffic::{LaneBuilder, LaneKind, Network};
 
 #[test]
 fn paired_boxes_keep_their_authored_visit_even_across_the_platform_side() {

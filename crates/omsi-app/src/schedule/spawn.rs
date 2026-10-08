@@ -60,7 +60,7 @@ impl Schedule {
         let leave: Vec<f64> = tt.stations.iter().map(|s| departure + s.1).collect();
         let (steps, track) = self.steps_of(&trip_name, &stations);
         let station_steps = trip_station_steps(trip, track, steps.len());
-        Self::add_twins(traffic, &steps);
+        add_twins(traffic, &steps);
         let slots = self.slots(world, traffic, &steps, None);
         if !slots.iter().any(|s| matches!(s, Slot::Lane(_))) && !slots.contains(&Slot::Waiting) {
             log::debug!("trip {trip_name}: no route");
@@ -166,7 +166,7 @@ impl Schedule {
         };
         let section: Vec<usize> = slots[start..end].iter().filter_map(lane_of).collect();
         let start_index = slots[start..at].iter().filter_map(lane_of).count();
-        Self::add_connectors(traffic, &section);
+        add_connectors(traffic, &section);
         let net = &traffic.net;
         let (section, index) = bridge_gaps(net, &section);
         let start_index = index[start_index.min(index.len() - 1)];
