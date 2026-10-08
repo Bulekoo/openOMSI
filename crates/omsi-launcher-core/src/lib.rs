@@ -2488,7 +2488,8 @@ pub struct Duty {
     pub lan: Option<String>,
     /// The name the other LAN players see (default: the profile).
     pub lan_name: Option<String>,
-    /// Season override: spring / summer / autumn / winter (empty = by date).
+    /// Season override: spring / summer / autumn / winter, with a phase `-early` / `-late`
+    /// (`autumn-late`; none = the middle; empty = by date).
     pub season: Option<String>,
     /// One of OMSI's tutorials (1..4): its own situation, nothing else of the duty.
     #[serde(default)]

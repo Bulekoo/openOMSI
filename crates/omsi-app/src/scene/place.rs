@@ -318,7 +318,9 @@ impl World {
                     }
                 }
             }
-            if let Some(tree) = tree_of(&ot, o, pos, heading) {
+            if let Some(mut tree) = tree_of(&ot, o, pos, heading) {
+                // (a season's phase: this tree's own look)
+                tree.1 = self.tree_look_texture(&ot, &tree.1, o.key, pos);
                 trees.push(tree);
                 continue;
             }

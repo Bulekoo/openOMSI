@@ -42,6 +42,7 @@ mod vehicle_materials;
 mod vehicle_types;
 mod vehicles;
 mod lanes;
+mod season_looks;
 
 pub(crate) use staging::*;
 pub(crate) use batching::*;

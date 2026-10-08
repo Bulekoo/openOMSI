@@ -1522,3 +1522,14 @@ fn a_banned_player_hears_why_at_the_door() {
     assert!(!c.connected);
     assert!(c.turned_away.as_deref().is_some_and(|r| r.contains("Banni : conduite dangereuse")), "{:?}", c.turned_away);
 }
+
+#[test]
+fn a_season_with_its_phase_crosses_the_wire() {
+    for season in ["autumn-late", "spring-early", "summer-late", "winter"] {
+        let mut w = world("maps/Grundorf/global.cfg");
+        w.season = season.into();
+        let line = w.fields();
+        let parts: Vec<&str> = line.split('|').collect();
+        assert_eq!(WorldInfo::from_fields(&parts, 0).season, season);
+    }
+}

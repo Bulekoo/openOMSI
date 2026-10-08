@@ -48,7 +48,7 @@ Everything can also be given on the command line, which then skips both:
 | `--drive-keys wasd` | let W/A/S/D drive instead of the arrow keys |
 | `--autostart` | put the bus into service before the run (as Shift+U does) |
 | `--click x,y[,dx,dy]` | press (and drag) the cockpit switch at that pixel, offscreen |
-| `--season winter` / `--situation x.osn` / `--physics simple` | season override, a saved situation, the kinematic dynamics instead of the rigid body |
+| `--season winter` (`autumn-late`, `spring-early`, …) / `--situation x.osn` / `--physics simple` | season override, a saved situation, the kinematic dynamics instead of the rigid body |
 | `--enhanced` / `--export-glb bus.glb` | the physically based renderer; write the bus as glTF (the launcher's preview) and quit |
 | `--enhanced-plus` | Enhanced+: the physically based renderer with ray-traced shadows, ambient occlusion and reflections |
 | `--launcher` / `--menu` / `--no-menu` | open the launcher (the default without arguments), the in-game menu, or neither |
@@ -513,10 +513,20 @@ and buses inside the archives.
 ## Season and weather
 
 The launcher's Departure card has a **Season** choice (spring / summer / autumn / winter,
-or by the date as in the original). Choosing one moves the date into that season, so the
-timetable and holidays follow, passes `--season` to the game (which picks the map's
-seasonal texture folder), and the weather list only offers what fits: snowfall and frost
-only in winter, no cold presets in summer.
+or by the date as in the original), and under a chosen season its **Early / Mid / Late**
+part. The phases are the meteorological season's three months (northern spring: March,
+April, May; half a year later on a map south of the equator), and choosing one moves the
+date to a typical day of it (10th, 15th, 20th; the year and the time of day stay), so the
+sun, the length of the day, the natural weather's temperature and snow, the street lamps,
+the timetable and holidays all follow. `--season autumn-late` does the same from the
+command line (`--season autumn` is the middle; a `--date` already in the phase's month is
+kept). The map's seasonal textures follow the phase - early spring still bare (`Winter`),
+late summer dry (`SummerDry`), early autumn green, mid autumn coloured (`Fall`), late
+autumn bare - and the trees and bushes are mixed between the two looks the phase lies
+between: in early autumn a quarter of them have turned, in mid autumn four in five, in
+late autumn most stand bare and some still carry their leaves (each plant by its own
+number, the same every time and for every LAN player). The weather list only offers what
+fits: snowfall and frost only in winter, no cold presets in summer.
 
 Weather presets (`Weather/*.owt`) change the light: overcast takes the sun away, rain and
 fog thicken the air, a snow preset puts any map into its winter textures with snow cover.

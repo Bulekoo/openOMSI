@@ -968,7 +968,8 @@ impl World {
             return None;
         };
         if !ot.sco.is_car_park {
-            return Some((ot, false));
+            // (a plant of a season's phase in its own look)
+            return Some((self.plant_look(file, ot, key, tx, ty), false));
         }
         let list = self.parked_car_types(parklist_index(captions));
         if list.is_empty() {

@@ -111,6 +111,10 @@ pub struct Choice {
     pub date: String,
     /// "auto", spring, summer, autumn, winter.
     pub season: String,
+    /// The season's phase: early, mid, late (with a season chosen).
+    pub phase: String,
+    /// The player's own date from before a season moved it ("By date" gives it back).
+    pub own_date: Option<String>,
     pub weather: String,
     pub traffic: f32,
     pub passengers: bool,
@@ -143,6 +147,8 @@ impl Default for Choice {
             start_trip: None,
             date: "1989-05-30".into(),
             season: "auto".into(),
+            phase: "mid".into(),
+            own_date: None,
             weather: String::new(),
             traffic: 30.0,
             passengers: true,
@@ -182,6 +188,11 @@ impl Choice {
         // (older launchers took a vehicle line of a broken ailists.cfg for the map's depot)
         if c.hof.to_ascii_lowercase().contains(".bus") || c.hof.to_ascii_lowercase().contains(".ovh") {
             c.hof.clear();
+        }
+        // a season chosen: the date in its phase, as the game will have it (older launchers
+        // kept the day of the month; the date may have followed the computer's since)
+        if let Some(d) = crate::season_phase::launcher_date(&c.season, &c.phase, &c.date, &c.map, true) {
+            c.date = d;
         }
         c
     }
@@ -653,7 +664,7 @@ impl State {
             profile: Some(self.config.profile.clone()).filter(|p| !p.is_empty()),
             lan: Some(lan),
             lan_name: None,
-            season: Some(c.season.clone()).filter(|s| s != "auto"),
+            season: Some(c.season.clone()).filter(|s| s != "auto").map(|s| crate::season_phase::launcher_choice(&s, &c.phase).map(|x| x.word()).unwrap_or(s)),
             tutorial: None,
             situation: None,
         }
@@ -750,6 +761,8 @@ impl State {
     fn follow_clock(&mut self) {
         let on = |k: &str| self.settings.get(k).and_then(|v| v.as_bool()).unwrap_or(false);
         let (time, date, year) = (on("use_real_time"), on("use_real_date"), on("use_real_year"));
+        // (a season chosen sets the date: its phase's, see `season_chosen`)
+        let date = date && self.choice.season == "auto";
         if !time && !date {
             return;
         }

@@ -74,7 +74,11 @@ pub(crate) struct Args {
     /// Your name as the other players see it.
     #[arg(long, default_value = "Driver")]
     pub(crate) lan_name: String,
-    /// Season override: spring, summer, autumn or winter (else the date decides, as in OMSI).
+    /// Season: spring, summer, autumn or winter, with its phase `-early`, `-mid` (the
+    /// default) or `-late` (`autumn-late`), else the date decides, as in OMSI. The date
+    /// moves into the phase's month (its typical day; a --date already in that month stays,
+    /// the year and the time of day stay), half a year later south of the equator; the
+    /// plants are mixed between the two texture seasons the phase lies between.
     #[arg(long)]
     pub(crate) season: Option<String>,
     /// Fire script triggers after spawning: name[@seconds],… (times apply during --drive).

@@ -155,10 +155,19 @@ impl World {
 
     /// An object type with one of its `[CTC]` paint schemes applied (parked cars).
     pub fn object_type_scheme(&self, rel: &str, scheme: Option<usize>) -> Option<Arc<ObjectType>> {
-        let mut key = rel.to_ascii_lowercase().replace('\\', "/");
-        if let Some(i) = scheme {
-            key = format!("{key}#{i}");
-        }
+        self.object_type_look(rel, scheme, None)
+    }
+
+    /// An object type (with a paint scheme), and with `look` its textures as they are in
+    /// that season (`Some(None)`: summer's) - a plant of a season's phase that looks unlike
+    /// the map's season (see `season_looks`). None for a look no texture of it has.
+    pub(super) fn object_type_look(&self, rel: &str, scheme: Option<usize>, look: Option<&Option<String>>) -> Option<Arc<ObjectType>> {
+        let key = format!(
+            "{}{}{}",
+            rel.to_ascii_lowercase().replace('\\', "/"),
+            scheme.map(|i| format!("#{i}")).unwrap_or_default(),
+            look.map(|l| format!("@{}", l.as_deref().unwrap_or("summer").to_ascii_lowercase())).unwrap_or_default()
+        );
         if let Some(t) = self.object_types.lock().get(&key) {
             return t.clone();
         }
@@ -438,6 +447,12 @@ impl World {
                 collision_shape: Default::default(),
             }))
         })();
+        // the other season's look: its own copy of the type (its own textures on the GPU),
+        // kept only when a texture of it differs
+        let loaded = match (loaded, look) {
+            (Some(mut t), Some(l)) => Arc::get_mut(&mut t).and_then(|ot| self.retexture_for_look(ot, l.as_deref())).map(|_| t),
+            (t, _) => t,
+        };
         // two loaders may have read the same type at once: all of them get the first copy,
         // so that it is uploaded (and evicted) once
         self.object_types
