@@ -14,6 +14,9 @@ use omsi_vehicle::Vehicle;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+mod damage;
+pub use damage::{BrokenGlass, DynamicImpact, VehicleDent};
+
 /// Scripts often test a stopped bus with `!Velocity_Ground`, so do not expose tiny solver drift.
 fn script_speed(speed_kmh: f32) -> f32 {
     if speed_kmh.abs() < 0.01 { 0.0 } else { speed_kmh }
@@ -964,6 +967,12 @@ pub struct VehicleInstance {
     pub collision: Option<Arc<crate::collision::CollisionWorld>>,
     /// Moving obstacles (AI vehicles) for this frame, set by the app.
     pub dynamic_boxes: Vec<crate::collision::Obb>,
+    /// Contacts with moving vehicles, handed back to traffic after the player's physics step.
+    pub dynamic_impacts: Vec<DynamicImpact>,
+    /// New dents waiting for their per-instance render mesh to be updated.
+    damage_dents: Vec<VehicleDent>,
+    broken_glass: Vec<BrokenGlass>,
+    glass_broken: Vec<bool>,
     /// A collision happened this frame: the `{trigger:collision}` block runs after physics.
     collided: bool,
     /// Energy of the last crash (J), for whoever wants to report it; cleared by the reader.
@@ -1274,6 +1283,10 @@ impl VehicleInstance {
             skin_rest: Vec::new(),
             collision: None,
             dynamic_boxes: Vec::new(),
+            dynamic_impacts: Vec::new(),
+            damage_dents: Vec::new(),
+            broken_glass: Vec::new(),
+            glass_broken: vec![false; n],
             collided: false,
             last_crash: 0.0,
             wheel_walls: true,
@@ -1531,7 +1544,7 @@ impl VehicleInstance {
         self.position.y += h.cos() * ds as f64;
         self.heading = (self.heading + dheading as f64).rem_euclid(360.0);
         // collisions: back out of obstacles and stop
-        if let (Some(cw), Some(bb)) = (&self.collision, self.ty.def.bounding_box) {
+        if let Some(bb) = self.ty.def.bounding_box {
             let obb = crate::collision::Obb::from_box(bb, self.position, self.body_heading());
             // an obstacle we were already inside before this step (spawned on it, pushed into
             // it) never blocks: only entering an obstacle does
@@ -1540,38 +1553,104 @@ impl VehicleInstance {
                 prev.0,
                 body_heading(&self.ty.def, prev.1, false),
             );
-            let hit = cw
-                .obstacles_near(&obb)
-                .into_iter()
-                .chain(self.dynamic_boxes.iter().copied())
-                .find(|b| {
-                    b.overlaps(&obb)
-                        && !b.overlaps(&prev_obb)
-                        && !(b.id >= 0 && self.knocked.contains(&b.id))
-                });
-            if let Some(hit) = hit {
-                let v = self.physics.speed;
-                if v.abs() > crate::rigid::CRASH_SPEED {
-                    let e = 0.5 * self.physics.mass_kg * v * v;
-                    let rel = hit.center - self.position.truncate();
-                    let body_h = body_heading(&self.ty.def, prev.1, false).to_radians();
-                    let (sh, ch) = (body_h.sin(), body_h.cos());
-                    self.host.coll_pos = [
-                        (rel.x * ch - rel.y * sh) as f32,
-                        (rel.x * sh + rel.y * ch) as f32,
-                        (crate::collision::impact_height(hit.z0.max(obb.z0), hit.z1.min(obb.z1))
-                            - self.position.z) as f32,
-                    ];
-                    // kJ, like the rigid model reports it
-                    self.host.coll_energy += e / 1000.0;
-                    self.last_crash += e;
-                    self.crashes += 1;
-                    self.last_impact = e;
-                    self.collided = true;
+            let mut obstacles = self
+                .collision
+                .as_ref()
+                .map(|cw| cw.obstacles_near(&obb))
+                .unwrap_or_default();
+            obstacles.extend(self.dynamic_boxes.iter().copied());
+            let hit = obstacles.iter().copied().find_map(|obstacle| {
+                let was_overlapping = if obstacle.mass > 0.0 {
+                    let mut previous = obstacle;
+                    previous.center -= obstacle.velocity * dt as f64;
+                    previous.overlaps(&prev_obb)
+                } else {
+                    obstacle.overlaps(&prev_obb)
+                };
+                if !obstacle.overlaps(&obb)
+                    || (was_overlapping && obstacle.mass <= 0.0)
+                    || (obstacle.id >= 0 && self.knocked.contains(&obstacle.id))
+                {
+                    return None;
                 }
-                self.position = prev.0;
-                self.heading = prev.1;
-                self.physics.speed = 0.0;
+                obb.contact(&obstacle)
+                    .map(|contact| (obstacle, contact, was_overlapping))
+            });
+            if let Some((hit, contact, was_overlapping)) = hit {
+                let body_h = body_heading(&self.ty.def, prev.1, false).to_radians();
+                let own_velocity =
+                    glam::DVec2::new(body_h.sin(), body_h.cos()) * self.physics.speed as f64;
+                let relative_velocity = own_velocity - hit.velocity;
+                let closing_speed = -relative_velocity.dot(contact.normal);
+                let speed = if hit.mass > 0.0 {
+                    closing_speed.max(0.0) as f32
+                } else {
+                    relative_velocity.length() as f32
+                };
+                // out of a moving car that comes on only as far as the bus itself ran into
+                // it this step (as the rigid model has it): a car creeping into the standing
+                // bus does not shove it along; out of one standing or drawing away all the way
+                let approaching = hit.mass > 0.0 && hit.velocity.dot(contact.normal) > 0.0;
+                let out = if approaching {
+                    contact.depth.min((-own_velocity.dot(contact.normal)).max(0.0) * dt as f64 + 0.001)
+                } else {
+                    contact.depth + 0.001
+                };
+                if hit.mass <= 0.0 || closing_speed >= -(crate::rigid::CRASH_SPEED as f64) {
+                    if was_overlapping {
+                        self.position += contact.normal.extend(0.0) * out;
+                        if speed > crate::rigid::CRASH_SPEED {
+                            self.physics.speed = 0.0;
+                        }
+                    } else if speed <= crate::rigid::CRASH_SPEED {
+                        self.position += contact.normal.extend(0.0) * out;
+                    } else {
+                        // what the blow takes: the bus's motion into a wall, and between two
+                        // vehicles what the pair loses, 0.5 v² (1 - e²) over their inverse
+                        // mass, as the rigid model counts it: a 1 t car running into the
+                        // standing bus at 10 m/s is some 44 kJ, not the 500 kJ of the bus
+                        // itself at that speed
+                        let e = if hit.mass > 0.0 {
+                            let back = if speed > 1.0 { crate::rigid::RESTITUTION } else { 0.0 };
+                            0.5 * speed * speed * (1.0 - back * back) / (1.0 / self.physics.mass_kg + 1.0 / hit.mass)
+                        } else {
+                            0.5 * self.physics.mass_kg * speed * speed
+                        };
+                        let point = glam::DVec3::new(
+                            contact.point.x,
+                            contact.point.y,
+                            crate::collision::impact_height(contact.z0, contact.z1),
+                        );
+                        let rel = point.truncate() - self.position.truncate();
+                        let (sh, ch) = (body_h.sin(), body_h.cos());
+                        let coll_pos = [
+                            (rel.x * ch - rel.y * sh) as f32,
+                            (rel.x * sh + rel.y * ch) as f32,
+                            (point.z - self.position.z) as f32,
+                        ];
+                        self.host.coll_pos = coll_pos;
+                        // kJ, like the rigid model reports it
+                        self.host.coll_energy += e / 1000.0;
+                        self.last_crash += e;
+                        self.crashes += 1;
+                        self.last_impact = e;
+                        self.collided = true;
+                        self.break_glass_for_impact(Vec3::from_array(coll_pos), speed, e);
+                        if hit.mass > 0.0 && hit.id <= -2 && e >= 1000.0 {
+                            self.dynamic_impacts.push(DynamicImpact {
+                                obstacle_id: hit.id,
+                                point,
+                                push: (-contact.normal).extend(0.0),
+                                speed,
+                                energy: e,
+                                mass: self.physics.mass_kg,
+                            });
+                        }
+                        self.position = prev.0;
+                        self.heading = prev.1;
+                        self.physics.speed = 0.0;
+                    }
+                }
             }
         }
         // ground under each wheel: height, terrain pitch and bank of the body
@@ -1841,6 +1920,19 @@ impl VehicleInstance {
                 {
                     continue;
                 }
+                self.break_glass_for_impact(hit.point, hit.speed, hit.energy);
+                if o.mass > 0.0 && o.id <= -2 {
+                    let point = rb.position
+                        + rb.orientation.mul_vec3(hit.point - rb.cog).as_dvec3();
+                    self.dynamic_impacts.push(DynamicImpact {
+                        obstacle_id: o.id,
+                        point,
+                        push: hit.push.as_dvec3(),
+                        speed: hit.speed,
+                        energy: hit.energy,
+                        mass: self.physics.mass_kg,
+                    });
+                }
                 energy += hit.energy;
                 if worst.map(|w| hit.energy > w.energy).unwrap_or(true) {
                     worst = Some(*hit);
@@ -1869,6 +1961,7 @@ impl VehicleInstance {
             self.last_impact = energy;
             self.crashes += 1;
             self.collided = true;
+            self.break_glass_for_impact(hit.point, hit.speed, hit.energy);
         }
         self.position = rb.origin();
         let (heading, pitch, bank) = rb.heading_pitch_bank();
@@ -2254,12 +2347,7 @@ impl VehicleInstance {
         self.host.clock.advance(dt);
         self.step_physics(dt);
         self.update_ground_probe();
-        if std::mem::take(&mut self.collided) {
-            // OMSI runs the vehicle's `collision` block on a crash (it damages the bus); the
-            // energy is that crash's, for as many reads as the block makes
-            self.trigger("collision");
-            self.host.coll_energy = 0.0;
-        }
+        self.run_collision_trigger();
         self.update_dirt(dt);
         // (signed, as Omsi.exe 0x7e5163 adds it: reversing takes it back)
         self.driven_km += (self.physics.velocity_kmh() as f64 / 3600.0) * dt as f64;
@@ -2269,6 +2357,13 @@ impl VehicleInstance {
         self.show_radio_text();
         self.clear_pax_requests();
         self.update_visuals(dt);
+    }
+
+    fn run_collision_trigger(&mut self) {
+        if std::mem::take(&mut self.collided) {
+            self.trigger("collision");
+            self.host.coll_energy = 0.0;
+        }
     }
 
     /// The station and the song on a radio whose display is a text of its script. OMSI has
@@ -2478,6 +2573,7 @@ impl VehicleInstance {
         for &(id, v) in inputs.iter().chain(pinned) {
             self.put(Some(id), v);
         }
+        self.run_collision_trigger();
         let p = self.ty.program.clone();
         if p.frame_ai.is_empty() {
             self.vm.run_frame(&p, &mut self.state, &mut self.host);
@@ -4281,7 +4377,7 @@ mod tests {
     use super::*;
     use std::sync::Arc;
 
-    fn coupling_test_type(boogies: Option<f32>) -> Arc<VehicleType> {
+    pub(super) fn coupling_test_type(boogies: Option<f32>) -> Arc<VehicleType> {
         Arc::new(VehicleType {
             def: Vehicle {
                 boogies,
@@ -4383,6 +4479,102 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn simple_physics_reports_a_moving_vehicle_striking_a_stationary_bus() {
+        let mut ty = coupling_test_type(None);
+        let def = &mut Arc::get_mut(&mut ty).unwrap().def;
+        def.bounding_box = Some([2.0, 2.0, 2.0, 0.0, 0.0, 1.0]);
+        def.rolling_resistance = 0.0;
+        let mut bus = VehicleInstance::new(ty, VehicleHost::new(Default::default()));
+        bus.physics.mass_kg = 10_000.0;
+        bus.dynamic_boxes.push(
+            crate::collision::Obb::from_box(
+                [0.8, 0.4, 2.0, 0.0, 0.0, 1.0],
+                DVec3::new(0.0, -1.1, 0.0),
+                0.0,
+            )
+            .moving(glam::DVec2::new(0.0, 10.0), 1_000.0, 7),
+        );
+
+        // The bus is stationary; the AI car moves into it during this tick.
+        bus.step_physics(0.1);
+
+        let impacts = bus.take_dynamic_impacts();
+        assert_eq!(impacts.len(), 1, "{impacts:?}");
+        let impact = impacts[0];
+        assert_eq!(impact.obstacle_id, -9);
+        assert!(impact.speed > crate::rigid::CRASH_SPEED, "{impact:?}");
+        assert!(impact.energy >= 1_000.0, "{impact:?}");
+        assert!(impact.point.y < 0.0, "{impact:?}");
+        assert!(impact.push.y < 0.0, "{impact:?}");
+        assert!(bus.collided);
+        assert_eq!(bus.physics.speed, 0.0);
+    }
+
+    /// A car creeping into the standing bus (below the crash speed) does not shove it along
+    /// at its own pace, and the crash of a car running into it counts the pair's energy.
+    #[test]
+    fn simple_physics_a_creeping_car_does_not_shove_the_standing_bus() {
+        let mut ty = coupling_test_type(None);
+        let def = &mut Arc::get_mut(&mut ty).unwrap().def;
+        def.bounding_box = Some([2.0, 2.0, 2.0, 0.0, 0.0, 1.0]);
+        def.rolling_resistance = 0.0;
+        let mut bus = VehicleInstance::new(ty, VehicleHost::new(Default::default()));
+        bus.physics.mass_kg = 10_000.0;
+        let y0 = bus.position.y;
+        let mut car = crate::collision::Obb::from_box([0.8, 0.4, 2.0, 0.0, 0.0, 1.0], DVec3::new(0.0, -1.19, 0.0), 0.0)
+            .moving(glam::DVec2::new(0.0, 0.3), 1_000.0, 7);
+        for _ in 0..60 {
+            car.center += car.velocity / 30.0;
+            bus.dynamic_boxes = vec![car];
+            bus.step_physics(1.0 / 30.0);
+        }
+        assert!(bus.position.y - y0 < 0.1, "the bus was shoved {:.2} m", bus.position.y - y0);
+        assert!(bus.take_dynamic_impacts().is_empty());
+
+        let mut ty = coupling_test_type(None);
+        let def = &mut Arc::get_mut(&mut ty).unwrap().def;
+        def.bounding_box = Some([2.0, 2.0, 2.0, 0.0, 0.0, 1.0]);
+        let mut bus = VehicleInstance::new(ty, VehicleHost::new(Default::default()));
+        bus.physics.mass_kg = 10_000.0;
+        bus.dynamic_boxes.push(
+            crate::collision::Obb::from_box([0.8, 0.4, 2.0, 0.0, 0.0, 1.0], DVec3::new(0.0, -1.1, 0.0), 0.0)
+                .moving(glam::DVec2::new(0.0, 10.0), 1_000.0, 7),
+        );
+        bus.step_physics(0.1);
+        let impact = bus.take_dynamic_impacts()[0];
+        // 0.5 v² (1 - e²) over the pair's inverse mass, and the bus's mass for the car's recoil
+        assert!((impact.energy - 0.5 * 100.0 * 0.96 / (1.0 / 10_000.0 + 1.0 / 1_000.0)).abs() < 1.0, "{impact:?}");
+        assert_eq!(impact.mass, 10_000.0);
+    }
+
+    #[test]
+    fn simple_physics_separates_persistent_overlap_with_a_moving_vehicle() {
+        let mut ty = coupling_test_type(None);
+        let def = &mut Arc::get_mut(&mut ty).unwrap().def;
+        def.bounding_box = Some([2.0, 2.0, 2.0, 0.0, 0.0, 1.0]);
+        def.rolling_resistance = 0.0;
+        let mut bus = VehicleInstance::new(ty, VehicleHost::new(Default::default()));
+        let car = crate::collision::Obb::from_box(
+            [1.0, 2.0, 2.0, 0.0, 0.0, 1.0],
+            DVec3::new(0.9, 0.0, 0.0),
+            0.0,
+        )
+        .moving(glam::DVec2::ZERO, 1_000.0, 7);
+        bus.dynamic_boxes.push(car);
+
+        bus.step_physics(0.01);
+
+        let body = crate::collision::Obb::from_box(
+            [2.0, 2.0, 2.0, 0.0, 0.0, 1.0],
+            bus.position,
+            bus.body_heading(),
+        );
+        assert!(!body.overlaps(&car), "position {:?}, car {:?}", bus.position, car);
+        assert!(bus.position.x < 0.0);
+        assert_eq!(bus.take_dynamic_impacts().len(), 0);
     }
 
     #[test]

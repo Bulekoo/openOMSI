@@ -230,7 +230,7 @@ impl Renderer {
         let cu = CameraUniform {
             post: [
                 if enhanced { 1.0 } else { 0.0 },
-                self.started.elapsed().as_secs_f32(),
+                lighting.animation_time.unwrap_or_else(|| self.started.elapsed().as_secs_f32()),
                 // (z: the roads are kept clear of the snow, `Lighting::roads_clear`)
                 if lighting.roads_clear { 1.0 } else { 0.0 },
                 // (the sun's height on the screen is read by no shader any more: the close

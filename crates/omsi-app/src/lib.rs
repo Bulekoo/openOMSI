@@ -60,6 +60,8 @@ mod puddles;
 mod quit;
 mod condensation;
 mod rain;
+mod window_wipers;
+mod window_drops;
 mod scene;
 mod season_phase;
 mod schedule;

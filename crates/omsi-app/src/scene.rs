@@ -41,6 +41,7 @@ mod scripted;
 mod vehicle_materials;
 mod vehicle_types;
 mod vehicles;
+mod vehicle_damage;
 mod lanes;
 mod season_looks;
 
@@ -53,6 +54,7 @@ pub(crate) use props::*;
 pub(crate) use scripted::*;
 pub(crate) use vehicle_materials::*;
 pub(crate) use vehicle_types::*;
+pub(crate) use vehicle_damage::*;
 use lanes::*;
 use lightmaps::*;
 pub(crate) use stage::*;

@@ -161,7 +161,10 @@ impl App {
             // the pedals as Omsi.exe has them: from the middle of the window to its
             // top edge the throttle, to the bottom one the brake, straight on
             let y = (2.0 * cy / h.max(1.0) - 1.0).clamp(-1.0, 1.0);
-            let (pedal_t, pedal_b) = ((-y).max(0.0), y.max(0.0));
+            let (pedal_t, pedal_b) = (
+                crate::player::mouse_pedal_target((-y).max(0.0), self.settings.mouse_pedal_strength),
+                crate::player::mouse_pedal_target(y.max(0.0), self.settings.mouse_pedal_strength),
+            );
             let (steer, fade) = &mut self.input.mouse_steer;
             // (after the first second the wheel follows the cursor within ~60 ms, or at
             // once with Smooth mouse steering off, #1092)

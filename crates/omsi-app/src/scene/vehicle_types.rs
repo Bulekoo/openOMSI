@@ -4,6 +4,7 @@ use super::*;
 
 /// GPU-side representation of a vehicle instance: one render instance per mesh.
 pub struct VehicleRender {
+    pub window_wipers: Option<crate::window_wipers::WindowWipers>,
     pub instances: Vec<usize>,
     /// Materials made for this vehicle alone (its text and script texture slots).
     pub own_materials: Vec<MaterialId>,
@@ -26,6 +27,10 @@ pub struct VehicleRender {
     /// `[smoothskin]` meshes drawn from a copy of their own (the player's articulated bus's
     /// bellows): (mesh index, the copy, the bone transforms it was last shaped for).
     pub skinned: Vec<(usize, MeshId, Vec<Mat4>)>,
+    /// Vehicle meshes with per-instance collision damage: (mesh index, GPU copy, CPU geometry).
+    pub damaged: Vec<(usize, MeshId, omsi_geometry::MeshData)>,
+    /// Colored, opaque crack overlays attached to damaged glass panes.
+    pub glass_cracks: Vec<(usize, usize, MeshId)>,
     /// An AI vehicle out of sight: its instances are hidden and not updated (see
     /// `Traffic::sync`).
     pub hidden: bool,

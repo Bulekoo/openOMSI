@@ -104,6 +104,8 @@ down to the bottom edge the brake. Above 10 km/h the same hand movement turns th
 and less (at 50 km/h a fifth as far), so the wheel feels heavier the faster the bus goes; for
 the first second after switching it on the wheel and the pedals ease towards the cursor.
 Settings → Driving → *Mouse steering sensitivity* makes it more or less sensitive (100 % = OMSI).
+*Mouse pedal strength* sets how much cursor travel is needed to reach full accelerator or
+braking: above 100 % the pedal reaches full sooner and below 100 % it takes more travel.
 Mouse steering works in the driver's, the passenger and the outside view; the wheel follows
 the cursor smoothly (a short easing, no steps). With *Smooth mouse steering* off (Settings →
 Driving) the wheel and the pedals are where the cursor says at once, as in OMSI.
@@ -312,6 +314,9 @@ elsewhere Vulkan, then OpenGL; see *Graphics API* below), `ctrl_off` (game contr
 on the Controllers page, by name, separated by `|`) and `language` (`ENG`, `DEU`, `FRA`: the language the HUD names cockpit switches
 in). The file also carries a `version`; older files that say
 `boarding=pay` because that was the launcher's old default are read as `auto`.
+With `collision_vehicles` enabled, impacts against AI traffic are delivered to the struck
+vehicle's collision scripts and deform a localized part of its body mesh where the model
+has editable body geometry.
 
 **Graphics API** (Settings → Display, `graphics_api`): the interface named is asked first and
 the others follow, so a machine without it still starts. *ANGLE (DirectX 11)* (Windows) runs

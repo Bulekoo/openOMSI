@@ -4,6 +4,29 @@ use super::planning::lane_open_to;
 #[cfg(test)]
 mod parked_lane_tests {
     use super::*;
+    use super::control::impact_zones;
+
+    #[test]
+    fn vehicle_impact_zones_cover_the_whole_body_with_distinct_front_rear_and_sides() {
+        let bb = [2.0, 4.0, 2.0, 0.3, 0.7, 1.0];
+        let zones = impact_zones(bb, DVec3::ZERO, 0.0, DVec2::ZERO, 1200.0, 42);
+        let samples = [
+            DVec2::new(0.3, 2.55),
+            DVec2::new(0.3, -1.15),
+            DVec2::new(-0.45, 0.7),
+            DVec2::new(1.05, 0.7),
+        ];
+        for point in samples {
+            let probe = crate::collision::Obb::point(
+                DVec3::new(point.x, point.y, 1.0),
+                0.02,
+            );
+            assert!(zones.iter().any(|zone| zone.overlaps(&probe)), "{point:?}");
+        }
+        assert!(zones.iter().all(|zone| zone.id == -44));
+        assert!(zones[0].center.y > zones[1].center.y);
+        assert!(zones[2].center.x < zones[3].center.x);
+    }
 
     #[test]
     fn a_parked_body_blocks_an_otherwise_empty_target_lane() {

@@ -472,6 +472,7 @@ impl Traffic {
             }
             crate::scene::sync_vehicle_textures(renderer, scene, &mut c.vehicle, &*render, &mut budget);
             crate::scene::sync_vehicle_materials(renderer, scene, &c.vehicle, render);
+            crate::scene::sync_vehicle_damage(renderer, scene, &mut c.vehicle, render);
             // a coupled part runs no scripts of its own: its plates, its displays and its
             // switched materials follow the leading vehicle's, as the player's own rear
             // sections do (without this an AI bus's rear section kept the blank textures and

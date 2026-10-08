@@ -66,6 +66,7 @@ impl Offscreen<'_> {
     /// The street lamps, the lit windows and the lighting at `clock` (the weather the
     /// physical model has then).
     fn final_lighting(&mut self, clock: &omsi_sim::SimClock) -> (omsi_sim::Daylight, omsi_render::Lighting) {
+        let (args, service_seconds) = (self.args, self.service_seconds);
         let Self {
             ref world,
             ref mut renderer,
@@ -98,6 +99,7 @@ impl Offscreen<'_> {
             driven,
             cabin_air.appearance(),
             settings,
+            args.drive.unwrap_or(0.0) + service_seconds as f32,
         );
         // OMSI_CONDENSATION=<minutes>,<people>[,engine 0/1]: the cabin air and the condensation
         // on the player's glass after that long with that many aboard
@@ -207,7 +209,7 @@ impl Offscreen<'_> {
                     1.0 / 30.0,
                     camera.position,
                     // ([wind] direction (deg) and speed (m/s), as the window's frame takes it)
-                    Vec3::new(weather.wind.0.to_radians().sin() * weather.wind.1, weather.wind.0.to_radians().cos() * weather.wind.1, 0.0),
+                    rain::weather_wind(weather),
                     scene,
                     &player_ref.as_ref().or(player.as_ref()).map(|p| rain::vehicle_boxes(&p.vehicle)).unwrap_or_default(),
                 );
