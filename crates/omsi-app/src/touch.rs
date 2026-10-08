@@ -240,7 +240,7 @@ impl App {
         let short = w.min(h) / dpi;
         let u = dpi * (short / 400.0).clamp(0.85, 1.35);
         let pad = 14.0 * u;
-        let t = &mut self.touch;
+        let t = &mut self.input.touch;
         t.u = u;
         t.size = (w, h);
         let mut b: Vec<Button> = Vec::new();
@@ -440,7 +440,7 @@ impl App {
 
     /// A finger on the screen.
     pub(crate) fn on_touch(&mut self, event_loop: &ActiveEventLoop, f: Finger) {
-        if !self.touch.enabled {
+        if !self.input.touch.enabled {
             return;
         }
         let p = Vec2::new(f.location.x as f32, f.location.y as f32);
@@ -453,9 +453,9 @@ impl App {
     }
 
     pub(crate) fn finger_down(&mut self, event_loop: &ActiveEventLoop, id: u64, p: Vec2) {
-        self.touch.fingers.retain(|f| f.id != id);
+        self.input.touch.fingers.retain(|f| f.id != id);
         let menu_mode = self.game_menu.is_some() || self.chooser.is_some() || self.navigator.as_ref().is_some_and(|n| n.map_open());
-        let t = &self.touch;
+        let t = &self.input.touch;
         let role = if let Some(k) = t.button_at(p) {
             Role::Button(k, t.buttons[k].btn)
         } else if self.game_menu.is_some() || self.chooser.is_some() {
@@ -480,7 +480,7 @@ impl App {
         } else {
             // the cockpit's switch under the finger, else the camera's
             self.on_cursor(p.x, p.y);
-            if self.hover.is_some() && self.view == "driver" && self.touch.fingers.iter().all(|f| f.role != Role::Cockpit) {
+            if self.hover.is_some() && self.view == "driver" && self.input.touch.fingers.iter().all(|f| f.role != Role::Cockpit) {
                 self.left_button(event_loop, true);
                 Role::Cockpit
             } else {
@@ -501,30 +501,30 @@ impl App {
             // without having moved - a finger that came down to scroll used to pick the
             // line it landed on)
             Role::Menu => self.on_cursor(p.x, p.y),
-            Role::Wheel(..) => self.touch.steering = true,
+            Role::Wheel(..) => self.input.touch.steering = true,
             _ => {}
         }
-        self.touch.fingers.push(Touched { id, start: p, pos: p, role, moved: false, since: Instant::now() });
+        self.input.touch.fingers.push(Touched { id, start: p, pos: p, role, moved: false, since: Instant::now() });
         self.touch_pedals(p);
         // two fingers on the picture: a pinch
-        let looks: Vec<Vec2> = self.touch.fingers.iter().filter(|f| matches!(f.role, Role::Look | Role::Mouse)).map(|f| f.pos).collect();
+        let looks: Vec<Vec2> = self.input.touch.fingers.iter().filter(|f| matches!(f.role, Role::Look | Role::Mouse)).map(|f| f.pos).collect();
         if looks.len() == 2 {
-            self.touch.pinch = Some(looks[0].distance(looks[1]).max(1.0));
+            self.input.touch.pinch = Some(looks[0].distance(looks[1]).max(1.0));
         }
     }
 
     pub(crate) fn finger_move(&mut self, id: u64, p: Vec2) {
-        let u = self.touch.u;
-        let Some(k) = self.touch.fingers.iter().position(|f| f.id == id) else { return };
-        let last = self.touch.fingers[k].pos;
+        let u = self.input.touch.u;
+        let Some(k) = self.input.touch.fingers.iter().position(|f| f.id == id) else { return };
+        let last = self.input.touch.fingers[k].pos;
         {
-            let f = &mut self.touch.fingers[k];
+            let f = &mut self.input.touch.fingers[k];
             f.pos = p;
             if !f.moved && p.distance(f.start) > 10.0 * u {
                 f.moved = true;
             }
         }
-        let role = self.touch.fingers[k].role;
+        let role = self.input.touch.fingers[k].role;
         match role {
             Role::Wheel(a0, _) => {
                 // The wheel turns as far round as the finger goes round its centre - the
@@ -534,41 +534,41 @@ impl App {
                 // the finger ran off the screen at about half a lock to the left, the system
                 // took the touch away and the wheel sprang back to the middle.
                 // (close to the centre the angle means nothing: only followed)
-                let d = p - self.touch.wheel_c;
+                let d = p - self.input.touch.wheel_c;
                 let a = d.y.atan2(d.x);
-                if d.length() > self.touch.wheel_r * 0.2 {
+                if d.length() > self.input.touch.wheel_r * 0.2 {
                     let mut da = a - a0;
                     if da > std::f32::consts::PI {
                         da -= std::f32::consts::TAU;
                     } else if da < -std::f32::consts::PI {
                         da += std::f32::consts::TAU;
                     }
-                    self.touch.steer = (self.touch.steer + da / touch_lock_angle(&self.settings)).clamp(-1.0, 1.0);
+                    self.input.touch.steer = (self.input.touch.steer + da / touch_lock_angle(&self.settings)).clamp(-1.0, 1.0);
                 }
-                self.touch.fingers[k].role = Role::Wheel(a, d.length());
+                self.input.touch.fingers[k].role = Role::Wheel(a, d.length());
             }
             Role::Throttle | Role::Brake => self.touch_pedals(p),
             Role::Stick => {
-                let d = p - self.touch.stick_c;
-                self.touch.stick_at = Some((self.touch.stick_c, d.clamp_length_max(self.touch.stick_r)));
-                self.stick_keys(d / self.touch.stick_r);
+                let d = p - self.input.touch.stick_c;
+                self.input.touch.stick_at = Some((self.input.touch.stick_c, d.clamp_length_max(self.input.touch.stick_r)));
+                self.stick_keys(d / self.input.touch.stick_r);
             }
             // (only a finger that has gone a way drags it: one wavering on a tap still opens
             // the city map)
             Role::Navigator => {
-                if self.touch.fingers[k].moved {
+                if self.input.touch.fingers[k].moved {
                     self.on_cursor(p.x, p.y);
                 }
             }
             Role::Cockpit | Role::Mouse => {
-                if let (Role::Mouse, Some(_)) = (role, self.touch.pinch) {
+                if let (Role::Mouse, Some(_)) = (role, self.input.touch.pinch) {
                     return self.touch_pinch();
                 }
                 self.on_cursor(p.x, p.y);
             }
             // the list follows the finger, line for line
             Role::Menu => {
-                if self.touch.fingers[k].moved {
+                if self.input.touch.fingers[k].moved {
                     // (no line lit under a finger that scrolls)
                     self.on_cursor(-1e4, -1e4);
                     let (start, row_h) = self.ui.as_ref().map(|u| (u.menu_start as f32, u.menu_row_h.max(1.0))).unwrap_or((0.0, 1.0));
@@ -580,10 +580,10 @@ impl App {
                 }
             }
             Role::Look => {
-                if self.touch.pinch.is_some() {
+                if self.input.touch.pinch.is_some() {
                     return self.touch_pinch();
                 }
-                if self.touch.fingers[k].moved {
+                if self.input.touch.fingers[k].moved {
                     // (degrees for a point dragged: a full turn is a few swipes)
                     let k = 0.28 / u * self.settings.look_sens;
                     // (the view turns the way the finger moves: taken the other way round,
@@ -596,40 +596,40 @@ impl App {
     }
 
     fn touch_pinch(&mut self) {
-        let looks: Vec<Vec2> = self.touch.fingers.iter().filter(|f| matches!(f.role, Role::Look | Role::Mouse)).map(|f| f.pos).collect();
+        let looks: Vec<Vec2> = self.input.touch.fingers.iter().filter(|f| matches!(f.role, Role::Look | Role::Mouse)).map(|f| f.pos).collect();
         if looks.len() < 2 {
             return;
         }
         let d = looks[0].distance(looks[1]).max(1.0);
-        if let Some(d0) = self.touch.pinch {
-            let amount = (d - d0) / (28.0 * self.touch.u);
+        if let Some(d0) = self.input.touch.pinch {
+            let amount = (d - d0) / (28.0 * self.input.touch.u);
             if amount.abs() > 0.05 {
                 self.wheel(amount);
-                self.touch.pinch = Some(d);
+                self.input.touch.pinch = Some(d);
             }
         }
     }
 
     pub(crate) fn finger_up(&mut self, event_loop: &ActiveEventLoop, id: u64, p: Vec2, cancelled: bool) {
-        let Some(k) = self.touch.fingers.iter().position(|f| f.id == id) else { return };
-        let f = self.touch.fingers.remove(k);
-        if self.touch.fingers.iter().filter(|f| matches!(f.role, Role::Look | Role::Mouse)).count() < 2 {
-            self.touch.pinch = None;
+        let Some(k) = self.input.touch.fingers.iter().position(|f| f.id == id) else { return };
+        let f = self.input.touch.fingers.remove(k);
+        if self.input.touch.fingers.iter().filter(|f| matches!(f.role, Role::Look | Role::Mouse)).count() < 2 {
+            self.input.touch.pinch = None;
         }
         match f.role {
             Role::Button(_, b) => {
                 if b.held() {
                     self.touch_button(event_loop, b, false);
-                } else if !cancelled && self.touch.button_at(p).and_then(|k| self.touch.buttons.get(k)).map(|x| x.btn) == Some(b) {
+                } else if !cancelled && self.input.touch.button_at(p).and_then(|k| self.input.touch.buttons.get(k)).map(|x| x.btn) == Some(b) {
                     self.touch_button(event_loop, b, true);
                 }
             }
-            Role::Wheel(..) => self.touch.steering = self.touch.fingers.iter().any(|f| matches!(f.role, Role::Wheel(..))),
-            Role::Throttle => self.touch.throttle = 0.0,
-            Role::Brake => self.touch.brake = 0.0,
-            Role::Clutch => self.touch.clutch = 0.0,
+            Role::Wheel(..) => self.input.touch.steering = self.input.touch.fingers.iter().any(|f| matches!(f.role, Role::Wheel(..))),
+            Role::Throttle => self.input.touch.throttle = 0.0,
+            Role::Brake => self.input.touch.brake = 0.0,
+            Role::Clutch => self.input.touch.clutch = 0.0,
             Role::Stick => {
-                self.touch.stick_at = None;
+                self.input.touch.stick_at = None;
                 self.stick_keys(Vec2::ZERO);
             }
             Role::Cockpit | Role::Mouse => {
@@ -661,7 +661,7 @@ impl App {
             Role::Look => {
                 // a tap on the picture: a click there (a switch the finger missed by a hair
                 // is still found: the cursor's pick is generous)
-                if !f.moved && !cancelled && f.since.elapsed().as_secs_f32() < 0.45 && self.touch.fingers.is_empty() {
+                if !f.moved && !cancelled && f.since.elapsed().as_secs_f32() < 0.45 && self.input.touch.fingers.is_empty() {
                     self.on_cursor(p.x, p.y);
                     self.left_button(event_loop, true);
                     self.left_button(event_loop, false);
@@ -673,7 +673,7 @@ impl App {
     /// The pedals from where the fingers on them are: the higher up the pedal, the harder
     /// it is pressed (a finger at its foot presses a little).
     fn touch_pedals(&mut self, _p: Vec2) {
-        let t = &mut self.touch;
+        let t = &mut self.input.touch;
         let depth = |r: Rect, y: f32| (0.2 + 0.8 * ((r.bottom() - y) / r.h)).clamp(0.2, 1.0);
         for f in &t.fingers {
             match f.role {
@@ -705,25 +705,25 @@ impl App {
         if d.length() > 0.95 {
             want.push(KeyCode::ShiftLeft);
         }
-        for k in self.touch.stick_keys.clone() {
+        for k in self.input.touch.stick_keys.clone() {
             if !want.contains(&k) {
-                self.keys.remove(&k);
+                self.input.keys.remove(&k);
             }
         }
         for k in &want {
-            self.keys.insert(*k);
+            self.input.keys.insert(*k);
         }
-        self.touch.stick_keys = want;
+        self.input.touch.stick_keys = want;
     }
 
     /// A key tapped (with Shift held when `shift`), through the keyboard's own handler.
     fn tap_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, shift: bool, pressed: bool) {
         if shift {
-            self.keys.insert(KeyCode::ShiftLeft);
+            self.input.keys.insert(KeyCode::ShiftLeft);
         }
         self.on_key(event_loop, code, pressed, false);
         if shift {
-            self.keys.remove(&KeyCode::ShiftLeft);
+            self.input.keys.remove(&KeyCode::ShiftLeft);
         }
     }
 
@@ -739,7 +739,7 @@ impl App {
     }
 
     fn touch_note(&mut self, text: &str) {
-        self.touch.note = Some((text.to_string(), 1.6));
+        self.input.touch.note = Some((text.to_string(), 1.6));
     }
 
     fn touch_button(&mut self, event_loop: &ActiveEventLoop, b: Btn, down: bool) {
@@ -748,7 +748,7 @@ impl App {
         }
         match b {
             Btn::Menu => {
-                self.touch.panel = false;
+                self.input.touch.panel = false;
                 self.open_game_menu();
             }
             Btn::CloseMenu => {
@@ -786,10 +786,10 @@ impl App {
                 }
             }
             Btn::Timetable => self.timetable = !self.timetable,
-            Btn::Panel => self.touch.panel = !self.touch.panel,
+            Btn::Panel => self.input.touch.panel = !self.input.touch.panel,
             Btn::Hide => {
-                self.touch.hidden = !self.touch.hidden;
-                self.touch.panel = false;
+                self.input.touch.hidden = !self.input.touch.hidden;
+                self.input.touch.panel = false;
             }
             Btn::Screenshot => self.take_screenshot(),
             Btn::Door(n) => {
@@ -805,7 +805,7 @@ impl App {
                 self.vehicle_action("parking_brake_toggle", false);
             }
             Btn::Gear(action, letter) => {
-                self.touch.gear = Some(letter);
+                self.input.touch.gear = Some(letter);
                 self.vehicle_action(action, true);
                 self.vehicle_action(action, false);
             }
@@ -823,7 +823,7 @@ impl App {
             Btn::AutoStart => {
                 self.tap_key(event_loop, KeyCode::KeyU, true, true);
                 self.tap_key(event_loop, KeyCode::KeyU, true, false);
-                self.touch.panel = false;
+                self.input.touch.panel = false;
             }
             Btn::Headlights => {
                 self.vehicle_action("kw_scheinwerfer_toggle", true);
@@ -855,9 +855,9 @@ impl App {
             }
             Btn::Info => self.set_info_bar(!self.info_bar),
             Btn::Tilt => {
-                self.touch.tilt = !self.touch.tilt;
-                crate::platform::set_tilt(self.touch.tilt);
-                let t = if self.touch.tilt { "Tilt steering on: hold the phone like a wheel" } else { "Tilt steering off" };
+                self.input.touch.tilt = !self.input.touch.tilt;
+                crate::platform::set_tilt(self.input.touch.tilt);
+                let t = if self.input.touch.tilt { "Tilt steering on: hold the phone like a wheel" } else { "Tilt steering off" };
                 self.touch_note(t);
             }
         }
@@ -866,10 +866,10 @@ impl App {
     /// Once a frame before the bus moves: the wheel and the pedals as the controller's axes
     /// (the stronger of the two for the pedals), and the wheel coming back when let go.
     pub(crate) fn touch_frame(&mut self, dt: f32) {
-        if !self.touch.enabled {
+        if !self.input.touch.enabled {
             return;
         }
-        let t = &mut self.touch;
+        let t = &mut self.input.touch;
         if t.tilt {
             if let Some(s) = crate::platform::tilt_steering() {
                 t.steer = s;
@@ -915,8 +915,8 @@ impl App {
         let lock_angle = touch_lock_angle(&self.settings);
         // (the buttons' backgrounds follow the interface's opacity; their icons stay solid)
         let panel_bg = PANEL_BG.alpha(crate::ui::backdrop(self.settings.ui_opacity));
-        let (w, h) = self.touch.size;
-        let t = &mut self.touch;
+        let (w, h) = self.input.touch.size;
+        let t = &mut self.input.touch;
         let u = t.u;
         let fonts = t.fonts.get_or_insert_with(Fonts::new);
         let pt = &mut t.painter;
@@ -1036,7 +1036,7 @@ impl App {
     /// Lay the controls out for a frame of `w` x `h` and paint them (drawn by
     /// `Touch::render` once the game's picture is in the frame).
     pub(crate) fn touch_prepare(&mut self, w: u32, h: u32) {
-        if !self.touch.enabled {
+        if !self.input.touch.enabled {
             return;
         }
         self.touch_layout(w as f32, h as f32);

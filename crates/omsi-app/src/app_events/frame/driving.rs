@@ -18,7 +18,7 @@ impl App {
         // (the cursor's aim into the cab: again when the cursor or the view
         // turned, else every few frames for switches that moved under it - a ray
         // through every cockpit mesh every frame was a tenth of the frame)
-        let key = self.camera.as_ref().map(|c| (self.cursor.0.round() as i32, self.cursor.1.round() as i32, (c.yaw * 4.0).round() as i32, (c.pitch * 4.0).round() as i32));
+        let key = self.camera.as_ref().map(|c| (self.input.cursor.0.round() as i32, self.input.cursor.1.round() as i32, (c.yaw * 4.0).round() as i32, (c.pitch * 4.0).round() as i32));
         // (the cab sways with the suspension: a view that only turned waits a few frames)
         let cursor_moved = key.map(|k| (k.0, k.1)) != self.hover_key.map(|k| (k.0, k.1));
         if cursor_moved || (key != self.hover_key && self.perf.total_frames % 6 == 0) || self.perf.total_frames % 12 == 0 {
@@ -63,8 +63,8 @@ impl App {
             // *before* `tick` cleared Aachen ibox momentary flags (incl. digit 0 /
             // `ibox_taste_D11`) before the frame could act when the click path had
             // not already consumed them (#744).
-            if self.dragging {
-                let (dx, dy) = std::mem::take(&mut self.drag_delta);
+            if self.input.dragging {
+                let (dx, dy) = std::mem::take(&mut self.input.drag_delta);
                 p.drag(dx, dy);
             }
             // (not in the headset: the player's own head moves there, and a head
@@ -79,7 +79,7 @@ impl App {
             // the sway goes on the head and the view while the bus waits, never
             // into the springs above. Nothing of it while a headset or a real
             // head tracker moves the head - that head is not a still one)
-            let idle = if vr_on || (self.settings.head_tracking && self.headtrack.is_some()) { 0.0 } else { self.settings.head_idle };
+            let idle = if vr_on || (self.settings.head_tracking && self.input.headtrack.is_some()) { 0.0 } else { self.settings.head_idle };
             // (at a standstill, as the setting says: it fades out over the first
             // few km/h as the bus pulls away and comes back when it stands - it
             // swayed on the road as well, #1325)
@@ -95,9 +95,9 @@ impl App {
             if let Some(w) = self.world.as_ref() {
                 crate::rail_drive::frame(p, self.traffic.as_ref().map(|t| &t.net), w, dt);
             }
-        } else if self.dragging {
+        } else if self.input.dragging {
             // paused / no ground: still deliver held-switch `_drag` (was unconditional before)
-            let (dx, dy) = std::mem::take(&mut self.drag_delta);
+            let (dx, dy) = std::mem::take(&mut self.input.drag_delta);
             p.drag(dx, dy);
         }
         // a script that set the time of day (`(S.S.Time)`) moves the game's clock

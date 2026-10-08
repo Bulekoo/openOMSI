@@ -33,17 +33,17 @@ impl App {
                 // (a port that cannot be had is tried again now and then, the
                 // setting stays on: turning it off here undid the switch in the
                 // menu at once)
-                if self.settings.head_tracking && self.headtrack.is_none() && self.headtrack_failed.is_none_or(|t| t.elapsed().as_secs_f32() > 5.0) {
+                if self.settings.head_tracking && self.input.headtrack.is_none() && self.input.headtrack_failed.is_none_or(|t| t.elapsed().as_secs_f32() > 5.0) {
                     let hwnd = self.window.as_ref().and_then(|window| crate::controllers::window_handle(window));
-                    self.headtrack = crate::headtrack::HeadTracker::start(self.settings.head_tracking_port, hwnd);
-                    self.headtrack_failed = self.headtrack.is_none().then(std::time::Instant::now);
+                    self.input.headtrack = crate::headtrack::HeadTracker::start(self.settings.head_tracking_port, hwnd);
+                    self.input.headtrack_failed = self.input.headtrack.is_none().then(std::time::Instant::now);
                 }
                 if !self.settings.head_tracking {
-                    self.headtrack_scale_last = None;
-                    self.headtrack_scale_bias = [0.0; 6];
-                    self.headtrack_invert_last = None;
+                    self.input.headtrack_scale_last = None;
+                    self.input.headtrack_scale_bias = [0.0; 6];
+                    self.input.headtrack_invert_last = None;
                 }
-                let tracked = self.headtrack.as_ref().and_then(|h| h.pose()).filter(|_| self.settings.head_tracking && matches!(self.view.as_str(), "driver" | "pax"));
+                let tracked = self.input.headtrack.as_ref().and_then(|h| h.pose()).filter(|_| self.settings.head_tracking && matches!(self.view.as_str(), "driver" | "pax"));
                 #[cfg(windows)]
                 let vr_on = self.xr.vr.is_some();
                 #[cfg(not(windows))]
@@ -176,30 +176,30 @@ impl App {
         }
 
         let raw = [t.pos[0], t.pos[1], t.pos[2], t.rot[0], t.rot[1], t.rot[2]];
-        let invert_changed = self.headtrack_invert_last.is_some_and(|previous| previous != invert);
+        let invert_changed = self.input.headtrack_invert_last.is_some_and(|previous| previous != invert);
         if invert_changed {
-            self.headtrack_scale_bias = [0.0; 6];
-        } else if let Some(previous) = self.headtrack_scale_last {
+            self.input.headtrack_scale_bias = [0.0; 6];
+        } else if let Some(previous) = self.input.headtrack_scale_last {
             let sensitivity_changed = (0..6).any(|k| (previous[k].abs() - scales[k].abs()).abs() > f32::EPSILON);
             if sensitivity_changed {
                 for k in 0..6 {
-                    let old_output = raw[k] * previous[k] + self.headtrack_scale_bias[k];
-                    self.headtrack_scale_bias[k] = old_output - raw[k] * scales[k];
+                    let old_output = raw[k] * previous[k] + self.input.headtrack_scale_bias[k];
+                    self.input.headtrack_scale_bias[k] = old_output - raw[k] * scales[k];
                 }
             }
         } else {
-            self.headtrack_scale_bias = [0.0; 6];
+            self.input.headtrack_scale_bias = [0.0; 6];
         }
-        self.headtrack_scale_last = Some(scales);
-        self.headtrack_invert_last = Some(invert);
+        self.input.headtrack_scale_last = Some(scales);
+        self.input.headtrack_invert_last = Some(invert);
 
         let adjusted = [
-            raw[0] * scales[0] + self.headtrack_scale_bias[0],
-            raw[1] * scales[1] + self.headtrack_scale_bias[1],
-            raw[2] * scales[2] + self.headtrack_scale_bias[2],
-            raw[3] * scales[3] + self.headtrack_scale_bias[3],
-            raw[4] * scales[4] + self.headtrack_scale_bias[4],
-            raw[5] * scales[5] + self.headtrack_scale_bias[5],
+            raw[0] * scales[0] + self.input.headtrack_scale_bias[0],
+            raw[1] * scales[1] + self.input.headtrack_scale_bias[1],
+            raw[2] * scales[2] + self.input.headtrack_scale_bias[2],
+            raw[3] * scales[3] + self.input.headtrack_scale_bias[3],
+            raw[4] * scales[4] + self.input.headtrack_scale_bias[4],
+            raw[5] * scales[5] + self.input.headtrack_scale_bias[5],
         ];
         t.pos = [adjusted[0], adjusted[1], adjusted[2]];
         t.rot = [adjusted[3], adjusted[4], adjusted[5]];

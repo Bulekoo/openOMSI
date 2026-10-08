@@ -15,8 +15,8 @@ impl App {
         }
         // the game controllers: their axes this frame, their buttons' key actions
         let hwnd = self.window.as_deref().and_then(crate::controllers::window_handle);
-        let ctl = self.controllers.get_or_insert_with(|| crate::controllers::Controllers::new(&self.args.root, hwnd));
-        ctl.set_focus(self.window_focused);
+        let ctl = self.input.controllers.get_or_insert_with(|| crate::controllers::Controllers::new(&self.args.root, hwnd));
+        ctl.set_focus(self.input.window_focused);
         ctl.deadzone = self.settings.ctrl_deadzone;
         ctl.right_stick_look = self.settings.right_stick_look;
         ctl.pedal_throttle = self.settings.pedal_throttle;
@@ -31,18 +31,18 @@ impl App {
         ctl.set_editing(self.game_menu.is_some() || self.chooser.is_some());
         let analog = ctl.poll();
         let actions = std::mem::take(&mut ctl.actions);
-        let moved = match (analog.steering, self.last_ctl_steer) {
+        let moved = match (analog.steering, self.input.last_ctl_steer) {
             (Some(x), Some(x0)) => (x - x0).abs() > 0.02,
             _ => false,
         };
-        if analog.steering.is_some() && (moved || self.last_ctl_steer.is_none()) {
-            self.last_ctl_steer = analog.steering;
+        if analog.steering.is_some() && (moved || self.input.last_ctl_steer.is_none()) {
+            self.input.last_ctl_steer = analog.steering;
         }
         #[cfg(windows)]
         let vr_on = self.xr.vr.is_some();
         #[cfg(not(windows))]
         let vr_on = false;
-        let needs_mouse = self.mouse_drive
+        let needs_mouse = self.input.mouse_drive
             || self.game_menu.is_some()
             || self.chooser.is_some()
             || self.list_kind.is_some()
@@ -50,10 +50,10 @@ impl App {
             || crate::plugin_ui::focused(&self.integrations.plugins)
             || !matches!(self.view.as_str(), "driver" | "outside" | "pax");
         let hide = (moved || actions.iter().any(|a| a.1)) && !needs_mouse && !vr_on;
-        if self.xr.vr_nav_edit.is_none() && hide != self.cursor_hidden.is_some() && (hide || needs_mouse) {
+        if self.xr.vr_nav_edit.is_none() && hide != self.input.cursor_hidden.is_some() && (hide || needs_mouse) {
             if let Some(win) = self.window.as_ref() {
                 win.set_cursor_visible(!hide);
-                self.cursor_hidden = hide.then_some(self.cursor);
+                self.input.cursor_hidden = hide.then_some(self.input.cursor);
             }
         }
         if let Some(n) = ctl.notice.take() {
@@ -115,15 +115,15 @@ impl App {
         } else if let Some((x, p)) = stick {
             let now = p.vehicle.physics.controls.steering;
             let kmh = p.vehicle.physics.velocity_kmh() as f32;
-            self.pad_kmh = crate::controllers::smooth_toward(self.pad_kmh, kmh, dt, 0.4);
-            let target = crate::controllers::gamepad_steering(x, self.pad_kmh);
-            self.pad_steer_target = crate::controllers::smooth_toward(self.pad_steer_target, target, dt, self.settings.pad_steer_smooth / 1000.0);
+            self.input.pad_kmh = crate::controllers::smooth_toward(self.input.pad_kmh, kmh, dt, 0.4);
+            let target = crate::controllers::gamepad_steering(x, self.input.pad_kmh);
+            self.input.pad_steer_target = crate::controllers::smooth_toward(self.input.pad_steer_target, target, dt, self.settings.pad_steer_smooth / 1000.0);
             let step = dt / 1.2;
-            analog.steering = Some(now + (self.pad_steer_target - now).clamp(-step, step));
+            analog.steering = Some(now + (self.input.pad_steer_target - now).clamp(-step, step));
         } else if let Some(p) = self.player.as_ref() {
             // (the stick picks up from where the wheel is, at the bus's speed)
-            self.pad_steer_target = p.vehicle.physics.controls.steering;
-            self.pad_kmh = p.vehicle.physics.velocity_kmh() as f32;
+            self.input.pad_steer_target = p.vehicle.physics.controls.steering;
+            self.input.pad_kmh = p.vehicle.physics.velocity_kmh() as f32;
         }
         // (in every view of the bus - driver, outside, passenger and the map camera -
         // as in OMSI, where switching the camera leaves the mouse steering on: its
@@ -133,11 +133,11 @@ impl App {
         // (the plugins' panels having the mouse hold the wheel and the pedals as
         // looking round does: the cursor goes to their buttons)
         let panels_mouse = self.plugin_focus();
-        if let (true, Some(s)) = (self.mouse_drive && bus_view && !self.mouse_look && !self.input_away && !panels_mouse
+        if let (true, Some(s)) = (self.input.mouse_drive && bus_view && !self.input.mouse_look && !self.input.input_away && !panels_mouse
                                       && self.game_menu.is_none(), self.gfx.surface.as_ref()) {
             let (w, h) = (s.config.width as f32, s.config.height as f32);
-            if std::mem::take(&mut self.center_cursor) {
-                self.cursor = (w * 0.5, h * 0.5);
+            if std::mem::take(&mut self.input.center_cursor) {
+                self.input.cursor = (w * 0.5, h * 0.5);
                 if let Some(win) = self.window.as_ref() {
                     let _ = win.set_cursor_position(winit::dpi::PhysicalPosition::new((w * 0.5) as f64, (h * 0.5) as f64));
                 }
@@ -147,22 +147,22 @@ impl App {
             // tyres, and at 30 km/h the wheel twitched with it by itself)
             let raw_kmh = self.player.as_ref().map(|p| p.vehicle.physics.velocity_kmh()).unwrap_or(0.0);
             let k_v = 1.0 - (-dt / 0.4).exp();
-            self.mouse_kmh += (raw_kmh - self.mouse_kmh) * k_v;
-            let kmh = self.mouse_kmh;
-            let base = (crate::player::mouse_steering(self.cursor.0, w, kmh) * self.settings.mouse_sens).clamp(-1.0, 1.0);
+            self.input.mouse_kmh += (raw_kmh - self.input.mouse_kmh) * k_v;
+            let kmh = self.input.mouse_kmh;
+            let base = (crate::player::mouse_steering(self.input.cursor.0, w, kmh) * self.settings.mouse_sens).clamp(-1.0, 1.0);
             // (what the mouse added at the edge, up to the full lock)
-            self.mouse_edge = self.mouse_edge.clamp((-1.0 - base).min(0.0), (1.0 - base).max(0.0));
-            let target = (base + self.mouse_edge).clamp(-1.0, 1.0);
+            self.input.mouse_edge = self.input.mouse_edge.clamp((-1.0 - base).min(0.0), (1.0 - base).max(0.0));
+            let target = (base + self.input.mouse_edge).clamp(-1.0, 1.0);
             // the pedals as Omsi.exe has them: from the middle of the window to its
             // top edge the throttle, to the bottom one the brake, straight on
-            let y = (2.0 * self.cursor.1 / h.max(1.0) - 1.0).clamp(-1.0, 1.0);
+            let y = (2.0 * self.input.cursor.1 / h.max(1.0) - 1.0).clamp(-1.0, 1.0);
             let (pedal_t, pedal_b) = ((-y).max(0.0), y.max(0.0));
-            let (steer, fade) = &mut self.mouse_steer;
+            let (steer, fade) = &mut self.input.mouse_steer;
             // (after the first second the wheel follows the cursor within ~60 ms, or at
             // once with Smooth mouse steering off, #1092)
             let k = crate::player::mouse_follow(*fade, dt, self.settings.mouse_smooth);
             *steer = target + (*steer - target) * k;
-            let (mt, mb) = &mut self.mouse_pedals;
+            let (mt, mb) = &mut self.input.mouse_pedals;
             *mt = crate::player::mouse_pedal(*mt, pedal_t, k);
             *mb = crate::player::mouse_pedal(*mb, pedal_b, k);
             *fade = (*fade - dt).max(0.0);
@@ -180,7 +180,7 @@ impl App {
                 }
                 let deg = self.player.as_ref().map(|p| p.vehicle.physics.steer_deg).unwrap_or(0.0);
                 if let Some(f) = g.as_mut() {
-                    let _ = writeln!(f, "{:.3},{:.4},{:.1},{:.2},{:.4},{:.4},{:.3}", self.clock.run_time, dt, self.cursor.0, kmh, target, self.mouse_steer.0, deg);
+                    let _ = writeln!(f, "{:.3},{:.4},{:.1},{:.2},{:.4},{:.4},{:.3}", self.clock.run_time, dt, self.input.cursor.0, kmh, target, self.input.mouse_steer.0, deg);
                 }
             }
             // the mouse owns the wheel (OMSI sets the curvature from it every frame):
@@ -192,18 +192,18 @@ impl App {
                 p.axes.brake = 0.0;
                 p.axes.throttle = 0.0;
             }
-            analog.throttle = Some(self.mouse_pedals.0);
-            analog.brake = Some(self.mouse_pedals.1);
-        } else if self.mouse_drive && bus_view && (self.mouse_look || self.input_away || panels_mouse)
+            analog.throttle = Some(self.input.mouse_pedals.0);
+            analog.brake = Some(self.input.mouse_pedals.1);
+        } else if self.input.mouse_drive && bus_view && (self.input.mouse_look || self.input.input_away || panels_mouse)
             && self.game_menu.is_none() {
             // looking round with the right button: the wheel and the pedals stay where
             // the mouse left them, as in OMSI (they went slack until the button was let
             // go - no quick look round while driving). With the window in the
             // background the same, its throttle let go (`App::input_lost`): the
             // cursor wandering over other windows steered and drove the bus.
-            analog.steering = Some(self.mouse_steer.0);
-            analog.throttle = Some(self.mouse_pedals.0);
-            analog.brake = Some(self.mouse_pedals.1);
+            analog.steering = Some(self.input.mouse_steer.0);
+            analog.throttle = Some(self.input.mouse_pedals.0);
+            analog.brake = Some(self.input.mouse_pedals.1);
             if let Some(p) = self.player.as_mut() {
                 p.axes.steering = 0.0;
             }
@@ -224,12 +224,12 @@ impl App {
                 if menu_open && *down { return false; }
                 let n = name.to_ascii_lowercase();
                 if let Some(k) = ["view_look_left", "view_look_right", "view_look_up", "view_look_down"].iter().position(|x| *x == n) {
-                    self.pad_look[k] = *down;
+                    self.input.pad_look[k] = *down;
                     return false;
                 }
                 // hold-to-talk: track press/release like `view_look_*`, do not fire once
                 if n == "voice_radio" {
-                    self.pad_voice_radio = *down;
+                    self.input.pad_voice_radio = *down;
                     return false;
                 }
                 if n == "gear_up" || n == "gear_down" {

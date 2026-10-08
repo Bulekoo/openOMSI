@@ -43,9 +43,9 @@ impl App {
                 _ => match crate::keys::dik_code(code) {
                     Some(scan) => {
                         let chord = omsi_content::input::chord(
-                            self.keys.contains(&KeyCode::ShiftLeft) || self.keys.contains(&KeyCode::ShiftRight),
-                            self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight),
-                            self.keys.contains(&KeyCode::AltLeft) || self.keys.contains(&KeyCode::AltRight),
+                            self.input.keys.contains(&KeyCode::ShiftLeft) || self.input.keys.contains(&KeyCode::ShiftRight),
+                            self.input.keys.contains(&KeyCode::ControlLeft) || self.input.keys.contains(&KeyCode::ControlRight),
+                            self.input.keys.contains(&KeyCode::AltLeft) || self.input.keys.contains(&KeyCode::AltRight),
                         );
                         self.apply_key_capture(Some(scan), chord);
                     }
@@ -60,7 +60,7 @@ impl App {
         }
         let n = self.game_menu_items().len();
         let sel = self.game_menu.unwrap_or(0);
-        let modified = self.keys.iter().any(|key| {
+        let modified = self.input.keys.iter().any(|key| {
             matches!(*key, KeyCode::ControlLeft | KeyCode::ControlRight | KeyCode::AltLeft | KeyCode::AltRight | KeyCode::ShiftLeft | KeyCode::ShiftRight)
         });
         self.menu_top = None;
@@ -119,7 +119,7 @@ impl App {
         self.wheel_acc -= steps as f32;
         // the wheel over the timetable beside the tours scrolls its stops
         if let (Some(u), Some(k)) = (self.ui.as_ref(), self.chooser) {
-            let (x, y) = self.cursor;
+            let (x, y) = self.input.cursor;
             if u.menu_pane_box.is_some_and(|r| x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3]) {
                 let first = (u.menu_pane_start as i64 - steps).max(0) as usize;
                 self.pane_scroll = Some((k, first));

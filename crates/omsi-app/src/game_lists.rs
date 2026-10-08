@@ -302,12 +302,12 @@ fn write_keyboard_cfg(_app: &App, cfg: &omsi_content::KeyboardCfg) -> Result<(),
 impl App {
     fn install_keyboard_cfg(&mut self, cfg: omsi_content::KeyboardCfg) {
         let runtime = cfg.with_game_defaults().with_vr_defaults();
-        self.game_keys = runtime.game.clone();
+        self.input.game_keys = runtime.game.clone();
         if let Some(p) = self.player.as_mut() {
             p.bindings = runtime.vehicles;
         }
-        self.own_keys = crate::startup::own_keys(&self.args.root);
-        self.own_shift = crate::startup::own_bindings(&self.args.root, omsi_content::input::KEY_SHIFT);
+        self.input.own_keys = crate::startup::own_keys(&self.args.root);
+        self.input.own_shift = crate::startup::own_bindings(&self.args.root, omsi_content::input::KEY_SHIFT);
         // A key changed by the player must win over the ready-made W/A/S/D or arrow
         // presets just as a key changed on the launcher's Controls page does.
         self.args.drive_keys = "omsi".into();
@@ -1500,7 +1500,7 @@ fn toggle_now(app: &App, id: &str) -> Option<bool> {
         "cam_smooth" => s.driverview_smooth,
         "coll_objects" => s.collision_objects,
         "coll_vehicles" => s.collision_vehicles,
-        "mouse" => app.mouse_drive,
+        "mouse" => app.input.mouse_drive,
         "mouse_right" => s.mouse_right_off,
         "mouse_smooth" => s.mouse_smooth,
         "blinker_cancel" => s.blinker_cancel,

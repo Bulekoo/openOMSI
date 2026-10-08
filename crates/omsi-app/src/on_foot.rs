@@ -860,7 +860,7 @@ impl App {
         let Some(mut f) = self.on_foot.take() else { return };
         let dt64 = dt as f64;
         f.ease_crouch(dt);
-        let key = |k: KeyCode| self.keys.contains(&k);
+        let key = |k: KeyCode| self.input.keys.contains(&k);
         if key(KeyCode::ArrowLeft) {
             f.yaw -= 90.0 * dt;
         }

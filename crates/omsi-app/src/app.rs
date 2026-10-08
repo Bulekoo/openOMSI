@@ -68,25 +68,9 @@ pub(crate) struct App {
     /// Cursor and view the hover was last worked out for (see the redraw).
     pub(crate) hover_key: Option<(i32, i32, i32, i32)>,
     pub(crate) view: String,
-    pub(crate) cursor: (f32, f32),
-    pub(crate) window_focused: bool,
-    /// The window lost the focus or was minimised or hidden: the keyboard and the mouse
-    /// work nothing until it has the focus again (`App::input_lost` / `input_back`).
-    pub(crate) input_away: bool,
-    pub(crate) keys: hashbrown::HashSet<KeyCode>,
-    /// Door trigger groups currently held by the Shift+number shortcut. Keeping the
-    /// release until physical key-up prevents latched button states and door chatter.
-    pub(crate) door_key_triggers: hashbrown::HashMap<KeyCode, Vec<String>>,
+    /// The keyboard, the mouse, controllers, head tracking and touch (see `InputState`).
+    pub(crate) input: InputState,
     pub(crate) last: Instant,
-    pub(crate) mouse_look: bool,
-    /// The left and right mouse buttons held.
-    pub(crate) buttons_held: (bool, bool),
-    /// The middle button held (looks round; the right button zooms).
-    pub(crate) mmb_held: bool,
-    /// The right button (or both) held: OMSI's mouse zoom (0x82c5f8) - moving the mouse up
-    /// widens the view in the bus or takes the outside camera further away, by the value at
-    /// the press over 500 pixels: (the cursor's height then, the zoom or distance then).
-    pub(crate) both_drag: Option<(f32, f32)>,
     /// The cockpit switch the cursor is over, shown in the HUD.
     pub(crate) hover: Option<String>,
     /// The part under the cursor when it is not a switch, so the HUD can say so.
@@ -123,64 +107,13 @@ pub(crate) struct App {
     pub(crate) menu_kbd: bool,
     /// Plugins and the services outside the game (see `Integrations`).
     pub(crate) integrations: Integrations,
-    /// Seconds Ctrl+Shift+Page Up/Down has been held (the clock runs faster the longer).
-    pub(crate) clock_hold: f32,
     /// How far the clock was set since the timetable was last put out again (s; see
     /// `shift_clock`).
     pub(crate) clock_jump: f64,
     /// The bus whose seat (`settings::bus_seats`) `settings.seat` holds now.
     pub(crate) seat_bus: String,
-    /// A controller button held for looking left, right, up, down (`view_look_*`).
-    pub(crate) pad_look: [bool; 4],
-    /// A controller button held for the multiplayer bus radio (`voice_radio`).
-    pub(crate) pad_voice_radio: bool,
-    /// The arrow keys turned the head (a glance that comes back when they are let go).
-    pub(crate) arrow_glance: bool,
     /// The next click on the city map puts the bus there (Esc → Move the bus on the map).
     pub(crate) teleport_pick: bool,
-    /// Head tracking (Settings → head tracking), started with the first frame that wants it.
-    pub(crate) headtrack: Option<crate::headtrack::HeadTracker>,
-    /// When head tracking last failed to start (tried again a few seconds later).
-    pub(crate) headtrack_failed: Option<std::time::Instant>,
-    /// Last TrackIR/OpenTrack output scales, used to keep the displayed camera position
-    /// fixed while a sensitivity slider is changed.
-    pub(crate) headtrack_scale_last: Option<[f32; 6]>,
-    /// Per-axis compensation for a live sensitivity change.
-    pub(crate) headtrack_scale_bias: [f32; 6],
-    /// Last inversion state; inversion is a direction change, not a new camera origin.
-    pub(crate) headtrack_invert_last: Option<[bool; 6]>,
-    /// Steering wheels, pedals, joysticks and gamepads (`Inputs/gamectrler.cfg`).
-    pub(crate) controllers: Option<crate::controllers::Controllers>,
-    /// OMSI's mouse control (`toggel_mouse_ctrl`, O): the cursor's place steers (across) and
-    /// works the pedals (up throttle, down brake).
-    pub(crate) mouse_drive: bool,
-    /// Mouse steering: the steering it gives (fraction of the full lock) and how long (s)
-    /// it still eases in after being switched on (OMSI: a second, see app_events).
-    pub(crate) mouse_steer: (f32, f32),
-    /// Mouse steering past the window's edge: the lock the mouse added while the cursor stood
-    /// pinned at the left or right edge (-1..1 of full lock). OMSI divides the width by the
-    /// speed, and at 30 km/h the edge of the screen was a third of the lock, with nowhere
-    /// further to move.
-    pub(crate) mouse_edge: f32,
-    /// Where the cursor steered when the right button began to look round: it goes back
-    /// there when the button is let go, so the wheel does not jump to where looking left it.
-    pub(crate) steer_cursor: Option<(f32, f32)>,
-    /// The cursor is put in the middle of the window before the mouse steers for the first
-    /// time (a game started with the mouse steering on: wherever the cursor was, the wheel
-    /// turned and the bus drove off on full throttle).
-    pub(crate) center_cursor: bool,
-    /// The cursor hidden while a controller drives: where it stood.
-    pub(crate) cursor_hidden: Option<(f32, f32)>,
-    /// The wheel's place when it last counted as moved.
-    pub(crate) last_ctl_steer: Option<f32>,
-    /// The mouse's throttle and brake (eased in with the steering).
-    pub(crate) mouse_pedals: (f32, f32),
-    /// The speed mouse steering divides by, smoothed.
-    pub(crate) mouse_kmh: f32,
-    /// The speed a gamepad stick's steering divides by, smoothed (as `mouse_kmh`).
-    pub(crate) pad_kmh: f32,
-    /// Where a gamepad stick turns the wheel to, smoothed (`pad_steer_smooth`).
-    pub(crate) pad_steer_target: f32,
     /// The tutorial being run (`--tutorial`), loaded on the first frame.
     pub(crate) tutorial: Option<crate::tutorial::Tutorial>,
     /// The player out of the seat, walking about (`on_foot`).
@@ -205,14 +138,6 @@ pub(crate) struct App {
     pub(crate) admin_list: Option<Vec<(String, String)>>,
     /// Which of the game menu's lists `admin_list` holds (see `game_lists`).
     pub(crate) list_kind: Option<crate::game_lists::ListKind>,
-    /// OMSI's global key actions from `Inputs/keyboard.cfg` ([game]).
-    pub(crate) game_keys: Vec<omsi_content::KeyBinding>,
-    /// Keys (DirectInput scan codes, no modifier) the player bound on the Controls page to
-    /// something the original's keyboard.cfg does not have there: a driving preset (W A S D,
-    /// the arrows) leaves them alone - D bound to the gearbox is the gearbox, not "steer right".
-    pub(crate) own_keys: std::collections::HashSet<i32>,
-    /// The same for keys held with Shift (a Shift+number of the player's own is not a door key).
-    pub(crate) own_shift: std::collections::HashSet<i32>,
     /// A binding chosen in the pause menu that is waiting for the next physical key:
     /// (true: [game], false: [vehicles], index in that section).
     pub(crate) key_capture: Option<(bool, usize)>,
@@ -228,16 +153,6 @@ pub(crate) struct App {
     pub(crate) autosave_t: f64,
     /// OMSI's timetable window (`view_set_schedule`, Insert).
     pub(crate) timetable: bool,
-    /// The left button is held on a switch: mouse movement turns it.
-    pub(crate) dragging: bool,
-    /// The left button is held on a page of the bus (an `[htmltexture]`): its script texture
-    /// index and the place on it the pointer was last seen.
-    pub(crate) html_pressed: Option<(usize, f32, f32)>,
-    /// The same for a page of a scenery object: its map id, script texture index and place.
-    pub(crate) html_object_pressed: Option<(i64, usize, f32, f32)>,
-    /// Cursor movement (logical pixels) while dragging a switch, not yet handed to the
-    /// script: `<event>_drag` fires once a frame with it (see `Player::drag`).
-    pub(crate) drag_delta: (f32, f32),
     /// Last workshop / fuel pump / wash message, and how long it still shows.
     pub(crate) service_msg: Option<(String, f32)>,
     /// The fuel pump or the bus wash running (`run_service`): which, and the seconds the
@@ -263,12 +178,8 @@ pub(crate) struct App {
     /// The current METAR receiver is a single manual fetch rather than the continuous sync.
     pub(crate) metar_once: bool,
     pub(crate) metar_next: f64,
-    /// The mouse cursor currently shows the hand (it is over a switch).
-    pub(crate) cursor_kind: u8,
     pub(crate) settings: settings::Settings,
     pub(crate) exiting: bool,
-    /// The on-screen controls of a phone (see `touch.rs`).
-    pub(crate) touch: crate::touch::Touch,
 }
 
 impl App {

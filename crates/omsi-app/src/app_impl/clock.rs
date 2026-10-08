@@ -71,7 +71,7 @@ impl App {
         self.service_msg = Some((format!("Clock: {h:02}:{:02}", ((t / 60.0) as u32) % 60), 3.0));
         self.clock_jump += secs;
         // (held Page Up/Down: once they are let go)
-        if self.clock_hold == 0.0 {
+        if self.input.clock_hold == 0.0 {
             self.timetable_after_clock_jump();
         }
     }

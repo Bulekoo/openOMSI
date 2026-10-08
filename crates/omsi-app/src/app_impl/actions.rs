@@ -272,12 +272,12 @@ impl App {
                 }
             }
             "toggel_mouse_ctrl" => {
-                self.set_mouse_drive(!self.mouse_drive);
-                let msg = if self.mouse_drive { "Mouse steering on: across steers, up is the throttle, down the brake (O turns it off)" } else { "Mouse steering off" };
+                self.set_mouse_drive(!self.input.mouse_drive);
+                let msg = if self.input.mouse_drive { "Mouse steering on: across steers, up is the throttle, down the brake (O turns it off)" } else { "Mouse steering off" };
                 self.service_msg = Some((msg.into(), 4.0));
             }
             "toggel_ctrler" => {
-                if let Some(c) = self.controllers.as_mut() {
+                if let Some(c) = self.input.controllers.as_mut() {
                     c.enabled = !c.enabled;
                     let msg = if !c.any() { "No game controller found" } else if c.enabled { "Game controller on" } else { "Game controller off" };
                     self.service_msg = Some((msg.into(), 3.0));
@@ -320,25 +320,25 @@ impl App {
     /// the wheel stays where the mouse left it; switched on, it eases from where it is to
     /// the cursor for the first second.
     pub(crate) fn set_mouse_drive(&mut self, on: bool) {
-        self.mouse_drive = on;
+        self.input.mouse_drive = on;
         if on {
             // O can be pressed while the pointer is anywhere in the window. Start mouse
             // steering from the neutral cursor position instead of applying that offset
             // to the wheel on the first frame.
-            self.center_cursor = true;
+            self.input.center_cursor = true;
         }
         if !on {
             crate::player::keep_wheel(self.player.as_mut());
             // the brake the mouse held stays on, as the brake key leaves it (OMSI has one
             // brake for both): the bus rolled off when the mouse let go of it (#517, #760)
             if let Some(p) = self.player.as_mut() {
-                p.axes.brake = p.axes.brake.max(self.mouse_pedals.1);
+                p.axes.brake = p.axes.brake.max(self.input.mouse_pedals.1);
             }
             #[cfg(windows)]
             self.reset_vr_pointer();
         }
-        self.mouse_steer = (self.player.as_ref().map(|p| p.vehicle.physics.controls.steering).unwrap_or(0.0), 1.0);
-        self.mouse_pedals = self.player.as_ref().map(|p| (p.vehicle.physics.controls.throttle, p.vehicle.physics.controls.brake)).unwrap_or((0.0, 0.0));
+        self.input.mouse_steer = (self.player.as_ref().map(|p| p.vehicle.physics.controls.steering).unwrap_or(0.0), 1.0);
+        self.input.mouse_pedals = self.player.as_ref().map(|p| (p.vehicle.physics.controls.throttle, p.vehicle.physics.controls.brake)).unwrap_or((0.0, 0.0));
         if self.settings.mouse_steering != on {
             self.settings.mouse_steering = on;
             crate::game_lists::remember_setting("mouse_steering", if on { "1" } else { "0" });

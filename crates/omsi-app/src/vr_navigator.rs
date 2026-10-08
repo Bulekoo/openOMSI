@@ -229,14 +229,14 @@ impl crate::App {
                 p.key(scan, 0, false);
             }
             p.axes.release_all();
-            for name in self.door_key_triggers.drain().flat_map(|(_, names)| names) {
+            for name in self.input.door_key_triggers.drain().flat_map(|(_, names)| names) {
                 let off = format!("{name}_off");
                 if p.vehicle.ty.program.trigger(&off).is_some() {
                     p.vehicle.trigger(&off);
                 }
             }
         }
-        self.buttons_held = (false, false);
+        self.input.buttons_held = (false, false);
         if self.game_menu.is_some() {
             self.close_game_menu();
         }
@@ -251,15 +251,15 @@ impl crate::App {
             moving: false,
             rotating: false,
             paused_before: self.paused,
-            mouse_drive_before: self.mouse_drive,
+            mouse_drive_before: self.input.mouse_drive,
         });
         if self.net.lan.is_none() {
             self.paused = true;
         }
-        self.mouse_drive = false;
-        self.mouse_look = false;
-        self.both_drag = None;
-        self.keys.clear();
+        self.input.mouse_drive = false;
+        self.input.mouse_look = false;
+        self.input.both_drag = None;
+        self.input.keys.clear();
         self.hover_key = None;
         #[cfg(windows)]
         {
@@ -279,7 +279,7 @@ impl crate::App {
             let _ = window.set_cursor_grab(winit::window::CursorGrabMode::Confined);
             window.set_cursor_visible(false);
         }
-        self.cursor_hidden = None;
+        self.input.cursor_hidden = None;
     }
 
     pub(crate) fn finish_vr_nav_edit(&mut self) {
@@ -287,11 +287,11 @@ impl crate::App {
             return;
         };
         self.paused = edit.paused_before;
-        self.mouse_drive = edit.mouse_drive_before;
-        self.mouse_look = false;
+        self.input.mouse_drive = edit.mouse_drive_before;
+        self.input.mouse_look = false;
         self.hover_key = None;
-        self.keys.clear();
-        self.cursor_hidden = None;
+        self.input.keys.clear();
+        self.input.cursor_hidden = None;
         #[cfg(windows)]
         self.reset_vr_pointer();
         if let Some(window) = self.window.as_ref() {
@@ -299,8 +299,8 @@ impl crate::App {
             window.set_cursor_visible(true);
             if edit.mouse_drive_before {
                 let _ = window.set_cursor_position(winit::dpi::PhysicalPosition::new(
-                    self.cursor.0 as f64,
-                    self.cursor.1 as f64,
+                    self.input.cursor.0 as f64,
+                    self.input.cursor.1 as f64,
                 ));
             }
         }
@@ -357,7 +357,7 @@ impl crate::App {
         }
         if rotating {
             use winit::keyboard::KeyCode;
-            if self.keys.contains(&KeyCode::ShiftLeft) || self.keys.contains(&KeyCode::ShiftRight) {
+            if self.input.keys.contains(&KeyCode::ShiftLeft) || self.input.keys.contains(&KeyCode::ShiftRight) {
                 p.roll += dx * 0.25;
             } else {
                 p.yaw -= dx * 0.25;
@@ -381,7 +381,7 @@ impl crate::App {
         let p = self.xr.vr_nav_profiles.buses.entry(key).or_default();
         use winit::keyboard::KeyCode;
         let resize =
-            self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight);
+            self.input.keys.contains(&KeyCode::ControlLeft) || self.input.keys.contains(&KeyCode::ControlRight);
         p.scroll(amount, resize, eye, driver);
     }
 

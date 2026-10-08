@@ -266,7 +266,7 @@ impl App {
                     || self.game_menu.is_some()
                     || self.chooser.is_some()
                     || map_open,
-                cursor: self.cursor,
+                cursor: self.input.cursor,
                 dt,
                 backdrop: ui::backdrop(settings.ui_opacity),
                 navigator: self.navigator.as_ref().and_then(|n| n.screen_rect()),
@@ -338,7 +338,7 @@ impl App {
             // scrolls a long list)
             // the name of the cab's switch under the cursor, unless the interface
             // covers the cab there (it read like a line of the menu over it)
-            let (cx, cy) = self.cursor;
+            let (cx, cy) = self.input.cursor;
             let map_open = self.navigator.as_ref().is_some_and(|n| n.map_open());
             let covered = self.game_menu.is_some()
                 || plugin_focus
@@ -371,12 +371,12 @@ impl App {
                 opacity: ui::backdrop(self.settings.ui_opacity),
                 width: w,
                 height: h,
-                cursor: (self.cursor.0 - hud[0], self.cursor.1),
+                cursor: (self.input.cursor.0 - hud[0], self.input.cursor.1),
                 vr: {
                     #[cfg(windows)] { self.xr.vr.is_some() }
                     #[cfg(not(windows))] { false }
                 },
-                tooltip: tooltip.filter(|_| self.settings.tooltips && !self.dragging && !covered && self.game_menu.is_none()),
+                tooltip: tooltip.filter(|_| self.settings.tooltips && !self.input.dragging && !covered && self.game_menu.is_none()),
                 // (switched off: none, `Settings::notes`; nor over the city map,
                 // whose header they covered once they stood on the timetable's line)
                 notes: if self.settings.notes && !map_open && self.game_menu.is_none() { notes } else { &[] },
@@ -399,7 +399,7 @@ impl App {
                 // covered the map's zoom and close buttons)
                 timetable: (self.timetable && !map_open).then(|| timetable_rows(self.duty.as_ref(), self.player.as_ref().map(|p| p.vehicle.host.tt_delay as f64))).flatten(),
                 info: self.info_bar.then(|| info_line(&self.clock, self.player.as_ref(), self.duty.as_ref(), self.humans.as_ref().map(|h| h.riding()), self.career.metres)),
-                info_room: self.touch.info_room.filter(|_| self.touch.enabled),
+                info_room: self.input.touch.info_room.filter(|_| self.input.touch.enabled),
                 tutorial: self.tutorial.as_ref().filter(|t| !t.hidden && self.game_menu.is_none()).and_then(|t| t.page().map(|p| (p.title.as_str(), p.text.as_str(), p.image.as_deref(), t.at, t.pages.len()))),
                 chat,
                 chat_size: self.settings.chat_size,

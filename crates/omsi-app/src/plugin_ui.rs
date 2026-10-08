@@ -1101,7 +1101,7 @@ impl crate::App {
         }
         let hit = self
             .integrations.plugin_panels
-            .click_at(&p.ui.borrow(), self.cursor.0, self.cursor.1);
+            .click_at(&p.ui.borrow(), self.input.cursor.0, self.input.cursor.1);
         if let Some((owner, panel, element)) = hit {
             p.ui.borrow_mut().click(owner, &panel, element.as_deref());
         }

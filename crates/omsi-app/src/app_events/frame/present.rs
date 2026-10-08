@@ -104,7 +104,7 @@ impl App {
             Ok(mut px) => match {
                 // (with the on-screen controls, when there are)
                 if include_touch {
-                    if let Some(over) = self.touch.picture(r, s.config.width, s.config.height) {
+                    if let Some(over) = self.input.touch.picture(r, s.config.width, s.config.height) {
                         crate::touch::composite(&mut px, &over);
                     }
                 }
@@ -257,14 +257,14 @@ impl App {
                 menu_range,
                 cursor_overlay,
                 tooltip_overlay,
-                self.cursor,
+                self.input.cursor,
                 self.player.as_ref().map(|p| (p.vehicle.position, p.vehicle.body_rotation())),
                 vr_nav_display.filter(|d| d.placement.enabled).and_then(|d| {
                     self.navigator.as_ref().and_then(|n| n.panel_overlay).map(|index| (index, d))
                 }),
                 self.player.as_ref().map(|p| p.uid),
                 self.settings.vr_head_smoothing_ms,
-                !self.mouse_drive,
+                !self.input.mouse_drive,
                 self.xr.vr_zoom_active,
             ) {
                 Ok(visible) => mirrored = visible,
@@ -280,7 +280,7 @@ impl App {
                 let hud = self
                     .settings
                     .hud_viewport((s.config.width, s.config.height));
-                steps::push_mirror_hud(&self.gfx.mirror_hud, scene, w, hud, (self.cursor.0 - hud[0], self.cursor.1));
+                steps::push_mirror_hud(&self.gfx.mirror_hud, scene, w, hud, (self.input.cursor.0 - hud[0], self.input.cursor.1));
             }
         }
         if !mirrored
@@ -312,7 +312,7 @@ impl App {
             );
         }
         // the on-screen controls over the picture (a phone)
-        self.touch.render(r, &view, s.config.width, s.config.height);
+        self.input.touch.render(r, &view, s.config.width, s.config.height);
         *self.perf.profile.entry("render").or_default() += __t.elapsed().as_secs_f64();
         if omsi_cfg::flags::OMSI_PROFILE_GPU.is_set() {
             // wait for the GPU here, so that its time shows as a stage of its own

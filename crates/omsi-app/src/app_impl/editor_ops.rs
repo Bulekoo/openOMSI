@@ -25,8 +25,8 @@ impl App {
 
     /// A key while the object editor is on; true when it was the editor's.
     pub(crate) fn editor_key(&mut self, code: KeyCode) -> bool {
-        let shift = self.keys.contains(&KeyCode::ShiftLeft) || self.keys.contains(&KeyCode::ShiftRight);
-        let ctrl = self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight);
+        let shift = self.input.keys.contains(&KeyCode::ShiftLeft) || self.input.keys.contains(&KeyCode::ShiftRight);
+        let ctrl = self.input.keys.contains(&KeyCode::ControlLeft) || self.input.keys.contains(&KeyCode::ControlRight);
         let Some(cam) = self.camera.as_ref() else { return false };
         let (eye, fwd, yaw) = (cam.position, cam.forward(), cam.yaw as f64);
         let Some(action) = crate::editor::action_for(code, shift, ctrl, yaw) else { return false };
@@ -169,7 +169,7 @@ impl App {
         if self.editor.is_none() {
             return false;
         }
-        let shift = self.keys.contains(&KeyCode::ShiftLeft) || self.keys.contains(&KeyCode::ShiftRight);
+        let shift = self.input.keys.contains(&KeyCode::ShiftLeft) || self.input.keys.contains(&KeyCode::ShiftRight);
         let action = if shift { crate::editor::Action::Move(glam::DVec3::Z * 0.1 * amount as f64) } else { crate::editor::Action::Turn(5.0 * amount as f64) };
         let (Some(world), Some(r), Some(scene)) = (self.world.clone(), self.renderer.as_ref(), self.scene.as_mut()) else { return true };
         if let Some(m) = self.editor.as_mut().unwrap().apply(&world, r, scene, &action) {

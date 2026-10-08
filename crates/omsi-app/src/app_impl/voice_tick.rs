@@ -53,20 +53,20 @@ impl App {
     /// Is the bindable bus radio key (`voice_radio` in Controls) held right now?
     /// Keyboard chord or a controller button bound to the same action (held while down).
     pub(super) fn voice_radio_held(&self) -> bool {
-        if self.pad_voice_radio {
+        if self.input.pad_voice_radio {
             return true;
         }
-        let held = |a: KeyCode, b: KeyCode| self.keys.contains(&a) || self.keys.contains(&b);
+        let held = |a: KeyCode, b: KeyCode| self.input.keys.contains(&a) || self.input.keys.contains(&b);
         let chord = omsi_content::input::chord(
             held(KeyCode::ShiftLeft, KeyCode::ShiftRight),
             held(KeyCode::ControlLeft, KeyCode::ControlRight),
             held(KeyCode::AltLeft, KeyCode::AltRight),
         );
-        self.game_keys.iter().any(|b| {
+        self.input.game_keys.iter().any(|b| {
             b.action.eq_ignore_ascii_case("voice_radio")
                 && b.scan_code != 0
                 && b.matches(chord)
-                && self.keys.iter().any(|k| crate::keys::dik_code(*k) == Some(b.scan_code))
+                && self.input.keys.iter().any(|k| crate::keys::dik_code(*k) == Some(b.scan_code))
         })
     }
 }

@@ -62,7 +62,7 @@ impl ApplicationHandler for App {
     /// `resumed`), the fingers and the held keys are let go.
     fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
         self.gfx.surface = None;
-        self.touch.drop_gpu();
+        self.input.touch.drop_gpu();
         self.input_lost();
         self.save_last_situation();
     }
@@ -89,16 +89,16 @@ impl ApplicationHandler for App {
             // window merely covered by another may still be the one the player drives with)
             WindowEvent::Occluded(hidden) => self.gfx.window_hidden = hidden,
             WindowEvent::Focused(true) => {
-                self.window_focused = true;
-                if let Some(ctl) = self.controllers.as_mut() {
+                self.input.window_focused = true;
+                if let Some(ctl) = self.input.controllers.as_mut() {
                     ctl.set_focus(true);
                 }
                 self.input_back();
             }
             WindowEvent::Focused(false) => {
                 self.finish_vr_nav_edit();
-                self.window_focused = false;
-                if let Some(ctl) = self.controllers.as_mut() {
+                self.input.window_focused = false;
+                if let Some(ctl) = self.input.controllers.as_mut() {
                     ctl.set_focus(false);
                 }
                 #[cfg(windows)]
@@ -120,8 +120,8 @@ impl ApplicationHandler for App {
             // in the background (a wheel turned over a window behind another one zoomed;
             // the keys a system sends again for what is still held when the focus comes
             // back count only when pressed anew)
-            WindowEvent::KeyboardInput { is_synthetic, ref event, .. } if self.input_away || (is_synthetic && event.state == ElementState::Pressed) => {}
-            WindowEvent::MouseInput { .. } | WindowEvent::MouseWheel { .. } if self.input_away => {}
+            WindowEvent::KeyboardInput { is_synthetic, ref event, .. } if self.input.input_away || (is_synthetic && event.state == ElementState::Pressed) => {}
+            WindowEvent::MouseInput { .. } | WindowEvent::MouseWheel { .. } if self.input.input_away => {}
             WindowEvent::KeyboardInput { event, .. } => {
                 if event.state == ElementState::Pressed && self.menu_edit_icao {
                     if let Some(text)=event.text.as_deref(){ self.icao_edit_text(text); }
@@ -149,7 +149,7 @@ impl ApplicationHandler for App {
                 if event.state == ElementState::Pressed
                     && event.text.as_deref() == Some("/")
                     && event.physical_key != PhysicalKey::Code(KeyCode::NumpadDivide)
-                    && self.game_keys.iter().any(|b| b.action.eq_ignore_ascii_case("chat_open") && b.scan_code == 53 && b.chord() == 0)
+                    && self.input.game_keys.iter().any(|b| b.action.eq_ignore_ascii_case("chat_open") && b.scan_code == 53 && b.chord() == 0)
                     && self.net.lan.is_some()
                     && !lan::chat_open(&self.net.remotes)
                 {
@@ -205,7 +205,7 @@ impl ApplicationHandler for App {
                     #[cfg(windows)]
                     if state == ElementState::Pressed && self.game_menu.is_none()
                         && self.chooser.is_none() {
-                        if self.mouse_drive {
+                        if self.input.mouse_drive {
                             self.set_mouse_drive(false);
                             self.service_msg = Some(("Mouse steering off".into(), 3.0));
                         } else {
@@ -226,8 +226,8 @@ impl ApplicationHandler for App {
                 if self.navigator.as_ref().map(|n| n.map_open()).unwrap_or(false) {
                     return;
                 }
-                self.mouse_look = state == ElementState::Pressed;
-                self.mmb_held = state == ElementState::Pressed;
+                self.input.mouse_look = state == ElementState::Pressed;
+                self.input.mmb_held = state == ElementState::Pressed;
                 self.update_hover();
             }
             WindowEvent::MouseWheel { delta, .. } => {
@@ -240,9 +240,9 @@ impl ApplicationHandler for App {
             WindowEvent::CursorMoved { position, .. } => {
                 if self.xr.vr_nav_edit.is_some() { return; }
                 // (both physical pixels)
-                if let Some((x, y)) = self.cursor_hidden {
+                if let Some((x, y)) = self.input.cursor_hidden {
                     if (position.x as f32 - x).abs() + (position.y as f32 - y).abs() > 8.0 {
-                        self.cursor_hidden = None;
+                        self.input.cursor_hidden = None;
                         if let Some(win) = self.window.as_ref() {
                             win.set_cursor_visible(true);
                         }
@@ -250,7 +250,7 @@ impl ApplicationHandler for App {
                 }
                 // (the on-screen controls on a computer, `OMSI_TOUCH=1`: the mouse is a
                 // finger on them - from #202)
-                if self.touch.enabled {
+                if self.input.touch.enabled {
                     self.finger_move(0, glam::Vec2::new(position.x as f32, position.y as f32));
                 }
                 #[cfg(windows)]
@@ -258,7 +258,7 @@ impl ApplicationHandler for App {
                     && matches!(self.view.as_str(), "driver" | "pax");
                 #[cfg(not(windows))]
                 let vr_cockpit = false;
-                if vr_cockpit && !self.mouse_look && !self.mouse_drive {
+                if vr_cockpit && !self.input.mouse_look && !self.input.mouse_drive {
                     #[cfg(windows)]
                     self.on_vr_cursor_moved(position.x as f32, position.y as f32);
                 } else {
@@ -275,8 +275,8 @@ impl ApplicationHandler for App {
                     self.plugin_click(state == ElementState::Pressed);
                     return;
                 }
-                if self.touch.enabled {
-                    let p = glam::Vec2::new(self.cursor.0, self.cursor.1);
+                if self.input.touch.enabled {
+                    let p = glam::Vec2::new(self.input.cursor.0, self.input.cursor.1);
                     if state == ElementState::Pressed {
                         self.finger_down(event_loop, 0, p);
                     } else {
@@ -284,17 +284,17 @@ impl ApplicationHandler for App {
                     }
                 } else {
                     let pressed = state == ElementState::Pressed;
-                    self.buttons_held.0 = pressed;
+                    self.input.buttons_held.0 = pressed;
                     // the right button already down (looking round): both held zoom, and
                     // the click works nothing in the cab
-                    if pressed && self.buttons_held.1 && self.start_both_drag() {
+                    if pressed && self.input.buttons_held.1 && self.start_both_drag() {
                         return;
                     }
                     // (the right button still held goes on zooming by itself, unless with
                     // `[altView]` it turns the view)
-                    if !pressed && self.both_drag.is_some() && !(self.buttons_held.1 && self.right_zooms()) {
-                        self.both_drag = None;
-                        self.mouse_look = self.buttons_held.1;
+                    if !pressed && self.input.both_drag.is_some() && !(self.input.buttons_held.1 && self.right_zooms()) {
+                        self.input.both_drag = None;
+                        self.input.mouse_look = self.input.buttons_held.1;
                         self.update_hover();
                     }
                     self.left_button(event_loop, pressed);
@@ -314,17 +314,17 @@ impl ApplicationHandler for App {
         event: DeviceEvent,
     ) {
         if matches!(&event, DeviceEvent::Added | DeviceEvent::Removed) {
-            if let Some(controllers) = self.controllers.as_ref() {
+            if let Some(controllers) = self.input.controllers.as_ref() {
                 controllers.refresh_devices();
             }
         }
         if let DeviceEvent::MouseMotion { delta } = event {
             if self.xr.vr_nav_edit.is_some() {
-                if self.window_focused { self.vr_nav_drag(delta.0 as f32, delta.1 as f32); }
+                if self.input.window_focused { self.vr_nav_drag(delta.0 as f32, delta.1 as f32); }
                 return;
             }
             // (in a view of the bus the cursor's own way turns it: move_cursor)
-            if self.mouse_look {
+            if self.input.mouse_look {
                 if !self.cursor_looks() {
                     if self.view == "outside" {
                         // F3 chase orbits at its own gain, not the head's.
@@ -342,7 +342,7 @@ impl ApplicationHandler for App {
                         self.look_by(delta.0 as f32 * k, delta.1 as f32 * k);
                     }
                 }
-            } else if self.mouse_drive && self.game_menu.is_none() {
+            } else if self.input.mouse_drive && self.game_menu.is_none() {
                 self.mouse_past_edge(delta.0 as f32);
             }
         }
@@ -356,8 +356,8 @@ impl ApplicationHandler for App {
             return;
         }
         crate::game_lists::flush_settings(false);
-        if self.mouse_edge != 0.0 && !self.mouse_drive {
-            self.mouse_edge = 0.0;
+        if self.input.mouse_edge != 0.0 && !self.input.mouse_drive {
+            self.input.mouse_edge = 0.0;
         }
         if let Some(w) = &self.window {
             w.request_redraw();
@@ -411,7 +411,7 @@ impl App {
         // over a mirror panel the wheel resizes it (Shift: wider or narrower)
         if let Some(size) = self.mirror_hud_size() {
             let shift =
-                self.keys.contains(&KeyCode::ShiftLeft) || self.keys.contains(&KeyCode::ShiftRight);
+                self.input.keys.contains(&KeyCode::ShiftLeft) || self.input.keys.contains(&KeyCode::ShiftRight);
             if self
                 .gfx.mirror_hud
                 .wheel(amount, shift, self.hud_cursor(), size)
@@ -435,14 +435,14 @@ impl App {
         }
         // the city map takes the wheel while it is open
         if let Some(n) = self.navigator.as_mut().filter(|n| n.map_open()) {
-            n.map_wheel(amount, self.cursor.0, self.cursor.1);
+            n.map_wheel(amount, self.input.cursor.0, self.input.cursor.1);
             return;
         }
         // the wheel over the chat (or while typing) scrolls its history
         if let Some(ui) = self.ui.as_mut() {
             if self.net.lan.is_some() && (ui.chat.hovered || lan::chat_open(&self.net.remotes)) {
                 // Ctrl + the wheel makes the chat larger or smaller (kept for the next game)
-                if self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight) {
+                if self.input.keys.contains(&KeyCode::ControlLeft) || self.input.keys.contains(&KeyCode::ControlRight) {
                     let to = ((self.settings.chat_size + amount.signum() * 0.1) * 10.0).round() / 10.0;
                     self.settings.chat_size = to.clamp(0.5, 3.0);
                     crate::game_lists::remember_setting("chat_size", &self.settings.chat_size.to_string());
@@ -473,7 +473,7 @@ impl App {
                 }
             }
         }
-        let ctrl = self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight);
+        let ctrl = self.input.keys.contains(&KeyCode::ControlLeft) || self.input.keys.contains(&KeyCode::ControlRight);
         if self.view == "outside" && self.player.is_some() && ctrl {
             // Ctrl+wheel: the outside camera stays where it is and narrows its field of view
             // (a telephoto; OMSI's own zoom there only moves the camera, as the wheel does)
@@ -533,16 +533,16 @@ impl App {
 
             // an open drop-down takes the click: an entry is chosen, anywhere else closes it
             if self.dropdown.is_some() {
-                let inside = |r: &[f32; 4]| self.cursor.0 >= r[0] && self.cursor.0 <= r[2] && self.cursor.1 >= r[1] && self.cursor.1 <= r[3];
+                let inside = |r: &[f32; 4]| self.input.cursor.0 >= r[0] && self.input.cursor.0 <= r[2] && self.input.cursor.1 >= r[1] && self.input.cursor.1 <= r[3];
                 let hit = self.ui.as_ref().and_then(|u| u.dd_rects.iter().position(|r| inside(r)).map(|i| i + u.dd_top));
                 // its scroll bar is dragged (a press on the track beside the thumb takes the
                 // thumb there by its middle); before, the press closed the list (#794)
                 if let Some((track, thumb)) = self.ui.as_ref().and_then(|u| u.dd_scroll).filter(|_| hit.is_none()) {
                     let bar = [thumb[0], track[1], thumb[2], track[3]];
                     if inside(&bar) {
-                        let grab = if inside(&thumb) { self.cursor.1 - thumb[1] } else { (thumb[3] - thumb[1]) * 0.5 };
+                        let grab = if inside(&thumb) { self.input.cursor.1 - thumb[1] } else { (thumb[3] - thumb[1]) * 0.5 };
                         self.dd_scroll_drag = Some(grab);
-                        self.drag_dropdown(self.cursor.1);
+                        self.drag_dropdown(self.input.cursor.1);
                         return;
                     }
                 }
@@ -560,10 +560,10 @@ impl App {
                     .as_ref()
                     .and_then(|u| u.menu_scroll_thumb)
                 {
-                    if self.cursor.0 >= thumb[0]
-                        && self.cursor.0 <= thumb[2]
-                        && self.cursor.1 >= thumb[1]
-                        && self.cursor.1 <= thumb[3]
+                    if self.input.cursor.0 >= thumb[0]
+                        && self.input.cursor.0 <= thumb[2]
+                        && self.input.cursor.1 >= thumb[1]
+                        && self.input.cursor.1 <= thumb[3]
                     {
                         self.menu_scroll_drag = true;
                         return;
@@ -574,10 +574,10 @@ impl App {
                 if self.chooser.is_some() {
                     let side = self.ui.as_ref().and_then(|u| {
                         u.menu_side.iter().position(|r| {
-                            self.cursor.0 >= r[0]
-                                && self.cursor.0 <= r[2]
-                                && self.cursor.1 >= r[1]
-                                && self.cursor.1 <= r[3]
+                            self.input.cursor.0 >= r[0]
+                                && self.input.cursor.0 <= r[2]
+                                && self.input.cursor.1 >= r[1]
+                                && self.input.cursor.1 <= r[3]
                         })
                     });
                     if let Some(i) = side {
@@ -591,16 +591,16 @@ impl App {
                     // its scroll bar is dragged (a press on the track beside the thumb takes
                     // the thumb there by its middle)
                     if let Some((track, thumb, _, _)) = self.ui.as_ref().and_then(|u| u.menu_pane_scroll) {
-                        let inside = |r: &[f32; 4]| self.cursor.0 >= r[0] && self.cursor.0 <= r[2] && self.cursor.1 >= r[1] && self.cursor.1 <= r[3];
+                        let inside = |r: &[f32; 4]| self.input.cursor.0 >= r[0] && self.input.cursor.0 <= r[2] && self.input.cursor.1 >= r[1] && self.input.cursor.1 <= r[3];
                         if inside(&[thumb[0], track[1], thumb[2], track[3]]) {
-                            let grab = if inside(&thumb) { self.cursor.1 - thumb[1] } else { (thumb[3] - thumb[1]) * 0.5 };
+                            let grab = if inside(&thumb) { self.input.cursor.1 - thumb[1] } else { (thumb[3] - thumb[1]) * 0.5 };
                             self.pane_scroll_drag = Some(grab);
-                            self.drag_pane(self.cursor.1);
+                            self.drag_pane(self.input.cursor.1);
                             return;
                         }
                     }
                     let pane = self.ui.as_ref().and_then(|u| {
-                        let inside = |r: &[f32; 4]| self.cursor.0 >= r[0] && self.cursor.0 <= r[2] && self.cursor.1 >= r[1] && self.cursor.1 <= r[3];
+                        let inside = |r: &[f32; 4]| self.input.cursor.0 >= r[0] && self.input.cursor.0 <= r[2] && self.input.cursor.1 >= r[1] && self.input.cursor.1 <= r[3];
                         if u.menu_pane_go.as_ref().is_some_and(inside) {
                             return Some(usize::MAX);
                         }
@@ -618,10 +618,10 @@ impl App {
                 // Otherwise check whether a menu row was clicked.
                 let hit = self.ui.as_ref().and_then(|u| {
                     u.menu_rects.iter().position(|r| {
-                        self.cursor.0 >= r[0]
-                            && self.cursor.0 <= r[2]
-                            && self.cursor.1 >= r[1]
-                            && self.cursor.1 <= r[3]
+                        self.input.cursor.0 >= r[0]
+                            && self.input.cursor.0 <= r[2]
+                            && self.input.cursor.1 >= r[1]
+                            && self.input.cursor.1 <= r[3]
                     })
                 });
 
@@ -641,8 +641,8 @@ impl App {
                     }
 
                     if let Some(c) = ctl {
-                        if self.chooser.is_some() && self.cursor.0 >= c[0] && self.cursor.0 <= c[2] {
-                            let fx = ((self.cursor.0 - c[0]) / (c[2] - c[0]).max(1.0)).clamp(0.0, 1.0);
+                        if self.chooser.is_some() && self.input.cursor.0 >= c[0] && self.input.cursor.0 <= c[2] {
+                            let fx = ((self.input.cursor.0 - c[0]) / (c[2] - c[0]).max(1.0)).clamp(0.0, 1.0);
                             self.chooser = Some(k);
                             // (a slider is held: it follows the cursor till the button is let go)
                             if self.list_click(k, fx) {
@@ -669,8 +669,8 @@ impl App {
                     // the line as Enter
                     let arrows = self.ui.as_ref().and_then(|u| u.menu_arrows.get(row).copied().flatten());
                     match arrows {
-                        Some([from, to, _]) if self.cursor.0 >= from && self.cursor.0 < to => self.chooser_adjust(k, "-"),
-                        Some([_, _, plus]) if self.cursor.0 >= plus => self.chooser_adjust(k, "+"),
+                        Some([from, to, _]) if self.input.cursor.0 >= from && self.input.cursor.0 < to => self.chooser_adjust(k, "-"),
+                        Some([_, _, plus]) if self.input.cursor.0 >= plus => self.chooser_adjust(k, "+"),
                         _ => self.menu_choose(event_loop, k),
                     }
                 }
