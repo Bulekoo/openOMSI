@@ -1101,6 +1101,20 @@ fn season_weather_fits(l: &mut Launcher) {
     l.state.touched();
 }
 
+/// Under a chosen season: its early, middle or late part, which the date and the plants'
+/// looks follow (the rows below start at the returned height).
+fn season_phase_picker(l: &mut Launcher, r: Rect, y: f32) -> f32 {
+    let phases = ["early", "mid", "late"];
+    let mut p = phases.iter().position(|x| *x == l.state.choice.phase).unwrap_or(1);
+    let w = (r.w * 0.6).min(300.0);
+    if l.ui.segmented("season-phase", Rect::new(r.x + (r.w - w) * 0.5, y - 6.0, w, 28.0), &mut p, &["Early", "Mid", "Late"]) {
+        l.state.choice.phase = phases[p].to_string();
+        l.state.season_chosen();
+        season_weather_fits(l);
+    }
+    y + 34.0
+}
+
 fn step_time(l: &mut Launcher, r: Rect) {
     let mut y = r.y;
     if let Some(name) = joined_server_name(l) {
@@ -1165,18 +1179,9 @@ fn step_time(l: &mut Launcher, r: Rect) {
         season_weather_fits(l);
     }
     y += 46.0;
-    // a season chosen: its early, middle or late part, which the date and the plants'
-    // looks follow
+    // a season chosen: its early, middle or late part
     if s > 0 {
-        let phases = ["early", "mid", "late"];
-        let mut p = phases.iter().position(|x| *x == l.state.choice.phase).unwrap_or(1);
-        let w = (r.w * 0.6).min(300.0);
-        if l.ui.segmented("season-phase", Rect::new(r.x + (r.w - w) * 0.5, y - 6.0, w, 28.0), &mut p, &["Early", "Mid", "Late"]) {
-            l.state.choice.phase = phases[p].to_string();
-            l.state.season_chosen();
-            season_weather_fits(l);
-        }
-        y += 34.0;
+        y = season_phase_picker(l, r, y);
     }
     let mut traffic = l.state.choice.traffic;
     if l.ui.slider("traffic", Rect::new(r.x, y, r.w, 34.0), &mut traffic, 0.0, 120.0, 1.0, "Cars around", &|v| format!("{v:.0}")) {

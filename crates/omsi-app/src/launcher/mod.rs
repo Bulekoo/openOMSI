@@ -15,6 +15,7 @@ pub mod phone;
 mod multiplayer;
 pub(crate) mod pages;
 mod showroom;
+mod season;
 mod state;
 #[cfg_attr(not(target_os = "android"), allow(unused_imports))]
 pub(crate) use state::crash_of;

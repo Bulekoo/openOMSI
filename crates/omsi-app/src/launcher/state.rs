@@ -1189,34 +1189,6 @@ impl State {
         self.touched();
     }
 
-    /// The season choice changed to `season` ("auto" = by date): a season moves the date
-    /// into its phase, and "By date" gives back the date the player had before.
-    pub fn set_season(&mut self, season: &str) {
-        let was_auto = self.choice.season == "auto";
-        self.choice.season = season.to_string();
-        if season == "auto" {
-            if let Some(d) = self.choice.own_date.take() {
-                self.choice.date = d;
-                self.load_lines();
-            }
-            return;
-        }
-        if was_auto {
-            self.choice.own_date = Some(self.choice.date.clone());
-        }
-        self.season_chosen();
-    }
-
-    /// A season and its phase chosen: the date moves to the phase's typical day of the
-    /// chosen year (half a year later on a map south of the equator), see `season_phase`.
-    pub fn season_chosen(&mut self) {
-        let c = &self.choice;
-        if let Some(d) = crate::season_phase::launcher_date(&c.season, &c.phase, &c.date, &c.map, false) {
-            self.choice.date = d;
-            self.load_lines();
-        }
-    }
-
     /// The season the chosen date (or the override) means.
     pub fn season(&self) -> &str {
         if self.choice.season != "auto" {
