@@ -4,6 +4,7 @@ use super::*;
 
 /// GPU-side representation of a vehicle instance: one render instance per mesh.
 pub struct VehicleRender {
+    pub window_wipers: Option<crate::window_wipers::WindowWipers>,
     pub instances: Vec<usize>,
     /// Materials made for this vehicle alone (its text and script texture slots).
     pub own_materials: Vec<MaterialId>,

@@ -24,6 +24,7 @@ impl App {
             self.player.as_ref().map(|p| &p.vehicle),
             self.session.cabin_air.appearance(),
             &self.settings,
+            self.clock.run_time as f32,
         )
     }
 

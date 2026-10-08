@@ -526,6 +526,8 @@ struct MaterialUniform {
     /// `MaterialExtra::sway`: x 1 for foliage the wind moves, y its pivot's and z its top's
     /// height (mesh units), w how much it gives to the wind
     sway: [f32; 4],
+    /// Window mask: mesh X/Z origin and inverse size; zero disables it.
+    wipe_bounds: [f32; 4],
 }
 
 /// The maps of a PBR set found beside a diffuse texture (`foo_n.png` and the rest, see
@@ -746,6 +748,8 @@ pub struct Lighting {
     /// Ångström exponent and its layer's depth (m); without it the day's own air is drawn
     /// from the calendar (`day_air`).
     pub air: Option<[f32; 3]>,
+    /// Simulation seconds for scene animation; standalone views use elapsed real time.
+    pub animation_time: Option<f32>,
 }
 
 impl Lighting {
@@ -821,6 +825,7 @@ impl Default for Lighting {
             day_seed: 0,
             veil: 0.0,
             air: None,
+            animation_time: None,
         }
     }
 }
@@ -902,7 +907,7 @@ impl GpuTexture {
 struct BindKey {
     textures: [(usize, u64); 7],
     address: TexAddressing,
-    uniform: [u32; 44],
+    uniform: [u32; 48],
 }
 
 /// Bytes of a texture of `format` with `levels` mip levels.
@@ -3333,6 +3338,13 @@ impl Renderer {
         scene.textures.len() - 1
     }
 
+    /// Unconverted RGBA channels for dynamic masks and other data rather than colour.
+    pub fn add_data_texture(&self, scene: &mut Scene, img: &omsi_texture::Image) -> TextureId {
+        let texture = upload_texture_format(&self.device, &self.queue, img, false, wgpu::TextureFormat::Rgba8Unorm);
+        scene.textures.push(texture);
+        scene.textures.len() - 1
+    }
+
     pub fn add_blank_texture(&self, scene: &mut Scene, width: u32, height: u32) -> TextureId {
         let (width, height) = fit_size(width.max(1), height.max(1), self.device.limits().max_texture_dimension_2d);
         // A newly allocated GPU texture has undefined contents. Script displays may be
@@ -3860,6 +3872,36 @@ impl Renderer {
         base: MaterialId,
         texture: Option<TextureId>,
     ) -> Option<MaterialId> {
+        self.copy_material(scene, base, texture, None)
+    }
+
+    /// A vehicle's precipitation layer with wetness and collector-drop maps.
+    /// Reuses the transmap binding without changing the layer's authored texture alpha.
+    pub fn add_window_wetness_material(
+        &self,
+        scene: &mut Scene,
+        base: MaterialId,
+        mask: TextureId,
+        drops: TextureId,
+        bounds: [f32; 4],
+        snow: bool,
+    ) -> Option<MaterialId> {
+        let texture = scene.materials.get(base)?.texture;
+        // The shader reads the inverse pane height only as a magnitude (`abs(wipe_bounds.zw)`),
+        // so its sign is free: negative marks the variant that shows settled snow, which
+        // the shader draws itself from the mask (`snow_on_pane`) instead of water drops.
+        let mut bounds = bounds;
+        bounds[3] = if snow { -bounds[3].abs() } else { bounds[3].abs() };
+        self.copy_material(scene, base, texture, Some((mask, drops, bounds)))
+    }
+
+    fn copy_material(
+        &self,
+        scene: &mut Scene,
+        base: MaterialId,
+        texture: Option<TextureId>,
+        wetness: Option<(TextureId, TextureId, [f32; 4])>,
+    ) -> Option<MaterialId> {
         let (
             alpha,
             color,
@@ -3872,9 +3914,9 @@ impl Renderer {
             lightmap,
             envmap,
             env_mask,
-            bump,
+            mut bump,
             emissive,
-            transmap,
+            mut transmap,
             address,
             mut uniform,
         ) = {
@@ -3898,6 +3940,16 @@ impl Renderer {
                 src.uniform,
             )
         };
+        if let Some((mask, drops, bounds)) = wetness {
+            transmap = Some((mask, true));
+            bump = Some((drops, 0.0));
+            uniform.wipe_bounds = bounds;
+            uniform.params[2] = 0.0;
+            // the snow variant is a pane of glass, not the film of water (`emissive.w` 2)
+            if bounds[3] < 0.0 && uniform.emissive[3] > 1.5 {
+                uniform.emissive[3] = 1.0;
+            }
+        }
         uniform.pbr = texture
             .and_then(|id| scene.pbr_maps.get(&id))
             .map(|maps| maps.flags)
@@ -4148,6 +4200,7 @@ impl Renderer {
                 .and_then(|t| scene.textures.get(t))
                 .is_some_and(|t| t.texture.usage().contains(wgpu::TextureUsages::RENDER_ATTACHMENT));
         let uniform = MaterialUniform {
+            wipe_bounds: [0.0; 4],
             color,
             params: [
                 mode,
@@ -7401,6 +7454,16 @@ fn upload_texture(
     img: &omsi_texture::Image,
     mipmaps: bool,
 ) -> GpuTexture {
+    upload_texture_format(device, queue, img, mipmaps, wgpu::TextureFormat::Rgba8UnormSrgb)
+}
+
+fn upload_texture_format(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    img: &omsi_texture::Image,
+    mipmaps: bool,
+    format: wgpu::TextureFormat,
+) -> GpuTexture {
     let mip_count = if mipmaps {
         (32 - img.width.max(img.height).leading_zeros()).max(1)
     } else {
@@ -7417,7 +7480,7 @@ fn upload_texture(
         mip_level_count: mip_count,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
     });
@@ -7476,7 +7539,7 @@ fn upload_texture(
         view,
         size: (img.width, img.height),
         bytes: texture_bytes(
-            wgpu::TextureFormat::Rgba8UnormSrgb,
+            format,
             img.width,
             img.height,
             mip_count,

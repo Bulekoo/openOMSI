@@ -912,6 +912,7 @@ impl Offscreen<'_> {
                     driven,
                     cabin_air.appearance(),
                     settings,
+                    run_clock.run_time as f32,
                 );
                 world.finish_texture_upgrades(renderer, scene);
                 let pixels = renderer.render_to_image(scene, w, h, &cam, &lighting)?;

@@ -357,7 +357,8 @@ pub(crate) fn light_vehicles<'a>(
 
 /// The lighting a picture is drawn with: the weather's (`cloud_drift`, the roads' `wetness`;
 /// `OMSI_WETNESS` in its place), dressed for the bus the camera may be in (`inside`) and the
-/// player's (`driven`: the wind on its glass, `condensation` on it).
+/// player's (`driven`: the wind on its glass, `condensation` on it). `animation_time`: the
+/// simulation's seconds the renderer animates the scene by (the rain on the glass).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn picture_lighting(
     daylight: &omsi_sim::Daylight,
@@ -369,6 +370,7 @@ pub(crate) fn picture_lighting(
     driven: Option<&omsi_sim::VehicleInstance>,
     condensation: [f32; 4],
     settings: &crate::settings::Settings,
+    animation_time: f32,
 ) -> omsi_render::Lighting {
     let mut lighting = match weather {
         Some(w) => weather_lighting(daylight, w, cloud_drift, wetness, settings.shadows),
@@ -377,7 +379,10 @@ pub(crate) fn picture_lighting(
     lighting.wetness = omsi_cfg::flags::OMSI_WETNESS.parse()
         .unwrap_or(wetness);
     dress_lighting(&mut lighting, world, inside, settings);
-    lighting.glass_wind = driven.map(crate::lights::vehicle_velocity).unwrap_or_default();
+    // (the air the glass meets: the bus's own speed against the weather's wind)
+    lighting.glass_wind = driven.map(crate::lights::vehicle_velocity).unwrap_or_default()
+        - weather.map(crate::rain::weather_wind).unwrap_or_default();
+    lighting.animation_time = Some(animation_time);
     lighting.condensation = condensation;
     // an LED panel's dots burn this much above their own colour (16 levels,
     // see `Settings::led_glow`); the panel's picture and its mask are held at
