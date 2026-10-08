@@ -374,7 +374,9 @@ milky sun, soft pale shadows); a passing cumulus takes the sun away from the str
 the clouds themselves brighten the sky light. The moon stands where it really is with its
 real phase and lights the night through the same atmosphere; the stars show where the sky
 is dark enough, and a city's lamps light its own haze and clouds (brightest on an overcast
-night). The camera exposes like one: for daylight, part of the way towards the light of the
+night). The clouds are a volume marched through in steps; `cloud_quality=low` (Graphics:
+Cloud quality) takes fewer of them - the same clouds a little grainier at their edges, for
+less of the GPU's time (on an M4 at 1080p about 0.8 ms of a frame). The camera exposes like one: for daylight, part of the way towards the light of the
 moment, with a camera's middle-tone contrast; street lamps are bright points with a little
 glare in clear air and wide halos in mist and rain.
 

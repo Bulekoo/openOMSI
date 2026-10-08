@@ -108,7 +108,8 @@ struct EnhancedUniform {
     sun_disc: [f32; 4],
     debug: [f32; 4],
     /// xyz where the sky cube was drawn from, relative to the camera (the dome looks the
-    /// clouds up through it with the parallax taken out)
+    /// clouds up through it with the parallax taken out); w the clouds' march steps
+    /// (`Lighting::low_clouds`)
     eye: [f32; 4],
     /// x how bright an LED panel's dots burn (`Lighting::led_glow`), y how much of the
     /// mip chain an LED panel is held at (`Lighting::led_mips`)
@@ -192,6 +193,11 @@ struct Probe {
     cube_eye: Option<DVec3>,
     cube_recapture: bool,
 }
+
+/// Steps of the enhanced clouds' march through their layer (sky_enhanced.wgsl
+/// `cloud_layer`), and with the low cloud quality (`Lighting::low_clouds`).
+const CLOUD_STEPS: u32 = 56;
+const CLOUD_STEPS_LOW: u32 = 20;
 
 /// Face size of the enhanced sky cube (see `Probe::cube_view`): about as many texels per
 /// degree as a 1600-pixel-wide picture has pixels at half its size (at 512 the clouds'
@@ -728,6 +734,11 @@ pub struct Lighting {
     /// chain has run them together, and what shimmer is left is a fraction of a
     /// full-resolution sample's; 4 is near the calm of the full chain.
     pub led_mips: f32,
+    /// Enhanced: the volumetric clouds marched in `CLOUD_STEPS_LOW` steps instead of
+    /// `CLOUD_STEPS` (the settings' cloud quality "low"): the same clouds, sampled more
+    /// coarsely - each redraw of the sky cube starts its steps elsewhere and is blended into
+    /// what is there, so the coarser grain mostly averages out.
+    pub low_clouds: bool,
     /// How much brighter the night is shown, in exposure steps after sunset (the settings' 0 .. 3).
     pub night_brightness: f32,
     /// The player's vehicle's velocity (m/s, world): at speed the airstream drives the drops
@@ -819,6 +830,7 @@ impl Default for Lighting {
             night_brightness: 0.0,
             led_glow: 1.5,
             led_mips: 1.3,
+            low_clouds: false,
             glass_wind: Vec3::ZERO,
             windy_trees: false,
             moon_dir: Vec3::new(0.0, -0.5, -0.866),
@@ -5715,7 +5727,7 @@ impl Renderer {
                 // the tone curve's contrast, which self-lit pictures undo (`display_level`)
                 tone_contrast(log_exposure),
             ],
-            eye: eye_off.extend(0.0).to_array(),
+            eye: eye_off.extend(if lighting.low_clouds { CLOUD_STEPS_LOW } else { CLOUD_STEPS } as f32).to_array(),
             // x how bright an LED panel's dots burn (see `MaterialExtra::led`; the settings'
             // 16 levels give 0 = off .. 3.75), y whether the LED panels' `\S:n` masks keep
             // their mip chain (0: at full resolution, the dots stay visible when small)
@@ -8236,14 +8248,11 @@ fn lean_scene(src: String) -> String {
 /// a texel each, and nothing is generated.
 fn cloud_noise_textures(device: &wgpu::Device, queue: &wgpu::Queue, enhanced_noise: bool) -> (wgpu::TextureView, wgpu::TextureView, wgpu::Sampler, Vec<u8>) {
     let t0 = std::time::Instant::now();
-    let (shape, detail) = if enhanced_noise {
-        std::thread::scope(|s| {
-            let a = s.spawn(clouds::shape_map);
-            let b = s.spawn(clouds::detail_volume);
-            (a.join().expect("cloud shape"), b.join().expect("cloud detail"))
-        })
-    } else {
-        (vec![vec![0, 0, 0, 255]], vec![vec![0]])
+    // (made once a process, and kept on the disk between starts: see `clouds::noise`)
+    let none = (vec![vec![0, 0, 0, 255]], vec![vec![0]]);
+    let (shape, detail) = match enhanced_noise.then(clouds::noise) {
+        Some(n) => (&n.shape, &n.detail),
+        None => (&none.0, &none.1),
     };
     let make = |label: &str, size: u32, dim: wgpu::TextureDimension, format: wgpu::TextureFormat, bpp: u32, levels: &[Vec<u8>]| {
         let depth = if dim == wgpu::TextureDimension::D3 { size } else { 1 };
@@ -8270,8 +8279,8 @@ fn cloud_noise_textures(device: &wgpu::Device, queue: &wgpu::Queue, enhanced_noi
         tex.create_view(&wgpu::TextureViewDescriptor::default())
     };
     let (shape_size, detail_size) = if enhanced_noise { (clouds::SHAPE_SIZE, clouds::DETAIL_SIZE) } else { (1, 1) };
-    let shape_view = make("cloud shape", shape_size, wgpu::TextureDimension::D2, wgpu::TextureFormat::Rgba8Unorm, 4, &shape);
-    let detail_view = make("cloud detail", detail_size, wgpu::TextureDimension::D3, wgpu::TextureFormat::R8Unorm, 1, &detail);
+    let shape_view = make("cloud shape", shape_size, wgpu::TextureDimension::D2, wgpu::TextureFormat::Rgba8Unorm, 4, shape);
+    let detail_view = make("cloud detail", detail_size, wgpu::TextureDimension::D3, wgpu::TextureFormat::R8Unorm, 1, detail);
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some("cloud noise"),
         address_mode_u: wgpu::AddressMode::Repeat,
