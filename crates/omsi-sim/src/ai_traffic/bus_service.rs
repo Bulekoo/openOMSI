@@ -785,4 +785,100 @@ mod tests {
         s.stops.clear();
         assert_eq!(s.at_station_side(), 0.0);
     }
+
+    fn service_context(net: &Network, day_time: f64, dt: f32) -> Ctx<'_> {
+        Ctx { net, way: &[], day_time, dt, id: 1, stopped: 0.0, passing: false,
+            kerb_swerve: None, wanted: Some(false), debug: false, timed_waits_only: false }
+    }
+
+    fn service_network() -> Network {
+        Network { lanes: vec![crate::traffic::LaneBuilder::arc(
+            glam::DVec3::ZERO, 0.0, 100.0, 0.0, 0.0, LaneKind::Street, 3.0)],
+            ..Default::default() }
+    }
+
+    fn service_vehicle() -> VehicleInstance {
+        crate::timetable_run::tests::script_test_vehicle("{frame_ai}\n{end}\n", "schedule_active\n", "")
+    }
+
+    #[test]
+    fn three_stop_service_closes_each_stop_and_completes_only_at_the_end() {
+        let net = service_network();
+        let mut vehicle = service_vehicle();
+        let mut state = AiState::new(0, 0.0, 1);
+        let stops: Vec<_> = (1..=3).map(|id| Stop::from_tuple((0, 10.0, 0.0, id as f64 * 100.0, id, 0.0))).collect();
+        let mut service = BusService::new(stops);
+        for visit in 1..=3 {
+            let depart = visit as f64 * 100.0;
+            service.arrive(&service_context(&net, depart, 0.0), depart, (0, 10.0));
+            assert_eq!(service.phase, Phase::Boarding);
+            service.step(&mut state, &mut vehicle, &service_context(&net, depart + 8.0, 8.0));
+            assert_eq!(service.phase, Phase::Closing);
+            service.step(&mut state, &mut vehicle, &service_context(&net, depart + 9.5, CLOSE_MIN));
+            assert_eq!(service.stops.len(), 3 - visit as usize);
+            assert_eq!(service.trip_done(), visit == 3);
+            if visit != 3 {
+                assert_eq!(service.phase, Phase::Running);
+            }
+        }
+        assert_eq!(state.signal, 0);
+        // A next trip must not inherit a previous passenger hold or closing phase.
+        service.boarding = 999.0;
+        service.restart(vec![Stop::from_tuple((0, 10.0, 0.0, 400.0, 1, 1.0))], true);
+        assert_eq!(service.phase, Phase::Running);
+        assert_eq!(service.boarding, 0.0);
+        assert_eq!(service.phase_t, 0.0);
+        assert!(service.layover && !service.boarded);
+    }
+
+    #[test]
+    fn early_late_and_layover_boundaries_keep_the_omsi_departure_rule() {
+        assert_eq!(early_wait(400.0, 379.0, false, false), 1.0);
+        assert_eq!(early_wait(400.0, 380.0, false, false), 0.0);
+        assert_eq!(early_wait(400.0, 381.0, false, false), 0.0);
+        assert_eq!(early_wait(400.0, 401.0, false, false), 0.0);
+        assert_eq!(early_wait(400.0, 380.0, true, false), 20.0);
+        let net = service_network();
+        let mut vehicle = service_vehicle();
+        let mut state = AiState::new(0, 0.0, 1);
+        let mut service = BusService::new(vec![Stop::from_tuple((0, 10.0, 0.0, 400.0, 1, 0.0))]);
+        service.layover = true;
+        service.arrive(&service_context(&net, 100.0, 0.0), 400.0, (0, 10.0));
+        assert_eq!(service.phase, Phase::Waiting);
+        assert!(!service.at_station());
+        service.step(&mut state, &mut vehicle, &service_context(&net, 354.0, 254.0));
+        assert_eq!(service.phase, Phase::Waiting);
+        service.step(&mut state, &mut vehicle, &service_context(&net, 355.0, 1.0));
+        assert_eq!(service.phase, Phase::Boarding);
+        service.step(&mut state, &mut vehicle, &service_context(&net, 396.0, 41.0));
+        assert_eq!(service.phase, Phase::Boarding);
+        service.step(&mut state, &mut vehicle, &service_context(&net, 400.0, 4.0));
+        assert_eq!(service.phase, Phase::Closing);
+    }
+
+    #[test]
+    fn streamed_route_tail_is_not_trip_completion_and_platform_side_survives_restart() {
+        let net = service_network();
+        let mut vehicle = service_vehicle();
+        let mut state = AiState::new(0, 0.0, 1);
+        for side in [0.0, 1.0, 2.0] {
+            let mut service = BusService::new(vec![Stop::from_tuple((0, 10.0, 0.0, 100.0, 42, side))]);
+            service.route_open = true;
+            service.phase = Phase::Boarding;
+            assert_eq!(service.at_station_side(), side);
+            service.boarding = 1.0;
+            service.hold(Some(999), 10.0);
+            assert_eq!(service.boarding, 1.0);
+            service.hold(Some(42), 10.0);
+            assert_eq!(service.boarding, 10.0);
+            service.depart(&mut state, &mut vehicle, &service_context(&net, 110.0, 0.0));
+            assert_eq!(service.phase, Phase::Running);
+            assert!(!service.trip_done());
+            // Geometry returns later: preserve the new visit's side and departure.
+            service.restart(vec![Stop::from_tuple((0, 10.0, 0.0, 200.0, 42, side))], false);
+            service.arrive(&service_context(&net, 200.0, 0.0), 200.0, (0, 10.0));
+            assert_eq!(service.at_station_side(), side);
+            assert_eq!(service.stops.front().unwrap().depart, 200.0);
+        }
+    }
 }

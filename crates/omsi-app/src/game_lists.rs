@@ -2882,16 +2882,6 @@ pub(crate) fn tour_at(app: &App, k: usize) -> Option<(String, String)> {
     Some((line.to_string(), tour.to_string()))
 }
 
-/// The time (seconds of the day) tour `tour` of line `line` starts.
-pub(crate) fn tour_start_of(app: &App, line: &str, tour: &str) -> f64 {
-    app.session.schedule
-        .as_ref()
-        .and_then(|s| s.data.lines.iter().find(|l| l.name == line))
-        .and_then(|l| l.tours.iter().find(|t| t.number == tour))
-        .and_then(tour_start)
-        .unwrap_or(0.0)
-}
-
 /// For the tour on row `k`: how many stops its chosen trip has, the stop chosen to start
 /// from, the trip chosen and how many trips the tour has.
 pub(crate) fn tour_choice(app: &App, k: usize) -> Option<(usize, usize, usize, usize)> {
@@ -2911,12 +2901,13 @@ pub(crate) fn tour_choice(app: &App, k: usize) -> Option<(usize, usize, usize, u
 /// by its time): the duty goes on from that stop, the bus stays where it is.
 pub(crate) fn start_duty_at(app: &mut App, line: &str, tour: &str, trip: usize, chosen: usize) {
     let now = app.clock.time;
-    let at = tour_start_of(app, line, tour);
     let Some((k, j)) = app.session.schedule.as_ref().and_then(|s| s.tour_trip_stops(line, tour, trip).get(chosen).map(|x| (x.0, x.1))) else {
         return start_duty(app, line, tour);
     };
     let (Some(w), Some(sch)) = (app.world.clone(), app.session.schedule.as_mut()) else { return };
-    let mut d = match sch.player_duty(&w, line, tour, at, None, false) {
+    // (the duty is made at the time it is now, as `start_duty` does: a night tour picked
+    // after midnight is then yesterday's, under way, not tonight's)
+    let mut d = match sch.player_duty(&w, line, tour, now, None, false) {
         Ok(d) => d,
         Err(e) => {
             app.service_msg = Some((format!("No duty: {e}"), 8.0));
