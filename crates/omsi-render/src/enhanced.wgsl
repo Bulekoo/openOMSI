@@ -273,6 +273,11 @@ fn lamp_light(p: vec3<f32>, n: vec3<f32>, v: vec3<f32>, sf: Surface, thin: bool,
         var irr = l.color.rgb * l.color.w * enh.lights.y * e;
         let nl = dot(n, ld);
         ground_e = ground_e + irr * max(ld.z, 0.0);
+        // Ground bounce is unshadowed. A lamp behind an ordinary surface contributes
+        // no direct light, so it must not sample its shadow map before being rejected.
+        if (!thin && nl <= 0.0) {
+            continue;
+        }
         // the lamps' own shadow maps (the few lighting the view most, see `lamp_shadow_at`)
         if (shadows) {
             irr = irr * lamp_shadow_at(li, p, n, thin);
@@ -281,9 +286,6 @@ fn lamp_light(p: vec3<f32>, n: vec3<f32>, v: vec3<f32>, sf: Surface, thin: bool,
             // a headlamp skims the grass: it lights the tips, not a crown's every side
             let wrap = select(0.45 + 0.25 * nl, 0.15 + 0.6 * max(nl, 0.0), l.extra.z != 0.0);
             sum = sum + irr * wrap * sf.albedo / PI;
-            continue;
-        }
-        if (nl <= 0.0) {
             continue;
         }
         let h = normalize(ld + v);
