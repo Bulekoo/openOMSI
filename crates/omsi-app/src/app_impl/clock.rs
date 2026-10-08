@@ -11,7 +11,7 @@ impl App {
         if self.real_time_locked() {
             return 1.0;
         }
-        match self.lan.as_ref() {
+        match self.net.lan.as_ref() {
             Some(l) => l.clock_speed,
             None => self.settings.time_speed.clamp(1.0, 30.0),
         }
@@ -20,7 +20,7 @@ impl App {
     /// The clock follows the real time and cannot be changed (the `time_sync` setting). In a
     /// LAN session as a client the host's clock counts: the host or the server syncs, not us.
     pub(crate) fn real_time_locked(&self) -> bool {
-        self.settings.time_sync && !self.lan.as_ref().is_some_and(|l| l.role == omsi_net::Role::Client)
+        self.settings.time_sync && !self.net.lan.as_ref().is_some_and(|l| l.role == omsi_net::Role::Client)
     }
 
     /// With the real-time sync on: hold the clock to this device's date and time (a second

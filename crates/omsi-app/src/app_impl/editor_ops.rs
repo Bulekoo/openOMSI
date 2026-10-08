@@ -8,7 +8,7 @@ impl App {
     pub(crate) fn toggle_editor(&mut self) {
         // (in a LAN session the host edits the map for everybody: its edits go to the
         // others' games, a client's would stay its own)
-        if self.editor.is_none() && self.lan.as_ref().map(|l| l.role == omsi_net::Role::Client).unwrap_or(false) {
+        if self.editor.is_none() && self.net.lan.as_ref().map(|l| l.role == omsi_net::Role::Client).unwrap_or(false) {
             self.service_msg = Some(("In a LAN session only the host edits the map".into(), 3.0));
             return;
         }
@@ -88,7 +88,7 @@ impl App {
         let (Some(ed), Some(w)) = (self.editor.as_ref(), self.world.as_ref()) else {
             if all {
                 // (edits stay after the editor is left: sent from the world's list)
-                if let (Some(w), Some(l)) = (self.world.as_ref(), self.lan.as_mut()) {
+                if let (Some(w), Some(l)) = (self.world.as_ref(), self.net.lan.as_mut()) {
                     if l.role == omsi_net::Role::Host {
                         let lines = crate::editor::Editor::default().sync_lines(w, &self.args.root, true);
                         let ids: Vec<u32> = l.peers().map(|p| p.pose.id).filter(|id| *id != l.my_id).collect();
@@ -102,7 +102,7 @@ impl App {
             }
             return;
         };
-        let Some(l) = self.lan.as_mut() else { return };
+        let Some(l) = self.net.lan.as_mut() else { return };
         if l.role != omsi_net::Role::Host {
             return;
         }

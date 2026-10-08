@@ -70,7 +70,7 @@ impl App {
             clock.time -= 86400.0;
             clock.day_of_year = clock.day_of_year % omsi_sim::clock::days_in_year(clock.year) + 1;
         }
-        if !self.settings.time_sync || self.lan.as_ref().is_some_and(|l| l.role == omsi_net::Role::Client) {
+        if !self.settings.time_sync || self.net.lan.as_ref().is_some_and(|l| l.role == omsi_net::Role::Client) {
             self.clock = clock;
         }
         p.vehicle.host.clock = self.clock.clone();

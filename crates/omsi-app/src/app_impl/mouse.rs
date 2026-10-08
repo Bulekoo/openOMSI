@@ -418,17 +418,17 @@ impl App {
             return;
         }
         // a click on the chat opens its input box (and is the chat's, not the cockpit's)
-        if pressed && self.lan.is_some() && self.settings.chat {
+        if pressed && self.net.lan.is_some() && self.settings.chat {
             if self.ui.as_ref().map(|u| u.chat.hovered).unwrap_or(false) {
-                self.remotes.chat.open();
+                self.net.remotes.chat.open();
                 return;
             }
             // a click anywhere else leaves the line and goes on to the game
-            self.remotes.chat.blur();
+            self.net.remotes.chat.blur();
         }
         // in another player's bus: a passenger, whose clicks work nothing of it (they
         // went to the driver's game, which worked its switches for them)
-        if self.view == "foot" && self.inside_remote.is_some() {
+        if self.view == "foot" && self.net.inside_remote.is_some() {
             return;
         }
         // a page (`[htmltexture]`) on a scenery object: pressed and released like the bus's own

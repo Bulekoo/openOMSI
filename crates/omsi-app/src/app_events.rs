@@ -150,12 +150,12 @@ impl ApplicationHandler for App {
                     && event.text.as_deref() == Some("/")
                     && event.physical_key != PhysicalKey::Code(KeyCode::NumpadDivide)
                     && self.game_keys.iter().any(|b| b.action.eq_ignore_ascii_case("chat_open") && b.scan_code == 53 && b.chord() == 0)
-                    && self.lan.is_some()
-                    && !lan::chat_open(&self.remotes)
+                    && self.net.lan.is_some()
+                    && !lan::chat_open(&self.net.remotes)
                 {
-                    self.remotes.chat.open();
+                    self.net.remotes.chat.open();
                     if let PhysicalKey::Code(code) = event.physical_key {
-                        lan::chat_swallow(&mut self.remotes, code);
+                        lan::chat_swallow(&mut self.net.remotes, code);
                     }
                     return;
                 }
@@ -163,9 +163,9 @@ impl ApplicationHandler for App {
                 if let (Some(text), true, true) = (
                     event.text.as_deref(),
                     event.state == ElementState::Pressed,
-                    lan::chat_open(&self.remotes),
+                    lan::chat_open(&self.net.remotes),
                 ) {
-                    lan::chat_type(&mut self.remotes, text);
+                    lan::chat_type(&mut self.net.remotes, text);
                 }
                 // (the Lua plugins' `key` event; a key held down repeats nothing)
                 if let (PhysicalKey::Code(code), false) = (event.physical_key, event.repeat) {
@@ -350,7 +350,7 @@ impl ApplicationHandler for App {
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         // the server sent us away (kick, ban): the game ends, the launcher says why
-        if self.lan.as_ref().and_then(crate::lan::turned_away).is_some() {
+        if self.net.lan.as_ref().and_then(crate::lan::turned_away).is_some() {
             self.finish_session();
             crate::platform::exit(event_loop);
             return;
@@ -381,7 +381,7 @@ impl ApplicationHandler for App {
         self.finish_session();
         // ("playing now" ends with the game)
         self.presence = None;
-        if let Some(lan) = self.lan.take() {
+        if let Some(lan) = self.net.lan.take() {
             // dropping the session says goodbye (BYE) to the host or the players
             drop(lan);
             log::info!("LAN: left the session");
@@ -440,7 +440,7 @@ impl App {
         }
         // the wheel over the chat (or while typing) scrolls its history
         if let Some(ui) = self.ui.as_mut() {
-            if self.lan.is_some() && (ui.chat.hovered || lan::chat_open(&self.remotes)) {
+            if self.net.lan.is_some() && (ui.chat.hovered || lan::chat_open(&self.net.remotes)) {
                 // Ctrl + the wheel makes the chat larger or smaller (kept for the next game)
                 if self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight) {
                     let to = ((self.settings.chat_size + amount.signum() * 0.1) * 10.0).round() / 10.0;
@@ -448,7 +448,7 @@ impl App {
                     crate::game_lists::remember_setting("chat_size", &self.settings.chat_size.to_string());
                     return;
                 }
-                ui.chat.wheel(self.remotes.chat.lines.len(), amount);
+                ui.chat.wheel(self.net.remotes.chat.lines.len(), amount);
                 return;
             }
         }

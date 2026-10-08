@@ -228,14 +228,10 @@ pub(crate) struct App {
     pub(crate) ego: bool,
     /// The player out of the seat, walking about (`on_foot`).
     pub(crate) on_foot: Option<crate::on_foot::OnFoot>,
-    /// Other players on foot whose avatars are drawn (their ids).
-    pub(crate) remote_walkers: Vec<u32>,
+    /// The multiplayer session and the other players (see `NetState`).
+    pub(crate) net: NetState,
     /// The camera is in the own bus's cab this frame (see RedrawRequested).
     pub(crate) in_cab: bool,
-    /// The player on foot is in this other player's bus (see `lan`: drawn from inside).
-    pub(crate) inside_remote: Option<u32>,
-    /// A dedicated server said we administer it (`admin`).
-    pub(crate) is_admin: bool,
     /// Where the bus last stood on the ground (and facing where): it is put back there when
     /// it falls through the world (see `admin::guard_fall`).
     pub(crate) safe_pose: Option<(glam::DVec3, f64)>,
@@ -349,10 +345,6 @@ pub(crate) struct App {
     /// The mouse cursor currently shows the hand (it is over a switch).
     pub(crate) cursor_kind: u8,
     pub(crate) settings: settings::Settings,
-    /// LAN session, and the other players' buses (drawn and heard like AI vehicles) with the
-    /// chat line.
-    pub(crate) lan: Option<omsi_net::LanSession>,
-    pub(crate) remotes: lan::LanGame,
     /// Frames longer than 50 ms (stutters) and the worst frame, for the exit summary.
     pub(crate) spikes: u32,
     pub(crate) worst_ms: f32,
@@ -560,8 +552,8 @@ impl App {
     /// Load the map, vehicle and traffic according to `args`.
     pub(crate) fn load_world_now(&mut self, event_loop: &ActiveEventLoop) {
         // a joining player loads the host's date, time, weather and season (after the menu)
-        if let Some(l) = self.lan.as_mut() {
-            lan::adopt_host_world(&mut self.args, l, &mut self.remotes);
+        if let Some(l) = self.net.lan.as_mut() {
+            lan::adopt_host_world(&mut self.args, l, &mut self.net.remotes);
         }
         let renderer = self.renderer.take().expect("renderer");
         let mut scene = renderer.new_scene();
@@ -740,7 +732,7 @@ impl App {
                 // (and a player who joins another's game sees the host's people)
                 if self.args.passengers || self.args.lan_join.is_some() {
                     let mut h = humans::Humans::new(&self.args.root);
-                    if let Some(lan) = self.lan.as_ref() {
+                    if let Some(lan) = self.net.lan.as_ref() {
                         h.set_lan_seed(lan::population_seed(lan));
                     }
                     h.exact_fare = self.settings.exact_fare;
@@ -774,7 +766,7 @@ impl App {
                         Ok(mut t) => {
                             t.lights_only = !populated;
                             t.no_timetable_buses = self.args.no_timetable_buses;
-                            if let Some(lan) = self.lan.as_ref() {
+                            if let Some(lan) = self.net.lan.as_ref() {
                                 t.set_lan_seed(lan::population_seed(lan));
                             }
                             if self.args.traffic > 0 {
@@ -852,10 +844,10 @@ impl App {
                         n.add_lanes(std::mem::take(&mut *w.lanes.lock()));
                     }
                 }
-                if let (Some(lan), Some(p)) = (self.lan.as_mut(), self.player.as_mut()) {
+                if let (Some(lan), Some(p)) = (self.net.lan.as_mut(), self.player.as_mut()) {
                     lan::settle_spawn(
                         lan,
-                        &mut self.remotes,
+                        &mut self.net.remotes,
                         p,
                         &self.args,
                         &w,
@@ -1006,8 +998,8 @@ impl App {
         let mut centers: Vec<DVec3> = self.camera.iter().map(|c| c.position).collect();
         centers.extend(self.player.iter().map(|p| p.vehicle.position));
         // a LAN host simulates the world around every player: the ground and the roads there
-        if self.lan.as_ref().map(|l| l.role == omsi_net::Role::Host).unwrap_or(false) {
-            centers.extend(self.remotes.remotes.values().map(|r| r.vehicle().position));
+        if self.net.lan.as_ref().map(|l| l.role == omsi_net::Role::Host).unwrap_or(false) {
+            centers.extend(self.net.remotes.remotes.values().map(|r| r.vehicle().position));
         }
         let (Some(streamer), Some(w), Some(r), Some(scene)) = (
             self.streamer.as_mut(),

@@ -61,7 +61,7 @@ impl App {
                 t.populate_seen(w, r, scene, center, view);
                 *self.profile.entry("traffic.populate").or_default() +=
                     __t5.elapsed().as_secs_f64();
-                steps::set_keep_clear(t, self.player.as_ref(), &self.remotes);
+                steps::set_keep_clear(t, self.player.as_ref(), &self.net.remotes);
                 if let Some(s) = self.schedule.as_mut() {
                     let __t6 = Instant::now();
                     steps::schedule_tick(s, w, t, r, scene, self.first_populate);
@@ -80,7 +80,7 @@ impl App {
             steps::set_ai_daylight(t, daylight, gloomy);
             let __t2 = Instant::now();
             let rail = self.player.as_ref().and_then(|p| p.rail.as_ref()).map(|r| (r.lane, r.along));
-            steps::traffic_tick(t, w, dt, self.paused, self.player.as_ref(), &self.remotes, &self.placed, rail);
+            steps::traffic_tick(t, w, dt, self.paused, self.player.as_ref(), &self.net.remotes, &self.placed, rail);
             *self.profile.entry("traffic.tick").or_default() +=
                 __t2.elapsed().as_secs_f64();
             for (k, v) in ["traffic.tick.lanes", "traffic.tick.plan", "traffic.tick.ai"]

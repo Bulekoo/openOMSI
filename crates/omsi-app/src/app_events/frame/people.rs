@@ -64,7 +64,7 @@ impl App {
                 ).widened(sight));
             }
             // (the other LAN players' buses, for their riders to sit in)
-            h.set_remote_buses(self.remotes.remotes.iter().map(|(id, r)| (*id, r.vehicle())));
+            h.set_remote_buses(self.net.remotes.remotes.iter().map(|(id, r)| (*id, r.vehicle())));
             // (and the vehicles the player placed and left, with their riders)
             h.set_placed_buses(self.placed.iter().map(|q| (q.uid, &q.vehicle)));
             h.set_player_next_stop(
@@ -154,7 +154,7 @@ impl App {
         }
         self.placing_frame();
         // the host sends every edit of the map again now and then (players join)
-        if self.lan.as_ref().map(|l| l.role == omsi_net::Role::Host).unwrap_or(false) {
+        if self.net.lan.as_ref().map(|l| l.role == omsi_net::Role::Host).unwrap_or(false) {
             self.editor_sync_t -= dt;
             if self.editor_sync_t <= 0.0 {
                 self.editor_sync_t = 10.0;

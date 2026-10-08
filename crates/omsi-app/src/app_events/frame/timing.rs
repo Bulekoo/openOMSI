@@ -60,7 +60,7 @@ impl App {
             || (self.view == "foot" && self.foot_bus() == Some(crate::humans::BusId::Player));
         // standing or sitting in another player's bus: that bus is drawn and heard
         // from inside (its interior meshes, not the outside ones over them)
-        self.inside_remote = match self.foot_bus() {
+        self.net.inside_remote = match self.foot_bus() {
             Some(crate::humans::BusId::Ai(x)) if self.view == "foot" => crate::humans::remote_bus_player(x),
             _ => None,
         };
@@ -225,7 +225,7 @@ impl App {
         if !self.drive_start(event_loop) {
             // the session goes on while the map loads: a big map's first area took
             // longer than the host waits for a silent player
-            if let Some(l) = self.lan.as_mut() {
+            if let Some(l) = self.net.lan.as_mut() {
                 let planned = omsi_net::Pose {
                     bus: self.args.bus.clone().unwrap_or_default().replace('\\', "/"),
                     ..Default::default()

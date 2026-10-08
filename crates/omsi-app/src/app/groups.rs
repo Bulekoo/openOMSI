@@ -28,3 +28,17 @@ pub(crate) struct VrState {
     #[cfg_attr(not(windows), allow(dead_code))]
     pub(crate) vr_zoom_active: bool,
 }
+
+/// The multiplayer session: the LAN or server connection and the other players seen in it.
+pub(crate) struct NetState {
+    /// Other players on foot whose avatars are drawn (their ids).
+    pub(crate) remote_walkers: Vec<u32>,
+    /// The player on foot is in this other player's bus (see `lan`: drawn from inside).
+    pub(crate) inside_remote: Option<u32>,
+    /// A dedicated server said we administer it (`admin`).
+    pub(crate) is_admin: bool,
+    /// LAN session, and the other players' buses (drawn and heard like AI vehicles) with the
+    /// chat line.
+    pub(crate) lan: Option<omsi_net::LanSession>,
+    pub(crate) remotes: lan::LanGame,
+}

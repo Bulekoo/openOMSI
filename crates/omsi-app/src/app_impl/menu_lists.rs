@@ -173,7 +173,7 @@ impl App {
             let (h, m, sec) = (n(0), n(2), n(4));
             if h > 23 || m > 59 || sec > 59 {
                 self.service_msg = Some((format!("{:02}:{:02}:{:02} is no time of day", h, m, sec), 3.0));
-            } else if self.lan.as_ref().is_some_and(|l| l.role == omsi_net::Role::Client) {
+            } else if self.net.lan.as_ref().is_some_and(|l| l.role == omsi_net::Role::Client) {
                 self.service_msg = Some(("In a LAN session the host sets the clock".into(), 3.0));
             } else if self.real_time_locked() {
                 self.service_msg = Some(("The time cannot be changed while the real-time sync is on".into(), 3.0));

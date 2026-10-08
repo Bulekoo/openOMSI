@@ -67,7 +67,7 @@ impl App {
             self.scene.as_mut(),
             self.camera.as_ref(),
         ) {
-            let vehicles = steps::light_vehicles(self.player.as_ref(), self.traffic.as_ref(), &self.remotes);
+            let vehicles = steps::light_vehicles(self.player.as_ref(), self.traffic.as_ref(), &self.net.remotes);
             let __tc = Instant::now();
             lights::collect(w, scene, &daylight, cam.position, &vehicles);
             *self.profile.entry("lights.collect").or_default() += __tc.elapsed().as_secs_f64();
@@ -100,7 +100,7 @@ impl App {
                 // rear section is a coupled part with its own [boundingbox] (#777)
                 let boxed = crate::rain::vehicle_boxes;
                 let mut buses: Vec<(glam::DVec3, f64, [f32; 6])> = self.player.as_ref().map(|p| boxed(&p.vehicle)).unwrap_or_default();
-                buses.extend(self.remotes.remotes.values().flat_map(|rv| boxed(rv.vehicle())));
+                buses.extend(self.net.remotes.remotes.values().flat_map(|rv| boxed(rv.vehicle())));
                 if let Some(t) = self.traffic.as_ref() {
                     buses.extend(t.cars.iter().filter(|c| c.is_bus() && (c.vehicle.position - cam.position).length() < 40.0).flat_map(|c| boxed(&c.vehicle)));
                 }
@@ -122,7 +122,7 @@ impl App {
                         if self.paused { 0.0 } else { dt },
                         self.player.as_ref(),
                         self.traffic.as_ref(),
-                        &self.remotes,
+                        &self.net.remotes,
                         cam.position,
                         spray_wind,
                         w,

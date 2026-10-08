@@ -103,8 +103,8 @@ impl App {
             n.left -= dt;
         }
         self.notices.retain(|n| n.left > 0.0);
-        if let Some(lan) = self.lan.as_ref() {
-            lines.extend(lan::hud_lines(lan, &self.remotes, self.player.as_ref()));
+        if let Some(lan) = self.net.lan.as_ref() {
+            lines.extend(lan::hud_lines(lan, &self.net.remotes, self.player.as_ref()));
             lines.extend(self.sound.voice.as_ref().and_then(|v| v.hud_line()));
         }
         if let Some(h) = self.humans.as_ref() {
@@ -190,7 +190,7 @@ impl App {
             };
             let frame = navigator::NavFrame {
                 traffic: self.traffic.as_ref(),
-                players: self.lan.as_ref().map(|l| crate::lan::nav_players(&self.remotes, l.my_id)).unwrap_or_default(),
+                players: self.net.lan.as_ref().map(|l| crate::lan::nav_players(&self.net.remotes, l.my_id)).unwrap_or_default(),
                 bus: at,
                 heading,
                 speed_kmh: p.vehicle.physics.velocity_kmh(),
@@ -294,13 +294,13 @@ impl App {
         if let (Some(ui), Some(s)) = (self.ui.as_mut(), self.surface.as_ref()) {
             let scale = self.window.as_ref().map(|w| w.scale_factor() as f32).unwrap_or(1.0);
             let (w, h) = (hud[2], hud[3]);
-            self.remotes.chat.disabled = !self.settings.chat;
-            let chat = (self.lan.is_some() && self.settings.chat).then(|| ui::ChatView {
-                lines: &self.remotes.chat.lines,
-                typing: self.remotes.chat.typing.as_deref(),
-                error: self.remotes.chat.error(),
+            self.net.remotes.chat.disabled = !self.settings.chat;
+            let chat = (self.net.lan.is_some() && self.settings.chat).then(|| ui::ChatView {
+                lines: &self.net.remotes.chat.lines,
+                typing: self.net.remotes.chat.typing.as_deref(),
+                error: self.net.remotes.chat.error(),
             });
-            ui.chat.hidden = self.remotes.chat.hidden;
+            ui.chat.hidden = self.net.remotes.chat.hidden;
             let mut tags = if self.settings.name_tags {
                 let voice = self.sound.voice.as_ref();
                 let speaks = |name: &str, id: u32| voice.is_some_and(|v| v.speaks(name, id));
@@ -318,7 +318,7 @@ impl App {
                     .as_ref()
                     .map(|c| {
                         lan::name_tags(
-                            &self.remotes,
+                            &self.net.remotes,
                             c,
                             s.config.width as f32,
                             h,

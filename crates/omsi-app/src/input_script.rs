@@ -258,7 +258,7 @@ impl App {
 
     /// `on_key` for the LAN chat; true when the key was the chat's.
     fn lan_chat_key(&mut self, code: KeyCode, pressed: bool, repeat: bool) -> bool {
-        if let Some(l) = self.lan.as_mut() {
+        if let Some(l) = self.net.lan.as_mut() {
             let held = |a: KeyCode, b: KeyCode| self.keys.contains(&a) || self.keys.contains(&b);
             let chord = omsi_content::input::chord(
                 held(KeyCode::ShiftLeft, KeyCode::ShiftRight),
@@ -272,7 +272,7 @@ impl App {
                     .find(|b| b.scan_code == scan && b.matches(chord) && b.action.to_ascii_lowercase().starts_with("chat_"))
                     .map(|b| b.action.clone()))
             };
-            if lan::chat_key(l, &mut self.remotes, code, pressed, repeat, bound.as_deref()) {
+            if lan::chat_key(l, &mut self.net.remotes, code, pressed, repeat, bound.as_deref()) {
                 return true;
             }
         }
@@ -306,7 +306,7 @@ impl App {
         if let (true, Some(t)) = (pressed, self.tutorial.as_mut()) {
             let ctrl = self.keys.contains(&KeyCode::ControlLeft) || self.keys.contains(&KeyCode::ControlRight);
             match code {
-                KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::PageDown if !t.hidden && self.lan.is_none() => {
+                KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::PageDown if !t.hidden && self.net.lan.is_none() => {
                     t.next();
                     return true;
                 }
@@ -866,8 +866,8 @@ impl App {
                 // `type <text>`: characters into the open LAN chat line (after `key V`)
                 "type" => {
                     let text = cmd.split_once(' ').map(|x| x.1).unwrap_or("");
-                    if lan::chat_open(&self.remotes) {
-                        lan::chat_type(&mut self.remotes, text);
+                    if lan::chat_open(&self.net.remotes) {
+                        lan::chat_type(&mut self.net.remotes, text);
                     } else {
                         log::warn!("input script: the chat line is not open");
                     }

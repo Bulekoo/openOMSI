@@ -9,7 +9,7 @@ impl App {
         if let Some(w) = self.weather.as_ref() {
             self.wetness = road_wetness(precip_of(w).1, dt as f64, self.wetness);
         }
-        let inside = match self.inside_remote.and_then(|id| self.remotes.remotes.get(&id)) {
+        let inside = match self.net.inside_remote.and_then(|id| self.net.remotes.remotes.get(&id)) {
             // (in another player's bus: its box is the one the camera is in)
             Some(rv) => Some(rv.vehicle()),
             None => self.player.as_ref().map(|p| &p.vehicle),

@@ -72,7 +72,7 @@ impl App {
                     (false, true) => -1.0,
                     _ => 0.0,
                 };
-                let client = self.lan.as_ref().is_some_and(|l| l.role == omsi_net::Role::Client);
+                let client = self.net.lan.as_ref().is_some_and(|l| l.role == omsi_net::Role::Client);
                 if ctrl && shift && dir != 0.0 && !client {
                     if self.clock_hold == 0.0 && self.real_time_locked() {
                         // (says once why the clock stays)

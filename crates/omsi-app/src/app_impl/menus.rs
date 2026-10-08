@@ -13,7 +13,7 @@ impl App {
         // steering key let go in the menu went on turning the wheel to full lock once the
         // menu closed (a throttle key went on accelerating, a door button stayed pressed)
         self.release_vehicle_keys();
-        if self.lan.is_none() {
+        if self.net.lan.is_none() {
             self.paused = true;
         }
         self.game_menu = Some(0);
@@ -327,7 +327,7 @@ impl App {
             }
             "later" | "earlier" | "later10" | "earlier10" => {
                 self.close_game_menu();
-                if self.lan.as_ref().map(|l| l.role == omsi_net::Role::Client).unwrap_or(false) {
+                if self.net.lan.as_ref().map(|l| l.role == omsi_net::Role::Client).unwrap_or(false) {
                     self.service_msg = Some(("In a LAN session the host sets the clock".into(), 3.0));
                 } else {
                     self.shift_clock(match id {
@@ -397,15 +397,15 @@ impl crate::App {
         if self.navigator.is_none() {
             v.retain(|x| x.0 != "map");
         }
-        let host = self.lan.as_ref().map(|l| l.role == omsi_net::Role::Host).unwrap_or(false);
+        let host = self.net.lan.as_ref().map(|l| l.role == omsi_net::Role::Host).unwrap_or(false);
         // the server code: a line to copy it, right under "World options" (only in a LAN session or on a server)
-        if self.lan.is_some() || on_server(&self.args) {
+        if self.net.lan.is_some() || on_server(&self.args) {
             if let Some(w) = v.iter().position(|x| x.0 == "world") {
                 v.insert(w + 1, ("copycode", "Copy server code"));
                 at = at.max(w + 2);
             }
         }
-        if host || self.is_admin {
+        if host || self.net.is_admin {
             let before_quit = v.iter().position(|x| x.0 == "quit").unwrap_or(v.len()).max(at);
             v.insert(before_quit, ("admin", "Administration..."));
         }
@@ -415,7 +415,7 @@ impl crate::App {
     /// Put the session's server code on the clipboard.
     pub(crate) fn copy_server_code(&mut self) {
         // (the host's code; a player or a server's join code or address as it was entered)
-        let Some(code) = self.lan.as_ref().and_then(|l| l.code()).map(|c| c.encode()).or_else(|| self.args.lan_join.clone()).filter(|c| !c.trim().is_empty()) else {
+        let Some(code) = self.net.lan.as_ref().and_then(|l| l.code()).map(|c| c.encode()).or_else(|| self.args.lan_join.clone()).filter(|c| !c.trim().is_empty()) else {
             self.service_msg = Some(("No server code: not in a LAN session or on a server".into(), 3.0));
             return;
         };

@@ -8,7 +8,7 @@ impl App {
     pub(crate) fn tick_lan(&mut self, dt: f32) {
         let walker = self.walker_pose();
         let radio_keyed = self.voice_radio_held();
-        let Some(lan) = self.lan.as_mut() else {
+        let Some(lan) = self.net.lan.as_mut() else {
             // (the session is over: the plugin is told so)
             self.sound.voice = None;
             return;
@@ -21,17 +21,17 @@ impl App {
         let frame = lan::Frame {
             audio: self.sound.audio.as_ref(),
             listener: self.camera.as_ref().map(|c| c.position),
-            muffled: self.in_cab || self.inside_remote.is_some(),
+            muffled: self.in_cab || self.net.inside_remote.is_some(),
             riders: self.humans.as_ref().map(|h| h.riding()).unwrap_or(0),
             clock: Some(&self.clock),
             tour: self.duty.as_ref().map(|d| format!("{}/{}", d.line, d.tour)),
             walker,
-            inside_of: self.inside_remote,
+            inside_of: self.net.inside_remote,
             radio_keyed,
         };
         let updates = lan::tick(
             lan,
-            &mut self.remotes,
+            &mut self.net.remotes,
             dt,
             &self.args,
             self.player.as_mut(),
@@ -46,7 +46,7 @@ impl App {
         for u in updates {
             self.apply_world_update(u);
         }
-        let cmds = self.lan.as_mut().map(|l| l.take_commands()).unwrap_or_default();
+        let cmds = self.net.lan.as_mut().map(|l| l.take_commands()).unwrap_or_default();
         for (from, text) in cmds {
             self.lan_command(from, &text);
         }
@@ -55,7 +55,7 @@ impl App {
 
     /// A command another player's game sent ours (`LanSession::command`).
     pub(crate) fn lan_command(&mut self, from: u32, text: &str) {
-        let Some(lan) = self.lan.as_ref() else { return };
+        let Some(lan) = self.net.lan.as_ref() else { return };
         let my_id = lan.my_id;
         if let Some(ev) = text.strip_prefix("trigger ") {
             // a switch worked by a passenger of ours: only by one who is in our bus
@@ -74,7 +74,7 @@ impl App {
         if text == "voice?" {
             if lan.role == omsi_net::Role::Host {
                 let answer = crate::voice::VoiceServer::command(crate::voice::hosted().as_ref());
-                if let Some(l) = self.lan.as_mut() {
+                if let Some(l) = self.net.lan.as_mut() {
                     l.command(from, &answer);
                 }
             }

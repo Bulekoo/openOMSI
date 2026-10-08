@@ -31,7 +31,7 @@ impl App {
                         self.world.as_ref().map(|w| w.global.name.as_str()),
                         bus.as_ref().map(|(short, full)| (short.as_str(), full.as_str())),
                         duty,
-                        self.lan.is_some(),
+                        self.net.lan.is_some(),
                     ));
                 }
             }
@@ -54,7 +54,7 @@ impl App {
             if let Some(t) = self.traffic.as_mut() {
                 others.extend(t.cars.iter_mut().map(|c| (c.id, "ai", &mut c.vehicle)));
             }
-            others.extend(self.remotes.remotes.iter_mut().map(|(id, r)| ((1u64 << 48) | *id as u64, "player", r.vehicle_mut())));
+            others.extend(self.net.remotes.remotes.iter_mut().map(|(id, r)| ((1u64 << 48) | *id as u64, "player", r.vehicle_mut())));
             let mut io = crate::plugins::Io { vehicle: self.player.as_mut().map(|p| &mut p.vehicle), others, dt, message: None, info, commands: Vec::new(), keys, events };
             plugins.frame(&mut io);
             let commands = std::mem::take(&mut io.commands);

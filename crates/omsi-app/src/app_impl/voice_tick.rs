@@ -6,7 +6,7 @@ impl App {
     /// The voice chat (`voice`), once a frame of a session: started with it when the
     /// settings allow, the host's voice server asked for, the plugin told who is where.
     pub(super) fn tick_voice(&mut self, dt: f32) {
-        let Some(lan) = self.lan.as_mut() else {
+        let Some(lan) = self.net.lan.as_mut() else {
             self.sound.voice = None;
             return;
         };
@@ -30,10 +30,10 @@ impl App {
                 }
             }
         }
-        let lan = self.lan.as_ref().unwrap();
+        let lan = self.net.lan.as_ref().unwrap();
         let my_bus = self.player.as_ref().map(|p| p.vehicle.position);
-        let others = crate::voice::speakers(lan, &self.remotes, my_bus);
-        let inside = if self.in_cab { Some(lan.my_id) } else { self.inside_remote };
+        let others = crate::voice::speakers(lan, &self.net.remotes, my_bus);
+        let inside = if self.in_cab { Some(lan.my_id) } else { self.net.inside_remote };
         // driving a bus (not on foot): on the company radio automatically
         let on_radio = self.player.is_some() && !self.ego;
         let radio_keyed = on_radio && self.voice_radio_held();
