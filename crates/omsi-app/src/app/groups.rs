@@ -340,3 +340,66 @@ pub(crate) struct MenuState {
     /// The server's notifications on the screen (`notify`), oldest first.
     pub(crate) notices: Vec<crate::ui::Notice>,
 }
+
+/// The simulated session besides the map, the player's bus and the clock: the other vehicles, the AI traffic and people, the duty and timetable, the weather and the wet roads, the driver's career and the player on foot.
+pub(crate) struct SessionState {
+    /// A situation's further vehicles and those placed from the game menu, standing.
+    pub(crate) placed: Vec<Player>,
+    /// The sim date and the season's texture folder the loaded world shows (see
+    /// `follow_date`).
+    pub(crate) world_day: Option<(i32, Option<String>)>,
+    pub(crate) traffic: Option<traffic::Traffic>,
+    pub(crate) schedule: Option<schedule::Schedule>,
+    pub(crate) humans: Option<humans::Humans>,
+    pub(crate) duty: Option<schedule::PlayerDuty>,
+    /// The duty was told the places of the stops beyond the loaded tiles.
+    pub(crate) duty_places: bool,
+    pub(crate) rain: rain::Rain,
+    /// The player's bus's cabin air and the condensation on its glass.
+    pub(crate) cabin_air: crate::condensation::CabinAir,
+    /// What the tyres throw up from the water on the roads (see `puddles`).
+    pub(crate) spray: puddles::Spray,
+    pub(crate) lamps_on: Option<bool>,
+    pub(crate) populate_t: f32,
+    pub(crate) humans_populate_t: f32,
+    pub(crate) first_populate: bool,
+    pub(crate) envir: Option<omsi_content::Envir>,
+    pub(crate) weather: Option<omsi_content::weather::Weather>,
+    /// How far the clock was set since the timetable was last put out again (s; see
+    /// `shift_clock`).
+    pub(crate) clock_jump: f64,
+    /// The bus whose seat (`settings::bus_seats`) `settings.seat` holds now.
+    pub(crate) seat_bus: String,
+    /// The player out of the seat, walking about (`on_foot`).
+    pub(crate) on_foot: Option<crate::on_foot::OnFoot>,
+    /// Where the bus last stood on the ground (and facing where): it is put back there when
+    /// it falls through the world (see `admin::guard_fall`).
+    pub(crate) safe_pose: Option<(glam::DVec3, f64)>,
+    /// Seconds since `safe_pose` was taken.
+    pub(crate) safe_age: f32,
+    /// A time of day the bus's script wrote (`(S.S.Time)`), for the clock at the next frame.
+    pub(crate) pending_time: Option<f64>,
+    /// The play time (`clock.run_time`) the last situation was saved at.
+    pub(crate) autosave_t: f64,
+    /// The fuel pump or the bus wash running (`run_service`): which, and the seconds the
+    /// tank or the dirt has not changed (it ends after `SERVICE_SETTLE`).
+    pub(crate) pumping: Option<(&'static str, f32)>,
+    /// The driver's personnel file and this session's statistics.
+    pub(crate) career: career::Career,
+    /// The duty's stops with their times as driven, kept in a file (`journey`).
+    pub(crate) journey: Option<crate::journey::Journey>,
+    /// How wet the roads are (0..1), built up by rain and dried by the sun.
+    pub(crate) wetness: f32,
+    /// How far the cloud cover has drifted with the wind (fractions of its tiling), summed
+    /// up frame by frame so that a change of wind does not throw the sky around.
+    pub(crate) cloud_drift: [f32; 2],
+    /// A change of weather coming in (see `weather_cycle`).
+    pub(crate) weather_blend: Option<crate::weather_cycle::Blend>,
+    /// The weather cycle, when the weather chosen is `cycle`.
+    pub(crate) weather_cycle: Option<crate::weather_cycle::Cycle>,
+    /// The METAR sync's download under way (see `tick_metar`), and the seconds to the next one.
+    pub(crate) metar_rx: Option<std::sync::mpsc::Receiver<Option<omsi_content::weather::Weather>>>,
+    /// The current METAR receiver is a single manual fetch rather than the continuous sync.
+    pub(crate) metar_once: bool,
+    pub(crate) metar_next: f64,
+}

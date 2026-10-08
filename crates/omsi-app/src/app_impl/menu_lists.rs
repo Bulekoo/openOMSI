@@ -73,7 +73,7 @@ impl App {
         if code.len()==4&&code.chars().all(|c|c.is_ascii_alphabetic()){
             self.settings.metar_station=code.clone();
             crate::game_lists::remember_setting("metar_station",&code);
-            self.metar_rx=None; self.metar_once=false; self.metar_next=0.0;
+            self.session.metar_rx=None; self.session.metar_once=false; self.session.metar_next=0.0;
             self.service_msg=Some((format!("METAR source: {code}"),3.0));
         }else if !code.is_empty(){self.service_msg=Some(("ICAO must be exactly 4 letters".into(),3.0));}
         self.refresh_list();

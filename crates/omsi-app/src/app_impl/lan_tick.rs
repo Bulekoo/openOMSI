@@ -14,7 +14,7 @@ impl App {
             return;
         };
         let duty = self
-            .duty
+            .session.duty
             .as_ref()
             .map(|d| &d.trips[d.trip_index])
             .map(|t| (t.line.as_str(), t.terminus.as_str()));
@@ -22,9 +22,9 @@ impl App {
             audio: self.sound.audio.as_ref(),
             listener: self.camera.as_ref().map(|c| c.position),
             muffled: self.cam.in_cab || self.net.inside_remote.is_some(),
-            riders: self.humans.as_ref().map(|h| h.riding()).unwrap_or(0),
+            riders: self.session.humans.as_ref().map(|h| h.riding()).unwrap_or(0),
             clock: Some(&self.clock),
-            tour: self.duty.as_ref().map(|d| format!("{}/{}", d.line, d.tour)),
+            tour: self.session.duty.as_ref().map(|d| format!("{}/{}", d.line, d.tour)),
             walker,
             inside_of: self.net.inside_remote,
             radio_keyed,
@@ -38,8 +38,8 @@ impl App {
             self.world.as_deref(),
             self.renderer.as_ref(),
             self.scene.as_mut(),
-            self.traffic.as_mut(),
-            self.humans.as_mut(),
+            self.session.traffic.as_mut(),
+            self.session.humans.as_mut(),
             duty,
             &frame,
         );
@@ -103,13 +103,13 @@ impl App {
                 self.clock.year = year;
                 self.clock.day_of_year = day_of_year;
                 self.clock.time = time;
-                if let Some(t) = self.traffic.as_mut() {
+                if let Some(t) = self.session.traffic.as_mut() {
                     t.day_time = time;
                 }
             }
             lan::WorldUpdate::Slew(s) => {
                 self.clock.time = (self.clock.time + s).clamp(0.0, 86399.999);
-                if let Some(t) = self.traffic.as_mut() {
+                if let Some(t) = self.session.traffic.as_mut() {
                     t.day_time += s;
                 }
             }
@@ -123,7 +123,7 @@ impl App {
                 self.change_weather(w, false, 240.0);
             }
             lan::WorldUpdate::Tours(tours) => {
-                if let Some(s) = self.schedule.as_mut() {
+                if let Some(s) = self.session.schedule.as_mut() {
                     s.set_lan_tours(tours);
                 }
             }

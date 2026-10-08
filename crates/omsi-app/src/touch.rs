@@ -284,7 +284,7 @@ impl App {
         push(&mut b, Btn::Panel, rb(x, y, r), "tune", "", t.panel, true);
         x -= step;
         push(&mut b, Btn::Map, rb(x, y, r), "map", "", false, true);
-        if self.duty.is_some() {
+        if self.session.duty.is_some() {
             x -= step;
             push(&mut b, Btn::Timetable, rb(x, y, r), "departure_board", "", self.menus.timetable, true);
         }
@@ -296,7 +296,7 @@ impl App {
             t.stick_r = 62.0 * u;
             t.stick_c = Vec2::new(pad + t.stick_r + 10.0 * u, h - pad - t.stick_r - 10.0 * u);
             // on foot, out of the eyes: kneel for a picture from low down (#1148)
-            if let Some(f) = self.on_foot.as_ref().filter(|f| f.cam == crate::on_foot::FootCam::First && f.seat.is_none()) {
+            if let Some(f) = self.session.on_foot.as_ref().filter(|f| f.cam == crate::on_foot::FootCam::First && f.seat.is_none()) {
                 let kr = 26.0 * u;
                 push(&mut b, Btn::Kneel, rb(w - pad - kr, h - pad - kr, kr), "keyboard_arrow_down", "", f.kneel, true);
             }

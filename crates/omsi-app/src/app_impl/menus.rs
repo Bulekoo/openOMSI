@@ -378,7 +378,7 @@ impl crate::App {
     pub(crate) fn game_menu_items(&self) -> Vec<(&'static str, &'static str)> {
         let mut v: Vec<(&'static str, &'static str)> = game_menu_for(&self.args).to_vec();
         let mut at = 1;
-        if self.on_foot.is_some() && self.player.is_some() {
+        if self.session.on_foot.is_some() && self.player.is_some() {
             v.insert(at, ("tobus", "Back to my bus"));
             at += 1;
         }
@@ -388,10 +388,10 @@ impl crate::App {
         }
         // ending the route is offered only while there is one, skipping a stop while its
         // trip still has one to come
-        if self.duty.is_none() {
+        if self.session.duty.is_none() {
             v.retain(|x| x.0 != "endduty");
         }
-        if !self.duty.as_ref().is_some_and(|d| d.stop_to_skip()) {
+        if !self.session.duty.as_ref().is_some_and(|d| d.stop_to_skip()) {
             v.retain(|x| x.0 != "skipstop");
         }
         if self.menus.navigator.is_none() {

@@ -53,7 +53,7 @@ pub(crate) fn items(app: &App) -> Vec<(String, String)> {
     for (label, secs) in [("Clock: 06:00 (morning)", 6 * 3600), ("Clock: 12:00 (noon)", 12 * 3600), ("Clock: 18:00 (evening)", 18 * 3600), ("Clock: 23:00 (night)", 23 * 3600)] {
         out.push((omsi_ui::tr(label).into_owned(), format!("clock {secs}")));
     }
-    if let Some(t) = app.traffic.as_ref() {
+    if let Some(t) = app.session.traffic.as_ref() {
         out.push((format!("{}: {} ({})", omsi_ui::tr("Traffic"), t.target, omsi_ui::tr("more / less")), "traffic next".into()));
     }
     out.push(("Clock +1 hour".into(), "time 3600".into()));
@@ -65,14 +65,14 @@ pub(crate) fn items(app: &App) -> Vec<(String, String)> {
     }
     out.push(("Next weather".into(), "weather next".into()));
     // the weather cycle, and each installed weather by name
-    let cycling = app.weather_cycle.is_some();
+    let cycling = app.session.weather_cycle.is_some();
     out.push((format!("{}: {}", omsi_ui::tr("Weather cycle"), if cycling { omsi_ui::tr("on") } else { omsi_ui::tr("off") }), "weather cycle".into()));
     for (file, w) in crate::weather_cycle::installed() {
         let now = app.args.weather.as_deref().is_some_and(|c| c.replace('\\', "/").eq_ignore_ascii_case(&file));
         let mark = if now { format!("  {}", omsi_ui::tr("(now)")) } else { String::new() };
         out.push((format!("{}: {}{mark}", omsi_ui::tr("Weather"), w.name), format!("weather set {file}")));
     }
-    if app.traffic.is_some() {
+    if app.session.traffic.is_some() {
         out.push((omsi_ui::tr("Clear the AI traffic (a jam)").into_owned(), "traffic clear".into()));
     }
     out.push(("Back".into(), "back".into()));
@@ -159,14 +159,14 @@ fn host_action(app: &mut App, action: &str, by: Option<u32>) {
         }
         "weather" => match arg.trim().split_once(' ').map(|(a, b)| (a, b.trim())).unwrap_or((arg.trim(), "")) {
             ("cycle", _) => {
-                if app.weather_cycle.take().is_none() {
+                if app.session.weather_cycle.take().is_none() {
                     let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(7);
                     let mut c = crate::weather_cycle::Cycle::new(seed);
                     // (the first change soon, not in an hour)
                     c.next_in = 60.0;
-                    app.weather_cycle = Some(c);
+                    app.session.weather_cycle = Some(c);
                 }
-                let on = app.weather_cycle.is_some();
+                let on = app.session.weather_cycle.is_some();
                 app.service_msg = Some((format!("Weather cycle {}", if on { "on" } else { "off" }), 3.0));
             }
             // (only an installed weather file: the name comes from the admin's game)
@@ -226,7 +226,7 @@ fn host_action(app: &mut App, action: &str, by: Option<u32>) {
             clear_ai_traffic(app);
         }
         "traffic" => {
-            if let Some(t) = app.traffic.as_mut() {
+            if let Some(t) = app.session.traffic.as_mut() {
                 t.target = crate::game_lists::next_step(&crate::game_lists::TRAFFIC, t.target);
                 app.args.traffic = t.target;
                 app.service_msg = Some((format!("Traffic: {}", t.target), 3.0));
@@ -243,7 +243,7 @@ pub(crate) fn clear_ai_traffic(app: &mut App) {
         app.service_msg = Some(("In a LAN session only the host can clear AI traffic".into(), 3.0));
         return;
     }
-    if let (Some(t), Some(w), Some(r), Some(scene)) = (app.traffic.as_mut(), app.world.as_ref(), app.renderer.as_ref(), app.scene.as_mut()) {
+    if let (Some(t), Some(w), Some(r), Some(scene)) = (app.session.traffic.as_mut(), app.world.as_ref(), app.renderer.as_ref(), app.scene.as_mut()) {
         let removed = t.clear_random(w, r, scene);
         app.service_msg = Some((format!("{removed} AI vehicles taken off the road"), 3.0));
     }
@@ -294,7 +294,7 @@ fn teleport_beside(app: &mut App, pos: glam::DVec3, heading: f64) {
 
 /// Our bus put at `at` facing `heading` (stopped), with the walker back at its wheel.
 pub(crate) fn teleport(app: &mut App, at: glam::DVec3, heading: f64) {
-    if app.on_foot.is_some() {
+    if app.session.on_foot.is_some() {
         app.back_to_bus();
     }
     // on the level at the height asked for (a car park under a building, a road under a
@@ -407,12 +407,12 @@ pub(crate) fn command(app: &mut App, from: u32, text: &str) {
             let reply = match parse_duty(arg) {
                 None => "duty-no malformed".to_string(),
                 Some((line, tour, trip, station)) => {
-                    let stops = app.schedule.as_ref().map(|s| s.tour_trip_stops(&line, &tour, trip)).unwrap_or_default();
+                    let stops = app.session.schedule.as_ref().map(|s| s.tour_trip_stops(&line, &tour, trip)).unwrap_or_default();
                     match stops.iter().position(|s| s.1 >= station).or(stops.len().checked_sub(1)) {
                         None => "duty-no unknown tour or trip".to_string(),
                         Some(chosen) => {
                             crate::game_lists::start_duty_at(app, &line, &tour, trip, chosen);
-                            let ok = app.duty.as_ref().is_some_and(|d| d.line.eq_ignore_ascii_case(&line) && d.tour.eq_ignore_ascii_case(&tour));
+                            let ok = app.session.duty.as_ref().is_some_and(|d| d.line.eq_ignore_ascii_case(&line) && d.tour.eq_ignore_ascii_case(&tour));
                             log::info!("LAN: the server gave us line {line} tour {tour}, trip {trip} from stop {chosen}: {}", if ok { "taken" } else { "not taken" });
                             if ok {
                                 format!("duty-ok {}", duty_arg(&line, &tour, trip, stops[chosen].1))
@@ -443,7 +443,7 @@ pub(crate) fn command(app: &mut App, from: u32, text: &str) {
         // (host → us) the server's dispatch takes the duty back: free drive, as the game menu's
         // "end the duty"; the host hears `duty-off-ok` (there was one) or `duty-off-none`
         "duty-off" if from == 1 => {
-            let had = app.duty.take().map(|d| format!("{} {}", d.line, d.tour));
+            let had = app.session.duty.take().map(|d| format!("{} {}", d.line, d.tour));
             // (the bus's own timetable with it, as "end the duty" clears it, #1317)
             if let Some(p) = app.player.as_mut() {
                 crate::game_lists::clear_timetable(&mut p.vehicle);
@@ -720,24 +720,24 @@ pub(crate) fn guard_fall(app: &mut App, dt: f32) {
         Some(w) => (crate::scene::drive_probe(&w.terrains, &w.surfaces, at.x, at.y, at.z + 1.5).below, w.walk_height(at.x, at.y)),
         None => (None, None),
     };
-    app.safe_age += dt;
+    app.session.safe_age += dt;
     let fallen = match (under, ground) {
         (Some(_), _) => false,
         (None, Some(g)) => at.z < g - 8.0,
-        (None, None) => app.safe_pose.map(|s| at.z < s.0.z - 40.0).unwrap_or(false),
+        (None, None) => app.session.safe_pose.map(|s| at.z < s.0.z - 40.0).unwrap_or(false),
     };
     if fallen {
-        if let Some((pos, heading)) = app.safe_pose {
+        if let Some((pos, heading)) = app.session.safe_pose {
             log::warn!("the bus fell through the world at ({:.1}, {:.1}, {:.1}): put back at ({:.1}, {:.1})", at.x, at.y, at.z, pos.x, pos.y);
             teleport(app, pos, heading);
             app.service_msg = Some(("The bus fell through the ground: it was put back where it last stood".into(), 5.0));
         }
         return;
     }
-    if app.safe_age >= 1.0 {
+    if app.session.safe_age >= 1.0 {
         if let Some(g) = under.filter(|g| (at.z - g).abs() < 2.5) {
-            app.safe_age = 0.0;
-            app.safe_pose = Some((glam::DVec3::new(at.x, at.y, g), p.vehicle.heading));
+            app.session.safe_age = 0.0;
+            app.session.safe_pose = Some((glam::DVec3::new(at.x, at.y, g), p.vehicle.heading));
         }
     }
 }

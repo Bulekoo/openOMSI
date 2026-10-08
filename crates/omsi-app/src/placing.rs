@@ -72,7 +72,7 @@ impl App {
     pub(crate) fn placing_frame(&mut self) {
         let Some(pl) = self.menus.placing.as_ref() else { return };
         let (uid, heading) = (pl.uid, pl.heading);
-        let Some(k) = self.placed.iter().position(|q| q.uid == uid) else {
+        let Some(k) = self.session.placed.iter().position(|q| q.uid == uid) else {
             self.menus.placing = None;
             return;
         };
@@ -82,7 +82,7 @@ impl App {
         // in another vehicle (the own bus, the traffic, another placed one)?
         let blocked = hit
             .map(|at| {
-                let bb = self.placed[k].vehicle.ty.def.bounding_box.unwrap_or([2.5, 11.0, 3.0, 0.0, 0.0, 1.5]);
+                let bb = self.session.placed[k].vehicle.ty.def.bounding_box.unwrap_or([2.5, 11.0, 3.0, 0.0, 0.0, 1.5]);
                 let me = Obb::from_box(bb, at, heading);
                 let mut others: Vec<Obb> = Vec::new();
                 let mut add = |v: &omsi_sim::VehicleInstance| {
@@ -95,12 +95,12 @@ impl App {
                 if let Some(p) = self.player.as_ref() {
                     add(&p.vehicle);
                 }
-                for (j, q) in self.placed.iter().enumerate() {
+                for (j, q) in self.session.placed.iter().enumerate() {
                     if j != k {
                         add(&q.vehicle);
                     }
                 }
-                if let Some(t) = self.traffic.as_ref() {
+                if let Some(t) = self.session.traffic.as_ref() {
                     for c in &t.cars {
                         add(&c.vehicle);
                     }
@@ -109,7 +109,7 @@ impl App {
             })
             .unwrap_or(false);
         if let Some(at) = hit {
-            put_vehicle(&mut self.placed[k].vehicle, at, heading);
+            put_vehicle(&mut self.session.placed[k].vehicle, at, heading);
         }
         if let Some(pl) = self.menus.placing.as_mut() {
             pl.at = hit;
@@ -137,7 +137,7 @@ impl App {
             (Some(_), false) => {
                 let uid = pl.uid;
                 self.menus.placing = None;
-                if let Some(q) = self.placed.iter_mut().find(|q| q.uid == uid) {
+                if let Some(q) = self.session.placed.iter_mut().find(|q| q.uid == uid) {
                     // settled onto its wheels where it was put
                     for _ in 0..3 {
                         q.vehicle.update(1.0 / 30.0);
@@ -192,13 +192,13 @@ impl App {
     /// stepping out where they are.
     pub(crate) fn remove_placed_vehicles(&mut self) {
         self.menus.placing = None;
-        let n = self.placed.len();
-        for mut q in std::mem::take(&mut self.placed) {
+        let n = self.session.placed.len();
+        for mut q in std::mem::take(&mut self.session.placed) {
             if let (Some(a), Some(mut ss)) = (self.sound.audio.as_ref(), q.sounds.take()) {
                 ss.stop_all(a);
             }
             if let (Some(w), Some(r), Some(scene)) = (self.world.clone(), self.renderer.as_ref(), self.scene.as_mut()) {
-                if let Some(h) = self.humans.as_mut() {
+                if let Some(h) = self.session.humans.as_mut() {
                     h.evict(crate::humans::BusId::Ai(crate::humans::placed_bus_id(q.uid)), &w);
                 }
                 if let Some(mut d) = q.driver.take() {
@@ -216,8 +216,8 @@ impl App {
     /// Escape while placing: the vehicle goes again.
     pub(crate) fn placing_cancel(&mut self) {
         let Some(pl) = self.menus.placing.take() else { return };
-        let Some(k) = self.placed.iter().position(|q| q.uid == pl.uid) else { return };
-        let mut q = self.placed.remove(k);
+        let Some(k) = self.session.placed.iter().position(|q| q.uid == pl.uid) else { return };
+        let mut q = self.session.placed.remove(k);
         if let (Some(a), Some(mut ss)) = (self.sound.audio.as_ref(), q.sounds.take()) {
             ss.stop_all(a);
         }

@@ -93,7 +93,7 @@ impl App {
                 p.move_head_idle(dt, idle, self.settings.head_idle_pace);
             }
             if let Some(w) = self.world.as_ref() {
-                crate::rail_drive::frame(p, self.traffic.as_ref().map(|t| &t.net), w, dt);
+                crate::rail_drive::frame(p, self.session.traffic.as_ref().map(|t| &t.net), w, dt);
             }
         } else if self.input.dragging {
             // paused / no ground: still deliver held-switch `_drag` (was unconditional before)
@@ -102,12 +102,12 @@ impl App {
         }
         // a script that set the time of day (`(S.S.Time)`) moves the game's clock
         if let Some(t) = p.vehicle.host.time_written.take() {
-            self.pending_time = Some(t);
+            self.session.pending_time = Some(t);
         }
         // the situation's further vehicles stand and run their scripts, and the
         // player's bus meets them
         let mut placed_boxes = Vec::new();
-        for q in self.placed.iter_mut() {
+        for q in self.session.placed.iter_mut() {
             if !self.paused {
                 q.vehicle.update(dt);
             }
@@ -125,9 +125,9 @@ impl App {
                 id: -1,
             });
         }
-        if !self.placed.is_empty() {
+        if !self.session.placed.is_empty() {
             // (the traffic writes the list afresh every frame; without it, this does)
-            if self.traffic.is_none() {
+            if self.session.traffic.is_none() {
                 p.vehicle.dynamic_boxes.clear();
             }
             p.vehicle.dynamic_boxes.extend(placed_boxes);
@@ -153,7 +153,7 @@ impl App {
         // from the driver's seat the figure stays in the mirrors
         // (from the driver's seat only the mirrors show him)
         // (out of the seat: nobody at the wheel)
-        p.sync_driver_hands(r, scene, dt, self.settings.driver && self.on_foot.is_none(), self.view == "driver", self.settings.hands_in_cab);
+        p.sync_driver_hands(r, scene, dt, self.settings.driver && self.session.on_foot.is_none(), self.view == "driver", self.settings.hands_in_cab);
     }
 
     /// The field of view without a bus, the sound's listener, the placed vehicles without a
@@ -187,7 +187,7 @@ impl App {
         // on foot without a bus of one's own: the vehicles one placed still stand, run
         // their scripts and are drawn where they are (the player's frame did it)
         if let (None, Some(r), Some(scene)) = (self.player.as_ref(), self.renderer.as_ref(), self.scene.as_mut()) {
-            for q in self.placed.iter_mut() {
+            for q in self.session.placed.iter_mut() {
                 if !self.paused {
                     q.vehicle.update(dt);
                 }

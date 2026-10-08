@@ -8,14 +8,14 @@ impl App {
     /// stopped by driving off.
     pub(crate) fn tick_service(&mut self, dt: f32) {
         const SERVICE_SETTLE: f32 = 1.5;
-        let Some((kind, idle)) = self.pumping else { return };
+        let Some((kind, idle)) = self.session.pumping else { return };
         let Some(p) = self.player.as_mut() else {
-            self.pumping = None;
+            self.session.pumping = None;
             return;
         };
         let (name, var) = if kind == "refuel" { ("veh_tank", "engine_tank_content") } else { ("veh_wash", "Dirt_Wiped") };
         if p.vehicle.physics.velocity_kmh().abs() > 2.0 {
-            self.pumping = None;
+            self.session.pumping = None;
             self.service_msg = Some((if kind == "refuel" { "Refuelling stopped" } else { "Washing stopped" }.into(), 4.0));
             return;
         }
@@ -24,12 +24,12 @@ impl App {
         let now = p.vehicle.var(var).unwrap_or(0.0);
         let idle = if (now - before).abs() > 1e-4 { 0.0 } else { idle + dt };
         if idle > SERVICE_SETTLE {
-            self.pumping = None;
+            self.session.pumping = None;
             let line = if kind == "refuel" { format!("refuelled: {now:.0} l in the tank") } else { format!("washed: dirt {:.0}%", now * 100.0) };
             log::info!("{line}");
             self.service_msg = Some((line, 6.0));
         } else {
-            self.pumping = Some((kind, idle));
+            self.session.pumping = Some((kind, idle));
             if kind == "refuel" {
                 self.service_msg = Some((format!("Refuelling: {now:.0} l"), 1.0));
             }
@@ -53,7 +53,7 @@ impl App {
                 p.vehicle.dirt = 0.0;
                 p.vehicle.set_engine_var("Dirt_Norm", 0.0);
             }
-            self.pumping = Some((if kind == "refuel" { "refuel" } else { "wash" }, 0.0));
+            self.session.pumping = Some((if kind == "refuel" { "refuel" } else { "wash" }, 0.0));
             self.service_msg = Some((if kind == "refuel" { "Refuelling... (drive off to stop)" } else { "Washing..." }.into(), 4.0));
             return;
         }

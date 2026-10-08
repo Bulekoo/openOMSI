@@ -87,7 +87,7 @@ impl App {
             format!("bus at ({:.1}, {:.1}, {:.1}) heading {:.0}, {:.0} km/h", v.position.x, v.position.y, v.position.z, v.heading, v.physics.velocity_kmh())
         });
         let cam = self.camera.as_ref().map(|c| format!("camera at ({:.0}, {:.0}, {:.0})", c.position.x, c.position.y, c.position.z));
-        let traffic = self.traffic.as_ref().map(|t| t.cars.len()).unwrap_or(0);
+        let traffic = self.session.traffic.as_ref().map(|t| t.cars.len()).unwrap_or(0);
         let time = self.clock.time;
         let gpu = match (self.renderer.as_ref(), self.scene.as_ref()) {
             (Some(r), Some(sc)) => format!(", GPU memory: textures {:.0} MB, meshes {:.0} MB", r.texture_bytes(sc) as f64 / 1e6, r.mesh_bytes(sc) as f64 / 1e6),

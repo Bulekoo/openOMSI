@@ -79,7 +79,7 @@ impl App {
         if self.menus.editor.is_some() {
             lines.push("Object editor: click picks · drag moves · wheel turns (Shift lifts) · Del · C copy · V variant · Backspace undo · Ctrl+S save · Esc".into());
         }
-        if let Some(d) = self.duty.as_ref().filter(|d| d.trip_done()) {
+        if let Some(d) = self.session.duty.as_ref().filter(|d| d.trip_done()) {
             lines.push(match d.trips.get(d.trip_index + 1) {
                 Some(next) => format!(
                     "End of the trip. Next: {} to {}, from {} at {} (it starts by itself a minute before)",
@@ -107,7 +107,7 @@ impl App {
             lines.extend(lan::hud_lines(lan, &self.net.remotes, self.player.as_ref()));
             lines.extend(self.sound.voice.as_ref().and_then(|v| v.hud_line()));
         }
-        if let Some(h) = self.humans.as_ref() {
+        if let Some(h) = self.session.humans.as_ref() {
             if let Some(hint) = h.hint() {
                 lines.push(hint);
             } else if let Some((name, value)) = &h.request {
@@ -159,14 +159,14 @@ impl App {
                 nav.start_map(w.clone());
             }
             // stops beyond the loaded tiles: their places from the navigator's map
-            if let (Some(places), Some(d)) = (nav.places(), self.duty.as_mut()) {
-                if !self.duty_places {
-                    self.duty_places = true;
+            if let (Some(places), Some(d)) = (nav.places(), self.session.duty.as_mut()) {
+                if !self.session.duty_places {
+                    self.session.duty_places = true;
                     d.learn_places(places);
                 }
             }
-            let (line, terminus, stops, trip) = navigator::duty_parts(self.duty.as_ref());
-            match (trip, self.schedule.as_ref(), self.traffic.as_ref(), self.world.as_ref()) {
+            let (line, terminus, stops, trip) = navigator::duty_parts(self.session.duty.as_ref());
+            match (trip, self.session.schedule.as_ref(), self.session.traffic.as_ref(), self.world.as_ref()) {
                 (Some((key, name)), Some(sch), _, _) if nav.map_net().is_some() => {
                     if nav.wants_route(&key, 0) {
                         let lanes = sch.trip_route_in(nav.map_net().unwrap(), &name);
@@ -184,12 +184,12 @@ impl App {
             }
             let (outside_temp, inside_temp) = vehicle_temperatures(p);
             // (on foot the map follows the walker, not the bus left standing)
-            let (at, heading) = match self.on_foot.as_ref() {
+            let (at, heading) = match self.session.on_foot.as_ref() {
                 Some(f) => (f.pos, f.heading),
                 None => (p.vehicle.position, p.vehicle.heading),
             };
             let frame = navigator::NavFrame {
-                traffic: self.traffic.as_ref(),
+                traffic: self.session.traffic.as_ref(),
                 players: self.net.lan.as_ref().map(|l| crate::lan::nav_players(&self.net.remotes, l.my_id)).unwrap_or_default(),
                 bus: at,
                 heading,
@@ -199,8 +199,8 @@ impl App {
                 line,
                 terminus,
                 stops,
-                delay: self.duty.as_ref().map(|_| p.vehicle.host.tt_delay as f64),
-                passengers: self.humans.as_ref().map(|h| h.riding()),
+                delay: self.session.duty.as_ref().map(|_| p.vehicle.host.tt_delay as f64),
+                passengers: self.session.humans.as_ref().map(|h| h.riding()),
                 stop_requested: navigator::stop_requested(&p.vehicle),
                 time: self.clock.time,
                 weekday: self.clock.weekday(),
@@ -231,7 +231,7 @@ impl App {
             // OMSI 2's dynamic route arrows over the junctions ahead
             if nav.arrows {
                 if let Some(w) = self.world.as_ref() {
-                    let spots = nav.arrow_spots(self.traffic.as_ref().map(|t| &t.net), 350.0, &|id| w.object_positions.lock().get(&id).map(|p| (p.0, p.1[0])));
+                    let spots = nav.arrow_spots(self.session.traffic.as_ref().map(|t| &t.net), 350.0, &|id| w.object_positions.lock().get(&id).map(|p| (p.0, p.1[0])));
                     self.gfx.route_arrows.tick(dt, w, r, scene, &spots);
                 }
             } else if self.gfx.route_arrows.any() {
@@ -364,7 +364,7 @@ impl App {
             };
             // (the game menu's greyed-out lines: the timetable needs an active route)
             let menu_disabled: &[&str] = &[];
-            let (menu_kind, menu_head, menu_preview) = crate::game_lists::menu_extras(self.menus.list_kind.as_ref(), self.menus.admin_list.as_deref(), chooser_sel, self.schedule.as_ref(), self.clock.time);
+            let (menu_kind, menu_head, menu_preview) = crate::game_lists::menu_extras(self.menus.list_kind.as_ref(), self.menus.admin_list.as_deref(), chooser_sel, self.session.schedule.as_ref(), self.clock.time);
             let frame = ui::Frame {
                 scale,
                 ui_scale: ui::size_factor(h, scale, self.settings.ui_scale, self.settings.ui_scale_window),
@@ -397,8 +397,8 @@ impl App {
                 menu_top: self.menus.menu_top,
                 // (not over the city map, which has the stops and their times: it
                 // covered the map's zoom and close buttons)
-                timetable: (self.menus.timetable && !map_open).then(|| timetable_rows(self.duty.as_ref(), self.player.as_ref().map(|p| p.vehicle.host.tt_delay as f64))).flatten(),
-                info: self.menus.info_bar.then(|| info_line(&self.clock, self.player.as_ref(), self.duty.as_ref(), self.humans.as_ref().map(|h| h.riding()), self.career.metres)),
+                timetable: (self.menus.timetable && !map_open).then(|| timetable_rows(self.session.duty.as_ref(), self.player.as_ref().map(|p| p.vehicle.host.tt_delay as f64))).flatten(),
+                info: self.menus.info_bar.then(|| info_line(&self.clock, self.player.as_ref(), self.session.duty.as_ref(), self.session.humans.as_ref().map(|h| h.riding()), self.session.career.metres)),
                 info_room: self.input.touch.info_room.filter(|_| self.input.touch.enabled),
                 tutorial: self.menus.tutorial.as_ref().filter(|t| !t.hidden && self.menus.game_menu.is_none()).and_then(|t| t.page().map(|p| (p.title.as_str(), p.text.as_str(), p.image.as_deref(), t.at, t.pages.len()))),
                 chat,

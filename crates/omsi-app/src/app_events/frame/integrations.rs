@@ -26,7 +26,7 @@ impl App {
                         let full = omsi_launcher_lib::display_bus_name(&format!("{} {short}", definition.manufacturer));
                         (short, full)
                     });
-                    let duty = self.duty.as_ref().map(|d| (d.line.as_str(), d.tour.as_str()));
+                    let duty = self.session.duty.as_ref().map(|d| (d.line.as_str(), d.tour.as_str()));
                     d.set(crate::discord::Presence::for_game(
                         self.world.as_ref().map(|w| w.global.name.as_str()),
                         bus.as_ref().map(|(short, full)| (short.as_str(), full.as_str())),
@@ -51,7 +51,7 @@ impl App {
             let plugins = self.integrations.plugins.as_mut().unwrap();
             // the vehicles around it: the AI traffic and the other players' buses
             let mut others: Vec<(u64, &'static str, &mut omsi_sim::VehicleInstance)> = Vec::new();
-            if let Some(t) = self.traffic.as_mut() {
+            if let Some(t) = self.session.traffic.as_mut() {
                 others.extend(t.cars.iter_mut().map(|c| (c.id, "ai", &mut c.vehicle)));
             }
             others.extend(self.net.remotes.remotes.iter_mut().map(|(id, r)| ((1u64 << 48) | *id as u64, "player", r.vehicle_mut())));
@@ -98,8 +98,8 @@ impl App {
                 }
             });
         }
-        if let (Some(h), Some(p)) = (self.humans.as_mut(), self.player.as_ref()) {
-            let hurt = steps::people_in_career(&mut self.career, h, p, self.settings.collision_pedestrians);
+        if let (Some(h), Some(p)) = (self.session.humans.as_mut(), self.player.as_ref()) {
+            let hurt = steps::people_in_career(&mut self.session.career, h, p, self.settings.collision_pedestrians);
             if hurt > 0 {
                 self.service_msg = Some(("Pedestrian knocked down!".into(), 6.0));
                 crate::plugins::queue_event(&mut self.integrations.plugin_events, "pedestrian", vec![omsi_plugin::InfoValue::Num(hurt as f64)]);

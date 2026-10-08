@@ -15,7 +15,7 @@ impl App {
                 let cam = *cam;
                 // (the seat kept for this bus, when one is: see `bus_seats`)
                 let bus = crate::game_lists::seat_key(p);
-                if bus != self.seat_bus {
+                if bus != self.session.seat_bus {
                     if let Some((seat, pitch)) = crate::settings::bus_seats::of(&bus) {
                         self.settings.seat = seat;
                         self.settings.seat_pitch_deg = pitch;
@@ -24,7 +24,7 @@ impl App {
                         self.settings.seat = saved.seat;
                         self.settings.seat_pitch_deg = saved.seat_pitch_deg;
                     }
-                    self.seat_bus = bus;
+                    self.session.seat_bus = bus;
                 }
                 p.seat = glam::Vec3::from_array(self.settings.seat);
                 // head tracking: the head's turn on top of the look, its movement

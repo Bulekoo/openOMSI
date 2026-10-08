@@ -11,11 +11,11 @@ impl App {
             self.service_msg=Some(("In a LAN session the host sets the weather".into(),3.0));return;
         }
         if self.metar_locked(){self.service_msg=Some(("The weather cannot be changed while the METAR sync is on".into(),3.0));return;}
-        let mut w=self.weather.clone().unwrap_or_default();
+        let mut w=self.session.weather.clone().unwrap_or_default();
         if w.precip.len()<5{w.precip.resize(5,0.0);}
         f(&mut w);
         let brightness=crate::weather_setup::custom_weather(self.args.weather.as_deref()).map(|c|c.brightness).unwrap_or(1.0);
-        let custom=crate::weather_setup::CustomWeather::from_weather(&w,brightness,self.wetness);
+        let custom=crate::weather_setup::CustomWeather::from_weather(&w,brightness,self.session.wetness);
         self.set_custom_weather(custom);
     }
 
@@ -25,18 +25,18 @@ impl App {
         }
         if self.metar_locked(){self.service_msg=Some(("The weather cannot be changed while the METAR sync is on".into(),3.0));return;}
         custom.normalize();
-        self.metar_rx=None;
-        self.metar_once=false;
+        self.session.metar_rx=None;
+        self.session.metar_once=false;
         let spec=custom.encode();
         let to=custom.to_weather();
-        let clouds_changed=self.weather.as_ref().is_none_or(|w|w.clouds.0.trim()!=to.clouds.0.trim());
-        self.args.weather=Some(spec.clone()); self.weather_blend=None; self.weather_cycle=None; self.wetness=custom.road_wetness;
+        let clouds_changed=self.session.weather.as_ref().is_none_or(|w|w.clouds.0.trim()!=to.clouds.0.trim());
+        self.args.weather=Some(spec.clone()); self.session.weather_blend=None; self.session.weather_cycle=None; self.session.wetness=custom.road_wetness;
         crate::scene::SNOW_WEATHER.store(to.snow,std::sync::atomic::Ordering::Relaxed);
         omsi_sim::host::set_ambient_weather(to.temp.0,to.temp.1);
-        self.weather=Some(to);
+        self.session.weather=Some(to);
         if clouds_changed{
             if let (Some(r),Some(scene))=(self.renderer.as_ref(),self.scene.as_mut()){
-                crate::weather_setup::setup_sky(&self.args,r,scene,self.envir.as_ref(),self.weather.as_ref());
+                crate::weather_setup::setup_sky(&self.args,r,scene,self.session.envir.as_ref(),self.session.weather.as_ref());
             }
         }
         self.follow_date();
@@ -78,13 +78,13 @@ impl App {
             self.service_msg = Some(("The weather cannot be changed while the METAR sync is on".into(), 3.0));
             return;
         }
-        self.metar_rx = None;
-        self.metar_once = false;
-        let from = self.weather.clone().unwrap_or_default();
+        self.session.metar_rx = None;
+        self.session.metar_once = false;
+        let from = self.session.weather.clone().unwrap_or_default();
         self.args.weather = file.clone();
         let to = load_weather(&self.args);
         let name = to.name.clone();
-        self.weather_blend = Some(crate::weather_cycle::Blend::new(from, to, secs));
+        self.session.weather_blend = Some(crate::weather_cycle::Blend::new(from, to, secs));
         if share {
             // (a host: the others take it up with its next clock message)
             if let (Some(l), Some(f)) = (self.net.lan.as_mut(), file.as_ref()) {
@@ -98,41 +98,41 @@ impl App {
     /// The weather this frame: a change coming in, and the cycle's next one (`secs` of the
     /// day went by; in LAN play only the host's cycle runs, the others follow it).
     pub(crate) fn tick_weather(&mut self, secs: f32) {
-        if let Some(b) = self.weather_blend.as_mut() {
+        if let Some(b) = self.session.weather_blend.as_mut() {
             let (w, clouds_changed, done) = b.step(secs);
-            self.weather = Some(w);
+            self.session.weather = Some(w);
             if done {
-                self.weather_blend = None;
+                self.session.weather_blend = None;
             }
             if clouds_changed {
                 if let (Some(r), Some(scene)) = (self.renderer.as_ref(), self.scene.as_mut()) {
-                    crate::weather_setup::setup_sky(&self.args, r, scene, self.envir.as_ref(), self.weather.as_ref());
+                    crate::weather_setup::setup_sky(&self.args, r, scene, self.session.envir.as_ref(), self.session.weather.as_ref());
                 }
             }
         }
         // the physical model goes on with the clock (unless a change is coming in)
-        if self.weather_blend.is_none() {
+        if self.session.weather_blend.is_none() {
             if let Some(w) = crate::weather_model::refresh(&self.clock) {
-                let kind_changed = self.weather.as_ref().is_none_or(|old| old.clouds.0 != w.clouds.0);
-                self.weather = Some(w);
+                let kind_changed = self.session.weather.as_ref().is_none_or(|old| old.clouds.0 != w.clouds.0);
+                self.session.weather = Some(w);
                 if kind_changed {
                     if let (Some(r), Some(scene)) = (self.renderer.as_ref(), self.scene.as_mut()) {
-                        crate::weather_setup::setup_sky(&self.args, r, scene, self.envir.as_ref(), self.weather.as_ref());
+                        crate::weather_setup::setup_sky(&self.args, r, scene, self.session.envir.as_ref(), self.session.weather.as_ref());
                     }
                 }
             }
         }
-        if let Some(w) = self.weather.as_ref() {
-            crate::weather_setup::cloud_drift_step(&mut self.cloud_drift, w, secs as f64);
+        if let Some(w) = self.session.weather.as_ref() {
+            crate::weather_setup::cloud_drift_step(&mut self.session.cloud_drift, w, secs as f64);
         }
         let follows = self.net.lan.as_ref().is_some_and(|l| l.role == omsi_net::Role::Client);
-        if follows || self.weather_blend.is_some() {
+        if follows || self.session.weather_blend.is_some() {
             return;
         }
         if self.metar_locked() {
             return;
         }
-        let Some(c) = self.weather_cycle.as_mut() else { return };
+        let Some(c) = self.session.weather_cycle.as_mut() else { return };
         c.next_in -= secs as f64;
         if c.next_in > 0.0 {
             return;
@@ -140,7 +140,7 @@ impl App {
         c.next_in = c.interval();
         let r = c.rand();
         let all = crate::weather_cycle::installed();
-        let now = self.weather.clone().unwrap_or_default();
+        let now = self.session.weather.clone().unwrap_or_default();
         let now_file = self.args.weather.clone().unwrap_or_default();
         if let Some(next) = crate::weather_cycle::pick(&all, &now, &now_file, self.clock.day_month().1, r) {
             self.change_weather(Some(next), true, 240.0);
@@ -172,10 +172,10 @@ impl App {
             return;
         }
         let icao=self.metar_station();
-        self.metar_rx=None;
-        self.metar_once=true;
+        self.session.metar_rx=None;
+        self.session.metar_once=true;
         let (tx,rx)=std::sync::mpsc::channel();
-        self.metar_rx=Some(rx);
+        self.session.metar_rx=Some(rx);
         std::thread::spawn(move||{let _=tx.send(crate::weather_setup::try_metar(&icao));});
         self.service_msg=Some((format!("Weather: loading METAR for {}",self.metar_station()),4.0));
     }
@@ -186,9 +186,9 @@ impl App {
             self.load_metar_once();
             return;
         }
-        self.metar_rx=None;
-        self.metar_once=false;
-        self.metar_next=0.0;
+        self.session.metar_rx=None;
+        self.session.metar_once=false;
+        self.session.metar_next=0.0;
         self.service_msg=Some((format!("Weather: refreshing METAR for {}",self.metar_station()),4.0));
     }
 
@@ -198,9 +198,9 @@ impl App {
             self.service_msg=Some(("Turn METAR sync off before editing its current weather".into(),3.0));
             return;
         }
-        let Some(w)=self.weather.as_ref() else{return};
+        let Some(w)=self.session.weather.as_ref() else{return};
         let brightness=crate::weather_setup::custom_weather(self.args.weather.as_deref()).map(|c|c.brightness).unwrap_or(1.0);
-        let c=crate::weather_setup::CustomWeather::from_weather(w,brightness,self.wetness);
+        let c=crate::weather_setup::CustomWeather::from_weather(w,brightness,self.session.wetness);
         self.set_custom_weather(c);
     }
 
@@ -208,12 +208,12 @@ impl App {
     /// every ten minutes) and the weather goes over to it; `dt` is real seconds.
     pub(crate) fn tick_metar(&mut self, dt: f32) {
         self.share_start_metar();
-        if let Some(rx)=self.metar_rx.as_ref(){
+        if let Some(rx)=self.session.metar_rx.as_ref(){
             match rx.try_recv(){
                 Ok(report)=>{
-                    let once=self.metar_once;
-                    self.metar_rx=None;
-                    self.metar_once=false;
+                    let once=self.session.metar_once;
+                    self.session.metar_rx=None;
+                    self.session.metar_once=false;
                     match report{
                         Some(w)=>self.apply_metar(w),
                         None=>self.service_msg=Some(("Weather: no METAR report could be loaded".into(),4.0)),
@@ -222,27 +222,27 @@ impl App {
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty)=>return,
                 Err(std::sync::mpsc::TryRecvError::Disconnected)=>{
-                    let once=self.metar_once;
-                    self.metar_rx=None;
-                    self.metar_once=false;
+                    let once=self.session.metar_once;
+                    self.session.metar_rx=None;
+                    self.session.metar_once=false;
                     if once{self.service_msg=Some(("Weather: METAR request failed".into(),4.0));return;}
                 }
             }
         }
         if !self.metar_locked() {
-            self.metar_next = 0.0;
+            self.session.metar_next = 0.0;
             return;
         }
-        self.metar_next -= dt as f64;
-        if self.metar_next > 0.0 {
+        self.session.metar_next -= dt as f64;
+        if self.session.metar_next > 0.0 {
             return;
         }
         // (a failed download is tried again in a minute)
-        self.metar_next = 60.0;
+        self.session.metar_next = 60.0;
         let icao = self.metar_station();
         let (tx, rx) = std::sync::mpsc::channel();
-        self.metar_rx = Some(rx);
-        self.metar_once = false;
+        self.session.metar_rx = Some(rx);
+        self.session.metar_once = false;
         std::thread::spawn(move || {
             let _ = tx.send(crate::weather_setup::try_metar(&icao));
         });
@@ -255,24 +255,24 @@ impl App {
         if !l.weather().to_ascii_lowercase().starts_with("metar:") {
             return;
         }
-        if let Some(wire) = self.weather.as_ref().and_then(crate::weather_setup::report_wire) {
+        if let Some(wire) = self.session.weather.as_ref().and_then(crate::weather_setup::report_wire) {
             l.set_weather(&wire);
         }
     }
 
     /// Go over to the weather of a METAR report that came in.
     fn apply_metar(&mut self, to: omsi_content::weather::Weather) {
-        self.metar_next = 600.0;
+        self.session.metar_next = 600.0;
         let file = to.path.to_string_lossy().to_string();
         // (what the players are told: the report's values, which they make the weather from)
         let wire = crate::weather_setup::report_wire(&to).unwrap_or_else(|| file.clone());
         let name = to.name.clone();
-        let from = self.weather.clone().unwrap_or_default();
+        let from = self.session.weather.clone().unwrap_or_default();
         crate::scene::SNOW_WEATHER.store(to.snow, std::sync::atomic::Ordering::Relaxed);
         omsi_sim::host::set_ambient_weather(to.temp.0, to.temp.1);
         self.args.weather = Some(file.clone());
-        self.weather_cycle = None;
-        self.weather_blend = Some(crate::weather_cycle::Blend::new(from, to, 60.0));
+        self.session.weather_cycle = None;
+        self.session.weather_blend = Some(crate::weather_cycle::Blend::new(from, to, 60.0));
         if let Some(l) = self.net.lan.as_mut().filter(|l| l.role == omsi_net::Role::Host) {
             l.set_weather(&wire);
         }

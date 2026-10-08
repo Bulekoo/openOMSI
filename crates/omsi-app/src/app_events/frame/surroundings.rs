@@ -15,17 +15,17 @@ impl App {
             self.clock.advance(dt * speed as f32);
             // (the real-time sync: the device's date and time, whatever the speed was)
             self.sync_real_time();
-            if let Some(t) = self.traffic.as_mut() {
+            if let Some(t) = self.session.traffic.as_mut() {
                 t.time_scale = speed;
             }
             self.tick_weather(dt * speed as f32);
-        } else if self.weather_blend.is_some() {
+        } else if self.session.weather_blend.is_some() {
             // (a preset picked in the paused menu: the change goes over in real time)
             self.tick_weather(dt);
         }
-        let daylight = omsi_sim::Daylight::compute(&self.clock, self.envir.as_ref());
-        let lamps = self.lamps_on != Some(daylight.lamps_on);
-        self.lamps_on = Some(daylight.lamps_on);
+        let daylight = omsi_sim::Daylight::compute(&self.clock, self.session.envir.as_ref());
+        let lamps = self.session.lamps_on != Some(daylight.lamps_on);
+        self.session.lamps_on = Some(daylight.lamps_on);
         // the lit windows of the houses by their [NightMapMode] timetable (once a
         // second: tiles come and go, and the hours pass)
         let night_modes = self.perf.total_frames % 60 == 0;
@@ -40,7 +40,7 @@ impl App {
             self.follow_date();
         }
         if let Some(p) = self.player.as_mut() {
-            steps::tell_surroundings(p, self.world.as_deref(), &daylight, self.weather.as_ref(), self.wetness);
+            steps::tell_surroundings(p, self.world.as_deref(), &daylight, self.session.weather.as_ref(), self.session.wetness);
         }
         daylight
     }
@@ -50,7 +50,7 @@ impl App {
     pub(super) fn frame_lights(&mut self, dt: f32, daylight: omsi_sim::Daylight) {
         let __t = Instant::now();
         // the lamps' cones in fog and falling rain or snow, and new light pictures
-        if let Some(wt) = &self.weather {
+        if let Some(wt) = &self.session.weather {
             lights::set_cone_strength(wt.fog.0, precip_of(wt).1, daylight.night);
         }
         if let Some(r) = self.renderer.as_mut() {
@@ -67,7 +67,7 @@ impl App {
             self.scene.as_mut(),
             self.camera.as_ref(),
         ) {
-            let vehicles = steps::light_vehicles(self.player.as_ref(), self.traffic.as_ref(), &self.net.remotes);
+            let vehicles = steps::light_vehicles(self.player.as_ref(), self.session.traffic.as_ref(), &self.net.remotes);
             let __tc = Instant::now();
             lights::collect(w, scene, &daylight, cam.position, &vehicles);
             *self.perf.profile.entry("lights.collect").or_default() += __tc.elapsed().as_secs_f64();
@@ -85,9 +85,9 @@ impl App {
                     });
                 }
             }
-            if let Some(wt) = &self.weather {
+            if let Some(wt) = &self.session.weather {
                 let (kind, rate) = precip_of(wt);
-                self.rain.set(kind, rate);
+                self.session.rain.set(kind, rate);
                 // [wind] direction (deg) speed (m/s)
                 let wind = Vec3::new(
                     wt.wind.0.to_radians().sin() * wt.wind.1,
@@ -101,46 +101,46 @@ impl App {
                 let boxed = crate::rain::vehicle_boxes;
                 let mut buses: Vec<(glam::DVec3, f64, [f32; 6])> = self.player.as_ref().map(|p| boxed(&p.vehicle)).unwrap_or_default();
                 buses.extend(self.net.remotes.remotes.values().flat_map(|rv| boxed(rv.vehicle())));
-                if let Some(t) = self.traffic.as_ref() {
+                if let Some(t) = self.session.traffic.as_ref() {
                     buses.extend(t.cars.iter().filter(|c| c.is_bus() && (c.vehicle.position - cam.position).length() < 40.0).flat_map(|c| boxed(&c.vehicle)));
                 }
                 let __tr = Instant::now();
-                self.rain.tick(if self.paused { 0.0 } else { dt }, cam.position, wind, scene, &buses);
+                self.session.rain.tick(if self.paused { 0.0 } else { dt }, cam.position, wind, scene, &buses);
                 // the player's bus's cabin air and the condensation on its glass
                 if let Some(p) = self.player.as_ref() {
-                    steps::cabin_air_step(&mut self.cabin_air, if self.paused { 0.0 } else { dt }, p, wt, self.humans.as_ref());
+                    steps::cabin_air_step(&mut self.session.cabin_air, if self.paused { 0.0 } else { dt }, p, wt, self.session.humans.as_ref());
                 }
                 *self.perf.profile.entry("lights.rain").or_default() += __tr.elapsed().as_secs_f64();
                 // what every vehicle's tyres throw up from the water on the road: the
                 // puddles and the wet asphalt the renderer draws (the same wetness:
                 // none under snow, OMSI_WETNESS as the picture takes it)
-                let wetness = puddles::road_wetness(self.wetness, wt.snow);
-                if (wetness > 0.0 || !self.spray.is_empty()) && !omsi_cfg::flags::OMSI_NO_SPRAY.is_set() {
+                let wetness = puddles::road_wetness(self.session.wetness, wt.snow);
+                if (wetness > 0.0 || !self.session.spray.is_empty()) && !omsi_cfg::flags::OMSI_NO_SPRAY.is_set() {
                     let __ts = Instant::now();
                     steps::throw_spray(
-                        &mut self.spray,
+                        &mut self.session.spray,
                         if self.paused { 0.0 } else { dt },
                         self.player.as_ref(),
-                        self.traffic.as_ref(),
+                        self.session.traffic.as_ref(),
                         &self.net.remotes,
                         cam.position,
                         spray_wind,
                         w,
                         wetness,
                     );
-                    self.spray.sprites(cam.position, &mut scene.smoke);
+                    self.session.spray.sprites(cam.position, &mut scene.smoke);
                     *self.perf.profile.entry("lights.spray").or_default() += __ts.elapsed().as_secs_f64();
                 }
                 // the rain heard in the street and the footsteps on the pavement
                 if let (Some(amb), Some(a)) = (self.sound.ambience.as_mut(), self.sound.audio.as_ref())
                 {
                     let steps = self
-                        .humans
+                        .session.humans
                         .as_mut()
                         .map(|h| h.take_footfalls())
                         .unwrap_or_default();
                     // what the passengers say, where they stand
-                    for line in self.humans.as_mut().map(|h| h.take_voice_lines()).unwrap_or_default() {
+                    for line in self.session.humans.as_mut().map(|h| h.take_voice_lines()).unwrap_or_default() {
                         if let Some(clip) = a.load_clip(&line.path) {
                             a.play(
                                 clip,
@@ -164,7 +164,7 @@ impl App {
                         dt,
                         (kind, rate),
                         inside,
-                        street_condition(wt, self.wetness),
+                        street_condition(wt, self.session.wetness),
                         cam.position,
                         &steps,
                     );
@@ -175,7 +175,7 @@ impl App {
                         let bucket = (self.clock.time / every as f64) as u32;
                         if LAST.swap(bucket, std::sync::atomic::Ordering::Relaxed) != bucket
                         {
-                            log::info!("sound: environment - {} (precip {kind} {rate:.2}, StreetCond {:.2}, {} voices)", amb.last, street_condition(wt, self.wetness), a.voice_count());
+                            log::info!("sound: environment - {} (precip {kind} {rate:.2}, StreetCond {:.2}, {} voices)", amb.last, street_condition(wt, self.session.wetness), a.voice_count());
                         }
                     }
                 }
@@ -193,7 +193,7 @@ impl App {
             self.scene.as_mut(),
             self.camera.as_ref(),
         ) {
-            let traffic = self.traffic.as_ref();
+            let traffic = self.session.traffic.as_ref();
             let phase = |c: usize, li: usize| {
                 traffic.map(|t| t.light_vars(c, li)).unwrap_or((omsi_sim::traffic::UNLINKED_PHASE as f32, 0.0))
             };
@@ -202,10 +202,10 @@ impl App {
                 w.sync_html_departures(&mut p.vehicle.host);
             }
             steps::departure_boards(
-                self.schedule.as_mut(),
+                self.session.schedule.as_mut(),
                 w,
                 traffic,
-                self.duty.as_ref(),
+                self.session.duty.as_ref(),
                 self.player
                     .as_ref()
                     .and_then(|p| p.vehicle.host.hof.as_deref()),

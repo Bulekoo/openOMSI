@@ -355,7 +355,7 @@ impl App {
             // Ctrl+S, OMSI's quicksave, stays a [game] key)
             let flying = m == 0
                 && flies_free_camera(code)
-                && (self.view == "free" || (self.player.is_none() && self.on_foot.is_none()));
+                && (self.view == "free" || (self.player.is_none() && self.session.on_foot.is_none()));
             // (Ctrl+Alt+arrows turn the mirror looked at: not Ctrl+arrow's gear or camera)
             let mirror_aim = ctrl && alt && matches!(code, KeyCode::ArrowLeft | KeyCode::ArrowRight | KeyCode::ArrowUp | KeyCode::ArrowDown);
             if let Some(scan) = keys::dik_code(code).filter(|_| !ours && !flying && !mirror_aim) {
@@ -421,7 +421,7 @@ impl App {
 
                 // the duty's next stop given up (#1015), as the game menu's line ("H" for
                 // Haltestelle: Ctrl+Shift+N is the VR navigator's)
-                KeyCode::KeyH if ctrl && shift_now && !alt && self.duty.is_some() && !self.chord_bound(code, shift_now, ctrl, alt) => {
+                KeyCode::KeyH if ctrl && shift_now && !alt && self.session.duty.is_some() && !self.chord_bound(code, shift_now, ctrl, alt) => {
                     self.skip_next_stop();
                     return true;
                 }
@@ -532,7 +532,7 @@ impl App {
                         if let Some(p) = self.player.as_mut() {
                             let msg = p.start_up();
                             self.service_msg = Some((msg, 6.0));
-                            if let Some(d) = self.duty.as_ref() {
+                            if let Some(d) = self.session.duty.as_ref() {
                                 let (trip, stop) = d.trip_for_ibis();
                                 p.set_duty_destination(trip, stop);
                             }
@@ -592,9 +592,9 @@ impl App {
                 }
                 KeyCode::F9 => {
                     // write the run into the driver's personnel file
-                    let line = self.career.summary();
-                    if self.career.path.is_some() {
-                        if let Err(e) = self.career.save() {
+                    let line = self.session.career.summary();
+                    if self.session.career.path.is_some() {
+                        if let Err(e) = self.session.career.save() {
                             log::warn!("writing the personnel file: {e}");
                         }
                     } else {
@@ -842,7 +842,7 @@ impl App {
                             self.on_left(false);
                         }
                     }
-                    log::info!("input script: click: placing {:?}, placed at {:?}", self.menus.placing.as_ref().map(|p| (p.at, p.blocked)), self.placed.last().map(|q| (q.vehicle.position, q.vehicle.heading)));
+                    log::info!("input script: click: placing {:?}, placed at {:?}", self.menus.placing.as_ref().map(|p| (p.at, p.blocked)), self.session.placed.last().map(|q| (q.vehicle.position, q.vehicle.heading)));
                 }
                 // `both down|up`: both mouse buttons held (OMSI's mouse zoom) or let go
                 "both" => {
@@ -923,7 +923,7 @@ impl App {
                         let d = c.position - p.vehicle.position;
                         let h = p.vehicle.heading.to_radians();
                         let (fwd, right) = (glam::DVec2::new(h.sin(), h.cos()), glam::DVec2::new(h.cos(), -h.sin()));
-                        log::info!("input script: view {} camera in the bus ({:.2}, {:.2}, {:.2}), on foot {:?}", self.view, d.truncate().dot(right), d.truncate().dot(fwd), d.z, self.on_foot.as_ref().map(|f| f.pos));
+                        log::info!("input script: view {} camera in the bus ({:.2}, {:.2}, {:.2}), on foot {:?}", self.view, d.truncate().dot(right), d.truncate().dot(fwd), d.z, self.session.on_foot.as_ref().map(|f| f.pos));
                     }
                 }
                 // `log mouse`: the mouse steering's state
@@ -976,8 +976,8 @@ impl App {
                             }
                         }
                     }
-                    let riders = self.humans.as_ref().map(|h| (h.people_in(crate::humans::BusId::Player), self.placed.iter().map(|q| h.people_in(crate::humans::BusId::Ai(crate::humans::placed_bus_id(q.uid)))).collect::<Vec<_>>()));
-                    log::info!("input script: menu {arg}: player {:?}, on foot {:?}, placed {}, people in the bus / the placed ones {:?}", self.player.as_ref().map(|p| p.vehicle.position), self.on_foot.as_ref().map(|f| f.pos), self.placed.len(), riders);
+                    let riders = self.session.humans.as_ref().map(|h| (h.people_in(crate::humans::BusId::Player), self.session.placed.iter().map(|q| h.people_in(crate::humans::BusId::Ai(crate::humans::placed_bus_id(q.uid)))).collect::<Vec<_>>()));
+                    log::info!("input script: menu {arg}: player {:?}, on foot {:?}, placed {}, people in the bus / the placed ones {:?}", self.player.as_ref().map(|p| p.vehicle.position), self.session.on_foot.as_ref().map(|f| f.pos), self.session.placed.len(), riders);
                 }
                 // `shot <file>`: the window's own view into a PNG, drawn from the scene the
                 // window is showing (the only way to see what the window path renders)

@@ -18,39 +18,19 @@ pub(crate) struct App {
     pub(crate) scene: Option<Scene>,
     pub(crate) camera: Option<Camera>,
     pub(crate) player: Option<Player>,
-    /// A situation's further vehicles and those placed from the game menu, standing.
-    pub(crate) placed: Vec<Player>,
+    /// The simulated world around the player's bus (see `SessionState`).
+    pub(crate) session: SessionState,
     /// The menus, lists, editor and on-screen panels (see `MenuState`).
     pub(crate) menus: MenuState,
     pub(crate) world: Option<Arc<World>>,
-    /// The sim date and the season's texture folder the loaded world shows (see
-    /// `follow_date`).
-    pub(crate) world_day: Option<(i32, Option<String>)>,
     /// Where the camera looks from and to, per view (see `ViewState`).
     pub(crate) cam: ViewState,
-    pub(crate) traffic: Option<traffic::Traffic>,
-    pub(crate) schedule: Option<schedule::Schedule>,
-    pub(crate) humans: Option<humans::Humans>,
-    pub(crate) duty: Option<schedule::PlayerDuty>,
-    /// The duty was told the places of the stops beyond the loaded tiles.
-    pub(crate) duty_places: bool,
     /// Chat, mouse-over names and name tags (Roboto).
     pub(crate) ui: Option<ui::Ui>,
     /// Frame timing, profiling and the test hooks (see `PerfState`).
     pub(crate) perf: PerfState,
-    pub(crate) rain: rain::Rain,
-    /// The player's bus's cabin air and the condensation on its glass.
-    pub(crate) cabin_air: crate::condensation::CabinAir,
-    /// What the tyres throw up from the water on the roads (see `puddles`).
-    pub(crate) spray: puddles::Spray,
-    pub(crate) lamps_on: Option<bool>,
-    pub(crate) populate_t: f32,
-    pub(crate) humans_populate_t: f32,
     /// What the game sounds out: the engine, the world around, the radio, the voice chat.
     pub(crate) sound: SoundState,
-    pub(crate) first_populate: bool,
-    pub(crate) envir: Option<omsi_content::Envir>,
-    pub(crate) weather: Option<omsi_content::weather::Weather>,
     pub(crate) clock: omsi_sim::SimClock,
     pub(crate) started: Instant,
     pub(crate) view: String,
@@ -62,47 +42,10 @@ pub(crate) struct App {
     pub(crate) paused: bool,
     /// Plugins and the services outside the game (see `Integrations`).
     pub(crate) integrations: Integrations,
-    /// How far the clock was set since the timetable was last put out again (s; see
-    /// `shift_clock`).
-    pub(crate) clock_jump: f64,
-    /// The bus whose seat (`settings::bus_seats`) `settings.seat` holds now.
-    pub(crate) seat_bus: String,
-    /// The player out of the seat, walking about (`on_foot`).
-    pub(crate) on_foot: Option<crate::on_foot::OnFoot>,
     /// The multiplayer session and the other players (see `NetState`).
     pub(crate) net: NetState,
-    /// Where the bus last stood on the ground (and facing where): it is put back there when
-    /// it falls through the world (see `admin::guard_fall`).
-    pub(crate) safe_pose: Option<(glam::DVec3, f64)>,
-    /// Seconds since `safe_pose` was taken.
-    pub(crate) safe_age: f32,
-    /// A time of day the bus's script wrote (`(S.S.Time)`), for the clock at the next frame.
-    pub(crate) pending_time: Option<f64>,
-    /// The play time (`clock.run_time`) the last situation was saved at.
-    pub(crate) autosave_t: f64,
     /// Last workshop / fuel pump / wash message, and how long it still shows.
     pub(crate) service_msg: Option<(String, f32)>,
-    /// The fuel pump or the bus wash running (`run_service`): which, and the seconds the
-    /// tank or the dirt has not changed (it ends after `SERVICE_SETTLE`).
-    pub(crate) pumping: Option<(&'static str, f32)>,
-    /// The driver's personnel file and this session's statistics.
-    pub(crate) career: career::Career,
-    /// The duty's stops with their times as driven, kept in a file (`journey`).
-    pub(crate) journey: Option<crate::journey::Journey>,
-    /// How wet the roads are (0..1), built up by rain and dried by the sun.
-    pub(crate) wetness: f32,
-    /// How far the cloud cover has drifted with the wind (fractions of its tiling), summed
-    /// up frame by frame so that a change of wind does not throw the sky around.
-    pub(crate) cloud_drift: [f32; 2],
-    /// A change of weather coming in (see `weather_cycle`).
-    pub(crate) weather_blend: Option<crate::weather_cycle::Blend>,
-    /// The weather cycle, when the weather chosen is `cycle`.
-    pub(crate) weather_cycle: Option<crate::weather_cycle::Cycle>,
-    /// The METAR sync's download under way (see `tick_metar`), and the seconds to the next one.
-    pub(crate) metar_rx: Option<std::sync::mpsc::Receiver<Option<omsi_content::weather::Weather>>>,
-    /// The current METAR receiver is a single manual fetch rather than the continuous sync.
-    pub(crate) metar_once: bool,
-    pub(crate) metar_next: f64,
     pub(crate) settings: settings::Settings,
     pub(crate) exiting: bool,
 }
@@ -295,7 +238,7 @@ impl App {
         }
         let renderer = self.renderer.take().expect("renderer");
         let mut scene = renderer.new_scene();
-        self.envir = omsi_content::Envir::load(&self.args.root.join("envir.cfg")).ok();
+        self.session.envir = omsi_content::Envir::load(&self.args.root.join("envir.cfg")).ok();
         // the weather cycle: a first weather that suits the month, the others after it
         if crate::weather_cycle::is_cycle(self.args.weather.as_deref()) {
             let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(7);
@@ -306,14 +249,14 @@ impl App {
             let r = c.rand();
             self.args.weather = crate::weather_cycle::pick(&all, &clear, "", month, r);
             log::info!("weather cycle: starting with {:?}", self.args.weather);
-            self.weather_cycle = Some(c);
+            self.session.weather_cycle = Some(c);
         }
-        self.weather = Some(load_weather(&self.args));
+        self.session.weather = Some(load_weather(&self.args));
         // the roads start in the state this weather has already left them in, as they do
         // offscreen: a session begun in the rain used to open on a bone-dry street
-        self.wetness = self.weather.as_ref().map(initial_wetness).unwrap_or(0.0);
+        self.session.wetness = self.session.weather.as_ref().map(initial_wetness).unwrap_or(0.0);
         self.clock = start_clock(&self.args);
-        setup_sky(&self.args, &renderer, &mut scene, self.envir.as_ref(), self.weather.as_ref());
+        setup_sky(&self.args, &renderer, &mut scene, self.session.envir.as_ref(), self.session.weather.as_ref());
         // the window streams the tiles around the camera unless a fixed area was asked for
         if !self.args.all && self.args.radius.is_none() {
             match open_world(&self.args) {
@@ -446,7 +389,7 @@ impl App {
                     match spawn_player(&one, &w, &renderer, &mut scene) {
                         Ok(Some(q)) => {
                             log::info!("situation: {} placed at {}", o.bus, o.spawn);
-                            self.placed.push(q);
+                            self.session.placed.push(q);
                         }
                         Ok(None) => {}
                         Err(e) => log::warn!("situation vehicle {}: {e:#}", o.bus),
@@ -465,7 +408,7 @@ impl App {
                     n.show_ai = self.settings.nav_ai;
                 }
                 if let Some(d) = self.args.driver.as_deref() {
-                    self.career = career::Career::load(&self.args.root, d);
+                    self.session.career = career::Career::load(&self.args.root, d);
                 }
                 // (and a player who joins another's game sees the host's people)
                 if self.args.passengers || self.args.lan_join.is_some() {
@@ -492,7 +435,7 @@ impl App {
                             h.seed_riders(self.args.riders, &p.vehicle, &w, &renderer, &mut scene);
                         }
                     }
-                    self.humans = Some(h);
+                    self.session.humans = Some(h);
                 }
                 // (a player who joins draws the host's traffic in it, whatever their own count
                 // says: the host's cars had nowhere to go without it)
@@ -511,7 +454,7 @@ impl App {
                                 t.precache_random(&w, &renderer, &mut scene);
                             }
                             t.day_time = parse_time(&self.args.time);
-                            self.traffic = Some(t);
+                            self.session.traffic = Some(t);
                         }
                         Err(e) => log::error!("traffic: {e:#}"),
                     }
@@ -522,11 +465,11 @@ impl App {
                             &w,
                             &renderer,
                             &mut scene,
-                            self.traffic.as_mut(),
+                            self.session.traffic.as_mut(),
                             parse_time(&self.args.time),
                         );
                         if let (Some(line), Some(p)) = (&self.args.line, self.player.as_mut()) {
-                            self.duty = match sch.player_duty(
+                            self.session.duty = match sch.player_duty(
                                 &w,
                                 line,
                                 self.args.tour.as_deref().unwrap_or(""),
@@ -557,13 +500,13 @@ impl App {
                             // the start-up began, and the displays stayed dark)
                             if let (true, Some(d)) = (
                                 self.args.autostart && !self.args.is_resuming(),
-                                self.duty.as_mut(),
+                                self.session.duty.as_mut(),
                             ) {
                                 d.update(&mut p.vehicle, parse_time(&self.args.time));
                                 let (trip, stop) = d.trip_for_ibis();
                                 p.set_duty_destination(trip, stop);
                             }
-                            if let Some(d) = self.duty.as_ref() {
+                            if let Some(d) = self.session.duty.as_ref() {
                                 let mut fonts = w.fonts.lock();
                                 if let Err(e) = crate::schedule_paper::update_vehicle(
                                     &mut p.vehicle,
@@ -574,10 +517,10 @@ impl App {
                                 }
                             }
                         }
-                        self.schedule = Some(sch);
+                        self.session.schedule = Some(sch);
                     }
                 }
-                if self.traffic.is_none() {
+                if self.session.traffic.is_none() {
                     if let Some(n) = self.menus.navigator.as_mut() {
                         n.add_lanes(std::mem::take(&mut *w.lanes.lock()));
                     }
@@ -589,7 +532,7 @@ impl App {
                         p,
                         &self.args,
                         &w,
-                        self.traffic.as_ref().map(|t| &t.net),
+                        self.session.traffic.as_ref().map(|t| &t.net),
                         // (still loading: a moment's wait for the host's list puts the bus
                         // where it is free at once - without it the bus stood inside another
                         // player's for the first frames and then jumped out of it)
@@ -777,7 +720,7 @@ impl App {
             p.vehicle.collision = self.settings.collision_objects.then(|| w.collision.lock().clone());
             p.vehicle.wheel_walls = self.settings.collision_objects;
         }
-        match self.traffic.as_mut() {
+        match self.session.traffic.as_mut() {
             Some(t) => {
                 t.add_tiles(w);
             }
@@ -789,7 +732,7 @@ impl App {
                 }
             }
         }
-        if let Some(on) = self.lamps_on {
+        if let Some(on) = self.session.lamps_on {
             w.set_lamps(r, scene, on);
         }
     }

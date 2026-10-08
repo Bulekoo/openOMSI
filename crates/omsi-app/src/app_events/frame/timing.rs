@@ -18,13 +18,13 @@ impl App {
         #[cfg(windows)]
         self.poll_vr_cursor_position();
         // OMSI's autosave of the last situation: every five minutes of play
-        if !self.paused && self.player.is_some() && self.clock.run_time - self.autosave_t >= 300.0 {
-            self.autosave_t = self.clock.run_time;
+        if !self.paused && self.player.is_some() && self.clock.run_time - self.session.autosave_t >= 300.0 {
+            self.session.autosave_t = self.clock.run_time;
             self.save_last_situation();
         }
         // the time of day a script set last frame (the nearer way round the clock)
         // (not with the real-time sync on: the clock stays the device's)
-        if let Some(t) = self.pending_time.take().filter(|_| !self.real_time_locked()) {
+        if let Some(t) = self.session.pending_time.take().filter(|_| !self.real_time_locked()) {
             let d = (t - self.clock.time + 43_200.0).rem_euclid(86_400.0) - 43_200.0;
             self.shift_clock(d);
         }

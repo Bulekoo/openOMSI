@@ -19,7 +19,7 @@ impl App {
             self.service_msg = Some(("This vehicle has no coupling at its back".into(), 4.0));
             return;
         };
-        let found = self.placed.iter().position(|q| {
+        let found = self.session.placed.iter().position(|q| {
             let Some(c) = q.vehicle.ty.def.coupling_front.as_ref() else { return false };
             let front = q.vehicle.world_transform().transform_point3(glam::Vec3::from(c.pos));
             let dh = ((q.vehicle.heading - rear_heading + 540.0).rem_euclid(360.0) - 180.0).abs();
@@ -29,7 +29,7 @@ impl App {
             self.service_msg = Some(("Nothing to couple: back up to a trailer's coupling (within 2.5 m, in line)".into(), 4.0));
             return;
         };
-        let q = self.placed.remove(k);
+        let q = self.session.placed.remove(k);
         let ty = q.vehicle.ty.clone();
         if let (Some(a), Some(mut ss)) = (self.sound.audio.as_ref(), q.sounds) {
             ss.stop_all(a);
@@ -73,7 +73,7 @@ impl App {
         };
         match spawn_player(&one, &w, r, scene) {
             Ok(Some(q)) => {
-                self.placed.push(q);
+                self.session.placed.push(q);
                 self.service_msg = Some(("Uncoupled".into(), 3.0));
             }
             Ok(None) => {}

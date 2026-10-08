@@ -46,7 +46,7 @@ impl App {
     /// menu's "Skip the next stop", Ctrl+Shift+H): the IBIS moves on with it, as it does
     /// when a bus page sets the next stop.
     pub(crate) fn skip_next_stop(&mut self) {
-        let Some(d) = self.duty.as_mut() else { return };
+        let Some(d) = self.session.duty.as_mut() else { return };
         let Some(name) = d.skip_next() else {
             self.service_msg = Some(("The trip is over: no stop to skip".into(), 3.0));
             return;

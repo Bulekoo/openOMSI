@@ -6,8 +6,8 @@ use super::*;
 impl App {
     /// The lighting the frame is drawn with.
     pub(super) fn frame_lighting(&mut self, dt: f32, daylight: omsi_sim::Daylight) -> omsi_render::Lighting {
-        if let Some(w) = self.weather.as_ref() {
-            self.wetness = road_wetness(precip_of(w).1, dt as f64, self.wetness);
+        if let Some(w) = self.session.weather.as_ref() {
+            self.session.wetness = road_wetness(precip_of(w).1, dt as f64, self.session.wetness);
         }
         let inside = match self.net.inside_remote.and_then(|id| self.net.remotes.remotes.get(&id)) {
             // (in another player's bus: its box is the one the camera is in)
@@ -16,13 +16,13 @@ impl App {
         };
         steps::picture_lighting(
             &daylight,
-            self.weather.as_ref(),
-            self.cloud_drift,
-            self.wetness,
+            self.session.weather.as_ref(),
+            self.session.cloud_drift,
+            self.session.wetness,
             self.world.as_deref(),
             inside,
             self.player.as_ref().map(|p| &p.vehicle),
-            self.cabin_air.appearance(),
+            self.session.cabin_air.appearance(),
             &self.settings,
         )
     }
@@ -542,7 +542,7 @@ impl App {
                     for (k, v) in &self.perf.profile {
                         log::info!("profile {k:10}: {:.1} ms/frame", v / n * 1000.0);
                     }
-                    if let Some(h) = self.humans.as_ref() {
+                    if let Some(h) = self.session.humans.as_ref() {
                         log::info!(
                             "profile people: {} ({})",
                             h.people.len(),

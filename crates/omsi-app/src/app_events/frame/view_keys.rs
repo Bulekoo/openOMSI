@@ -222,7 +222,7 @@ impl App {
         // frame, and walking jumped about, the more so the lower the frame rate, #807)
         if let (Some(cam), true) = (
             self.camera.as_mut(),
-            self.view == "free" || (self.player.is_none() && self.on_foot.is_none()),
+            self.view == "free" || (self.player.is_none() && self.session.on_foot.is_none()),
         ) {
             let mut v = Vec3::ZERO;
             let f = cam.forward();

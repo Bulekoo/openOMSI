@@ -74,7 +74,7 @@ fn route_numbers(app: &App) -> Vec<String> {
             }
         }
     }
-    if let Some(sch) = app.schedule.as_ref() {
+    if let Some(sch) = app.session.schedule.as_ref() {
         for l in &sch.data.lines {
             let n = l.name.trim().to_string();
             if !n.is_empty() && !out.contains(&n) {
@@ -433,7 +433,7 @@ pub(crate) fn items(app: &App, kind: &ListKind) -> Vec<(String, String)> {
             return out;
         }
         ListKind::Lines => {
-            if let Some(sch) = app.schedule.as_ref() {
+            if let Some(sch) = app.session.schedule.as_ref() {
                 let mut lines: Vec<&omsi_timetable::Line> = sch.data.lines.iter().filter(|l| l.user_allowed && l.tours.iter().any(|t| tour_listed(sch, &l.name, t, app.clock.time))).collect();
                 lines.sort_by(|a, b| natural(&a.name, &b.name));
                 for l in lines {
@@ -445,8 +445,8 @@ pub(crate) fn items(app: &App, kind: &ListKind) -> Vec<(String, String)> {
             }
         }
         ListKind::Tours(line, _) => {
-            if let Some(l) = app.schedule.as_ref().and_then(|s| s.data.lines.iter().find(|l| l.name == *line)) {
-                for t in sorted_tours(l).into_iter().filter(|t| app.schedule.as_ref().is_some_and(|s| tour_listed(s, line, t, app.clock.time))) {
+            if let Some(l) = app.session.schedule.as_ref().and_then(|s| s.data.lines.iter().find(|l| l.name == *line)) {
+                for t in sorted_tours(l).into_iter().filter(|t| app.session.schedule.as_ref().is_some_and(|s| tour_listed(s, line, t, app.clock.time))) {
                     // (the tours in order of the time they start)
                     out.push((format!("{} {}", tr("Tour"), t.number.trim()), format!("tour {}\u{1}{}", line, t.number)));
                 }
@@ -454,7 +454,7 @@ pub(crate) fn items(app: &App, kind: &ListKind) -> Vec<(String, String)> {
         }
         ListKind::Drivers => {
             for name in driver_names(app) {
-                let mark = if app.career.path.as_ref().and_then(|p| p.file_stem()).is_some_and(|s| s.to_string_lossy().eq_ignore_ascii_case(&name)) { format!("  {}", tr("(now)")) } else { String::new() };
+                let mark = if app.session.career.path.as_ref().and_then(|p| p.file_stem()).is_some_and(|s| s.to_string_lossy().eq_ignore_ascii_case(&name)) { format!("  {}", tr("(now)")) } else { String::new() };
                 out.push((format!("{name}{mark}"), format!("driver {name}")));
             }
         }
@@ -859,7 +859,7 @@ pub(crate) fn run_move(app: &mut App, kind: &ListKind, action: &str, mv: Move) -
         ListKind::Tours(_, pick) => {
             if let Some((line, tour)) = arg.split_once('\u{1}') {
                 let chosen = pick.as_ref().filter(|p| p.0 == tour).map(|p| p.1).unwrap_or(0);
-                let trip = pick.as_ref().filter(|p| p.0 == tour).map(|p| p.2).unwrap_or_else(|| app.schedule.as_ref().map(|s| s.tour_trip_now(line, tour, app.clock.time)).unwrap_or(0));
+                let trip = pick.as_ref().filter(|p| p.0 == tour).map(|p| p.2).unwrap_or_else(|| app.session.schedule.as_ref().map(|s| s.tour_trip_now(line, tour, app.clock.time)).unwrap_or(0));
                 start_duty_at(app, line, tour, trip, chosen);
             }
             None
@@ -1001,7 +1001,7 @@ pub(crate) fn button(name: &str, text: &str, desc: &str, id: &str) -> (String, S
 /// the duty" dropped the duty alone, and the bus's own displays went on with the old trip -
 /// a paper sign with its line in the window, the IBIS's stop list (#1317).
 pub(crate) fn end_duty(app: &mut App) {
-    app.duty = None;
+    app.session.duty = None;
     if let Some(p) = app.player.as_mut() {
         clear_timetable(&mut p.vehicle);
     }
@@ -1122,11 +1122,11 @@ fn custom_state(app:&App)->crate::weather_setup::CustomWeather{
     if let Some(mut c)=crate::weather_setup::custom_weather(app.args.weather.as_deref()){
         // Wetness keeps evolving while driving; never restore an old serialized value just
         // because another custom field (brightness, humidity, etc.) was edited.
-        c.road_wetness=app.wetness;
+        c.road_wetness=app.session.wetness;
         return c
     }
-    match app.weather.as_ref(){
-        Some(w)=>crate::weather_setup::CustomWeather::from_weather(w,1.0,app.wetness),
+    match app.session.weather.as_ref(){
+        Some(w)=>crate::weather_setup::CustomWeather::from_weather(w,1.0,app.session.wetness),
         None=>crate::weather_setup::CustomWeather::default(),
     }
 }
@@ -1190,7 +1190,7 @@ fn option_now(app: &App, verb: &str, arg: &str) -> Option<f32> {
     let s = &app.settings;
     Some(match verb {
         "speed" => s.time_speed as f32,
-        "traffic" => app.traffic.as_ref()?.target as f32,
+        "traffic" => app.session.traffic.as_ref()?.target as f32,
         "pax" => s.pax_density,
         "volume" => s.volume,
         "led_glow" => s.led_glow as f32,
@@ -1237,17 +1237,17 @@ fn option_now(app: &App, verb: &str, arg: &str) -> Option<f32> {
         "seat_pitch" => s.seat_pitch_deg,
         "hour" => ((app.clock.time / 3600.0) as i64).rem_euclid(24) as f32,
         "minute" => (((app.clock.time / 60.0) as i64) % 60) as f32,
-        "visibility" => app.weather.as_ref()?.fog.0,
+        "visibility" => app.session.weather.as_ref()?.fog.0,
         "rain_amt" => {
-            let w = app.weather.as_ref()?;
+            let w = app.session.weather.as_ref()?;
             if w.precip.first().copied().unwrap_or(0.0) < 0.5 { 0.0 } else { (w.precip.get(1).copied().unwrap_or(0.0) / 255.0).clamp(0.0, 1.0) }
         }
-        "wet" => app.wetness,
+        "wet" => app.session.wetness,
         "brightness" => custom_state(app).brightness,
         "humidity" => custom_state(app).humidity,
-        "temp" => app.weather.as_ref()?.temp.0,
-        "wind_speed" => app.weather.as_ref()?.wind.1,
-        "wind_dir" => app.weather.as_ref()?.wind.0.rem_euclid(360.0),
+        "temp" => app.session.weather.as_ref()?.temp.0,
+        "wind_speed" => app.session.weather.as_ref()?.wind.1,
+        "wind_dir" => app.session.weather.as_ref()?.wind.0.rem_euclid(360.0),
         _ => return None,
     })
 }
@@ -1264,7 +1264,7 @@ fn option_set(app: &mut App, verb: &str, arg: &str, v: f32) -> Option<(&'static 
             Some(("time_speed", app.settings.time_speed.to_string()))
         }
         "traffic" => {
-            if let Some(t) = app.traffic.as_mut() {
+            if let Some(t) = app.session.traffic.as_mut() {
                 t.target = v.round() as usize;
                 app.args.traffic = t.target;
             }
@@ -1508,8 +1508,8 @@ fn toggle_now(app: &App, id: &str) -> Option<bool> {
         "get_up" => s.get_up,
         "time_sync" => s.time_sync,
         "metar_sync" => s.metar_sync,
-        "snow_cover" => app.weather.as_ref().is_some_and(|w|w.snow),
-        "snow_road" => app.weather.as_ref().is_some_and(|w|w.snow_on_road),
+        "snow_cover" => app.session.weather.as_ref().is_some_and(|w|w.snow),
+        "snow_road" => app.session.weather.as_ref().is_some_and(|w|w.snow_on_road),
         "camcoll" => s.camera_collision,
         "steer_look" => s.steer_look,
         "hands_in_cab" => s.hands_in_cab,
@@ -1649,12 +1649,12 @@ fn toggle_set(app: &mut App, id: &str, on: bool) -> Option<(&'static str, String
         // cannot be changed while it is on (the cycle and a hand-made weather end with it)
         "metar_sync" => {
             app.settings.metar_sync = on;
-            app.metar_rx = None;
-            app.metar_once = false;
-            app.metar_next = 0.0;
+            app.session.metar_rx = None;
+            app.session.metar_once = false;
+            app.session.metar_next = 0.0;
             if on {
-                app.weather_cycle = None;
-                app.weather_blend = None;
+                app.session.weather_cycle = None;
+                app.session.weather_blend = None;
             }
             Some(("metar_sync", bit))
         }
@@ -1984,11 +1984,11 @@ pub(crate) fn dropdown_for(app: &App, row: usize, id: &str) -> Option<Dropdown> 
             v
         }
         "cloudkind" => {
-            current = app.weather.as_ref().and_then(|w| cloud_index(&w.clouds.0));
+            current = app.session.weather.as_ref().and_then(|w| cloud_index(&w.clouds.0));
             CLOUD_TYPES.iter().enumerate().map(|(i, (_, n))| (tr(*n), format!("cloud {i}"))).collect()
         }
         "precipkind" => {
-            current = app.weather.as_ref().map(|w| (w.precip.first().copied().unwrap_or(0.0).max(0.0) as usize).min(PRECIP_KINDS.len() - 1));
+            current = app.session.weather.as_ref().map(|w| (w.precip.first().copied().unwrap_or(0.0).max(0.0) as usize).min(PRECIP_KINDS.len() - 1));
             PRECIP_KINDS.iter().enumerate().map(|(i, n)| (tr(*n), format!("precip {i}"))).collect()
         }
         "preset" => {
@@ -2031,11 +2031,11 @@ pub(crate) fn dropdown_apply(app: &mut App, action: &str) {
             let code: String = arg.trim().chars().filter(|c| c.is_ascii_alphabetic()).take(4).collect::<String>().to_ascii_uppercase();
             app.settings.metar_station = code.clone();
             remember_setting("metar_station", &code);
-            app.metar_rx = None;
-            app.metar_once = false;
+            app.session.metar_rx = None;
+            app.session.metar_once = false;
             // With sync on, the new station is fetched at once. With it off this simply
             // selects the station for "Load current METAR once".
-            app.metar_next = 0.0;
+            app.session.metar_next = 0.0;
         }
         "cloud" => {
             if let Some(i) = arg.trim().parse::<usize>().ok().filter(|i| *i < CLOUD_TYPES.len()) {
@@ -2093,12 +2093,12 @@ pub(crate) fn dropdown_apply(app: &mut App, action: &str) {
 }
 
 fn weather_name(app: &App) -> String {
-    if app.weather.as_ref().is_some_and(|w| w.name == CUSTOM_WEATHER) {
+    if app.session.weather.as_ref().is_some_and(|w| w.name == CUSTOM_WEATHER) {
         return CUSTOM_WEATHER.to_string();
     }
     // a METAR report's weather
     if app.args.weather.as_deref().is_some_and(|p| p.starts_with(crate::weather_setup::REPORT)) {
-        if let Some(n) = app.weather.as_ref().map(|w| w.name.trim().to_string()).filter(|n| !n.is_empty()) {
+        if let Some(n) = app.session.weather.as_ref().map(|w| w.name.trim().to_string()).filter(|n| !n.is_empty()) {
             return n;
         }
     }
@@ -2109,7 +2109,7 @@ fn weather_name(app: &App) -> String {
             let stem = file.rsplit_once('.').map(|x| x.0).unwrap_or(file);
             stem.trim_start_matches('#').to_string()
         }
-        None => app.weather.as_ref().map(|w| w.name.trim().to_string()).filter(|n| !n.is_empty()).unwrap_or_else(|| "Map default".to_string()),
+        None => app.session.weather.as_ref().map(|w| w.name.trim().to_string()).filter(|n| !n.is_empty()).unwrap_or_else(|| "Map default".to_string()),
     }
 }
 
@@ -2224,7 +2224,7 @@ fn reload_settings(app: &mut App) {
     flush_settings(true);
     // (the seat is the bus's, see `bus_seats`: it is read again for the bus)
     app.settings = crate::settings::Settings::load();
-    app.seat_bus.clear();
+    app.session.seat_bus.clear();
     crate::ui_language(&app.settings.language);
     sync_live(app);
 }
@@ -2237,7 +2237,7 @@ fn sync_live(app: &mut App) {
     if let Some(n) = app.menus.navigator.as_mut() {
         n.arrows = s.nav_arrows;
     }
-    if let Some(h) = app.humans.as_mut() {
+    if let Some(h) = app.session.humans.as_mut() {
         h.exact_fare = s.exact_fare;
         h.boarding = s.boarding.clone();
         h.voices = match s.pax_voices.as_str() {
@@ -2516,14 +2516,14 @@ fn vehicle_pages(app: &App) -> Vec<Page> {
         display.push(opens("Driver", "Change the current driver profile", "driver"));
     }
     let mut fleet: Vec<(String, String)> = Vec::new();
-    if has || !app.placed.is_empty() {
+    if has || !app.session.placed.is_empty() {
         fleet.push(button("Drive the next vehicle", "Switch", "Take the wheel of another vehicle standing in the world", "switch"));
     }
     fleet.push(opens("Place a vehicle", "Place a vehicle of your choice", "place"));
     if has {
         fleet.push(button("Couple", "Couple", "Couple the vehicle to the one in front of or behind it", "couple"));
         fleet.push(button("Uncouple", "Uncouple", "Separate the coupled vehicles", "uncouple"));
-        if app.on_foot.is_none() {
+        if app.session.on_foot.is_none() {
             fleet.push(button("Get up and out", "Get out", "Step out of your car and explore the world", "getout"));
         }
         fleet.push(button("Remove this vehicle", "Remove", "Removes the current vehicle", "remove"));
@@ -2532,7 +2532,7 @@ fn vehicle_pages(app: &App) -> Vec<Page> {
         fleet.push(button("Swap for another vehicle", "Swap", "Put another vehicle in this one's place and drive it", "swap"));
         fleet.push(button("Reload this vehicle", "Reload", "Read the vehicle's files again (.bus, model and sound configuration, scripts) and drive it from here", "reload"));
     }
-    if !app.placed.is_empty() {
+    if !app.session.placed.is_empty() {
         fleet.push(button("Remove the placed vehicles", "Remove", "Removes all vehicles you've placed from the world", "clearplaced"));
     }
     let mut service: Vec<(String, String)> = Vec::new();
@@ -2583,7 +2583,7 @@ fn world_pages(app: &App) -> Vec<Page> {
             for (name, hm, secs) in [("Morning", "06:00", 6 * 3600), ("Noon", "12:00", 12 * 3600), ("Evening", "18:00", 18 * 3600), ("Night", "23:00", 23 * 3600)] {
                 time.push(button(name, hm, "Jump to this time of day.", &format!("clock_set {secs}")));
             }
-            if let (Some(_), Some(p)) = (app.duty.as_ref(), app.player.as_ref()) {
+            if let (Some(_), Some(p)) = (app.session.duty.as_ref(), app.player.as_ref()) {
                 let d = p.vehicle.host.tt_delay as f64;
                 if d.abs() >= 1.0 {
                     let text = format!("{}{}:{:02}", if d < 0.0 { "−" } else { "+" }, (d.abs() / 60.0) as i64, d.abs() as i64 % 60);
@@ -2610,18 +2610,18 @@ fn world_pages(app: &App) -> Vec<Page> {
         if !app.metar_locked() {
             weather.push(button("Custom weather", "Edit current", "Freeze the weather currently in force and edit it as a custom weather.", "weather_custom"));
         }
-        let cloud = app.weather.as_ref().and_then(|w| cloud_index(&w.clouds.0)).map(|i| CLOUD_TYPES[i].1.to_string()).or_else(|| app.weather.as_ref().map(|w| w.clouds.0.trim().to_string())).unwrap_or_default();
+        let cloud = app.session.weather.as_ref().and_then(|w| cloud_index(&w.clouds.0)).map(|i| CLOUD_TYPES[i].1.to_string()).or_else(|| app.session.weather.as_ref().map(|w| w.clouds.0.trim().to_string())).unwrap_or_default();
         weather.push((row("Clouds", 'o', &cloud, "The kind of clouds in the sky.", None), "cloudkind".to_string()));
         weather.extend(slider_row(app, "visibility", "Visibility", "How far one can see; less is fog.", &|v| if v >= 1000.0 { format!("{:.1} km", v / 1000.0) } else { format!("{} m", v as i64) }));
         weather.extend(slider_row(app,"brightness","Brightness","Brightness of the custom weather lighting.",&|v|format!("{:.0} %",v*100.0)));
-        let kind = app.weather.as_ref().map(|w| (w.precip.first().copied().unwrap_or(0.0).max(0.0) as usize).min(PRECIP_KINDS.len() - 1)).unwrap_or(0);
+        let kind = app.session.weather.as_ref().map(|w| (w.precip.first().copied().unwrap_or(0.0).max(0.0) as usize).min(PRECIP_KINDS.len() - 1)).unwrap_or(0);
         weather.push((row("Precipitation", 'o', PRECIP_KINDS[kind], "Rain or snow.", None), "precipkind".to_string()));
         weather.extend(slider_row(app, "rain_amt", "Precipitation strength", "How hard it rains or snows.", &pct));
         weather.extend(slider_row(app, "wet", "Wet roads", "How wet the roads are now (they dry in the sun, wet in the rain).", &pct));
         weather.extend(switch_row(app,"snow_cover","Snow cover","Snow lying on the world and ground."));
         weather.extend(switch_row(app,"snow_road","Snow on road","Treat the road surface as snow-covered."));
         climate.extend(slider_row(app, "temp", "Temperature", "The air temperature.", &|v| format!("{} °C", v as i64)));
-        let dew_temp=app.weather.as_ref().map(|w|w.temp.0).unwrap_or(15.0);
+        let dew_temp=app.session.weather.as_ref().map(|w|w.temp.0).unwrap_or(15.0);
         climate.extend(slider_row(app,"humidity","Humidity","Relative humidity of the air.",&|v|format!("{:.0} % · dew {:.0} °C",v,crate::weather_setup::dew_point_c(dew_temp,v))));
         climate.extend(slider_row(app, "wind_speed", "Wind speed", "How fast the wind blows; it drives the clouds.", &|v| format!("{} m/s", v as i64)));
         climate.extend(slider_row(app, "wind_dir", "Wind direction", "The direction of the wind in degrees (0 is north).", &|v| format!("{}°", v as i64)));
@@ -2634,7 +2634,7 @@ fn world_pages(app: &App) -> Vec<Page> {
     }
     let mut people: Vec<(String, String)> = Vec::new();
     people.extend(slider_row(app, "traffic", "Traffic", "How many vehicles drive around the map.", &|v| format!("{} vehicles", v as i64)));
-    if !client && app.traffic.is_some() {
+    if !client && app.session.traffic.is_some() {
         people.push(button("Clear AI traffic", "Clear", "Remove the current AI cars from the road; random traffic will return automatically.", "traffic_clear"));
     }
     people.extend(slider_row(app, "pax", "Passengers", "How many passengers wait at the stops and ride.", &pct));
@@ -2838,16 +2838,16 @@ fn driver_names(app: &App) -> Vec<String> {
 /// Go on with another driver: this run so far into the old personnel file, the rest into
 /// the new one.
 fn switch_driver(app: &mut App, name: &str) {
-    if app.career.path.is_some() {
-        if let Err(e) = app.career.save() {
+    if app.session.career.path.is_some() {
+        if let Err(e) = app.session.career.save() {
             log::warn!("writing the personnel file: {e}");
         }
     }
     let rel = format!("Drivers/{name}.odr");
     let mut next = crate::career::Career::load(&app.args.root, &rel);
     // (the distance and the clock of the run go on; the counters start with the new file)
-    next.seconds = app.career.seconds;
-    app.career = next;
+    next.seconds = app.session.career.seconds;
+    app.session.career = next;
     app.args.driver = Some(rel);
     app.service_msg = Some((format!("Driver: {name}"), 3.0));
 }
@@ -2874,7 +2874,7 @@ pub(crate) fn tour_at(app: &App, k: usize) -> Option<(String, String)> {
 
 /// The time (seconds of the day) tour `tour` of line `line` starts.
 pub(crate) fn tour_start_of(app: &App, line: &str, tour: &str) -> f64 {
-    app.schedule
+    app.session.schedule
         .as_ref()
         .and_then(|s| s.data.lines.iter().find(|l| l.name == line))
         .and_then(|l| l.tours.iter().find(|t| t.number == tour))
@@ -2886,7 +2886,7 @@ pub(crate) fn tour_start_of(app: &App, line: &str, tour: &str) -> f64 {
 /// from, the trip chosen and how many trips the tour has.
 pub(crate) fn tour_choice(app: &App, k: usize) -> Option<(usize, usize, usize, usize)> {
     let (line, tour) = tour_at(app, k)?;
-    let sch = app.schedule.as_ref()?;
+    let sch = app.session.schedule.as_ref()?;
     let trips = sch.tour_trip_count(&line, &tour);
     let (stop, trip) = match app.menus.list_kind.as_ref() {
         Some(ListKind::Tours(_, Some(p))) if p.0 == tour => (p.1, p.2),
@@ -2902,10 +2902,10 @@ pub(crate) fn tour_choice(app: &App, k: usize) -> Option<(usize, usize, usize, u
 pub(crate) fn start_duty_at(app: &mut App, line: &str, tour: &str, trip: usize, chosen: usize) {
     let now = app.clock.time;
     let at = tour_start_of(app, line, tour);
-    let Some((k, j)) = app.schedule.as_ref().and_then(|s| s.tour_trip_stops(line, tour, trip).get(chosen).map(|x| (x.0, x.1))) else {
+    let Some((k, j)) = app.session.schedule.as_ref().and_then(|s| s.tour_trip_stops(line, tour, trip).get(chosen).map(|x| (x.0, x.1))) else {
         return start_duty(app, line, tour);
     };
-    let (Some(w), Some(sch)) = (app.world.clone(), app.schedule.as_mut()) else { return };
+    let (Some(w), Some(sch)) = (app.world.clone(), app.session.schedule.as_mut()) else { return };
     let mut d = match sch.player_duty(&w, line, tour, at, None, false) {
         Ok(d) => d,
         Err(e) => {
@@ -2928,12 +2928,12 @@ pub(crate) fn start_duty_at(app: &mut App, line: &str, tour: &str, trip: usize, 
     }
     app.args.line = Some(line.to_string());
     app.args.tour = Some(tour.to_string());
-    app.duty = Some(d);
+    app.session.duty = Some(d);
     app.service_msg = Some((format!("Line {line}, tour {}", tour.trim()), 4.0));
 }
 
 fn start_duty(app: &mut App, line: &str, tour: &str) {
-    let (Some(w), Some(sch)) = (app.world.clone(), app.schedule.as_mut()) else { return };
+    let (Some(w), Some(sch)) = (app.world.clone(), app.session.schedule.as_mut()) else { return };
     let now = app.clock.time;
     match sch.player_duty(&w, line, tour, now, None, false) {
         Ok(mut d) => {
@@ -2952,7 +2952,7 @@ fn start_duty(app: &mut App, line: &str, tour: &str) {
             }
             app.args.line = Some(line.to_string());
             app.args.tour = Some(tour.to_string());
-            app.duty = Some(d);
+            app.session.duty = Some(d);
             app.service_msg = Some((format!("Line {line}, tour {}", tour.trim()), 4.0));
         }
         Err(e) => app.service_msg = Some((format!("No duty: {e}"), 8.0)),
