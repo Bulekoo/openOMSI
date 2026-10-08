@@ -442,9 +442,29 @@ pub(crate) fn make_app(mut args: Args, server_cfg: Option<server::ServerCfg>) ->
     // (as the last session left it, #1164)
     let info_bar = settings.info_bar;
     let is_server = args.server.is_some();
+    // What loads, starts or reads the clock, made one after the other in a fixed order before
+    // the App and its groups are put together (their logs and threads come in this order).
+    let instance = graphics_instance();
+    let vr_nav_profiles = crate::vr_navigator::Profiles::load();
+    let ui = ui::Ui::new();
+    let rain = rain::Rain::new();
+    let cabin_air = crate::condensation::CabinAir::new();
+    let spray = puddles::Spray::new();
+    let radio = radio::Radio::load(&args_root_for_keys);
+    let started = Instant::now();
+    let last = Instant::now();
+    let input_script = parse_input_script();
+    let game_keys = omsi_content::KeyboardCfg::load(&crate::startup::keyboard_cfg(&args_root_for_keys)).unwrap_or_default().with_game_defaults().with_vr_defaults().game;
+    let own_keys = crate::startup::own_keys(&args_root_for_keys);
+    let own_shift = crate::startup::own_bindings(&args_root_for_keys, omsi_content::input::KEY_SHIFT);
+    let fps_t = Instant::now();
+    let update_watch = crate::update_watch::UpdateWatch::new();
+    // (a server counts its players by their own games, not itself)
+    let presence = if is_server { None } else { crate::presence::Presence::start() };
+    let touch = touch::Touch::new();
     let mut app = App {
         args,
-        instance: graphics_instance(),
+        instance,
         window: None,
         surface: None,
         renderer: None,
@@ -469,26 +489,26 @@ pub(crate) fn make_app(mut args: Args, server_cfg: Option<server::ServerCfg>) ->
         duty_places: false,
         hud: None,
         navigator: None,
-        vr_nav_profiles: crate::vr_navigator::Profiles::load(),
+        vr_nav_profiles,
         vr_nav_edit: None,
         spanned: false,
-        ui: ui::Ui::new(),
+        ui,
         fps: 0.0,
-        rain: rain::Rain::new(),
-        cabin_air: crate::condensation::CabinAir::new(),
-        spray: puddles::Spray::new(),
+        rain,
+        cabin_air,
+        spray,
         lamps_on: None,
         menu: None,
         populate_t: 0.0,
         humans_populate_t: 0.0,
-        radio: radio::Radio::load(&args_root_for_keys),
+        radio,
         profile: Default::default(),
         profile_prev: Default::default(),
         first_populate: true,
         envir: None,
         weather: None,
         clock: omsi_sim::SimClock::default(),
-        started: Instant::now(),
+        started,
         total_frames: 0,
         mirror_budget: 1.0,
         mirrors_seen: 2,
@@ -507,7 +527,7 @@ pub(crate) fn make_app(mut args: Args, server_cfg: Option<server::ServerCfg>) ->
         window_hidden: false,
         keys: Default::default(),
         door_key_triggers: Default::default(),
-        last: Instant::now(),
+        last,
         speed: 30.0,
         mouse_look: false,
         buttons_held: (false, false),
@@ -519,7 +539,7 @@ pub(crate) fn make_app(mut args: Args, server_cfg: Option<server::ServerCfg>) ->
         hover_part: None,
         hover_hand: false,
         head_idle_hold: Default::default(),
-        input_script: parse_input_script(),
+        input_script,
         shot: None,
         paused: false,
         game_menu: None,
@@ -577,9 +597,9 @@ pub(crate) fn make_app(mut args: Args, server_cfg: Option<server::ServerCfg>) ->
         admin_list: None,
         list_kind: None,
         route_arrows: Default::default(),
-        game_keys: omsi_content::KeyboardCfg::load(&crate::startup::keyboard_cfg(&args_root_for_keys)).unwrap_or_default().with_game_defaults().with_vr_defaults().game,
-        own_keys: crate::startup::own_keys(&args_root_for_keys),
-        own_shift: crate::startup::own_bindings(&args_root_for_keys, omsi_content::input::KEY_SHIFT),
+        game_keys,
+        own_keys,
+        own_shift,
         key_capture: None,
         menu_prev_pause: false,
         info_bar,
@@ -599,13 +619,12 @@ pub(crate) fn make_app(mut args: Args, server_cfg: Option<server::ServerCfg>) ->
         view_zoom: Default::default(),
         orbit: ORBIT_DEFAULT,
         frames: 0,
-        fps_t: Instant::now(),
+        fps_t,
         service_msg: clock_note.map(|m| (m, 10.0)),
         pumping: None,
         notices: Vec::new(),
-        update_watch: crate::update_watch::UpdateWatch::new(),
-        // (a server counts its players by their own games, not itself)
-        presence: if is_server { None } else { crate::presence::Presence::start() },
+        update_watch,
+        presence,
         log_state: Default::default(),
         plugins: None,
         career: Default::default(),
@@ -635,7 +654,7 @@ pub(crate) fn make_app(mut args: Args, server_cfg: Option<server::ServerCfg>) ->
         exiting: false,
         stand_in: None,
         cpu_mark: None,
-        touch: touch::Touch::new(),
+        touch,
     };
     app.lan = lan;
     app.remotes = lan_game;
