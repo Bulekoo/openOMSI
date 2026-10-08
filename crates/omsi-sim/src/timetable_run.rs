@@ -11,7 +11,7 @@ mod sim;
 mod times;
 mod tours;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 use crate::traffic::LaneKey;
 use hashbrown::{HashMap, HashSet};

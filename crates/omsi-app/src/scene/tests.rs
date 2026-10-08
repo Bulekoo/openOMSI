@@ -41,16 +41,16 @@ fn far_offset_forest_backdrops_keep_their_owner_tiles_visibility() {
     let forest = rectangle(-1109.0, 693.0);
     for heading in [0.0, 45.0, 225.0] {
         let xf = object_rotation([heading, 0.0, 0.0]);
-        assert!(stand_in_mesh(&forest, &xf, DVec3::new(6242.0, 3348.0, 70.0), loaded),
+        assert!(stand_in_mesh(&forest, &[], &xf, DVec3::new(6242.0, 3348.0, 70.0), loaded),
             "the distant forest at heading {heading} must not cover a road outside its owner tiles");
     }
     // Ordinary large geometry beside its origin still uses the full view distance.
-    assert!(!stand_in_mesh(&rectangle(0.0, 693.0), &Mat4::IDENTITY, DVec3::ZERO, loaded));
+    assert!(!stand_in_mesh(&rectangle(0.0, 693.0), &[], &Mat4::IDENTITY, DVec3::ZERO, loaded));
     // A small offset part is not enough to classify an object as a far backdrop.
-    assert!(!stand_in_mesh(&rectangle(-1109.0, 5.0), &Mat4::IDENTITY, DVec3::ZERO, loaded));
-    assert!(!stand_in_mesh(&forest, &Mat4::from_scale(glam::Vec3::splat(0.2)), DVec3::ZERO, loaded));
+    assert!(!stand_in_mesh(&rectangle(-1109.0, 5.0), &[], &Mat4::IDENTITY, DVec3::ZERO, loaded));
+    assert!(!stand_in_mesh(&forest, &[], &Mat4::from_scale(glam::Vec3::splat(0.2)), DVec3::ZERO, loaded));
     // Keep the existing whole-city stand-in rule, even for a centred model.
-    assert!(stand_in_mesh(&rectangle(0.0, 2000.0), &Mat4::IDENTITY, DVec3::ZERO, loaded));
+    assert!(stand_in_mesh(&rectangle(0.0, 2000.0), &[], &Mat4::IDENTITY, DVec3::ZERO, loaded));
 }
 
 #[test]

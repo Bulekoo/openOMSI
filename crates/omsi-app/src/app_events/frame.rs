@@ -33,6 +33,8 @@ impl App {
         // session ends)
         let Some(time) = self.frame_timing(event_loop) else { return };
         let dt = time.dt;
+        // a vehicle chosen in the menu, read on a worker meanwhile, put down once it is ready
+        self.poll_vehicle_placement();
         // the start menu, and the map's first area still loading
         if !self.frame_menus(event_loop, dt) {
             return;

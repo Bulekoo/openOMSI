@@ -52,6 +52,28 @@ pub(crate) enum ListKind {
     PlaceHof(String, String),
 }
 
+/// The lists with a search line on top: the vehicles to place, the depot files and the
+/// destinations.
+pub(crate) fn searchable(kind: &ListKind) -> bool {
+    matches!(kind, ListKind::Hofs | ListKind::Destinations | ListKind::PlaceMaker | ListKind::PlaceType(_) | ListKind::PlaceHof(..))
+}
+
+/// The search typed (while it is) or set for the open list.
+fn search_query(app: &App) -> &str {
+    if app.menus.menu_edit_search {
+        app.menus.menu_edit.as_deref().unwrap_or("")
+    } else {
+        &app.menus.menu_search
+    }
+}
+
+/// A line of a list matches a search when its label or its action (a file's path) holds
+/// every word of it, whatever the case.
+fn search_matches(label: &str, action: &str, query: &str) -> bool {
+    let haystack = format!("{label} {action}").to_lowercase();
+    query.split_whitespace().all(|word| haystack.contains(&word.to_lowercase()))
+}
+
 /// A vehicle file of the menu's list (`Vehicles/...`) as its definition.
 fn bus_def(app: &App, bus: &str) -> Option<omsi_vehicle::Vehicle> {
     let path = crate::spawn::player_bus_path(&app.args.root, bus).ok()?;
@@ -531,8 +553,14 @@ pub(crate) fn items(app: &App, kind: &ListKind) -> Vec<(String, String)> {
                 }
             }
             groups.sort_by(|a, b| bus_cmp(&a.1, &b.1).then_with(|| a.0.cmp(&b.0)));
+            let searching = !search_query(app).trim().is_empty();
             for (key, name, vs) in groups {
-                if vs.len() == 1 {
+                if searching {
+                    // (searched for: every type, under its manufacturer's name)
+                    for v in vs {
+                        out.push((format!("{name}  ·  {}", v.2), format!("bus {}", v.3)));
+                    }
+                } else if vs.len() == 1 {
                     // (a manufacturer with one type: that type at once)
                     out.push((format!("{name}  ·  {}", vs[0].2), format!("bus {}", vs[0].3)));
                 } else {
@@ -595,6 +623,18 @@ pub(crate) fn items(app: &App, kind: &ListKind) -> Vec<(String, String)> {
                 out.push((tr("This bus has no list of fleet numbers"), "back".into()));
             }
         }
+    }
+    if searchable(kind) {
+        let query = search_query(app);
+        out.retain(|(label, action)| search_matches(label, action, query));
+        let label = if app.menus.menu_edit_search {
+            format!("{}: {query}_  ({})", tr("Search…"), tr("Enter sets it, Esc cancels"))
+        } else if query.is_empty() {
+            tr("Search…")
+        } else {
+            format!("{}: {query}", tr("Search…"))
+        };
+        out.insert(0, (label, "search".into()));
     }
     out.push((tr("Back"), "back".into()));
     out
@@ -722,6 +762,11 @@ pub(crate) fn run(app: &mut App, kind: &ListKind, action: &str) -> Option<ListKi
 pub(crate) fn run_move(app: &mut App, kind: &ListKind, action: &str, mv: Move) -> Option<ListKind> {
     if crate::game_controller_menu::is_controller_list(Some(kind)) {
         return crate::game_controller_menu::run(app, kind, action, mv);
+    }
+    if action == "search" && searchable(kind) {
+        app.menus.menu_edit = Some(app.menus.menu_search.clone());
+        app.menus.menu_edit_search = true;
+        return Some(kind.clone());
     }
     if action == "back" {
         return match kind {
@@ -2882,16 +2927,6 @@ pub(crate) fn tour_at(app: &App, k: usize) -> Option<(String, String)> {
     Some((line.to_string(), tour.to_string()))
 }
 
-/// The time (seconds of the day) tour `tour` of line `line` starts.
-pub(crate) fn tour_start_of(app: &App, line: &str, tour: &str) -> f64 {
-    app.session.schedule
-        .as_ref()
-        .and_then(|s| s.data.lines.iter().find(|l| l.name == line))
-        .and_then(|l| l.tours.iter().find(|t| t.number == tour))
-        .and_then(tour_start)
-        .unwrap_or(0.0)
-}
-
 /// For the tour on row `k`: how many stops its chosen trip has, the stop chosen to start
 /// from, the trip chosen and how many trips the tour has.
 pub(crate) fn tour_choice(app: &App, k: usize) -> Option<(usize, usize, usize, usize)> {
@@ -2911,12 +2946,13 @@ pub(crate) fn tour_choice(app: &App, k: usize) -> Option<(usize, usize, usize, u
 /// by its time): the duty goes on from that stop, the bus stays where it is.
 pub(crate) fn start_duty_at(app: &mut App, line: &str, tour: &str, trip: usize, chosen: usize) {
     let now = app.clock.time;
-    let at = tour_start_of(app, line, tour);
     let Some((k, j)) = app.session.schedule.as_ref().and_then(|s| s.tour_trip_stops(line, tour, trip).get(chosen).map(|x| (x.0, x.1))) else {
         return start_duty(app, line, tour);
     };
     let (Some(w), Some(sch)) = (app.world.clone(), app.session.schedule.as_mut()) else { return };
-    let mut d = match sch.player_duty(&w, line, tour, at, None, false) {
+    // (the duty is made at the time it is now, as `start_duty` does: a night tour picked
+    // after midnight is then yesterday's, under way, not tonight's)
+    let mut d = match sch.player_duty(&w, line, tour, now, None, false) {
         Ok(d) => d,
         Err(e) => {
             app.service_msg = Some((format!("No duty: {e}"), 8.0));
@@ -2971,6 +3007,14 @@ fn start_duty(app: &mut App, line: &str, tour: &str) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn searches_model_and_hof_names_and_paths_without_losing_their_actions() {
+        assert!(super::search_matches("Volvo BRT", "bus Vehicles/Pack/biarticulado.bus", "VOLVO biarticulado"));
+        assert!(super::search_matches("Curitiba", "hof Vehicles/Bus/curitiba.hof", "curitiba .hof"));
+        assert!(!super::search_matches("Curitiba", "hof curitiba.hof", "recife"));
+        assert!(super::search_matches("Anything", "bus x.bus", "  "));
+    }
+
     /// A destination picked from the list keeps the route number the bus shows, its letter
     /// too (92E, IBIS 92 and suffix 10).
     #[test]

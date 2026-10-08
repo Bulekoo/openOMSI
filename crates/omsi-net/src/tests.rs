@@ -638,6 +638,41 @@ fn a_client_takes_the_hosts_world_and_clock() {
 }
 
 #[test]
+fn host_weather_changes_are_sent_immediately_in_clock() {
+    let mut host = LanSession::host(27921, "host", world("maps/Grundorf/global.cfg"), true).unwrap();
+    let port = host.local_addr().unwrap().port();
+    let mut client = LanSession::join(
+        &port.to_string(),
+        "client",
+        world("maps/Grundorf/global.cfg"),
+        Duration::from_secs(1),
+    )
+    .unwrap();
+    for s in [&mut host, &mut client] {
+        s.heartbeat = 0.05;
+    }
+    pump(&mut [&mut host, &mut client], &[pose(1.0), pose(2.0)], 80, |s| s[1].connected);
+    let _ = client.take_host_clock();
+
+    let custom = "custom:vis=5000;br=0.80;wd=90;ws=4.0;t=22.0;rh=70;p=1013;c=2;cb=120;pt=1;pi=80;wet=0.50;snow=0;snowroad=0";
+    host.clock_acc = 0.0;
+    host.set_weather(custom);
+    assert!(host.clock_acc >= CLOCK_EVERY, "weather change must force the next CLOCK");
+    pump(&mut [&mut host, &mut client], &[pose(1.0), pose(2.0)], 20, |s| s[1].host_clock.is_some());
+    assert_eq!(client.take_host_clock().expect("custom weather clock").world.weather, custom);
+
+    // the same weather again sends nothing new
+    host.clock_acc = 0.0;
+    host.set_weather(custom);
+    assert_eq!(host.clock_acc, 0.0);
+
+    host.set_weather("");
+    assert!(host.clock_acc >= CLOCK_EVERY, "clearing weather must force the next CLOCK");
+    pump(&mut [&mut host, &mut client], &[pose(1.0), pose(2.0)], 20, |s| s[1].host_clock.is_some());
+    assert_eq!(client.take_host_clock().expect("default weather clock").world.weather, "");
+}
+
+#[test]
 fn the_host_lists_the_vehicles_at_a_clients_bus() {
     let mut host =
         LanSession::host(28120, "host", world("maps/Grundorf/global.cfg"), true).unwrap();

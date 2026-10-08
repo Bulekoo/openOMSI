@@ -506,6 +506,31 @@ pub(super) struct PreparedVehicles {
     pub(super) textures: HashMap<PathBuf, (omsi_render::PreparedTexture, omsi_texture::PixelFormat)>,
 }
 
+impl World {
+    /// A reader for a vehicle being placed (see `spawn::PendingPlacement`): what it makes
+    /// stays its own until the vehicle is put down (`accept_placement_prefetch`), so a
+    /// placement that is dropped leaves no meshes or textures behind.
+    pub fn placement_prefetch(&self, renderer: &Renderer) -> VehiclePrefetch {
+        VehiclePrefetch {
+            ready: Arc::new(Mutex::new(PreparedVehicles::default())),
+            ..self.vehicle_prefetch(renderer)
+        }
+    }
+
+    /// What a placement's reader made, given to the world's for the upload; what the
+    /// fleet made meanwhile wins, and the copies are dropped.
+    pub fn accept_placement_prefetch(&self, staged: VehiclePrefetch) {
+        let PreparedVehicles { meshes, textures } = std::mem::take(&mut *staged.ready.lock());
+        let mut ready = self.vehicle_ready.lock();
+        for (key, value) in meshes {
+            ready.meshes.entry(key).or_insert(value);
+        }
+        for (key, value) in textures {
+            ready.textures.entry(key).or_insert(value);
+        }
+    }
+}
+
 impl VehiclePrefetch {
     /// Read what uploading `vt` in `scheme` will ask for and the GPU does not have.
     pub fn prefetch(&self, vt: &omsi_sim::VehicleType, scheme: Option<usize>) {

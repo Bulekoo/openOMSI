@@ -68,6 +68,14 @@ impl Task {
 /// at the stop (`Pax::door_since`).
 pub const DOOR_GIVE_UP: f64 = 25.0;
 
+/// One continuous wait at a shut entry: when it began and whether it is past `DOOR_GIVE_UP`.
+/// An open door ends it, so a later closure starts a fresh wait.
+pub fn shut_door_wait(previous: Option<f64>, now: f64, at_shut_door: bool) -> (Option<f64>, bool) {
+    let since = if at_shut_door { Some(previous.unwrap_or(now)) } else { None };
+    let expired = since.is_some_and(|start| now - start > DOOR_GIVE_UP);
+    (since, expired)
+}
+
 /// The ticket a passenger has (+0x61c): nothing to do, a ticket to stamp, one to buy.
 pub const TICKET_NONE: u8 = 0;
 pub const TICKET_STAMP: u8 = 2;

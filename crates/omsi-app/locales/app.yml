@@ -25911,3 +25911,15 @@ _version: 2
 "Remove this device":
   pt: "Remover este dispositivo"
   pt-pt: "Remover este dispositivo"
+"A vehicle is still loading":
+  pt: "Um veículo ainda está carregando"
+  pt-pt: "Ainda está a carregar um veículo"
+"Loading vehicle...":
+  pt: "Carregando veículo..."
+  pt-pt: "A carregar veículo..."
+"Vehicle loading stopped unexpectedly":
+  pt: "O carregamento do veículo parou inesperadamente"
+  pt-pt: "O carregamento do veículo parou inesperadamente"
+"Vehicle loaded":
+  pt: "Veículo carregado"
+  pt-pt: "Veículo carregado"

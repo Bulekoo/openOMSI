@@ -2,6 +2,29 @@ use super::*;
 use glam::DVec3;
 use crate::traffic::{LaneBuilder, LaneKind, Network};
 
+/// A stop box beside a curve, on either side of the path, keeps the repeated visit its
+/// timetable names and its place along the curve.
+#[test]
+fn authored_platform_boxes_on_curves_keep_the_repeated_visit() {
+    for radius in [-40.0, 40.0] {
+        let net = Network {
+            lanes: vec![LaneBuilder::arc(DVec3::ZERO, 0.0, 60.0, radius, 0.0, LaneKind::Street, 3.0)],
+            ..Default::default()
+        };
+        let (point, heading) = net.lanes[0].at(30.0);
+        let h = (heading as f64).to_radians();
+        let right = DVec3::new(h.cos(), -h.sin(), 0.0);
+        for offset in [-4.0, 4.0] {
+            for side in [0.0, 1.0, 2.0] {
+                let (ri, s, lat) = project_stop(&net, &[0, 0], point + right * offset, Some(25.0), 0, side, StopRoute::Track(1)).unwrap();
+                assert_eq!(ri, 1, "the authored repeated visit is retained");
+                assert!((s - 30.0).abs() < 0.5, "projection keeps the position along the curve: {s}");
+                assert!(lat.abs() > 3.5, "the platform box lies off the path");
+            }
+        }
+    }
+}
+
 #[test]
 fn paired_boxes_keep_their_authored_visit_even_across_the_platform_side() {
     let net = Network {

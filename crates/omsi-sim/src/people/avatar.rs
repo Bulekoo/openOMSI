@@ -278,7 +278,23 @@ impl PeopleSim {
 
     /// The buses of the last tick within `r` of `at`, the own first.
     pub fn bus_ids_near(&self, at: DVec3, r: f64) -> Vec<BusId> {
-        let mut v: Vec<(BusId, f64)> = self.last_buses.iter().map(|b| (b.id, (b.pos - at).truncate().length())).filter(|x| x.1 < r).collect();
+        let mut v: Vec<(BusId, f64)> = self
+            .last_buses
+            .iter()
+            .map(|b| {
+                // The front origin can be more than 25 m from the last section of a
+                // biarticulated bus: the nearest of its sections and its doors as they stand,
+                // on curves too.
+                let doors = b.cabin.entries.iter().chain(&b.cabin.exits).map(|door| b.world(door.outside));
+                let distance = std::iter::once(b.pos)
+                    .chain(b.trailers.iter().map(|part| part.pos))
+                    .chain(doors)
+                    .map(|pos| (pos - at).truncate().length())
+                    .fold(f64::INFINITY, f64::min);
+                (b.id, distance)
+            })
+            .filter(|x| x.1 < r)
+            .collect();
         v.sort_by(|a, b| (a.0 != BusId::Player).cmp(&(b.0 != BusId::Player)).then(a.1.total_cmp(&b.1)));
         v.into_iter().map(|x| x.0).collect()
     }

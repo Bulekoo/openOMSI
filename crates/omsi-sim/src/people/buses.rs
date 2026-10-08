@@ -46,6 +46,21 @@ impl PeopleSim {
         }
     }
 
+    /// Whether the bus says when its doors are open: any `PAX_Entry<i>_Open` /
+    /// `PAX_Exit<i>_Open` its script reports, or any `door_<i>` / `door<i>` animation of an
+    /// entry or exit, including buses whose front door is not an entry. Only an AI bus that
+    /// says nothing of any door is taken to open them all while it boards.
+    pub(super) fn reports_doors(v: &VehicleInstance, n_entry: usize, n_exit: usize) -> bool {
+        let base = if n_entry <= 1 { 1 } else { 2 };
+        [("Entry", n_entry, 0), ("Exit", n_exit, base)].into_iter().any(|(kind, count, offset)| {
+            (0..count).any(|i| {
+                Self::script_reports(v, &format!("PAX_{kind}{i}_Open"))
+                    || v.var(&format!("door_{}", offset + i)).is_some()
+                    || v.var(&format!("door{}", offset + i)).is_some()
+            })
+        })
+    }
+
     /// `PAX_Entry<i>_Open` / `PAX_Exit<i>_Open` as the bus script reports them. A bus whose
     /// script never sets them (or only sets some of them) falls back to its physical `door_<i>`
     /// or `door<i>` animations; an entry or exit past the eighth without variables of its own
@@ -78,7 +93,13 @@ impl PeopleSim {
             out
         };
         let entry = states("Entry", n_entry, &door_val);
-        let exit = states("Exit", n_exit, &|i| door_val((exit_door_base + i).min(7)));
+        // Each exit follows its own leaf's animation (an articulated bus's rear doors are
+        // door_8, door_9, ...); one past door_7 the bus has no animation for opens with door_7.
+        let has_door = |k: usize| v.var(&format!("door_{k}")).is_some() || v.var(&format!("door{k}")).is_some();
+        let exit = states("Exit", n_exit, &|i| {
+            let k = exit_door_base + i;
+            door_val(if k > 7 && !has_door(k) { 7 } else { k })
+        });
         (entry, exit)
     }
 
@@ -295,7 +316,7 @@ impl PeopleSim {
                     vec![false; cabin.exits.len()],
                 );
                 if open {
-                    if Self::script_reports(&c.vehicle, "PAX_Entry0_Open") || c.vehicle.var("door_0").is_some() || c.vehicle.var("door0").is_some() {
+                    if Self::reports_doors(&c.vehicle, cabin.entries.len(), cabin.exits.len()) {
                         let (e, x) =
                             Self::doors_open(&c.vehicle, cabin.entries.len(), cabin.exits.len());
                         entry_open = e;

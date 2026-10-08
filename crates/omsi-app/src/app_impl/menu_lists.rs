@@ -7,11 +7,17 @@ impl App {
     /// Show one of the menu's lists in the chooser (see `game_lists`).
     pub(crate) fn open_list(&mut self, kind: crate::game_lists::ListKind) {
         crate::game_lists::forget_page_titles();
+        // (a search belongs to its list; `chooser_pick` has taken the kind when it goes on)
+        if self.menus.list_kind.as_ref().is_some_and(|k| *k != kind) {
+            self.forget_search();
+        }
         self.menus.dropdown = None;
         self.menus.admin_list = Some(crate::game_lists::items(self, &kind));
         self.menus.list_kind = Some(kind);
-        // (on its first line, not on a heading)
-        self.menus.chooser = Some(if self.is_heading(0) { self.chooser_next(0, 1) } else { 0 });
+        // (on its first line, not on a heading, nor on the search line above it: Enter
+        // picks what it picked before the lists could be searched)
+        let search = self.menus.admin_list.as_ref().and_then(|l| l.first()).is_some_and(|l| l.1 == "search");
+        self.menus.chooser = Some(if self.is_heading(0) || search { self.chooser_next(0, 1) } else { 0 });
     }
 
     /// Line `k` of the list shown heads the lines under it (`game_lists::HEADING`).
@@ -115,6 +121,43 @@ impl App {
         self.refresh_list();
     }
 
+    /// The search of the list shown is over (another list is shown).
+    fn forget_search(&mut self) {
+        self.menus.menu_search.clear();
+        if self.menus.menu_edit_search {
+            self.menus.menu_edit = None;
+            self.menus.menu_edit_search = false;
+        }
+    }
+
+    /// A key while the search of a list is typed: Enter keeps it, Escape drops what was
+    /// typed (the search before stays); the text comes through `route_edit_text`.
+    fn search_edit_key(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Escape => {
+                self.menus.menu_edit = None;
+                self.menus.menu_edit_search = false;
+            }
+            KeyCode::Enter | KeyCode::NumpadEnter => {
+                self.menus.menu_search = self.menus.menu_edit.take().unwrap_or_default();
+                self.menus.menu_edit_search = false;
+            }
+            KeyCode::Backspace | KeyCode::Delete => {
+                if let Some(text) = self.menus.menu_edit.as_mut() {
+                    text.pop();
+                }
+            }
+            _ => {
+                if let Some(c) = route_char(code) {
+                    self.route_edit_text(&c.to_string());
+                    return;
+                }
+            }
+        }
+        self.refresh_list();
+        self.menus.chooser = Some(0);
+    }
+
     /// A key while a route number is typed in the destination list (#836). Printable
     /// text comes through `route_edit_text` so keyboard layouts and symbols are preserved;
     /// physical key codes remain a fallback for platforms that do not provide text.
@@ -147,6 +190,19 @@ impl App {
     /// Text entered in OMSI's free route-number field. It is intentionally not restricted
     /// to letters and digits: add-on displays use values such as `-10` and other symbols.
     pub(crate) fn route_edit_text(&mut self, text: &str) {
+        if self.menus.menu_edit_search {
+            if let Some(query) = self.menus.menu_edit.as_mut() {
+                for c in text.chars().filter(|c| !c.is_control()) {
+                    if query.chars().count() >= SEARCH_MAX {
+                        break;
+                    }
+                    query.push(c);
+                }
+            }
+            self.refresh_list();
+            self.menus.chooser = Some(0);
+            return;
+        }
         if !matches!(self.menus.list_kind, Some(crate::game_lists::ListKind::RouteNumbers)) || self.menus.menu_edit.is_none() {
             return;
         }
@@ -209,6 +265,8 @@ impl App {
         self.menus.dropdown = None;
         if self.menus.menu_edit_icao { if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);} }
         self.menus.menu_edit_icao=false;
+        self.menus.menu_edit_search = false;
+        self.menus.menu_search.clear();
         self.menus.menu_edit = None;
         self.menus.chooser = None;
         self.menus.admin_list = None;
@@ -307,7 +365,9 @@ impl App {
             return;
         }
         if self.menus.menu_edit.is_some() {
-            if self.menus.menu_edit_icao {
+            if self.menus.menu_edit_search {
+                self.search_edit_key(code);
+            } else if self.menus.menu_edit_icao {
                 self.icao_edit_key(code);
             } else if matches!(self.menus.list_kind, Some(crate::game_lists::ListKind::RouteNumbers)) {
                 self.route_edit_key(code);
@@ -486,6 +546,7 @@ impl App {
                     let keep = next == kind;
                     if !keep {
                         self.menus.menu_top = None;
+                        self.forget_search();
                     }
                     self.open_list(next);
                     if keep {
@@ -551,6 +612,9 @@ mod route_tests {
 /// How long a route number typed by hand may be. Eight characters were too few: Hong Kong
 /// buses take commands through it (`paper_sign_1_name=ABC.png`, `adddept_sign=1`, #1518).
 const ROUTE_NUMBER_MAX: usize = 64;
+
+/// How long the search of a list may be.
+const SEARCH_MAX: usize = 80;
 
 /// The first entry a drop-down (or the tours' timetable) of `n` entries showing `rows`
 /// shows with its thumb (`len` high) at the top `thumb_top` in `track`.
