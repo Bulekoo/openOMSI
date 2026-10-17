@@ -226,7 +226,19 @@ fn history_light(qc: vec2<i32>, qz: f32) -> vec3<f32> {
     if (abs(was - pc.w) > 0.2 + 0.04 * pc.w) {
         return vec3<f32>(0.0);
     }
-    return min(max(textureLoad(t_hist, pq, 0).rgb, vec3<f32>(0.0)), vec3<f32>(p.wide.w));
+    var l = max(textureLoad(t_hist, pq, 0).rgb, vec3<f32>(0.0));
+    // (a small bright thing - a lamp, a spot of glare, a sign's edge - is one texel among a
+    // hundred its neighbours: of the fourteen samples it takes one, and the blur turned it
+    // into a square of the blur's size. What is far brighter than what lies round it is cut
+    // down to a little more than that: a wall, a sign or a window is as bright as its
+    // neighbours)
+    let hsz = vec2<i32>(textureDimensions(t_hist)) - vec2<i32>(1);
+    let ring = (textureLoad(t_hist, clamp(pq + vec2<i32>(4, 0), vec2<i32>(0), hsz), 0).rgb
+        + textureLoad(t_hist, clamp(pq - vec2<i32>(4, 0), vec2<i32>(0), hsz), 0).rgb
+        + textureLoad(t_hist, clamp(pq + vec2<i32>(0, 4), vec2<i32>(0), hsz), 0).rgb
+        + textureLoad(t_hist, clamp(pq - vec2<i32>(0, 4), vec2<i32>(0), hsz), 0).rgb) * 0.25;
+    l = min(l, ring * 1.5 + vec3<f32>(0.02));
+    return min(l, vec3<f32>(p.wide.w));
 }
 
 // pixel position of a view-space point, through the same projection the depth was made with
@@ -266,7 +278,10 @@ fn fs_blur(in: VsOut) -> @location(0) vec4<f32> {
             let z = lin(textureLoad(t_depth, c * 2, 0));
             let dz = abs(z - z0);
             let tap = textureLoad(t_ao, c, 0);
-            let gw = 1.0 - smoothstep(0.5 * gtol, gtol, dz);
+            // (a tent, not a box: what one hit leaves in the picture is a soft spot, not a
+            // square of the window's size)
+            let r2 = f32(x * x + y * y) + 0.5;
+            let gw = (1.0 - smoothstep(0.5 * gtol, gtol, dz)) * exp(-r2 / 8.0);
             gi_sum = gi_sum + bounce_unpack(tap) * gw;
             gsum = gsum + gw;
             if (x >= -3 && x <= 2 && y >= -3 && y <= 2) {
