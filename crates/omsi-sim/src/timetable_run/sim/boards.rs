@@ -113,6 +113,12 @@ impl ScheduleSim {
         }
         // the player's bus
         if let Some(duty) = duty {
+            // (a duty's times are its own day's: a night tour's 25:05 is 1:05 on the clock. The
+            // board is worked out in the duty's time and its arrivals handed back in the
+            // clock's - compared with the clock's 0:50, the player's next trip looked 24
+            // hours away and the bus was missing from every board after midnight)
+            let duty_ahead = duty.duty_time(now) - now;
+            let now = now + duty_ahead;
             // a trip not begun leaves on time at the earliest (the bus waits at its
             // first stop), one under way arrives as early or late as it runs
             let delay = duty.delay(now);
@@ -151,7 +157,7 @@ impl ScheduleSim {
                         extra.delay = Some(delay);
                     }
                     list.push((
-                        expected,
+                        expected - duty_ahead,
                         trip.line.trim().to_string(),
                         trip.terminus.clone(),
                         (s.dep - s.arr).max(0.0),
@@ -472,6 +478,20 @@ mod tests {
         assert_eq!(boards[&42].iter().map(|r| (r.0.as_str(), r.1.as_str())).collect::<Vec<_>>(), [("7", destination), ("8", destination)]);
         assert_eq!(pages["markt"].iter().map(|r| r.destination.as_str()).collect::<Vec<_>>(), [destination, destination]);
         assert_eq!(sim.depots["depot"][0].2.as_ref().unwrap().termini[0].strings[0], "     U Marktstraße   über Bahnhof");
+    }
+
+    /// The player's night tour after midnight: its 25:05 trip is on the board at 0:50 and
+    /// shows 1:05 there; at 21:00 the same trip is hours off and on no board.
+    #[test]
+    fn the_players_night_trip_shows_on_the_board_in_clock_time() {
+        let sim = schedule();
+        let mut trip = crate::timetable_run::tests::planned(90_300.0, &[(0.0, 90_300.0, 90_300.0)]);
+        trip.line = "N7".into();
+        trip.stops[0].object_id = 9;
+        let duty = PlayerDuty::new("N7".into(), "3".into(), vec![trip], 0, 0, true);
+        let after_midnight = sim.stop_list(9, 3_000.0, &HashMap::new(), Some(&duty));
+        assert_eq!(after_midnight.iter().map(|r| (r.0.round(), r.1.as_str())).collect::<Vec<_>>(), [(3_900.0, "N7")]);
+        assert!(sim.stop_list(9, 75_600.0, &HashMap::new(), Some(&duty)).is_empty());
     }
 
     /// A night tour of today (23:00, 24:30) and the same tour's 24:30 as yesterday's, at
