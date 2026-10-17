@@ -87,7 +87,8 @@ impl ExposureLog {
                 let bits = u16::from_le_bytes([view[0], view[1]]);
                 let metered = half_to_f32(bits);
                 let (pre, m) = self.pending;
-                let ev = ((m[1] - metered) * m[0]).clamp(-m[2], m[3]) + m[4];
+                let gap = m[1] - metered;
+                let ev = (gap * if gap > 0.0 { METER_SHORTFALL_GAIN } else { m[0] }).clamp(-m[2], m[3]) + m[4];
                 if ev.is_finite() {
                     self.ev = ev;
                 }
@@ -142,6 +143,12 @@ pub(crate) fn half_to_f32(b: u16) -> f32 {
 }
 
 impl Renderer {
+    /// The lightning strikes since the last call, as (seconds until the thunder is heard,
+    /// distance in m): the sound plays the thunder of what the picture showed.
+    pub fn take_strikes(&mut self) -> Vec<(f32, f32)> {
+        std::mem::take(&mut self.tone.lightning.strikes).into_iter().map(|s| (s.delay, s.distance)).collect()
+    }
+
     /// Change the dynamic parameters of an instance. `slot_alpha` entries beyond the mesh's
     /// slot count are ignored; missing ones keep 1.0.
     pub fn set_params(
@@ -936,4 +943,6 @@ pub(crate) struct ToneMapping {
     /// The enhanced lighting uniform as last written (`prepare_enhanced`), for the passes
     /// that decide on the CPU whether they have anything to draw (`shafts_seen`).
     pub(crate) enh_last: crate::uniforms::EnhancedUniform,
+    /// The thunderstorm's flashes (`Lightning`) and the strikes the sound has not yet taken.
+    pub(crate) lightning: crate::lighting::Lightning,
 }

@@ -80,6 +80,8 @@ struct PostPipelines {
     tonemap: wgpu::RenderPipeline,
     tonemap_encoded: wgpu::RenderPipeline,
     fxaa: wgpu::RenderPipeline,
+    /// The picture as absolute radiance at half size, for the next frame's bounced light.
+    history: wgpu::RenderPipeline,
 }
 
 /// The pipelines of the main pass for one colour target format: the swap chain's, and

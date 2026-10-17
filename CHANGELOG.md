@@ -8,6 +8,27 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 
 ### New
 
+**Weather and light (Enhanced)**
+
+- The eye adapts the way an eye does: a picture much darker than the light model expects
+  (a dark cab, an underpass) is made up for over some three seconds - five-sixths of it,
+  across six stops, where a bright surplus (snow, the sun in view) still only darkens the
+  picture a little - and a dazzle on coming out passes in about a second.
+- The sky's occlusion by houses, trees and hills is worked out on the street's scale (18 m),
+  not only the first two metres: a narrow street or the shade under a crown is darker than a
+  square, and the surfaces round a point light it with what they send back (the last
+  frame's picture, colour included: a sunlit wall lights the one across the street, lit
+  windows light the street at night). `OMSI_WIDE_AO=reach,strength,gain,max` tunes it.
+- The physical weather model keeps the water of the grey deck (its optical depth, a thin
+  stratus to a raining nimbostratus), so a rainy or winter day is as bright or as dark as
+  its cloud is thick. It also gives the cumulus layer its own base (the condensation level)
+  and depth (a shallow sheet under a high, towers in moist rising air), altocumulus, and
+  thunderstorms.
+- A thunderstorm has lightning: flashes of several strokes light the clouds from inside and
+  the street with a cold light, a cloud-to-ground stroke draws its crooked channel, and the
+  thunder is heard after the distance's delay. `OMSI_STORM=activity[,azimuth]` shows one.
+- The sun's shafts between houses and trees are followed up to 420 m (180 before).
+
 **Navigator and city map**
 
 - The navigator and the city map draw every map in the style of Apple Maps, from the map

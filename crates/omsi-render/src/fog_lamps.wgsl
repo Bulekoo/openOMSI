@@ -88,9 +88,11 @@ fn pixel_ray(at: vec2<f32>) -> vec4<f32> {
 @group(0) @binding(6) var s_shadow: sampler_comparison;
 @group(0) @binding(7) var t_shadow_far: texture_depth_2d;
 const SHAFT_DEPTH_RANGE: f32 = 2199.0;
-const SHAFT_STEPS: u32 = 16u;
-// how far the shafts are followed (the near cascade's reach, a little less)
-const SHAFT_REACH: f32 = 180.0;
+const SHAFT_STEPS: u32 = 20u;
+// how far the shafts are followed: the near cascade's reach and, past it, the far map's
+// (the beams of a misty avenue, or a low sun between the blocks, reach farther than the
+// first hundred metres)
+const SHAFT_REACH: f32 = 420.0;
 
 // Whether the sun reaches a point in the air (1) or a house or a crown stands between (0).
 fn sun_reaches(x: vec3<f32>) -> f32 {

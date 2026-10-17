@@ -5,9 +5,15 @@ struct SsaoParams {
     params: vec4<f32>,
     // xy: the projection's off-centre shift (m20, m21), zero for a symmetric frustum
     shift: vec4<f32>,
+    // x the wide occlusion's reach (m), y its strength (0 = off), z the bounced light's
+    // gain (0 = off), w the largest radiance a bounce is taken from (1 = 10 000 cd/m²)
+    wide: vec4<f32>,
 };
 @group(0) @binding(0) var<uniform> p: SsaoParams;
 @group(0) @binding(1) var t_depth: texture_depth_2d;
+// The last frame's picture at this size, as absolute radiance (1 = 10 000 cd/m²): what the
+// surfaces round a point send to it (post.wgsl `fs_history`).
+@group(0) @binding(3) var t_hist: texture_2d<f32>;
 
 struct VsOut {
     @builtin(position) clip: vec4<f32>,
@@ -50,6 +56,31 @@ fn hash(v: vec2<f32>) -> f32 {
     let p = vec2<i32>(i32(v.x) & 3, i32(v.y) & 3);
     let bayer = array<f32, 16>(0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
     return (bayer[p.y * 4 + p.x] + 0.5) / 16.0;
+}
+
+// The bounced light (irradiance, rgb) in two channels of the AO texture's four: its
+// luminance as it is, and the colour's red and blue relative to it (0 .. 2, five bits
+// each) in one number - the green follows from the luminance. Blurred and read back
+// decoded, so the quantisation of one tap is not mixed with another's.
+const BOUNCE_RANGE: f32 = 2.0;
+fn bounce_pack(e: vec3<f32>) -> vec2<f32> {
+    let y = dot(e, vec3<f32>(0.2126, 0.7152, 0.0722));
+    if (y < 1e-6) {
+        return vec2<f32>(0.0, 0.0);
+    }
+    let u = clamp(e.r / y / BOUNCE_RANGE, 0.0, 1.0);
+    let v = clamp(e.b / y / BOUNCE_RANGE, 0.0, 1.0);
+    return vec2<f32>(y, round(u * 31.0) * 32.0 + round(v * 31.0));
+}
+
+fn bounce_unpack(t: vec4<f32>) -> vec3<f32> {
+    let y = t.b;
+    let iu = floor(t.a / 32.0 + 0.001);
+    let iv = t.a - iu * 32.0;
+    let r = iu / 31.0 * BOUNCE_RANGE * y;
+    let b = iv / 31.0 * BOUNCE_RANGE * y;
+    let g = max((y - 0.2126 * r - 0.0722 * b) / 0.7152, 0.0);
+    return vec3<f32>(r, g, b);
 }
 
 @fragment
@@ -107,13 +138,58 @@ fn fs_ssao(in: VsOut) -> @location(0) vec4<f32> {
         }
     }
     var ao = 1.0 - p.params.y * occ / f32(count);
+    // --- the street's scale: how much of the sky a point sees past the houses, trees and
+    // hills round it (a hemisphere reaching `wide.x` metres, cosine-weighted), and the
+    // light the surfaces that block it send back (their picture of the last frame)
+    var wide = 1.0;
+    var bounce = vec3<f32>(0.0);
+    if (p.wide.y > 0.0) {
+        let wr = p.wide.x;
+        let wcount = 14;
+        var wocc = 0.0;
+        var gi = vec3<f32>(0.0);
+        let a2 = a + 1.7;
+        for (var i = 0; i < wcount; i = i + 1) {
+            let fi = f32(i);
+            let ang = fi * 2.399963 + a2;
+            let r = (fi + 0.5) / f32(wcount);
+            let scale = mix(0.2, 1.0, fract(fi * 0.618034 + a * 0.159155));
+            let s = vec3<f32>(cos(ang) * r, sin(ang) * r, sqrt(max(0.0, 1.0 - r * r)));
+            let sp = pos + (t * s.x + b * s.y + n * s.z) * wr * scale;
+            let q = project(sp);
+            if (q.x < 0.0 || q.y < 0.0 || q.x >= p.params.z || q.y >= p.params.w) {
+                continue;
+            }
+            let qc = vec2<i32>(q);
+            let qz = lin(textureLoad(t_depth, qc * 2, 0));
+            let dz = qz - sp.z;
+            // (a surface far in front of the sample is another object's edge, not a wall
+            // standing over it)
+            let range = 1.0 - smoothstep(wr * 0.6, wr * 1.6, abs(pos.z - qz));
+            if (dz > 0.25 && range > 0.0) {
+                wocc = wocc + range;
+                if (p.wide.z > 0.0) {
+                    let l = textureLoad(t_hist, qc, 0).rgb;
+                    gi = gi + min(max(l, vec3<f32>(0.0)), vec3<f32>(p.wide.w)) * range;
+                }
+            }
+        }
+        wide = 1.0 - p.wide.y * wocc / f32(wcount);
+        bounce = gi * (3.14159265 / f32(wcount)) * p.wide.z;
+    }
+    ao = ao * wide;
     // far away a screen-space radius covers whole buildings: fade the effect out with
     // distance, where it only added shimmer
     let dist = -pos.z;
-    ao = mix(ao, 1.0, clamp((dist - 60.0) / 140.0, 0.0, 1.0));
+    ao = mix(ao, wide, clamp((dist - 60.0) / 140.0, 0.0, 1.0));
+    // (the wide occlusion reaches farther: it fades over the next two hundred metres)
+    ao = mix(ao, 1.0, clamp((dist - 200.0) / 250.0, 0.0, 1.0));
+    bounce = bounce * (1.0 - clamp((dist - 200.0) / 250.0, 0.0, 1.0));
     // (clamp of a NaN is not safe on every GPU: a black blotch of shade on Windows)
     let ao_ok = select(1.0, clamp(ao, 0.0, 1.0), (bitcast<u32>(ao) & 0x7f800000u) != 0x7f800000u);
-    return vec4<f32>(ao_ok, dist, 0.0, 0.0);
+    let bounce_ok = select(vec3<f32>(0.0), bounce, all((bitcast<vec3<u32>>(bounce) & vec3<u32>(0x7f800000u)) != vec3<u32>(0x7f800000u)));
+    let pk = bounce_pack(bounce_ok);
+    return vec4<f32>(ao_ok, dist, pk.x, pk.y);
 }
 
 // pixel position of a view-space point, through the same projection the depth was made with
@@ -136,6 +212,7 @@ fn fs_blur(in: VsOut) -> @location(0) vec4<f32> {
     let size = vec2<i32>(i32(p.params.z), i32(p.params.w));
     let z0 = lin(textureLoad(t_depth, px * 2, 0));
     var sum = 0.0;
+    var gi_sum = vec3<f32>(0.0);
     var wsum = 0.0;
     // 6x6 window: covers every rotation of the 4x4 pattern at least once in each row and
     // column, and the depth weight keeps the occlusion from bleeding across an edge (a
@@ -146,10 +223,14 @@ fn fs_blur(in: VsOut) -> @location(0) vec4<f32> {
             let z = lin(textureLoad(t_depth, c * 2, 0));
             let tol = 0.3 + 0.02 * abs(z0);
             let w = select(0.0, 1.0, abs(z - z0) < tol);
-            sum = sum + textureLoad(t_ao, c, 0).r * w;
+            let tap = textureLoad(t_ao, c, 0);
+            sum = sum + tap.r * w;
+            gi_sum = gi_sum + bounce_unpack(tap) * w;
             wsum = wsum + w;
         }
     }
     let blurred = select(1.0, sum / wsum, wsum > 0.0);
-    return vec4<f32>(select(1.0, blurred, (bitcast<u32>(blurred) & 0x7f800000u) != 0x7f800000u), select(-z0, 60000.0, textureLoad(t_depth, px * 2, 0) <= 0.0), 0.0, 0.0);
+    let gi = select(vec3<f32>(0.0), gi_sum / wsum, wsum > 0.0);
+    let pk = bounce_pack(gi);
+    return vec4<f32>(select(1.0, blurred, (bitcast<u32>(blurred) & 0x7f800000u) != 0x7f800000u), select(-z0, 60000.0, textureLoad(t_depth, px * 2, 0) <= 0.0), pk.x, pk.y);
 }

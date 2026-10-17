@@ -20,6 +20,7 @@ impl Renderer {
                     height.div_ceil(2) as f32,
                 ],
                 shift: [proj.z_axis.x, proj.z_axis.y, 0.0, 0.0],
+                wide: if f.enhanced_frame { occlusion_tuning() } else { [0.0; 4] },
             };
             self.queue
                 .write_buffer(&self.ao_buf, 0, bytemuck::bytes_of(&u));
