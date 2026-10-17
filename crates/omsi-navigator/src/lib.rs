@@ -274,10 +274,9 @@ struct Roads {
     look: u64,
     anchor: DVec2,
     lanes_seen: usize,
-    /// Vertices of the ground (buffer 0) and of the houses: their shadows (buffer 12), standing
-    /// (8) and flat (13).
-    verts: usize,
+    /// Vertices of the houses: their shadows (buffer 12), standing (8) and flat (13).
     houses: [usize; 3],
+    runs: [cull::Runs; 4],
     built_at: f32,
 }
 
@@ -1314,6 +1313,7 @@ mod panel;
 mod live;
 mod build;
 pub use build::{Built, MapGround};
+mod cull;
 mod city_map;
 pub use city_map::*;
 use lines_panel::*;

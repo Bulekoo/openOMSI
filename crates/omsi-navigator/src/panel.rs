@@ -54,10 +54,10 @@ impl Navigator {
         let mut built = None;
         if let Some(job) = self.panel_job.as_ref() {
             match job.poll() {
-                Ok(Some(b)) => {
+                Ok(Some(mut b)) => {
                     let (look, lanes) = job.meta;
-                    let [verts, houses @ ..] = b.counts;
-                    self.roads = Some(Roads { look, anchor: b.anchor, lanes_seen: lanes, verts, houses, built_at: self.time });
+                    let [_, houses @ ..] = b.counts;
+                    self.roads = Some(Roads { look, anchor: b.anchor, lanes_seen: lanes, houses, runs: std::mem::take(&mut b.runs), built_at: self.time });
                     built = Some(b);
                     self.panel_job = None;
                 }
@@ -75,9 +75,9 @@ impl Navigator {
                 let device = renderer.device.clone();
                 self.panel_job = Some(super::build::Job::start((look_key, lanes_now), move || super::build::build(&parts, anchor, reach, &pal2, look, true, true).made_on(&device)));
             } else {
-                let b = super::build::build(&parts, anchor, reach, &pal, look, true, true);
-                let [verts, houses @ ..] = b.counts;
-                self.roads = Some(Roads { look: look_key, anchor, lanes_seen: lanes_now, verts, houses, built_at: self.time });
+                let mut b = super::build::build(&parts, anchor, reach, &pal, look, true, true);
+                let [_, houses @ ..] = b.counts;
+                self.roads = Some(Roads { look: look_key, anchor, lanes_seen: lanes_now, houses, runs: std::mem::take(&mut b.runs), built_at: self.time });
                 built = Some(b);
             }
         }
@@ -203,21 +203,25 @@ impl Navigator {
         for l in layers.iter_mut() {
             l.opacity *= self.shown;
         }
-        let (ground_n, [shadow_n, solid_n, flat_n]) = self.roads.as_ref().map(|r| (r.verts as u32, r.houses.map(|n| n as u32))).unwrap_or((0, [0; 3]));
+        let solid_n = self.roads.as_ref().map_or(0, |r| r.houses[1] as u32);
         let three = self.show_3d;
         let route_n = self.route_mesh.3;
-        let draws = [
-            Draw { buffer: 2, range: 0..n_bg, layer: 5, texture: 0 },
-            Draw { buffer: 0, range: 0..ground_n, layer: 1, texture: 0 },
-            Draw { buffer: 13, range: 0..if three { 0 } else { flat_n }, layer: 1, texture: 0 },
-            Draw { buffer: 12, range: 0..if three { shadow_n } else { 0 }, layer: 2, texture: 0 },
-            Draw { buffer: 8, range: 0..if three { solid_n } else { 0 }, layer: 3, texture: 0 },
+        let mpp = map_layer.px_scale * self.zoom as f32 * 4.0;
+        let seen = |part: usize, on: bool| match (&self.roads, on) {
+            (Some(r), true) => super::cull::visible(&r.runs[part], vpm, mpp),
+            _ => Vec::new(),
+        };
+        let mut draws = vec![Draw { buffer: 2, range: 0..n_bg, layer: 5, texture: 0 }];
+        for (buffer, part, on, layer) in [(0, 0, true, 1), (13, 3, !three, 1), (12, 1, three, 2), (8, 2, three, 3)] {
+            draws.extend(seen(part, on).into_iter().map(|range| Draw { buffer, range, layer, texture: 0 }));
+        }
+        draws.extend([
             Draw { buffer: 9, range: 0..if three && solid_n > 0 { route_n } else { 0 }, layer: 1, texture: 0 },
             Draw { buffer: 1, range: 0..route_n, layer: 4, texture: 0 },
             Draw { buffer: 2, range: n_bg..n_bg + n_dy, layer: 1, texture: 0 },
             Draw { buffer: 16, range: 0..icon_n, layer: 0, texture: icon_tex },
             Draw { buffer: 2, range: n_ui_start..all.len() as u32, layer: 0, texture: 0 },
-        ];
+        ]);
         let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("navigator") });
         gpu.render(device, queue, &mut enc, target, size, Some(wgpu::Color::TRANSPARENT), &layers, &draws);
         queue.submit([enc.finish()]);
