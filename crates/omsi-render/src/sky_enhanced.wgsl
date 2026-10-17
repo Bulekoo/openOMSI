@@ -144,8 +144,11 @@ fn cloud_base_shape(p: vec3<f32>, h: f32, lod: f32) -> vec2<f32> {
     var shape_m = m * (linearstep(0.0, 0.1, h) - linearstep(top_fade, 1.0, h));
     if (cb > 0.05) {
         let wide = textureSampleLevel(t_cloud_shape, s_cloud, (p.xy + drift + vec2<f32>(1500.0, 800.0) * (h - 0.8)) / CLOUD_SHAPE_PERIOD, lod + 4.0).r;
-        let anvil = cb * smoothstep(0.74, 0.86, h) * (1.0 - smoothstep(0.9, 1.0, h)) * smoothstep(0.3, 0.55, wide);
-        shape_m = max(shape_m, anvil * (0.25 + 0.75 * s.r));
+        // (it follows the heaps' own picture, and is thin and torn at its edges, as the real
+        // sheet of ice crystals is: a flat plateau with a sharp rim read as an oval lid)
+        let spread = smoothstep(0.35, 0.7, mix(wide, s.r, 0.5));
+        let anvil = cb * smoothstep(0.74, 0.86, h) * (1.0 - smoothstep(0.9, 1.0, h)) * spread * spread;
+        shape_m = max(shape_m, anvil * (0.15 + 0.85 * s.r));
     }
     return vec2<f32>(shape_m, s.b);
 }
