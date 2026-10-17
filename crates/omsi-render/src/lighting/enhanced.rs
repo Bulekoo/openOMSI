@@ -100,7 +100,7 @@ pub(crate) fn bounce_history(
 pub(crate) const WIDE_AO_REACH: f32 = 18.0;
 pub(crate) const WIDE_AO_STRENGTH: f32 = 0.9;
 pub(crate) const BOUNCE_GAIN: f32 = 0.85;
-pub(crate) const BOUNCE_MAX: f32 = 6.0;
+pub(crate) const BOUNCE_MAX: f32 = 4.0;
 
 /// The tone curve's contrast about mid grey for a pre-exposure (its natural log): a
 /// camera's by day, falling off through the dusk to a little under none at night, where

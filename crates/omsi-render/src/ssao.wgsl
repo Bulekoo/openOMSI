@@ -169,8 +169,6 @@ fn fs_ssao(in: VsOut) -> @location(0) vec4<f32> {
             let qc = vec2<i32>(q);
             let qz = lin(textureLoad(t_depth, qc * 2, 0));
             let dz = qz - sp.z;
-            // (a surface far in front of the sample is another object's edge, not a wall
-            // standing over it)
             // a surface counts for what it takes of the hemisphere: not further in front of
             // the sample than the sample is from the point (a wall over the point, not
             // another object's edge), and never the cab round the camera: a dashboard and its
@@ -180,7 +178,11 @@ fn fs_ssao(in: VsOut) -> @location(0) vec4<f32> {
             if (dz > 0.25 && range > 0.0) {
                 wocc = wocc + range;
                 if (p.wide.z > 0.0 && p.history.x > 0.5) {
-                    gi = gi + history_light(qc, qz) * range;
+                    // (a lamp or a lit sign among the hits would be one sample of fourteen worth
+                    // a hundred of its neighbours' and stand in the picture as a pattern of
+                    // spots: what is brighter than a sunlit white wall is compressed)
+                    let lc = history_light(qc, qz);
+                    gi = gi + lc / (vec3<f32>(1.0) + lc * 0.35) * range;
                 }
             }
         }
@@ -249,23 +251,33 @@ fn fs_blur(in: VsOut) -> @location(0) vec4<f32> {
     var sum = 0.0;
     var gi_sum = vec3<f32>(0.0);
     var wsum = 0.0;
+    var gsum = 0.0;
     // 6x6 window: covers every rotation of the 4x4 pattern at least once in each row and
     // column, and the depth weight keeps the occlusion from bleeding across an edge (a
-    // relative tolerance: far surfaces are allowed a larger step)
-    for (var y = -3; y <= 2; y = y + 1) {
-        for (var x = -3; x <= 2; x = x + 1) {
+    // relative tolerance: far surfaces are allowed a larger step, and the weight falls off
+    // smoothly: a hard cut left the pattern standing wherever a slanting ground's steps
+    // from pixel to pixel came near it). The bounced light is smooth by nature and noisier
+    // by its few hits, so it is gathered over 8x8 with a looser tolerance.
+    let tol = 0.3 + 0.04 * abs(z0);
+    let gtol = 0.5 + 0.1 * abs(z0);
+    for (var y = -4; y <= 3; y = y + 1) {
+        for (var x = -4; x <= 3; x = x + 1) {
             let c = clamp(px + vec2<i32>(x, y), vec2<i32>(0), size - vec2<i32>(1));
             let z = lin(textureLoad(t_depth, c * 2, 0));
-            let tol = 0.3 + 0.02 * abs(z0);
-            let w = select(0.0, 1.0, abs(z - z0) < tol);
+            let dz = abs(z - z0);
             let tap = textureLoad(t_ao, c, 0);
-            sum = sum + tap.r * w;
-            gi_sum = gi_sum + bounce_unpack(tap) * w;
-            wsum = wsum + w;
+            let gw = 1.0 - smoothstep(0.5 * gtol, gtol, dz);
+            gi_sum = gi_sum + bounce_unpack(tap) * gw;
+            gsum = gsum + gw;
+            if (x >= -3 && x <= 2 && y >= -3 && y <= 2) {
+                let w = 1.0 - smoothstep(0.5 * tol, tol, dz);
+                sum = sum + tap.r * w;
+                wsum = wsum + w;
+            }
         }
     }
     let blurred = select(1.0, sum / wsum, wsum > 0.0);
-    let gi = select(vec3<f32>(0.0), gi_sum / wsum, wsum > 0.0);
+    let gi = select(vec3<f32>(0.0), gi_sum / gsum, gsum > 0.0);
     let pk = bounce_pack(gi);
     return vec4<f32>(select(1.0, blurred, (bitcast<u32>(blurred) & 0x7f800000u) != 0x7f800000u), select(-z0, 60000.0, textureLoad(t_depth, px * 2, 0) <= 0.0), pk.x, pk.y);
 }
