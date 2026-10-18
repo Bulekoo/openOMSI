@@ -237,20 +237,43 @@ pub(crate) struct Warm {
     done: Arc<Mutex<Vec<(usize, Vec<(std::path::PathBuf, Prepared)>)>>>,
     /// Pictures read and not uploaded yet, by file.
     pub(super) prepared: hashbrown::HashMap<std::path::PathBuf, Prepared>,
-    /// The map's own figures (by `Arc` address) read ahead as the avatars are, see
-    /// `Warm::map_figures`.
-    figures: hashbrown::HashSet<usize>,
+    /// The map's own figures being read ahead (see `Warm::map_figures`).
+    figures: Option<FigureRead>,
 }
 
-/// How much the map's figures read ahead may hold before they are drawn (bytes): beyond it a
-/// figure's pictures are let go once read, and its first person decodes them on the frame
-/// as before.
+/// How much the read-ahead of a map's figures decodes in all (bytes): it stops there, and
+/// the figures left are decoded on the frame of their first person, as before.
 const FIGURES_AHEAD_BYTES: usize = 160 << 20;
+
+/// The read-ahead of one map's figures: on a thread of its own, after nothing else (the
+/// timetable fleet's read-ahead and the avatars keep the shared workers), one figure file
+/// at a time.
+struct FigureRead {
+    /// The figures' files, the list it was started for.
+    figures: Vec<std::path::PathBuf>,
+    /// Set when the map changes: the thread stops before its next picture.
+    stop: Arc<std::sync::atomic::AtomicBool>,
+    /// The pictures it finished, not yet taken in.
+    out: Arc<Mutex<Vec<(std::path::PathBuf, Prepared)>>>,
+    /// The pictures it put into `Warm::prepared` (taken out again if the map changes before
+    /// anybody is drawn with them).
+    given: Vec<std::path::PathBuf>,
+}
+
+impl Drop for FigureRead {
+    fn drop(&mut self) {
+        self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
 
 impl Warm {
     /// Whether avatar `a`'s pictures are read; starts reading them on a worker if not.
     pub(super) fn ready(&mut self, a: &Arc<HumanType>, root: &std::path::Path) -> bool {
-        self.collect();
+        for (k, list) in self.done.lock().drain(..) {
+            self.reading.remove(&k);
+            self.ready.insert(k);
+            self.prepared.extend(list);
+        }
         let key = Arc::as_ptr(a) as usize;
         if self.ready.contains(&key) {
             return true;
@@ -276,35 +299,61 @@ impl Warm {
         false
     }
 
-    /// Take in what the workers finished.
-    fn collect(&mut self) {
-        let finished: Vec<_> = self.done.lock().drain(..).collect();
-        for (k, list) in finished {
-            self.reading.remove(&k);
-            self.ready.insert(k);
-            if self.figures.contains(&k) && self.prepared_bytes() > FIGURES_AHEAD_BYTES {
-                continue;
-            }
-            self.prepared.extend(list);
-        }
-    }
-
-    /// The bytes the pictures read and not yet uploaded hold.
-    fn prepared_bytes(&self) -> usize {
-        self.prepared.values().filter_map(|(t, _)| t.as_ref()).map(|t| t.levels.iter().map(Vec::len).sum::<usize>()).sum()
-    }
-
-    /// Have the pictures of the map's own figures (in their default clothes) read on the
-    /// workers as an avatar's are, up to `FIGURES_AHEAD_BYTES`: the first person of a figure
-    /// otherwise read and decoded them on the frame - a busy stop with a big pack of figures
-    /// stalled for up to half a second at a time. The person is drawn at once all the same;
-    /// whatever is not there yet is read on the frame as before.
+    /// Have the pictures of the map's own figures (in their default clothes) decoded ahead,
+    /// up to `FIGURES_AHEAD_BYTES`: the first person of a figure otherwise read and decoded
+    /// them on the frame - a busy stop with a big pack of figures stalled for up to half a
+    /// second at a time. The person is drawn at once all the same; whatever is not there yet
+    /// is read on the frame as before. A new list of figures (another map) stops the read of
+    /// the old one and drops what it read that nobody used.
     pub(super) fn map_figures(&mut self, types: &[Arc<HumanType>], root: &std::path::Path) {
-        self.collect();
-        for t in types {
-            if self.figures.insert(Arc::as_ptr(t) as usize) {
-                self.ready(t, root);
+        let same = self.figures.as_ref().is_some_and(|f| f.figures.len() == types.len() && f.figures.iter().zip(types).all(|(p, t)| *p == t.def.path));
+        if !same {
+            if let Some(old) = self.figures.take() {
+                for p in &old.given {
+                    self.prepared.remove(p);
+                }
             }
+            if types.is_empty() {
+                return;
+            }
+            self.figures = Some(start_figure_read(types, root));
+        }
+        let Some(f) = self.figures.as_mut() else { return };
+        for (path, pictures) in f.out.lock().drain(..) {
+            f.given.push(path.clone());
+            self.prepared.entry(path).or_insert(pictures);
         }
     }
+}
+
+/// Start reading `types`' default pictures on a thread of their own (see `FigureRead`).
+fn start_figure_read(types: &[Arc<HumanType>], root: &std::path::Path) -> FigureRead {
+    use std::sync::atomic::Ordering;
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let out: Arc<Mutex<Vec<(std::path::PathBuf, Prepared)>>> = Arc::default();
+    let figures: Vec<std::path::PathBuf> = types.iter().map(|t| t.def.path.clone()).collect();
+    let (list, root, halt, sink) = (types.to_vec(), root.to_path_buf(), stop.clone(), out.clone());
+    let spawned = std::thread::Builder::new().name("figure pictures".into()).spawn(move || {
+        let mut seen = hashbrown::HashSet::new();
+        let mut decoded = 0usize;
+        for t in &list {
+            let dirs = t.texture_dirs(&root);
+            for m in t.meshes.iter().flat_map(|hm| hm.materials.iter()) {
+                if halt.load(Ordering::Relaxed) || decoded >= FIGURES_AHEAD_BYTES {
+                    return;
+                }
+                let Some(path) = material_texture(t, &dirs, &m.texture, 0) else { continue };
+                if !seen.insert(path.clone()) {
+                    continue;
+                }
+                let Ok((data, _)) = omsi_texture::gpu::load_gpu(&path) else { continue };
+                decoded += data.levels.iter().map(Vec::len).sum::<usize>();
+                sink.lock().push((path, (Some(Arc::new(data)), None)));
+            }
+        }
+    });
+    if let Err(e) = spawned {
+        log::warn!("people: no thread to read the figures' pictures ahead: {e}");
+    }
+    FigureRead { figures, stop, out, given: Vec::new() }
 }
