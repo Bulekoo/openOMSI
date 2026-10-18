@@ -931,6 +931,17 @@ mod tests {
 }
 
 #[cfg(test)]
+pub(crate) fn with_test_language<T>(code: &str, f: impl FnOnce() -> T) -> T {
+    use std::sync::{Mutex, OnceLock};
+    static LANGUAGE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    let _guard = LANGUAGE_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap_or_else(|e| e.into_inner());
+    ui_language(code);
+    let result = f();
+    ui_language("ENG");
+    result
+}
+
+#[cfg(test)]
 mod locale_tests {
     use omsi_ui::i18n::{templated, templates, Piece};
 

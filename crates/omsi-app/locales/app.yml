@@ -10380,35 +10380,65 @@ _version: 2
   tl: "Arrow keys para pumili, Enter simula, Esc labas"
   sv: "Piltangenterna väljer, Enter startar, Esc avslutar"
   sr: "Tasteri sa strelicama biraju, Enter počinje, Esc se zatvara"
-"Click here or press / to chat":
-  ca: "Clica aquí o prem / per xatejar"
-  ru: "Нажмите сюда или / для чата"
-  de: "Hier klicken oder / drücken zum Chatten"
-  fr: "Cliquez ici ou appuyez sur / pour discuter"
-  uk: "Клацніть тут або натисніть /, щоб писати в чат"
-  be: "Пстрыкніце тут або націсніце /, каб пісаць у чат"
-  kk: "Чат үшін осында басыңыз немесе / басыңыз"
-  pl: "Kliknij tutaj lub naciśnij /, aby pisać na czacie"
-  cs: "Klikněte sem nebo stiskněte / pro chat"
-  hu: "Kattints ide vagy nyomd meg a / gombot a csevegéshez"
-  es: "Haz clic aquí o pulsa / para chatear"
-  pt: "Clique aqui ou pressione / para abrir o chat"
-  pt-pt: "Clique aqui ou prima / para abrir o chat"
-  it: "Clicca qui o premi / per scrivere in chat"
-  nl: "Klik hier of druk op / om te chatten"
-  tr: "Sohbet için buraya tıklayın veya / tuşuna basın"
-  ja: "ここをクリックするか / を押してチャット"
-  zh: "点击此处或按 / 聊天"
-  hi: "चैट के लिए यहाँ क्लिक करें या / दबाएँ"
-  zh-tw: "按此或按 / 開始聊天"
-  ko: "여기를 클릭하거나 /를 눌러 채팅"
-  th: "คลิกที่นี่หรือกด / เพื่อแชท"
-  vi: "Nhấp vào đây hoặc nhấn / để trò chuyện"
-  id: "Klik di sini atau tekan / untuk mengobrol"
-  ms: "Klik di sini atau tekan / untuk sembang"
-  tl: "Pindutin dito o / para mag-chat"
-  sv: "Klicka här eller tryck på / för att chatta"
-  sr: "Kliknite ovde ili pritisnite / za ćaskanje"
+"Click here to chat":
+  ca: "Clica aquí per xatejar"
+  ru: "Нажмите сюда для чата"
+  de: "Hier klicken zum Chatten"
+  fr: "Cliquez ici pour discuter"
+  uk: "Клацніть тут, щоб писати в чат"
+  be: "Пстрыкніце тут, каб пісаць у чат"
+  kk: "Чат үшін осында басыңыз"
+  pl: "Kliknij tutaj, aby pisać na czacie"
+  cs: "Klikněte sem pro chat"
+  hu: "Kattints ide a csevegéshez"
+  es: "Haz clic aquí para chatear"
+  pt: "Clique aqui para abrir o chat"
+  pt-pt: "Clique aqui para abrir o chat"
+  it: "Clicca qui per scrivere in chat"
+  nl: "Klik hier om te chatten"
+  tr: "Sohbet için buraya tıklayın"
+  ja: "ここをクリックしてチャット"
+  zh: "点击此处聊天"
+  hi: "चैट के लिए यहाँ क्लिक करें"
+  zh-tw: "按此開始聊天"
+  ko: "여기를 클릭해 채팅"
+  th: "คลิกที่นี่เพื่อแชท"
+  vi: "Nhấp vào đây để trò chuyện"
+  id: "Klik di sini untuk mengobrol"
+  ms: "Klik di sini untuk sembang"
+  tl: "Pindutin dito para mag-chat"
+  sv: "Klicka här för att chatta"
+  sr: "Kliknite ovde za ćaskanje"
+
+"Click here or press {} to chat":
+  ca: "Clica aquí o prem {} per xatejar"
+  ru: "Нажмите сюда или {} для чата"
+  de: "Hier klicken oder {} drücken zum Chatten"
+  fr: "Cliquez ici ou appuyez sur {} pour discuter"
+  uk: "Клацніть тут або натисніть {}, щоб писати в чат"
+  be: "Пстрыкніце тут або націсніце {}, каб пісаць у чат"
+  kk: "Чат үшін осында басыңыз немесе {} басыңыз"
+  pl: "Kliknij tutaj lub naciśnij {}, aby pisać na czacie"
+  cs: "Klikněte sem nebo stiskněte {} pro chat"
+  hu: "Kattints ide vagy nyomd meg a {} gombot a csevegéshez"
+  es: "Haz clic aquí o pulsa {} para chatear"
+  pt: "Clique aqui ou pressione {} para abrir o chat"
+  pt-pt: "Clique aqui ou prima {} para abrir o chat"
+  it: "Clicca qui o premi {} per scrivere in chat"
+  nl: "Klik hier of druk op {} om te chatten"
+  tr: "Sohbet için buraya tıklayın veya {} tuşuna basın"
+  ja: "ここをクリックするか {} を押してチャット"
+  zh: "点击此处或按 {} 聊天"
+  hi: "चैट के लिए यहाँ क्लिक करें या {} दबाएँ"
+  zh-tw: "按此或按 {} 開始聊天"
+  ko: "여기를 클릭하거나 {}를 눌러 채팅"
+  th: "คลิกที่นี่หรือกด {} เพื่อแชท"
+  vi: "Nhấp vào đây hoặc nhấn {} để trò chuyện"
+  id: "Klik di sini atau tekan {} untuk mengobrol"
+  ms: "Klik di sini atau tekan {} untuk sembang"
+  tl: "Pindutin dito o {} para mag-chat"
+  sv: "Klicka här eller tryck på {} för att chatta"
+  sr: "Kliknite ovde ili pritisnite {} za ćaskanje"
 "Paused  |  P to go on":
   ca: "En pausa  |  P per continuar"
   ru: "Пауза  |  P - продолжить"
@@ -10788,7 +10818,7 @@ _version: 2
   ja: "連結できません:トレーラーの連結器の位置(2.5 m以内、一直線上)までバックしてください"
   zh: "无可挂接对象:请倒车至拖车的挂接装置(2.5 m以内,成一直线)"
   hi: "जोड़ने को कुछ नहीं: ट्रेलर की कपलिंग तक पीछे जाएँ (2.5 m के भीतर, सीध में)"
-  zh-tw: "沒有可連接的物件：請倒車至拖車掛鉤處（2.5 公尺以內，成一直線）"
+  zh-tw: "沒有可連接的物件：請倒車至拖車掛鉤處（2.5 米以內，成一直線）"
   sv: "Inget att koppla: backa mot ett släps koppling (inom 2,5 m, i linje)"
   sr: "Ništa za spajanje: nazad do spojnice prikolice (unutar 2,5 m, u redu)"
 "Nothing coupled by hand (an articulated bus's rear section stays)":
@@ -13643,8 +13673,8 @@ _version: 2
   tr: "<1 dk"
   ja: "<1分"
   zh: "<1 分钟"
-  hi: "<1 मिनट"
   zh-tw: "<1 分鐘"
+  hi: "<1 मिनट"
   sv: "<1 min"
   sr: "<1 min"
 "A LAN session goes on while the menu is open":
@@ -49569,14 +49599,35 @@ _version: 2
   sr: "Android pita da li da ažurira openOMSI: tamo pritisnite Ažuriraj. Aplikacija se zatim ponovo pokreće sama."
   ru: "Android спрашивает, обновить ли openOMSI: нажмите там «Обновить». Приложение затем запустится заново само."
 
-"CHAT  (V in the game to write)":
-  es: "CHAT (V en el juego para escribir)"
-  zh-tw: "聊天（遊戲中按 V 輸入）"
-  pt: "CHAT  (V no jogo para escrever)"
-  ca: "XAT  (V al joc per escriure)"
-  fr: "CHAT  (V dans le jeu pour écrire)"
-  sr: "CHAT (V u igri za pisanje)"
-  ru: "ЧАТ  (V в игре, чтобы писать)"
+"CHAT  (in the game: the chat key, see Controls)":
+  ca: "XAT  (al joc: la tecla de xat, vegeu Controls)"
+  ru: "ЧАТ  (в игре: клавиша чата, см. Управление)"
+  de: "CHAT  (im Spiel: die Chat-Taste, siehe Steuerung)"
+  fr: "CHAT  (dans le jeu : la touche de chat, voir Commandes)"
+  uk: "ЧАТ  (у грі: клавіша чату, див. Керування)"
+  be: "ЧАТ  (у гульні: клавіша чата, гл. Кіраванне)"
+  kk: "ЧАТ  (ойында: чат пернесі, Басқару бөлімін қараңыз)"
+  pl: "CZAT  (w grze: klawisz czatu, zob. Sterowanie)"
+  cs: "CHAT  (ve hře: klávesa chatu, viz Ovládání)"
+  hu: "CSEVEGÉS  (a játékban: a csevegés gombja, lásd Irányítás)"
+  es: "CHAT  (en el juego: la tecla de chat, ver Controles)"
+  pt: "CHAT  (no jogo: a tecla de chat, veja Controles)"
+  pt-pt: "CHAT  (no jogo: a tecla de chat, ver Controlos)"
+  it: "CHAT  (nel gioco: il tasto della chat, vedi Comandi)"
+  nl: "CHAT  (in het spel: de chattoets, zie Besturing)"
+  tr: "SOHBET  (oyunda: sohbet tuşu, bkz. Kontroller)"
+  ja: "チャット（ゲーム内：チャットキー、「操作」を参照）"
+  zh: "聊天（游戏中：聊天键，见“控制”）"
+  hi: "चैट  (गेम में: चैट कुंजी, कंट्रोल देखें)"
+  zh-tw: "聊天（遊戲中：聊天鍵，見「操控設定」）"
+  ko: "채팅  (게임 중: 채팅 키, 조작 설정 참고)"
+  th: "แชท  (ในเกม: ปุ่มแชท ดูที่การควบคุม)"
+  vi: "TRÒ CHUYỆN  (trong trò chơi: phím trò chuyện, xem Điều khiển)"
+  id: "OBROLAN  (dalam game: tombol obrolan, lihat Kontrol)"
+  ms: "SEMBANG  (dalam permainan: kekunci sembang, lihat Kawalan)"
+  tl: "CHAT  (sa laro: ang chat key, tingnan ang Mga kontrol)"
+  sv: "CHATT  (i spelet: chattangenten, se Kontroller)"
+  sr: "CHAT  (u igri: taster za čet, vidi Kontrole)"
 
 "no key bindings":
   es: "sin teclas asignadas"
@@ -53510,6 +53561,195 @@ _version: 2
   ca: "Eines de desenvolupament"
   sr: "Alati za programere"
   ru: "Инструменты разработчика"
+
+"Variables":
+  zh-tw: "變數"
+
+"Overlays":
+  zh-tw: "疊加項目"
+
+"Files":
+  zh-tw: "檔案"
+
+"Watched":
+  zh-tw: "監看的變數"
+
+"All variables":
+  zh-tw: "所有變數"
+
+"Search variables ($ for string variables)":
+  zh-tw: "搜尋變數（字串變數請加上 $）"
+
+"no bus of one's own":
+  zh-tw: "尚未選擇巴士"
+
+"held":
+  zh-tw: "固定中"
+
+"Set":
+  zh-tw: "設定"
+
+"Hold":
+  zh-tw: "固定"
+
+"Let go":
+  zh-tw: "解除固定"
+
+"Variable value":
+  zh-tw: "變數值"
+
+"Across":
+  zh-tw: "橫向"
+
+"Along":
+  zh-tw: "縱向"
+
+"Turn":
+  zh-tw: "水平旋轉"
+
+"Paths":
+  zh-tw: "路徑"
+
+"Entry point":
+  zh-tw: "入口"
+
+"Exit point":
+  zh-tw: "出口"
+
+"Path points":
+  zh-tw: "路徑節點"
+
+"Driver position":
+  zh-tw: "駕駛員位置"
+
+"Standing position":
+  zh-tw: "站立位置"
+
+"Bounding box":
+  zh-tw: "包圍盒"
+
+"Axle":
+  zh-tw: "車軸"
+
+"Money point":
+  zh-tw: "收款點"
+
+"Change point":
+  zh-tw: "找零點"
+
+"Interior light":
+  zh-tw: "燈光"
+
+"stamper":
+  zh-tw: "打票機"
+
+"ticket sale":
+  zh-tw: "售票位置"
+
+"driver view":
+  zh-tw: "駕駛員視角"
+
+"passenger view":
+  zh-tw: "乘客視角"
+
+"Driver camera {n} of {count}":
+  zh-tw: "駕駛員視角 {n}／{count}"
+
+"Passenger camera {n} of {count}":
+  zh-tw: "乘客視角 {n}／{count}"
+
+"(path point {})":
+  zh-tw: "（路徑節點 {}）"
+
+"Log opened":
+  zh-tw: "已開啟記錄檔"
+
+"Model":
+  zh-tw: "模型"
+
+"Constant files":
+  zh-tw: "常數檔案"
+
+"Scripts":
+  zh-tw: "腳本"
+
+"(none)":
+  zh-tw: "（無）"
+
+"yaw":
+  zh-tw: "偏航"
+
+"pitch":
+  zh-tw: "俯仰"
+
+"fov":
+  zh-tw: "視野角"
+
+"paths.cfg and passenger cabin":
+  zh-tw: "paths.cfg 與乘客艙"
+
+"sound.cfg":
+  zh-tw: "sound.cfg"
+
+".bus (physics, cameras, mirrors, box)":
+  zh-tw: ".bus（物理、攝影機、後視鏡、包圍盒）"
+
+"model.cfg (animations, lights)":
+  zh-tw: "model.cfg（動畫、燈光）"
+
+"constfiles":
+  zh-tw: "常數檔案"
+
+"driven":
+  zh-tw: "驅動"
+
+"mirror {}  fov {:.0}":
+  zh-tw: "後視鏡 {}　視野角 {:.0}"
+
+"mirror {}: its [add_camera_reflexion_2] block copied":
+  zh-tw: "已複製後視鏡 {} 的 [add_camera_reflexion_2] 設定區塊"
+
+"mirror {}: the clipboard is not there - the block is in the log":
+  zh-tw: "無法使用剪貼簿；後視鏡 {} 的設定區塊已輸出至記錄檔"
+
+"Reloaded {} in {:.0} ms: {}":
+  zh-tw: "已重新載入 {}，耗時 {:.0} 毫秒：{}"
+
+"Reload failed for {}: {}":
+  zh-tw: "重新載入 {} 失敗：{}"
+
+"no sound":
+  zh-tw: "沒有音效設定檔"
+
+"animations, lights and visibility taken over":
+  zh-tw: "動畫、燈光與可見度已套用"
+
+"the bus has no model":
+  zh-tw: "此巴士沒有模型"
+
+"a script changed since: place the bus anew":
+  zh-tw: "腳本已變更：請重新放置巴士"
+
+"constants and curves taken over":
+  zh-tw: "常數與曲線已套用"
+
+"scripts are not read again: place the bus anew":
+  zh-tw: "無法重新讀取腳本：請重新放置巴士"
+
+"a script or a variable list changed: place the bus anew to run it":
+  zh-tw: "腳本或變數清單已變更：請重新放置巴士以套用"
+
+"Cabin drawn anew (no passengers in this game)":
+  zh-tw: "乘客艙已重新建立（本場遊戲沒有乘客）"
+
+"Cannot reload cabin: {} people aboard and the new cabin has fewer places, doors or points - let them off first":
+  zh-tw: "無法重新載入乘客艙：目前有 {} 名乘客，而新乘客艙的座位、車門或路徑點較少，請先讓乘客下車"
+
+"no passenger cabin now":
+  zh-tw: "目前沒有乘客艙"
+
+"Cabin reloaded: {} path points, {} places, {} entries, {} exits":
+  zh-tw: "乘客艙已重新載入：{} 個路徑點、{} 個位置、{} 個入口、{} 個出口"
 
 "Close (Ctrl+Shift+D)":
   zh-tw: "關閉（Ctrl+Shift+D）"
@@ -60256,194 +60496,242 @@ _version: 2
   sr: "Nepoznato"
 
 "Air pressure is low (spring brake {:.1} bar): the spring brake holds until the compressor has filled the tanks - keep the engine running":
+  zh-tw: "氣壓過低（彈簧煞車 {:.1} bar）：空氣壓縮機將儲氣筒充滿前，彈簧煞車會保持制動；請讓引擎繼續運轉"
   fr: "Pression d'air basse (frein à ressort {:.1} bar) : le frein à ressort reste serré tant que le compresseur n'a pas rempli les réservoirs - laissez tourner le moteur"
   sr: "Pritisak vazduha je nizak (oprugna kočnica {:.1} bar): opružna kočnica ostaje aktivirana dok kompresor ne napuni rezervoare — ostavite motor da radi"
   ru: "Давление воздуха низкое (пружинный тормоз {:.1} бар): пружинный тормоз удерживается, пока компрессор не заполнит баллоны — не глушите двигатель"
 "Air pressure is low ({:.1} bar in the tanks, spring brake {:.1} bar): the spring brake holds until the compressor has filled the tanks - keep the engine running":
+  zh-tw: "氣壓過低（儲氣筒 {:.1} bar，彈簧煞車 {:.1} bar）：空氣壓縮機將儲氣筒充滿前，彈簧煞車會保持制動；請讓引擎繼續運轉"
   fr: "Pression d'air basse ({:.1} bar dans les réservoirs, frein à ressort {:.1} bar) : le frein à ressort reste serré tant que le compresseur n'a pas rempli les réservoirs - laissez tourner le moteur"
   sr: "Pritisak vazduha je nizak ({:.1} bar u rezervoarima, opružna kočnica {:.1} bar): opružna kočnica ostaje aktivirana dok kompresor ne napuni rezervoare — ostavite motor da radi"
   ru: "Давление воздуха низкое ({:.1} бар в баллонах, пружинный тормоз {:.1} бар): пружинный тормоз удерживается, пока компрессор не заполнит баллоны — не глушите двигатель"
 "Air pressure is low ({v:.1} bar)":
+  zh-tw: "氣壓過低（{v:.1} bar）"
   fr: "Pression d'air basse ({v:.1} bar)"
   sr: "Pritisak vazduha je nizak ({v:.1} bar)"
   ru: "Давление воздуха низкое ({v:.1} бар)"
 "Axles and wheels":
+  zh-tw: "車軸與車輪"
   fr: "Essieux et roues"
   sr: "Osovine i točkovi"
   ru: "Оси и колёса"
 "Bounding boxes":
+  zh-tw: "包圍盒"
   fr: "Boîtes englobantes"
   sr: "Granični okviri"
   ru: "Ограничивающие рамки"
 "Cabin / outside view":
+  zh-tw: "駕駛室／車外視角"
   fr: "Vue cabine / extérieure"
   sr: "Pogled iz kabine / spoljašnji pogled"
   ru: "Кабина / внешний вид"
 "Camera keys off: in the free view the keys work the bus, the mouse turns the camera":
+  zh-tw: "自由視角：相機快捷鍵已關閉，按鍵可控制巴士，滑鼠可轉動視角"
   fr: "Touches de caméra désactivées : en vue libre, les touches commandent le bus et la souris tourne la caméra"
   sr: "Kontrole kamere isključene: u slobodnom pogledu tasteri upravljaju autobusom, a miš pomera kameru"
   ru: "Клавиши камеры выкл.: в свободном обзоре клавиши управляют автобусом, мышь поворачивает камеру"
 "Camera keys on: W, A, S, D, Q, E and the arrows fly the free camera":
+  zh-tw: "自由視角：相機快捷鍵已開啟；使用 W、A、S、D、Q、E 及方向鍵移動相機"
   fr: "Touches de caméra activées : W, A, S, D, Q, E et les flèches déplacent la caméra libre"
   sr: "Kontrole kamere uključene: W, A, S, D, Q, E i strelice pomeraju slobodnu kameru"
   ru: "Клавиши камеры вкл.: W, A, S, D, Q, E и стрелки управляют свободной камерой"
 "Centre of gravity":
+  zh-tw: "重心"
   fr: "Centre de gravité"
   sr: "Težište"
   ru: "Центр тяжести"
 "Change due: {owed:.2}":
+  zh-tw: "找零：{owed:.2}"
   fr: "Monnaie à rendre : {owed:.2}"
   sr: "Kusur: {owed:.2}"
   ru: "Причитается сдача: {owed:.2}"
 "Could not place {}: {e:#}":
+  zh-tw: "無法放置 {}：{e:#}"
   fr: "Impossible de placer {} : {e:#}"
   sr: "Nije moguće postaviti {}: {e:#}"
   ru: "Не удалось разместить {}: {e:#}"
 "Could not place {name}: {e}":
+  zh-tw: "無法放置 {name}：{e}"
   fr: "Impossible de placer {name} : {e}"
   sr: "Nije moguće postaviti {name}: {e}"
   ru: "Не удалось разместить {name}: {e}"
 "Could not start the game again: {e}":
+  zh-tw: "無法重新啟動遊戲：{e}"
   fr: "Impossible de relancer le jeu : {e}"
   sr: "Nije moguće ponovo pokrenuti igru: {e}"
   ru: "Не удалось перезапустить игру: {e}"
 "Depot file: {}":
+  zh-tw: "車庫檔案：{}"
   fr: "Fichier de dépôt : {}"
   sr: "Datoteka depoa: {}"
   ru: "Файл парка: {}"
 "Depot file: {e}":
+  zh-tw: "車庫檔案：{e}"
   fr: "Fichier de dépôt : {e}"
   sr: "Datoteka depoa: {e}"
   ru: "Файл парка: {e}"
 "Developer tools closed":
+  zh-tw: "開發人員工具已關閉"
   fr: "Outils de développement fermés"
   sr: "Alatke za razvoj su zatvorene"
   ru: "Инструменты разработчика закрыты"
 "Developer tools (Ctrl+Shift+D closes them)":
+  zh-tw: "開發人員工具（按 Ctrl+Shift+D 關閉）"
   fr: "Outils de développement (Ctrl+Maj+D pour les fermer)"
   sr: "Alatke za razvoj (Ctrl+Shift+D ih zatvara)"
   ru: "Инструменты разработчика (Ctrl+Shift+D закрывает их)"
 "Esc menu: Drive the next vehicle":
+  zh-tw: "Esc 選單：駕駛下一輛車"
   fr: "menu Échap : Conduire le véhicule suivant"
   sr: "Esc meni: preuzmi sledeće vozilo"
   ru: "Меню Esc: Сесть за следующий транспорт"
 "Event was not added: {e}":
+  zh-tw: "未能新增事件：{e}"
   fr: "L'évènement n'a pas été ajouté : {e}"
   sr: "Događaj nije dodat: {e}"
   ru: "Событие не добавлено: {e}"
 "Fleet number {n}":
+  zh-tw: "車隊編號 {n}"
   fr: "Numéro de parc {n}"
   sr: "Broj vozila u voznom parku {n}"
   ru: "Бортовой номер {n}"
 "G at its driver's door":
+  zh-tw: "在車輛駕駛座車門旁按 G"
   fr: "G à sa porte conducteur"
   sr: "G kod vozačevih vrata"
   ru: "G у двери водителя"
 "Ground flattened to {:.2} m":
+  zh-tw: "地面已整平至 {:.2} m"
   fr: "Sol aplani à {:.2} m"
   sr: "Teren poravnat na {:.2} m"
   ru: "Земля выровнена до {:.2} м"
 "Ground lowered {:.2} m":
+  zh-tw: "地面已降低 {:.2} m"
   fr: "Sol abaissé de {:.2} m"
   sr: "Teren spušten za {:.2} m"
   ru: "Земля опущена на {:.2} м"
 "Ground raised {:.2} m":
+  zh-tw: "地面已升高 {:.2} m"
   fr: "Sol relevé de {:.2} m"
   sr: "Teren podignut za {:.2} m"
   ru: "Земля поднята на {:.2} м"
 "Host's mods could not be fetched: {e}":
+  zh-tw: "無法取得房主使用的模組：{e}"
   fr: "Les mods de l'hôte n'ont pas pu être récupérés : {e}"
   sr: "Nije moguće preuzeti modove domaćina: {e}"
   ru: "Не удалось получить моды хоста: {e}"
 "Host's mods: everything the host uses is installed here":
+  zh-tw: "房主使用的所有模組都已安裝"
   fr: "Mods de l'hôte : tout ce qu'il utilise est installé ici"
   sr: "Modovi domaćina: sve što domaćin koristi već je instalirano ovde"
   ru: "Моды хоста: всё, что использует хост, здесь установлено"
 "Insert: new panel - Delete: remove it - C: show another mirror":
+  zh-tw: "Insert：新增面板；Delete：移除面板；C：顯示其他後視鏡"
   fr: "Inser : nouveau panneau - Suppr : le retirer - C : afficher un autre rétroviseur"
   sr: "Insert: dodaj novi panel — Delete: ukloni ga — C: prikaži drugo ogledalo"
   ru: "Insert: новая панель — Delete: удалить её — C: показать другое зеркало"
 "Interior lights":
+  zh-tw: "車廂燈"
   fr: "Éclairage intérieur"
   sr: "Unutrašnje osvetljenje"
   ru: "Освещение салона"
 "Its log is in the openOMSI data folder (launcher.log).":
+  zh-tw: "記錄檔位於 openOMSI 的資料目錄（launcher.log）。"
   fr: "Son journal se trouve dans le dossier de données d'openOMSI (launcher.log)."
   sr: "Dnevnik se nalazi u fascikli sa openOMSI podacima (launcher.log)."
   ru: "Его журнал находится в папке данных openOMSI (launcher.log)."
 "Its log is in the openOMSI data folder (launcher.log); Microsoft Edge WebView2 {} is installed.":
+  zh-tw: "記錄檔位於 openOMSI 的資料目錄（launcher.log）；目前已安裝 Microsoft Edge WebView2 {}。"
   fr: "Son journal se trouve dans le dossier de données d'openOMSI (launcher.log) ; Microsoft Edge WebView2 {} est installé."
   sr: "Dnevnik se nalazi u fascikli sa openOMSI podacima (launcher.log); instaliran je Microsoft Edge WebView2 {}."
   ru: "Его журнал находится в папке данных openOMSI (launcher.log); установлен Microsoft Edge WebView2 {}."
 "Key binding was not saved: {e}":
+  zh-tw: "無法儲存按鍵綁定：{e}"
   fr: "La touche n'a pas été enregistrée : {e}"
   sr: "Dodela tastera nije sačuvana: {e}"
   ru: "Раскладка клавиши не сохранена: {e}"
 "Kneeling: C (or Space) stands up again":
+  zh-tw: "車身跪降中：再次按 C（或空白鍵）即可升起"
   fr: "Accroupi : C (ou Espace) pour se relever"
   sr: "Spuštanje autobusa: pritisnite C (ili Space) da ga ponovo podignete"
   ru: "Приседание: C (или пробел) поднимает обратно"
 "Kneeling: the button again stands up":
+  zh-tw: "車身跪降中：再次按下該按鈕即可升起"
   fr: "Accroupi : le même bouton pour se relever"
   sr: "Spuštanje autobusa: ponovo pritisnite dugme da ga podignete"
   ru: "Приседание: та же кнопка поднимает обратно"
 "LAN: other players join with the code {}  (or by an address: {})":
+  zh-tw: "區域網路遊戲：其他玩家可使用代碼 {} 加入（或使用位址：{}）"
   fr: "LAN : les autres joueurs rejoignent avec le code {}  (ou par une adresse : {})"
   sr: "LAN: drugi igrači se pridružuju pomoću koda {} (ili adrese: {})"
   ru: "LAN: другие игроки подключаются по коду {}  (или по адресу: {})"
 "LAN: the host's weather: {}":
+  zh-tw: "區域網路遊戲：房主天氣：{}"
   fr: "LAN : la météo de l'hôte : {}"
   sr: "LAN: vremenske prilike koje je podesio domaćin: {}"
   ru: "LAN: погода хоста: {}"
 "Left indicator":
+  zh-tw: "左方向燈"
   fr: "Clignotant gauche"
   sr: "Levi pokazivač pravca"
   ru: "Левый указатель поворота"
 "Left stick click":
+  zh-tw: "左搖桿按鍵"
   fr: "Clic du stick gauche"
   sr: "Klik leve palice"
   ru: "Нажатие левого стика"
 "No home folder was found to keep the key bindings in":
+  zh-tw: "找不到可用來儲存按鍵綁定的家目錄"
   fr: "Aucun dossier personnel trouvé pour y garder les touches"
   sr: "Nije pronađena matična fascikla za čuvanje dodela tastera"
   ru: "Не найдена домашняя папка для хранения раскладки клавиш"
 "Open / close all doors":
+  zh-tw: "開啟／關閉所有車門"
   fr: "Ouvrir / fermer toutes les portes"
   sr: "Otvori / zatvori sva vrata"
   ru: "Открыть / закрыть все двери"
 "Passenger wants: {name}  {value:.2}":
+  zh-tw: "乘客需要：{name}  {value:.2}"
   fr: "Le passager veut : {name}  {value:.2}"
   sr: "Putnik traži: {name}  {value:.2}"
   ru: "Пассажир хочет: {name}  {value:.2}"
 "Placing: click to set it down (wheel / Q / E turn, R turns round, Esc takes it away)":
+  zh-tw: "放置：按一下即可放下（滑鼠滾輪／Q／E 旋轉，R 翻轉，Esc 取消）"
   fr: "Placement : cliquez pour le poser (molette / Q / E pour tourner, R pour faire demi-tour, Échap pour l'enlever)"
   sr: "Postavljanje: kliknite da biste spustili objekat (točkić / Q / E rotiraju ga, R ga okreće naopako, Esc ga uklanja)"
   ru: "Размещение: клик ставит объект (колесо / Q / E поворачивают, R разворачивает, Esc убирает)"
 "Placing: it would stand in another vehicle here":
+  zh-tw: "放置：此處會與另一輛車重疊"
   fr: "Placement : il chevaucherait un autre véhicule ici"
   sr: "Postavljanje: ovde bi se objekat preklapao sa drugim vozilom"
   ru: "Размещение: здесь объект пересекался бы с другим транспортом"
 "Placing: point at the ground (wheel / Q / E turn, R turns round, Esc takes it away)":
+  zh-tw: "放置：將游標移至地面（滑鼠滾輪／Q／E 旋轉，R 翻轉，Esc 取消）"
   fr: "Placement : visez le sol (molette / Q / E pour tourner, R pour faire demi-tour, Échap pour l'enlever)"
   sr: "Postavljanje: usmerite pokazivač ka tlu (točkić / Q / E rotiraju objekat, R ga okreće naopako, Esc ga uklanja)"
   ru: "Размещение: наведите на землю (колесо / Q / E поворачивают, R разворачивает, Esc убирает)"
 "Refuelling... (drive off to stop)":
+  zh-tw: "正在加油……（駛離即可停止）"
   fr: "Plein en cours... (démarrez pour arrêter)"
   sr: "Sipanje goriva... (odvezite se da biste zaustavili)"
   ru: "Заправка… (чтобы остановить, тронитесь с места)"
 "Refuelling stopped":
+  zh-tw: "已停止加油"
   fr: "Plein arrêté"
   sr: "Sipanje goriva je zaustavljeno"
   ru: "Заправка остановлена"
 "Reloaded from its files: {}":
+  zh-tw: "已從檔案重新載入：{}"
   fr: "Rechargé depuis ses fichiers : {}"
   sr: "Ponovo učitano iz datoteka: {}"
   ru: "Перезагружено из своих файлов: {}"
 "Right indicator":
+  zh-tw: "右方向燈"
   fr: "Clignotant droit"
   sr: "Desni pokazivač pravca"
   ru: "Правый указатель поворота"
 "R: put the cursor on a mirror panel (Shift+R: every mirror)":
+  zh-tw: "R：將游標移至後視鏡面板（Shift+R：切換所有後視鏡）"
   fr: "R : placer le curseur sur un panneau de rétroviseur (Maj+R : tous les rétroviseurs)"
   sr: "R: postavite pokazivač na panel ogledala (Shift+R: sva ogledala)"
   ru: "R: навести курсор на панель зеркала (Shift+R: все зеркала)"
@@ -60477,82 +60765,102 @@ _version: 2
   sv: "Passagerarbelysningen är på"
   sr: "Svetla u putničkom prostoru su uključena"
 "Seats and standing places":
+  zh-tw: "座位與站立位置"
   fr: "Places assises et debout"
   sr: "Sedišta i mesta za stajanje"
   ru: "Сидячие и стоячие места"
 "Sent to the server: {action}":
+  zh-tw: "已傳送至伺服器：{action}"
   fr: "Envoyé au serveur : {action}"
   sr: "Poslato serveru: {action}"
   ru: "Отправлено на сервер: {action}"
 "Stop skipped: {name}":
+  zh-tw: "已略過站點：{name}"
   fr: "Arrêt sauté : {name}"
   sr: "Zaustavljanje je preskočeno: {name}"
   ru: "Остановка пропущена: {name}"
 "The bus could not be loaded: {}":
+  zh-tw: "無法載入巴士：{}"
   fr: "Le bus n'a pas pu être chargé : {}"
   sr: "Autobus nije moguće učitati: {}"
   ru: "Не удалось загрузить автобус: {}"
 "The game cannot draw on this computer: {e:#}":
+  zh-tw: "此電腦無法繪製遊戲畫面：{e:#}"
   fr: "Le jeu ne peut pas s'afficher sur cet ordinateur : {e:#}"
   sr: "Igra ne može da iscrtava grafiku na ovom računaru: {e:#}"
   ru: "Игра не может рисовать на этом компьютере: {e:#}"
 "The game cannot open its window: {e}":
+  zh-tw: "遊戲無法開啟視窗：{e}"
   fr: "Le jeu ne peut pas ouvrir sa fenêtre : {e}"
   sr: "Igra ne može da otvori svoj prozor: {e}"
   ru: "Игра не может открыть своё окно: {e}"
 "The game's window cannot be drawn into: {e:#}":
+  zh-tw: "無法在遊戲視窗中繪製內容：{e:#}"
   fr: "Impossible de dessiner dans la fenêtre du jeu : {e:#}"
   sr: "Nije moguće iscrtavati sadržaj u prozoru igre: {e:#}"
   ru: "В окне игры невозможно рисовать: {e:#}"
 "The graphics card cannot keep up: {what}":
+  zh-tw: "顯示卡無法維持所需效能：{what}"
   fr: "La carte graphique ne suit pas : {what}"
   sr: "Grafička kartica ne uspeva da održi korak: {what}"
   ru: "Видеокарта не справляется: {what}"
 "The graphics driver reset the card: the game started again with lighter graphics for this drive. Settings → Graphics keeps yours for the next start.":
+  zh-tw: "顯示卡驅動程式已重設顯示卡：遊戲已使用較低的圖形設定重新啟動本次行程。「設定 → 圖形」中的設定會保留，供下次啟動使用。"
   fr: "Le pilote graphique a réinitialisé la carte : le jeu a redémarré avec des graphismes allégés pour cette partie. Paramètres → Graphismes garde les vôtres pour le prochain lancement."
   sr: "Grafički upravljački program je resetovao karticu: igra je ponovo pokrenuta sa skromnijim grafičkim podešavanjima za ovu vožnju. Vaša podešavanja za sledeće pokretanje ostaju sačuvana u Podešavanja → Grafika."
   ru: "Графический драйвер сбросил видеокарту: игра перезапустилась с облегчённой графикой для этой поездки. Настройки → Графика сохранят ваши настройки для следующего запуска."
 "The launcher's window needs WebKitGTK 4.1 (the package libwebkit2gtk-4.1-0 on Debian and Ubuntu, webkit2gtk4.1 on Fedora, webkit2gtk-4.1 on Arch).":
+  zh-tw: "啟動器視窗需要 WebKitGTK 4.1（Debian 和 Ubuntu 套件名稱為 libwebkit2gtk-4.1-0、Fedora 為 webkit2gtk4.1、Arch 為 webkit2gtk-4.1）。"
   fr: "La fenêtre du lanceur a besoin de WebKitGTK 4.1 (le paquet libwebkit2gtk-4.1-0 sur Debian et Ubuntu, webkit2gtk4.1 sur Fedora, webkit2gtk-4.1 sur Arch)."
   sr: "Prozor pokretača zahteva WebKitGTK 4.1 (paket libwebkit2gtk-4.1-0 na Debianu i Ubuntuu, webkit2gtk4.1 na Fedori, odnosno webkit2gtk-4.1 na Archu)."
   ru: "Для окна лаунчера требуется WebKitGTK 4.1 (пакет libwebkit2gtk-4.1-0 на Debian и Ubuntu, webkit2gtk4.1 на Fedora, webkit2gtk-4.1 на Arch)."
 "The server does not offer {name}":
+  zh-tw: "伺服器未提供 {name}"
   fr: "Le serveur ne propose pas {name}"
   sr: "Server ne nudi {name}"
   ru: "Сервер не предлагает {name}"
 "This map uses {objects} objects and {splines} splines that are not installed (add-ons: {}{more}). The list is in {}":
+  zh-tw: "此地圖使用了尚未安裝的 {objects} 個物件與 {splines} 條樣條線（附加元件：{}{more}）。清單位於 {}"
   fr: "Cette carte utilise {objects} objets et {splines} splines qui ne sont pas installés (add-ons : {}{more}). La liste se trouve dans {}"
   sr: "Ova mapa koristi {objects} objekata i {splines} splajnova koji nisu instalirani (dodaci: {}{more}). Spisak se nalazi u {}"
   ru: "Эта карта использует {objects} объектов и {splines} сплайнов, которые не установлены (дополнения: {}{more}). Список находится в {}"
 "Tickets and stampers":
+  zh-tw: "車票與打票機"
   fr: "Billets et composteurs"
   sr: "Karte i poništivači"
   ru: "Билеты и компостеры"
 "Time speed x{s}":
+  zh-tw: "時間倍率 ×{s}"
   fr: "Vitesse du temps x{s}"
   sr: "Brzina protoka vremena ×{s}"
   ru: "Скорость времени x{s}"
 "Tomorrow.io: set your private API key first":
+  zh-tw: "Tomorrow.io：請先設定你的私人 API 金鑰"
   fr: "Tomorrow.io : indiquez d'abord votre clé d'API privée"
   sr: "Tomorrow.io: najpre podesite svoj privatni API ključ"
   ru: "Tomorrow.io: сначала укажите свой приватный API-ключ"
 "Voice: joining the voice channel ...":
+  zh-tw: "語音：正在加入語音頻道……"
   fr: "Voix : connexion au salon vocal ..."
   sr: "Glas: pridruživanje glasovnom kanalu..."
   ru: "Голос: подключение к голосовому каналу…"
 "Voice: start GreenTeaSpeak with the openOMSI plugin to talk":
+  zh-tw: "語音：請啟動 GreenTeaSpeak 並載入 openOMSI 外掛以進行語音通話"
   fr: "Voix : lancez GreenTeaSpeak avec le plugin openOMSI pour parler"
   sr: "Glas: pokrenite GreenTeaSpeak sa openOMSI dodatkom da biste razgovarali"
   ru: "Голос: запустите GreenTeaSpeak с плагином openOMSI, чтобы говорить"
 "Voice: your microphone is muted":
+  zh-tw: "語音：麥克風已靜音"
   fr: "Voix : votre micro est coupé"
   sr: "Glas: mikrofon vam je isključen"
   ru: "Голос: ваш микрофон выключен"
 "Washing stopped":
+  zh-tw: "已停止洗車"
   fr: "Lavage arrêté"
   sr: "Pranje je zaustavljeno"
   ru: "Мойка остановлена"
 "Weather cycle {}":
+  zh-tw: "天氣循環 {}"
   fr: "Cycle météo {}"
   sr: "Ciklus vremenskih prilika {}"
   ru: "Цикл погоды {}"
@@ -61716,3 +62024,42 @@ _version: 2
   tl: "Enhanced: lilim sa buong kalye at ang liwanag na tumatalbog sa pagitan ng mga ibabaw; pinapatay ito ng Auto sa maliit o shared na graphics chip (humigit-kumulang kalahating millisecond bawat frame)"
   sv: "Enhanced: skugga över en hel gata och ljus som studsar mellan ytor; Auto stänger av det på ett litet eller delat grafikchip (ungefär en halv millisekund per bild)"
   sr: "Enhanced: senka preko cele ulice i svetlo koje se odbija između površina; Auto to isključuje na malom ili deljenom grafičkom čipu (oko pola milisekunde po kadru)"
+"m":
+  zh-tw: "米"
+"km":
+  zh-tw: "公里"
+"yd":
+  zh-tw: "碼"
+"ft":
+  zh-tw: "英尺"
+"mi":
+  zh-tw: "英里"
+"Terrain":
+  es: "Relieve"
+  ca: "Relleu"
+  zh-tw: "地形"
+  sv: "Terräng"
+  pt: "Relevo"
+  fr: "Relief"
+  de: "Gelände"
+  nl: "Terrein"
+  pt-pt: "Relevo"
+  zh: "地形"
+  ru: "Рельеф"
+  pl: "Teren"
+  uk: "Рельєф"
+  it: "Rilievo"
+  cs: "Terén"
+  tr: "Arazi"
+  hu: "Domborzat"
+  ja: "地形"
+  be: "Рэльеф"
+  kk: "Бедер"
+  hi: "भूभाग"
+  ko: "지형"
+  th: "ภูมิประเทศ"
+  vi: "Địa hình"
+  id: "Medan"
+  ms: "Rupa bumi"
+  tl: "Lupain"
+  sr: "Teren"

@@ -10,6 +10,9 @@ use omsi_ui::Vertex;
 
 const PANEL_REACH: f64 = 640.0;
 const PANEL_REBUILD: f64 = 150.0;
+/// The triangles of house models the panel's ground may hold: it is drawn every frame, and rebuilt
+/// as the bus drives.
+const PANEL_MODELS: usize = 30_000;
 
 /// The card behind the next turn (dark in both looks, as a car's guidance banner is).
 const BANNER: Color = Color::rgba(28, 30, 33, 0.95);
@@ -67,15 +70,15 @@ impl Navigator {
         }
         if rebuild && self.panel_job.is_none() && built.is_none() {
             let anchor = f.bus.truncate();
-            let parts = self.ground_parts(net);
+            let parts = self.ground_parts(net, None);
             let look = GroundLook { surfaces: true, trees: true, dashes: true };
             let reach = PANEL_REACH;
             if self.global.is_some() {
                 let pal2 = pal;
                 let device = renderer.device.clone();
-                self.panel_job = Some(super::build::Job::start((look_key, lanes_now), move || super::build::build(&parts, anchor, reach, &pal2, look, true, true).made_on(&device)));
+                self.panel_job = Some(super::build::Job::start((look_key, lanes_now), move || super::build::build(&parts, anchor, reach, &pal2, look, true, Some(PANEL_MODELS)).made_on(&device)));
             } else {
-                let mut b = super::build::build(&parts, anchor, reach, &pal, look, true, true);
+                let mut b = super::build::build(&parts, anchor, reach, &pal, look, true, Some(PANEL_MODELS));
                 let [_, houses @ ..] = b.counts;
                 self.roads = Some(Roads { look: look_key, anchor, lanes_seen: lanes_now, houses, runs: std::mem::take(&mut b.runs), built_at: self.time });
                 built = Some(b);
@@ -350,7 +353,7 @@ impl Navigator {
         };
         let jam_note = (self.jam_cost >= 30.0).then(|| {
             let what = if self.jam_cost >= 60.0 { wd.jam } else { wd.slow };
-            (format!("{what} +{:.0} min", (self.jam_cost / 60.0).max(1.0).round()), if self.jam_cost >= 60.0 { style::TRAFFIC[2] } else { style::TRAFFIC[1] })
+            (format!("{what} +{:.0} {}", (self.jam_cost / 60.0).max(1.0).round(), omsi_ui::tr("min")), if self.jam_cost >= 60.0 { style::TRAFFIC[2] } else { style::TRAFFIC[1] })
         });
         match f.stops.first() {
             Some(st) => {
@@ -373,7 +376,7 @@ impl Navigator {
                 if let Some(d) = self.next_dist {
                     parts.push(units.distance(d));
                     let secs = d / (self.speed_avg.max(5.0) as f64) + if self.jam_cost > 0.0 { self.jam_cost as f64 } else { 0.0 };
-                    parts.push(if secs < 60.0 { "<1 min".to_string() } else { format!("{:.0} min", (secs / 60.0).round()) });
+                    parts.push(if secs < 60.0 { omsi_ui::tr("<1 min").into_owned() } else { format!("{:.0} {}", (secs / 60.0).round(), omsi_ui::tr("min")) });
                 }
                 parts.push(format!("{:02}:{:02}", (st.arrival / 3600.0) as i32 % 24, ((st.arrival % 3600.0) / 60.0) as i32));
                 let line2 = parts.join(" · ");

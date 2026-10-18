@@ -44,6 +44,11 @@ APPLESCRIPT
 cp assets/icons/app/openomsi.icns "$tmp/mnt/.VolumeIcon.icns"
 xattr -wx com.apple.FinderInfo "0000000000000000040000000000000000000000000000000000000000000000" "$tmp/mnt"
 sync
-hdiutil detach "$tmp/mnt" >/dev/null || { sleep 5; hdiutil detach -force "$tmp/mnt" >/dev/null; }
+# A busy detach can finish before the retry; an already-unmounted image is ready to convert.
+hdiutil detach "$tmp/mnt" >/dev/null || {
+  sleep 5
+  hdiutil detach -force "$tmp/mnt" >/dev/null || [ ! -d "$tmp/mnt/openOMSI.app" ]
+}
 mkdir -p "$(dirname "$out")"
 hdiutil convert "$tmp/rw.dmg" -format UDZO -imagekey zlib-level=9 -ov -o "$out" >/dev/null
+

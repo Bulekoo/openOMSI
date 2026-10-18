@@ -290,7 +290,8 @@ impl App {
                     let n = *c + 1;
                     // (the camera left keeps its look, the one taken finds its own again)
                     self.sync_view_look();
-                    self.service_msg = Some((format!("{} camera {n} of {count}", if pax { "Passenger" } else { "Driver" }), 2.0));
+                    let message = format!("{} camera {n} of {count}", if pax { "Passenger" } else { "Driver" });
+                    self.service_msg = Some((omsi_ui::tr(&message).into_owned(), 2.0));
                 }
             }
             // OMSI's quick menu from a key that is no Shift, Ctrl or Alt (a tap of one of
@@ -473,5 +474,20 @@ mod gear_lever_tests {
         // a lever moved by every gate is not the gear
         let own = program("lever_moved\nmy_gear\n", "{trigger:kw_s_1}\n1 (S.L.lever_moved)\n1 (S.L.my_gear)\n{end}\n{trigger:kw_s_2}\n1 (S.L.lever_moved)\n2 (S.L.my_gear)\n{end}\n");
         assert_eq!(super::gate_gear_var(&own).as_deref(), Some("my_gear"));
+    }
+}
+
+#[cfg(test)]
+mod camera_notice_tests {
+    #[test]
+    fn camera_switch_notices_are_translated_with_their_numbers() {
+        crate::with_test_language("ZHT", || {
+            for (source, expected) in [
+                ("Driver camera 10 of 10", "駕駛員視角 10／10"),
+                ("Passenger camera 2 of 4", "乘客視角 2／4"),
+            ] {
+                assert_eq!(omsi_ui::tr(source), expected);
+            }
+        });
     }
 }

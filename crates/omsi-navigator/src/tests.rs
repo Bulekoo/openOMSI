@@ -370,6 +370,43 @@ fn the_route_of_the_line_in_focus_is_picked() {
 }
 
 #[test]
+fn the_terrain_view_leaves_out_the_land_use_and_draws_the_contour_lines() {
+    let n = with_example_lines();
+    let sf = n.surface.clone().unwrap();
+    assert!(sf.has_contours());
+    let pal = style::palette(false);
+    let (mut full, mut terrain) = (Painter::new(), Painter::new());
+    surface::build_surface(&mut full, &sf, DVec2::ZERO, None, pal, false);
+    let layers = surface::build_surface(&mut terrain, &sf, DVec2::ZERO, None, pal, true);
+    assert!(!full.verts.is_empty() && !terrain.verts.is_empty());
+    // (the land use is left out of the terrain view)
+    assert!(terrain.verts.len() < full.verts.len());
+    // the contour lines are a ribbon each; the strength changes the colour, not the lines
+    let (mut strong, mut faint) = (Painter::new(), Painter::new());
+    surface::build_contours(&mut strong, &layers, DVec2::ZERO, pal, 1.0);
+    surface::build_contours(&mut faint, &layers, DVec2::ZERO, pal, 0.2);
+    assert!(!strong.verts.is_empty());
+    assert_eq!(strong.verts.len(), faint.verts.len());
+    assert!(strong.verts.iter().zip(&faint.verts).any(|(a, b)| a.color != b.color));
+}
+
+#[test]
+fn the_terrain_view_needs_a_button_a_package_with_relief_and_has_a_band_for_each_zoom() {
+    let mut n = with_example_lines();
+    assert!(n.contour_band().is_none(), "off until the button is pressed");
+    n.show_contours = true;
+    n.city.mpp = 2.0;
+    assert_eq!(n.contour_band().map(|b| b.1), Some(0));
+    n.city.mpp = 8.0;
+    assert_eq!(n.contour_band().map(|b| b.1), Some(1));
+    n.city.mpp = 30.0;
+    assert_eq!(n.contour_band().map(|b| b.1), Some(2));
+    // (the surface drawn off: no terrain view either)
+    n.surface = None;
+    assert!(n.contour_band().is_none());
+}
+
+#[test]
 fn the_timetable_is_read_on_a_worker_and_the_frame_does_not_wait_for_it() {
     let mut n = with_example_lines();
     n.date = 19900101;
@@ -416,6 +453,42 @@ fn the_map_zooms_in_for_a_turn_and_out_on_the_straight() {
     assert_eq!(zoom_target(70.0, Some(0.0), 0.0), 150.0);
     assert!(zoom_target(50.0, None, 30.0) < zoom_target(50.0, None, 5.0));
     assert!(zoom_target(50.0, None, -30.0) >= 150.0);
+}
+
+#[test]
+fn the_heights_of_the_contours_are_made_on_a_worker_and_only_with_the_terrain_on() {
+    let mut n = with_example_lines();
+    let sf = n.surface.clone().unwrap();
+    let win = Rect::new(0.0, 0.0, 1000.0, 600.0);
+    let at = |_q: DVec3| Vec2::new(500.0, 300.0);
+    // terrain off: nothing is asked for, nothing is started
+    n.city.mpp = 2.0;
+    let mut ui = Painter::new();
+    n.terrain_labels(&mut ui, &at, win, 1.0, &mut Vec::new());
+    assert_eq!(n.marks_started, 0);
+    assert!(sf.contour_marks_ready().is_none());
+    // terrain on: the frame does not make them; a worker does, and the labels follow
+    n.show_contours = true;
+    // (and with the map's surface off there is no terrain view either: no lines are built, so no heights)
+    n.show_surface = false;
+    n.terrain_labels(&mut ui, &at, win, 1.0, &mut Vec::new());
+    assert_eq!(n.marks_started, 0);
+    n.show_surface = true;
+    n.terrain_labels(&mut ui, &at, win, 1.0, &mut Vec::new());
+    assert_eq!(n.marks_started, n.surface_version + 1);
+    let began = std::time::Instant::now();
+    while sf.contour_marks_ready().is_none() && began.elapsed() < std::time::Duration::from_secs(10) {
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(sf.contour_marks_ready().is_some_and(|m| !m.is_empty()), "the worker made the marks");
+    let before = ui.verts.len();
+    n.terrain_labels(&mut ui, &at, win, 1.0, &mut Vec::new());
+    assert!(ui.verts.len() > before, "the heights are written once they are there");
+    // none over what the map has written already: with the whole window taken, no height is written
+    let all = vec![Rect::new(-1.0e5, -1.0e5, 2.0e5, 2.0e5)];
+    let before = ui.verts.len();
+    n.terrain_labels(&mut ui, &at, win, 1.0, &mut all.clone());
+    assert_eq!(ui.verts.len(), before, "the heights step aside for what is already there");
 }
 
 #[test]

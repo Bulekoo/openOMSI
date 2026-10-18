@@ -11,7 +11,7 @@
 //! the centimetre). Areas are triangles, ready to draw; buildings are outlines (anticlockwise)
 //! with their triangulated roofs.
 
-use glam::{DVec2, Vec2};
+use glam::{DVec2, Vec2, Vec3};
 
 /// What the ground is, by the texture it is painted with.
 pub const LAND_GRASS: usize = 0;
@@ -32,6 +32,12 @@ pub const PAVE_GREEN: usize = 3;
 pub const PAVE_INNER: usize = 4;
 pub const PAVE_CLASSES: usize = 5;
 
+/// What a painted marking is: lane lines, crossings, stop lines and arrows are white, a
+/// no-parking or bus lane line yellow.
+pub const PAINT_WHITE: usize = 0;
+pub const PAINT_AMBER: usize = 1;
+pub const PAINT_CLASSES: usize = 2;
+
 /// The lines: a railway, a tram track (in a street or on its own bed), a river or stream.
 pub const LINE_RAIL: u8 = 0;
 pub const LINE_TRAM: u8 = 1;
@@ -41,12 +47,28 @@ pub const LINE_ROAD_EDGE: u8 = 3;
 pub const LINE_AREA_EDGE: u8 = 4;
 
 /// A house: its outline (anticlockwise, not closed), its roof's triangles (indices into the
-/// outline) and how tall it is (m).
+/// outline) and how tall it is (m). `open`: a roof on posts or over a street (a canopy, a
+/// bridge, a carport) with no walls under it: drawn as a roof only, so the way under it shows.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Building {
     pub outline: Vec<Vec2>,
     pub roof: Vec<[u16; 3]>,
     pub height: f32,
+    pub open: bool,
+    /// The building's model is drawn in 3D (`Layers::instances`), not a prism of the outline.
+    pub has_mesh: bool,
+    /// Which of `Layers::instances` it is a part of (`u32::MAX`: none): the 3D map draws the
+    /// footprint instead when it has not the budget to draw the model.
+    pub inst: u32,
+}
+
+/// A placed model: which of `Layers::models`, where (relative to the layers' origin) and which
+/// way (compass heading, degrees).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Instance {
+    pub model: u32,
+    pub at: Vec2,
+    pub heading: f32,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -68,6 +90,12 @@ pub struct Layers {
     /// Per paved class: triangles.
     pub paved: Vec<Vec<Vec2>>,
     pub buildings: Vec<Building>,
+    /// The faces of the models the buildings are (x, y, z up from the model's ground) and where
+    /// they stand: what the 3D map draws, untextured.
+    pub models: Vec<Vec<[Vec3; 3]>>,
+    pub instances: Vec<Instance>,
+    /// Per marking class: triangles of the paint on the roads, as their textures lay it.
+    pub paint: Vec<Vec<Vec2>>,
     /// Single trees: x, y and the crown's radius.
     pub trees: Vec<[f32; 3]>,
     pub lines: Vec<Line>,
@@ -75,11 +103,11 @@ pub struct Layers {
 
 const MAGIC: &[u8; 4] = b"OMML";
 /// Bumped whenever the generator changes what it makes: an older cache is read again.
-pub const VERSION: u32 = 13;
+pub const VERSION: u32 = 18;
 
 impl Layers {
     pub fn empty(origin: DVec2) -> Layers {
-        Layers { origin, land: vec![Vec::new(); LAND_CLASSES], paved: vec![Vec::new(); PAVE_CLASSES], ..Default::default() }
+        Layers { origin, land: vec![Vec::new(); LAND_CLASSES], paved: vec![Vec::new(); PAVE_CLASSES], paint: vec![Vec::new(); PAINT_CLASSES], ..Default::default() }
     }
 
     /// The extent of everything (relative), for the zoom limits.
@@ -121,6 +149,10 @@ impl Layers {
         for l in &self.paved {
             pts(&mut w, l);
         }
+        u32_(&mut w, self.paint.len());
+        for l in &self.paint {
+            pts(&mut w, l);
+        }
         u32_(&mut w, self.buildings.len());
         for b in &self.buildings {
             pts(&mut w, &b.outline);
@@ -129,6 +161,26 @@ impl Layers {
                 t.iter().for_each(|i| w.extend_from_slice(&i.to_le_bytes()));
             }
             f(&mut w, b.height);
+            w.push(b.open as u8 | (b.has_mesh as u8) << 1);
+            u32_(&mut w, b.inst as usize);
+        }
+        u32_(&mut w, self.models.len());
+        for m in &self.models {
+            u32_(&mut w, m.len());
+            for t in m {
+                for p in t {
+                    f(&mut w, p.x);
+                    f(&mut w, p.y);
+                    f(&mut w, p.z);
+                }
+            }
+        }
+        u32_(&mut w, self.instances.len());
+        for i in &self.instances {
+            u32_(&mut w, i.model as usize);
+            f(&mut w, i.at.x);
+            f(&mut w, i.at.y);
+            f(&mut w, i.heading);
         }
         u32_(&mut w, self.trees.len());
         for t in &self.trees {
@@ -163,7 +215,11 @@ impl Layers {
             out.paved.push(r.points()?);
         }
         out.paved.resize(PAVE_CLASSES, Vec::new());
-        for _ in 0..r.count(12)? {
+        for _ in 0..r.count(8)? {
+            out.paint.push(r.points()?);
+        }
+        out.paint.resize(PAINT_CLASSES, Vec::new());
+        for _ in 0..r.count(17)? {
             let outline = r.points()?;
             let mut roof = Vec::new();
             for _ in 0..r.count(6)? {
@@ -173,7 +229,29 @@ impl Layers {
                 }
                 roof.push(t);
             }
-            out.buildings.push(Building { outline, roof, height: r.f32()? });
+            let height = r.f32()?;
+            let flags = r.take(1)?[0];
+            let inst = r.u32()?;
+            out.buildings.push(Building { outline, roof, height, open: flags & 1 != 0, has_mesh: flags & 2 != 0, inst });
+        }
+        for _ in 0..r.count(4)? {
+            let n = r.count(36)?;
+            let mut m = Vec::with_capacity(n);
+            for _ in 0..n {
+                let mut t = [Vec3::ZERO; 3];
+                for p in t.iter_mut() {
+                    *p = Vec3::new(r.f32()?, r.f32()?, r.f32()?);
+                }
+                m.push(t);
+            }
+            out.models.push(m);
+        }
+        for _ in 0..r.count(16)? {
+            let model = r.u32()?;
+            if model as usize >= out.models.len() {
+                return None;
+            }
+            out.instances.push(Instance { model, at: Vec2::new(r.f32()?, r.f32()?), heading: r.f32()? });
         }
         for _ in 0..r.count(12)? {
             out.trees.push([r.f32()?, r.f32()?, r.f32()?]);
@@ -401,17 +479,38 @@ mod tests {
         l.tiles.push([0.0, 0.0, 300.0, 300.0]);
         l.land[LAND_FOREST] = vec![Vec2::ZERO, Vec2::X, Vec2::Y];
         l.paved[PAVE_ROAD] = vec![Vec2::ZERO, Vec2::X * 4.0, Vec2::Y];
+        l.paint[PAINT_AMBER] = vec![Vec2::ZERO, Vec2::X, Vec2::Y];
         let outline = vec![Vec2::ZERO, Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), Vec2::new(0.0, 8.0)];
-        l.buildings.push(Building { roof: triangulate(&outline), outline, height: 12.5 });
+        l.buildings.push(Building { roof: triangulate(&outline), outline, height: 12.5, open: true, has_mesh: true, inst: 0 });
+        l.models.push(vec![[Vec3::ZERO, Vec3::X, Vec3::Z]]);
+        l.instances.push(Instance { model: 0, at: Vec2::new(3.0, 4.0), heading: 90.0 });
         l.trees.push([5.0, 6.0, 3.0]);
         l.lines.push(Line { class: LINE_TRAM, width: 1.5, points: vec![Vec2::ZERO, Vec2::ONE] });
         let b = l.to_bytes(42);
         let r = Layers::from_bytes(&b, 42).unwrap();
         assert_eq!(r.buildings, l.buildings);
+        assert_eq!(r.models, l.models);
+        assert_eq!(r.instances, l.instances);
         assert_eq!(r.lines, l.lines);
         assert_eq!(r.land[LAND_FOREST].len(), 3);
+        assert_eq!(r.paint[PAINT_AMBER].len(), 3);
         assert!(Layers::from_bytes(&b, 43).is_none());
         assert!(Layers::from_bytes(&b[..b.len() - 3], 42).is_none());
+    }
+
+    #[test]
+    fn the_last_instances_of_a_file_without_trees_or_lines_are_read_back() {
+        // (an instance is a u32 and three f32: 16 bytes, so the count check must ask for 16 each,
+        // or the layers after them - none here - are what a file would have to still hold)
+        let mut l = Layers::empty(DVec2::ZERO);
+        l.models.push(vec![[Vec3::ZERO, Vec3::X, Vec3::Z]]);
+        for i in 0..3 {
+            l.instances.push(Instance { model: 0, at: Vec2::new(i as f32, 2.0), heading: 10.0 * i as f32 });
+        }
+        let bytes = l.to_bytes(7);
+        let r = Layers::from_bytes(&bytes, 7).expect("the layers read back");
+        assert_eq!(r.instances, l.instances);
+        assert!(r.trees.is_empty() && r.lines.is_empty());
     }
 
     #[test]

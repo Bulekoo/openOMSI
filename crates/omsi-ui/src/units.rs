@@ -77,20 +77,20 @@ impl Units {
     pub fn distance(self, m: f64) -> String {
         let m = m.max(0.0);
         match self {
-            Units::Metric if m >= 1000.0 => format!("{:.1} km", m / 1000.0),
-            Units::Metric => format!("{:.0} m", ((m / 10.0).round() * 10.0).max(10.0)),
-            Units::British if m >= METRES_PER_MILE / 4.0 => format!("{:.1} mi", m / METRES_PER_MILE),
-            Units::British => format!("{:.0} yd", ((m / METRES_PER_YARD / 10.0).round() * 10.0).max(10.0)),
-            Units::American if m >= METRES_PER_MILE / 10.0 => format!("{:.1} mi", m / METRES_PER_MILE),
-            Units::American => format!("{:.0} ft", ((m / METRES_PER_FOOT / 50.0).round() * 50.0).max(50.0)),
+            Units::Metric if m >= 1000.0 => format!("{:.1} {}", m / 1000.0, crate::i18n::tr("km")),
+            Units::Metric => format!("{:.0} {}", ((m / 10.0).round() * 10.0).max(10.0), crate::i18n::tr("m")),
+            Units::British if m >= METRES_PER_MILE / 4.0 => format!("{:.1} {}", m / METRES_PER_MILE, crate::i18n::tr("mi")),
+            Units::British => format!("{:.0} {}", ((m / METRES_PER_YARD / 10.0).round() * 10.0).max(10.0), crate::i18n::tr("yd")),
+            Units::American if m >= METRES_PER_MILE / 10.0 => format!("{:.1} {}", m / METRES_PER_MILE, crate::i18n::tr("mi")),
+            Units::American => format!("{:.0} {}", ((m / METRES_PER_FOOT / 50.0).round() * 50.0).max(50.0), crate::i18n::tr("ft")),
         }
     }
 
     /// A long distance (driven, a mileometer): `12.3 km`, `7.6 mi`.
     pub fn long_distance(self, km: f64, decimals: usize) -> String {
         match self {
-            Units::Metric => format!("{:.*} km", decimals, km),
-            _ => format!("{:.*} mi", decimals, km * 1000.0 / METRES_PER_MILE),
+            Units::Metric => format!("{:.*} {}", decimals, km, crate::i18n::tr("km")),
+            _ => format!("{:.*} {}", decimals, km * 1000.0 / METRES_PER_MILE, crate::i18n::tr("mi")),
         }
     }
 

@@ -60,10 +60,18 @@ fn main() {
             tri(&mut img, t[0], t[1], t[2], land[class]);
         }
     }
-    let paved = [[255, 255, 255, 255], [246, 244, 240, 255], [226, 226, 230, 255]];
+    // (with OMSI_DUMP_CLASSES the road is beige, the footway pink and the yard blue)
+    let classes = std::env::var_os("OMSI_DUMP_CLASSES").is_some();
+    let paved = if classes { [[255, 235, 205, 255], [255, 205, 215, 255], [170, 200, 240, 255]] } else { [[255, 255, 255, 255], [246, 244, 240, 255], [226, 226, 230, 255]] };
     for class in [layers::PAVE_FOOT, layers::PAVE_AREA, layers::PAVE_ROAD] {
         for t in l.paved[class].chunks_exact(3) {
             tri(&mut img, t[0], t[1], t[2], paved[class]);
+        }
+    }
+    let mark = [[196, 200, 208, 255], [236, 190, 70, 255]];
+    for class in [layers::PAINT_WHITE, layers::PAINT_AMBER] {
+        for t in l.paint[class].chunks_exact(3) {
+            tri(&mut img, t[0], t[1], t[2], mark[class]);
         }
     }
     for t in &l.trees {

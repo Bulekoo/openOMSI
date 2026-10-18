@@ -462,7 +462,8 @@ impl App {
                     self.toggle_pause();
                     return true;
                 }
-                // OMSI's `quicksave` (Alt+S)
+                // Alt+S: our own second quick save key, beside OMSI's `quicksave` (Ctrl+S in
+                // keyboard.cfg)
                 KeyCode::KeyS if alt && !ctrl => {
                     self.quick_save();
                     return true;

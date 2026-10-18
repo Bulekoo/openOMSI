@@ -7,4 +7,4 @@ pub mod roads;
 pub mod style;
 mod mesh;
 
-pub use mesh::{GroundLook, MapData};
+pub use mesh::{GroundLook, MapData, MODEL_TRIANGLES};

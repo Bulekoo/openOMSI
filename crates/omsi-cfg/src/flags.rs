@@ -267,6 +267,7 @@ flags! {
     OMSI_DRIVER_SHIFTER: Text, Test, Use, "-", "Part of a variable or file name: force the shifter the driver's hand uses; off: both hands on the wheel.";
     OMSI_DRIVE_PROFILE: Text, Test, Use, "-", "Offscreen: \"t throttle brake [steer]/...\" piecewise constant pedals (crash/kerb tests).";
     OMSI_DRIVE_V0: Num, Test, Use, "-", "Offscreen: the bus's speed in km/h on the first frame.";
+    OMSI_DUMP_CLASSES: Bool, Debug, Use, "off", "mapgen_dump example: paint the paving by class (road, footway, yard) in telling colours.";
     OMSI_DUMP_CUT: Text, Debug, Use, "-", "Directory: write each tile's road-cut alpha masks as images.";
     OMSI_DUMP_GROUND: Text, Debug, Use, "-", "File: every loaded tile's final terrain and road cut as text.";
     OMSI_DUMP_SCENERY_TEXT: Text, Debug, Use, "-", "Directory: write the scenery objects' text textures as drawn.";
@@ -329,6 +330,7 @@ flags! {
     OMSI_MOBILE: Bool, Test, Use, "off", "The phone layout on a computer (screen cut-outs).";
     OMSI_MUTE: Bool, Test, Use, "off", "Mix everything as usual but play nothing.";
     OMSI_NAV_2D: Bool, Test, Use, "off", "Navigator pictures with flat houses (the nav_3d setting off).";
+    OMSI_NAV_CONTOURS: Bool, Test, Use, "off", "Offscreen: the city map in its terrain view (contour lines and their heights, when the map's package has them).";
     OMSI_NAV_LINES: Text, Test, Use, "-", "Offscreen: open the city map's lines panel on the line with this number (a route, then a departure time, after semicolons: 5;1 or 5;1;14:07, which opens its timetable).";
     OMSI_NAV_MAP: Bool, Test, Use, "off", "Open the navigation map.";
     OMSI_NAV_MAP_MPP: Num, Test, Use, "2.5", "Navigation map zoom in metres per pixel.";

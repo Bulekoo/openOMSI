@@ -245,6 +245,86 @@ fn a_new_boarding_forgets_the_plugins_ticket_but_not_its_tag() {
     assert!(h.ticket_pending(0));
 }
 
+/// A custom payment can be set while boarding, but not after
+/// the passenger has asked for their ticket. A new ticket clears it.
+#[test]
+fn custom_payment_can_only_be_set_before_the_cash_desk_and_is_cleared() {
+    let ty = human_type("payment");
+    let mut h = PeopleSim::new(Path::new("/nonexistent"), 200);
+    h.tickets = Some(Arc::new(pack()));
+    h.player_cabin = Some(player_bus("payment").cabin);
+    h.people = vec![boarding(&ty, 1, Task::WalkingToBus)];
+
+    // A plugin can set the payment while the passenger is boarding.
+    let payment = TicketChange {
+        payment: Some(20.0),
+        ..Default::default()
+    };
+    assert_eq!(h.set_ticket(1, &payment, "x"), Ok(()));
+    assert_eq!(h.pax(0).unwrap().plugin().payment, Some(20.0));
+
+    // Negative payments are refused without changing the existing value.
+    let invalid = TicketChange {
+        payment: Some(-1.0),
+        ..Default::default()
+    };
+    assert_eq!(h.set_ticket(1, &invalid, "x"), Err("invalid payment"));
+    assert_eq!(h.pax(0).unwrap().plugin().payment, Some(20.0));
+
+    // It is still allowed on the way to the cash desk (sub < 4).
+    {
+        let p = h.pax_mut(0).unwrap();
+        p.inside = Some(BusId::Player);
+        p.task = Task::InBusToPlace;
+        p.sub = 3;
+    }
+
+    let updated_payment = TicketChange {
+        payment: Some(10.0),
+        ..Default::default()
+    };
+    assert_eq!(h.set_ticket(1, &updated_payment, "x"), Ok(()));
+    assert_eq!(h.pax(0).unwrap().plugin().payment, Some(10.0));
+
+    // Once the passenger has reached the cash desk (sub >= 4),
+    // the payment can no longer be changed.
+    h.pax_mut(0).unwrap().sub = 4;
+    assert_eq!(
+        h.set_ticket(1, &payment, "x"),
+        Err("already asked for the ticket")
+    );
+    assert_eq!(h.pax(0).unwrap().plugin().payment, Some(10.0));
+
+    // Starting a new ticket clears the previous payment.
+    h.new_ticket(0, TICKET_BUY, 1, 2.7, false);
+    assert_eq!(h.pax(0).unwrap().plugin().payment, None);
+}
+
+#[test]
+fn payment_is_rejected_for_a_pass_holder() {
+    let ty = human_type("pass-payment");
+    let mut h = PeopleSim::new(Path::new("/nonexistent"), 200);
+
+    h.tickets = Some(Arc::new(pack()));
+    h.player_cabin = Some(player_bus("pass-payment").cabin);
+    h.people = vec![boarding(&ty, 1, Task::WalkingToBus)];
+
+    // This passenger does not buy a ticket.
+    h.new_ticket(0, TICKET_NONE, 0, 0.0, false);
+
+    let payment = TicketChange {
+        payment: Some(20.0),
+        ..Default::default()
+    };
+
+    assert_eq!(
+        h.set_ticket(1, &payment, "x"),
+        Err("payment requires a ticket purchase")
+    );
+
+    assert_eq!(h.pax(0).unwrap().plugin().payment, None);
+}
+
 /// Review of #2708: a buyer always has a ticket of the pack the driver can give - else they
 /// wait at the desk for a ticket that cannot be given.
 #[test]

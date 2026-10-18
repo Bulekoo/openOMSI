@@ -407,6 +407,13 @@ impl App {
                 lines: &self.net.remotes.chat.lines,
                 typing: self.net.remotes.chat.typing.as_deref(),
                 error: self.net.remotes.chat.error(),
+                open_key: self
+                    .input
+                    .game_keys
+                    .iter()
+                    .find(|b| b.action.eq_ignore_ascii_case("chat_open"))
+                    .map(|b| (b.scan_code != 0).then(|| crate::keys::key_name(b.scan_code as i64, b.modifier as i64)))
+                    .unwrap_or_else(|| Some("/".into())),
             });
             ui.chat.hidden = self.net.remotes.chat.hidden;
             let mut tags = if self.settings.name_tags {

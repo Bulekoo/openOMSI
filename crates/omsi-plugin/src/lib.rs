@@ -229,6 +229,7 @@ impl TicketCall {
             price: (a.price.to_bits() != self.price.to_bits() && a.price.is_finite()).then_some(a.price.max(0.0)),
             voice: (!a.voice.trim().is_empty()).then(|| a.voice.clone()),
             tag: None,
+            payment: None,
         }
     }
 }

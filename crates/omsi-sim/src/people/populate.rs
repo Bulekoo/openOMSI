@@ -366,7 +366,11 @@ impl PeopleSim {
             .keys()
             .copied()
             .filter(|&l| {
-                (net.lanes[l].start() - center).truncate().length() < STROLL_RADIUS * 0.9
+                // A zero trafficdensity means no random traffic originates here, also
+                // on pedestrian paths (e.g. map 400's traffic islands). Keep the path
+                // in PedNet so passengers and people already walking can still use it.
+                net.lanes[l].density > 0.0
+                    && (net.lanes[l].start() - center).truncate().length() < STROLL_RADIUS * 0.9
                     && net.lanes[l].length() > 4.0
             })
             .collect();

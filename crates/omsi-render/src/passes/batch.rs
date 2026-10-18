@@ -635,6 +635,8 @@ impl Renderer {
             let mode = (f.enhanced, f.reflection_frame, format, self.options.msaa, rt_gbuf());
             let chunks = bundle_chunks(self.encoding_pool.as_ref(), batches);
             let mut reuse: Vec<Option<wgpu::RenderBundle>> = vec![None; chunks.len()];
+            // (what a part binds is kept once its batches repeat: while driving they change every frame)
+            let mut repeated = vec![false; chunks.len()];
             let mirrors = self.history.mirror_bundles.borrow();
             let window = kept.then(|| self.history.main_bundles.borrow());
             let last = match &window {
@@ -645,8 +647,9 @@ impl Renderer {
                 if let Some(c) = last {
                     if c.mode == mode && c.camera == *camera {
                         for (k, chunk) in chunks.iter().enumerate() {
-                            if let Some((b, r, bundle)) = c.parts.get(k) {
-                                if *b == **chunk && same_resources(scene, chunk, r) {
+                            if let Some((_, r, bundle)) = c.parts.get(k).filter(|(b, ..)| *b == **chunk) {
+                                repeated[k] = true;
+                                if r.as_ref().is_some_and(|r| same_resources(scene, chunk, r)) {
                                     reuse[k] = Some(bundle.clone());
                                 }
                             }
@@ -676,7 +679,8 @@ impl Renderer {
                 parts: chunks
                     .iter()
                     .zip(&bundles)
-                    .map(|(chunk, b)| (chunk.to_vec(), batch_resources(scene, chunk), b.clone().expect("whole")))
+                    .zip(&repeated)
+                    .map(|((chunk, b), &again)| (chunk.to_vec(), again.then(|| batch_resources(scene, chunk)), b.clone().expect("whole")))
                     .collect(),
             };
             if kept {
@@ -704,8 +708,8 @@ impl Renderer {
 pub(crate) struct MainBundles {
     mode: (bool, bool, wgpu::TextureFormat, u32, bool),
     camera: wgpu::BindGroup,
-    /// each bundle with the batches it was recorded from and what they bound
-    parts: Vec<(Vec<Batch>, Vec<BatchResources>, wgpu::RenderBundle)>,
+    /// each bundle with the batches it was recorded from and what they bound (once they repeat)
+    parts: Vec<(Vec<Batch>, Option<Vec<BatchResources>>, wgpu::RenderBundle)>,
 }
 
 /// What a recorded batch binds: its mesh's buffers and place in them, and its material's

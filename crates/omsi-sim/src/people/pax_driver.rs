@@ -217,11 +217,17 @@ impl PeopleSim {
             // the money on the desk (sub_7e8254)
             let point = bn.cabin.money_var.clone();
             let mut paid = value;
+            // Target amount indicated by the plugin, if any.
+            let payment = p.plugin().payment.filter(|amount| amount.is_finite()).map(|amount| amount.max(value));
             if let Some(m) = self.money.as_mut() {
-                let coins = if self.exact_fare || auto { m.exact_coins_for(value) } else { m.omsi_coins_for(value) };
+                let coins = if auto { m.exact_coins_for(value) }
+                else if let Some(payment) = payment {  m.exact_coins_for(payment) }
+                else if self.exact_fare { m.exact_coins_for(value) }
+                else { m.omsi_coins_for(value) };
+                // Real payment made by the passenger, which may be different from the ticket price.
                 paid = m.value_of(&coins);
                 if let Some((pos, var, parent)) = point {
-                    // (put there when the view catches up: `view_sync::apply_people`)
+                    // (put there when the view catches up: view_sync::apply_people)
                     self.bodies.ops.push(BodyOp::Coins { coins, point: pos, var, change: false, parent });
                 }
             }

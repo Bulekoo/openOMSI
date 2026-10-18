@@ -748,6 +748,8 @@ pub struct TicketChange {
     pub voice: Option<String>,
     /// A text of the plugin's own kept with the person (empty: none).
     pub tag: Option<String>,
+    /// The amount of money the passenger pays (the plugin may change it, or leave it as the ticket's price).
+    pub payment: Option<f32>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]

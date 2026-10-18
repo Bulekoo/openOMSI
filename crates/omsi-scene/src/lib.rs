@@ -33,6 +33,7 @@ pub mod camera_arm;
 pub mod driver;
 pub mod lights;
 pub mod mapgen;
+pub mod road_paint;
 pub mod money;
 pub mod puddles;
 pub mod rain;
