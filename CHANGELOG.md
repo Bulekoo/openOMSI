@@ -13,7 +13,10 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 - The eye adapts the way an eye does: a picture much darker than the light model expects
   (a dark cab, an underpass) is made up for over some three seconds - five-sixths of it,
   across six stops, where a bright surplus (snow, the sun in view) still only darkens the
-  picture a little - and a dazzle on coming out passes in about a second.
+  picture a little - and a dazzle on coming out passes in about a second. This is for the
+  day: through the dusk it gives way to the old gentle metering, so the blue hour and the
+  twilight of a summer night are not shown brighter than the sun under the horizon makes
+  them (a white night comes only where the sun stays a few degrees below it).
 - The sky's occlusion by houses, trees and hills is worked out on the street's scale (18 m),
   not only the first two metres: a narrow street or the shade under a crown is darker than a
   square, and the surfaces round a point light it with what they send back (the last

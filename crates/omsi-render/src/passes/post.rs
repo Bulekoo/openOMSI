@@ -23,7 +23,8 @@ impl Renderer {
         // lamp-lit street came out most of a stop brighter than any eye sees it)
         let mut m = meter_tuning();
         let after_sunset = self.sky.sky_state.as_ref().map_or(0.0, |st| ((0.052 - st.input.sun_dir.normalize_or_zero().z) / 0.157).clamp(0.0, 1.0));
-        m[3] *= 1.0 - atmosphere::smoothstep(3.0, 7.0, self.tone.exposure.unwrap_or(0.0) / std::f32::consts::LN_2);
+        let (brighten, shortfall_gain) = shortfall_adaptation(self.tone.exposure.unwrap_or(0.0) / std::f32::consts::LN_2, m[3], m[0]);
+        m[3] = brighten;
         let pu = PostUniform {
             // the metering may take a little off a bright picture and add a little to a
             // dark one: a night stays a night, snow stays white
@@ -53,7 +54,7 @@ impl Renderer {
                 let contrast = tone_contrast(self.tone.exposure.unwrap_or(0.0));
                 if rt_frame && !f.env.no_rt_grade { [1.0, 0.08, 0.0, contrast] } else { [0.0, 0.0, 0.0, contrast] }
             },
-            e: [METER_SHORTFALL_GAIN, 0.0, 0.0, 0.0],
+            e: [shortfall_gain, 0.0, 0.0, 0.0],
         };
         self.queue
             .write_buffer(&self.tone.post_buf, 0, bytemuck::bytes_of(&pu));

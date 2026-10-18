@@ -914,6 +914,19 @@ pub(crate) const METER_TARGET: f32 = -2.84;
 pub(crate) const METER_DARKEN: f32 = 2.0;
 pub(crate) const METER_BRIGHTEN: f32 = 6.0;
 pub(crate) const METER_SHORTFALL_GAIN: f32 = 0.85;
+/// How far the metering may brighten (EV) and how much of a shortfall it makes up, for the
+/// light model's pre-exposure (log2), the tuned reach and the tuned share. The eye's wide, fast
+/// correction is for a dark place in daylight - a tunnel, a cab, an underpass: it fades out
+/// over the dusk (by a pre-exposure of 8) and is gone by night, where the light model's own
+/// exposure is the adaptation and the old gentle metering (1.6 EV, a share of 0.4) is all
+/// there is - or every night in the blue hour and the twilight of a summer night would be
+/// shown as bright as a white night, which only a sun a few degrees under the horizon makes.
+pub(crate) fn shortfall_adaptation(log2_pre: f32, brighten: f32, gain: f32) -> (f32, f32) {
+    const GENTLE: f32 = 1.6;
+    let day = 1.0 - atmosphere::smoothstep(0.5, 3.0, log2_pre);
+    let reach = GENTLE.min(brighten) + (brighten - GENTLE).max(0.0) * day;
+    (reach * (1.0 - atmosphere::smoothstep(3.0, 7.0, log2_pre)), gain + (METER_SHORTFALL_GAIN - gain) * day)
+}
 /// How fast the eye follows a darker and a brighter picture (s): light adaptation of the
 /// cones takes about a second (a dazzle after a tunnel's mouth passes in that time), dark
 /// adaptation to a fraction of the way some three.

@@ -88,7 +88,7 @@ impl ExposureLog {
                 let metered = half_to_f32(bits);
                 let (pre, m) = self.pending;
                 let gap = m[1] - metered;
-                let ev = (gap * if gap > 0.0 { METER_SHORTFALL_GAIN } else { m[0] }).clamp(-m[2], m[3]) + m[4];
+                let ev = (gap * if gap > 0.0 { shortfall_adaptation(pre, m[3], m[0]).1 } else { m[0] }).clamp(-m[2], m[3]) + m[4];
                 if ev.is_finite() {
                     self.ev = ev;
                 }
