@@ -178,7 +178,7 @@ fn fs_ssao(in: VsOut) -> @location(0) vec4<f32> {
             if (dz > 0.25 && range > 0.0) {
                 wocc = wocc + range;
                 if (p.wide.z > 0.0 && p.history.x > 0.5) {
-                    // (a lamp or a lit sign among the hits would be one sample of fourteen worth
+                    // (a lamp or a lit sign among the hits would be one sample of eight worth
                     // a hundred of its neighbours' and stand in the picture as a pattern of
                     // spots: what is brighter than a sunlit white wall is compressed)
                     let lc = history_light(qc, qz);
