@@ -54,7 +54,9 @@ Release → Run workflow** from `main` (or `gh workflow run release.yml --ref ma
    `openOMSI-<version>-windows-x64.zip`, `-windows-arm64.zip`, `-macos-arm64.zip`,
    `-macos-x64.zip`, `-linux-x64.zip`, `-linux-arm64.zip`, `-android-arm64.apk`,
    `-server-linux-x64.zip`, `-server-linux-arm64.zip`, `-server-windows-x64.zip`,
-   `-server-windows-arm64.zip`, a `SHA256SUMS` file with the SHA-256 of each of them, and
+   `-server-windows-arm64.zip`, the installers `-windows-x64-setup.exe`,
+   `-windows-arm64-setup.exe`, `-macos-arm64.dmg` and `-macos-x64.dmg`, a `SHA256SUMS`
+   file with the SHA-256 of each of them, and
    release notes from this version's section of `CHANGELOG.md`
    ([`scripts/release-notes.sh`](../scripts/release-notes.sh)).
 
@@ -90,8 +92,9 @@ The launcher's updater checks each archive against the SHA-256 that GitHub's API
 it before installing it (when the API cannot be reached and the updater falls back to
 github.com, it relies on the HTTPS connection alone).
 
-Pull requests run the same builds without publishing anything. Build output never goes
-into the repository (`target/` and `dist/` are ignored).
+Pull requests build Windows x64, macOS for Apple silicon, Linux x64 and Android without
+publishing anything; every push to `main` builds all the platforms above, also without
+publishing. Build output never goes into the repository (`target/` and `dist/` are ignored).
 
 ### Test builds of a pull request
 

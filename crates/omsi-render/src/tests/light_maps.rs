@@ -4,6 +4,10 @@ use super::*;
 /// light on - seen face on in the shade of a day (ambient light only), and by night, in the
 /// classic, the Vanilla+ and the Enhanced picture.
 fn display_pixel(night: f32, classic: bool, enhanced: bool) -> [u8; 3] {
+    lit_pixel(night, classic, enhanced, false, None)
+}
+
+fn lit_pixel(night: f32, classic: bool, enhanced: bool, switched_night_map: bool, inside: Option<(DVec3, f64, [f32; 6])>) -> [u8; 3] {
     let adapter = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
     let mut renderer = pollster::block_on(Renderer::new_with(
         &adapter,
@@ -16,7 +20,12 @@ fn display_pixel(night: f32, classic: bool, enhanced: bool) -> [u8; 3] {
     let one = |renderer: &mut Renderer, scene: &mut Scene, rgba: [u8; 4]| renderer.add_texture(scene, &omsi_texture::Image { width: 1, height: 1, rgba: rgba.to_vec(), has_alpha: false }, false);
     let face = one(&mut renderer, &mut scene, [60, 170, 220, 255]);
     let white = one(&mut renderer, &mut scene, [255, 255, 255, 255]);
-    let mat = renderer.add_material_lit(&mut scene, Some(face), AlphaMode::Opaque, [1.0; 4], false, None, None, Some(white));
+    let mat = if switched_night_map {
+        let dim = one(&mut renderer, &mut scene, [40, 40, 40, 255]);
+        renderer.add_material_extra(&mut scene, Some(face), AlphaMode::Opaque, [1.0; 4], false, None, Some(dim), None, None, [0.0; 3], MaterialExtra { night_switched: true, ..Default::default() })
+    } else {
+        renderer.add_material_lit(&mut scene, Some(face), AlphaMode::Opaque, [1.0; 4], false, None, None, Some(white))
+    };
     let half = 2.0;
     let mesh = renderer.add_mesh(
         &mut scene,
@@ -40,9 +49,10 @@ fn display_pixel(night: f32, classic: bool, enhanced: bool) -> [u8; 3] {
         fog_density: 0.0,
         night,
         // the sun behind the display: its face in the shade, lit by the sky alone
-        sun_dir: Vec3::new(0.0, 1.0, 0.5).normalize(),
+        sun_dir: Vec3::new(0.0, 1.0, if switched_night_map { -0.5 } else { 0.5 }).normalize(),
         sun_intensity: day,
         ambient: Vec3::splat(0.05 + 0.4 * day),
+        inside,
         ..Default::default()
     };
     let rgba = renderer.render_to_image(&mut scene, 64, 64, &camera, &lighting).unwrap();
@@ -65,4 +75,19 @@ fn a_white_light_map_shows_the_display_by_day_as_by_night() {
         // (its colour, not white)
         assert!(enh[2] > enh[0] + 40, "night {night}: {enh:?}");
     }
+}
+
+/// A switched night map (a lit switch, a gauge) is held down only in the player's own cab
+/// seen from the driver's place: another vehicle's, and the cab seen from outside, keep
+/// their full glow.
+#[test]
+#[ignore = "requires a graphics adapter; run with --ignored on a GPU host"]
+fn only_the_own_cab_dims_a_switched_night_map() {
+    let sum = |inside| lit_pixel(1.0, false, true, true, inside).iter().map(|&v| v as i32).sum::<i32>();
+    let free = sum(None);
+    let own_cab = sum(Some((DVec3::ZERO, 0.0, [6.0, 10.0, 6.0, 0.0, 0.0, 0.0])));
+    let other_vehicle = sum(Some((DVec3::new(0.0, -3.0, 0.0), 0.0, [6.0, 4.0, 6.0, 0.0, 0.0, 0.0])));
+    let from_outside = sum(Some((DVec3::new(0.0, 4.0, 0.0), 0.0, [6.0, 2.0, 6.0, 0.0, 0.0, 0.0])));
+    assert!((other_vehicle - free).abs() <= 3, "another vehicle {other_vehicle} against {free}");
+    assert!(own_cab + 10 < from_outside, "own cab {own_cab} against the cab from outside {from_outside}");
 }

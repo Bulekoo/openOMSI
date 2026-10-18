@@ -24,13 +24,14 @@ pub(super) struct GroundParts {
 pub struct Built {
     pub anchor: DVec2,
     pub counts: [usize; 4],
+    pub(crate) runs: [super::cull::Runs; 4],
     verts: [Vec<Vertex>; 4],
     made: Option<[omsi_ui::Vertices; 4]>,
 }
 
 impl Built {
     fn new(anchor: DVec2, verts: [Vec<Vertex>; 4]) -> Built {
-        Built { anchor, counts: verts.each_ref().map(Vec::len), verts, made: None }
+        Built { anchor, counts: verts.each_ref().map(Vec::len), runs: verts.each_ref().map(|v| super::cull::runs(v)), verts, made: None }
     }
 
     /// The vertices as built (empty once `made_on` put them on the GPU): the ground, then the

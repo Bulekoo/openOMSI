@@ -944,7 +944,7 @@ impl Settings {
     }
 
     pub fn render_options(&self) -> omsi_render::RenderOptions {
-        omsi_render::RenderOptions { msaa: self.msaa, anisotropy: self.anisotropy, shadow_size: self.shadow_size, ssao: self.ssao, render_scale: self.render_scale, compress_textures: self.texture_compression, gpu_texture_compression: self.gpu_texture_compression, fxaa: self.post_aa != "off", min_obj_size: self.min_obj_size, max_obj_dist: self.object_distance(), mirror_enhanced: self.mirror_quality == "enhanced", omsi_shadow_casters: self.shadow_casters == "omsi", shadow_blobs: self.shadow_blobs, reflections: self.reflections > 0.0, preview_only: false, no_enhanced: !matches!(graphics_mode(&self.graphics), "enhanced" | "enhanced_plus"), ray_tracing: self.ray_tracing() }
+        omsi_render::RenderOptions { msaa: self.msaa, anisotropy: self.anisotropy, shadow_size: self.shadow_size, ssao: self.ssao, render_scale: self.render_scale, compress_textures: self.texture_compression, gpu_texture_compression: self.gpu_texture_compression, fxaa: self.post_aa != "off", min_obj_size: self.min_obj_size, max_obj_dist: self.object_distance(), mirror_enhanced: self.mirror_quality == "enhanced", omsi_shadow_casters: self.shadow_casters == "omsi", shadow_blobs: self.shadow_blobs, reflections: self.reflections > 0.0, preview_only: false, no_enhanced: !matches!(graphics_mode(&self.graphics), "enhanced" | "enhanced_plus"), ray_tracing: self.ray_tracing(), max_scene: None }
     }
 }
 
@@ -1112,6 +1112,10 @@ pub fn resolution_of(text: &str) -> Option<(u32, u32)> {
     Some((w?, h?))
 }
 
+pub fn fullscreen_scene_cap(fullscreen: bool, spanned: bool, resolution: Option<(u32, u32)>) -> Option<(u32, u32)> {
+    resolution.filter(|_| fullscreen && !spanned)
+}
+
 #[cfg(test)]
 mod resolution_tests {
     #[test]
@@ -1120,6 +1124,15 @@ mod resolution_tests {
         assert_eq!(super::resolution_of("resolution=auto\n"), None);
         assert_eq!(super::resolution_of("window_size=1920*1080\n"), Some((1920, 1080)));
         assert_eq!(super::resolution_of("vsync=1\n"), None);
+    }
+
+    #[test]
+    fn the_scene_cap_follows_fullscreen_both_ways() {
+        let set = Some((1280, 720));
+        assert_eq!(super::fullscreen_scene_cap(true, false, set), set);
+        assert_eq!(super::fullscreen_scene_cap(false, false, set), None);
+        assert_eq!(super::fullscreen_scene_cap(true, true, set), None);
+        assert_eq!(super::fullscreen_scene_cap(true, false, None), None);
     }
 }
 

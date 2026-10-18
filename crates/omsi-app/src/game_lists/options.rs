@@ -699,6 +699,10 @@ fn toggle_set_graphics_and_controls(app: &mut App, id: &str, on: bool, bit: Stri
             } else if let Some(w) = app.window.as_ref() {
                 w.set_fullscreen(on.then_some(winit::window::Fullscreen::Borderless(None)));
             }
+            let cap = crate::settings::fullscreen_scene_cap(on, app.gfx.spanned, crate::settings::Settings::resolution().filter(|_| app.args.size == crate::cli::DEFAULT_SIZE));
+            if let Some(r) = app.renderer.as_mut() {
+                r.options.max_scene = cap;
+            }
             Some(("fullscreen", bit))
         }
         "vsync" => {

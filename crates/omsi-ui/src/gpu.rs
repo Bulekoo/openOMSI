@@ -442,6 +442,7 @@ impl Gpu {
             multiview_mask: None,
         });
         let mut depth_on: Option<u8> = None;
+        let mut state: Option<(usize, usize, usize)> = None;
         for d in draws {
             let (Some((Some(buf), _)), Some(l)) = (self.buffers.get(d.buffer), layers.get(d.layer)) else { continue };
             // (a texture that is not there - one freed, or a number kept from another device -
@@ -463,6 +464,11 @@ impl Gpu {
                 });
                 depth_on = Some(want);
             }
+            if state == Some((d.layer, d.texture, d.buffer)) {
+                pass.draw(d.range.clone(), 0..1);
+                continue;
+            }
+            state = None;
             pass.set_bind_group(0, &self.uniform_group, &[(d.layer as u64 * SLOT) as u32]);
             pass.set_bind_group(1, &tex.group, &[]);
             // A flat layer's `viewport` is the size its pixels are laid out in (an interface in
@@ -483,6 +489,7 @@ impl Gpu {
             }
             pass.set_scissor_rect(x0, y0, x1 - x0, y1 - y0);
             pass.set_vertex_buffer(0, buf.slice(..));
+            state = Some((d.layer, d.texture, d.buffer));
             pass.draw(d.range.clone(), 0..1);
         }
     }

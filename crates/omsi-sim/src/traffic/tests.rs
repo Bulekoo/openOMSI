@@ -1152,6 +1152,22 @@ fn jumps_beyond_the_cycle_restart_it() {
 }
 
 #[test]
+fn the_kept_bends_give_the_bend_speed_found_anew() {
+    let net = junction();
+    let mut car = AiState::new(0, 1.3, 7);
+    car.speed = 13.9;
+    car.plan_next(&net);
+    let dt = 1.0 / 50.0;
+    for k in 0..400 {
+        let (cached, fresh) = (car.curve_speed_cached(&net), car.curve_speed(&net));
+        assert!((cached - fresh).abs() < 0.05 || (cached > 1e30 && fresh > 1e30), "step {k}: {cached} vs {fresh}");
+        if !car.advance(&net, dt, None, None) {
+            break;
+        }
+    }
+}
+
+#[test]
 fn two_quiet_jumps_at_the_cycle_start_let_the_clock_run_on() {
     // A 127 s cycle with two day jumps at 0 s, each taken while its detector light is
     // empty (to 15 s, past the night flashing), and one at 87 s past the cycle's end. At

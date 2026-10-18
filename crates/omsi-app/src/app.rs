@@ -230,7 +230,7 @@ impl App {
                 }
             },
         };
-        let start = match crate::startup::RendererStart::begin(&mut self.gfx.instance, &window, self.args.session_settings.render_options(&self.settings)) {
+        let start = match crate::startup::RendererStart::begin(&mut self.gfx.instance, &window, omsi_render::RenderOptions { max_scene: crate::settings::fullscreen_scene_cap(self.settings.fullscreen, self.gfx.spanned, resolution), ..self.args.session_settings.render_options(&self.settings) }) {
             Ok(s) => s,
             Err(e) => {
                 fatal_message(&format!("The game cannot draw on this computer: {e:#}"));
