@@ -144,6 +144,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_BLEND_AB` | bool | off | use | app | Offscreen: a second picture with the blended draws in the old order, for a before/after of the draw order. |
 | `OMSI_BRIDGE_ONLY` | bool | off | use | net | LAN: forget our own addresses so that only what the rendezvous bridge reports is tried. |
 | `OMSI_BUDGET_FROM` | text | - | use | app | Offscreen with OMSI_TEXTURE_MEMORY: x,y[,MB] - the texture budget is met as seen from that point. |
+| `OMSI_CAM_SWEEP` | text | - | use | app | yaw[,jump]: the offscreen warm frames come from a camera turning yaw degrees a frame and ending in the picture's pose; with a jump (m), from a place that far to the side (a cut). For checking what reads the last frame. |
 | `OMSI_CAM_VEHICLE` | text | - | use | app | Offscreen: x,y,z,yaw,pitch[,fov] - a camera in the bus's own frame. |
 | `OMSI_CHECK_ENTRIES` | bool | off | use | app | Map check: is there ground to stand on where a player is put down. |
 | `OMSI_CHECK_GROUND` | bool | off | use | sim | Check: people on foot with a walkable surface above their heads, every two seconds. |

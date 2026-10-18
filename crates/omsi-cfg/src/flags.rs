@@ -159,6 +159,7 @@ flags! {
     OMSI_BRIDGE_ONLY: Bool, Test, Use, "off", "LAN: forget our own addresses so that only what the rendezvous bridge reports is tried.";
     OMSI_BUDGET_FROM: Text, Test, Use, "-", "Offscreen with OMSI_TEXTURE_MEMORY: x,y[,MB] - the texture budget is met as seen from that point.";
     OMSI_BUILD: Text, Build, Build, "-", "Compile-time (env!): the commit the binary was built from, set by build.rs. Not read at runtime.";
+    OMSI_CAM_SWEEP: Text, Test, Use, "-", "yaw[,jump]: the offscreen warm frames come from a camera turning yaw degrees a frame and ending in the picture's pose; with a jump (m), from a place that far to the side (a cut). For checking what reads the last frame.";
     OMSI_CAM_VEHICLE: Text, Test, Use, "-", "Offscreen: x,y,z,yaw,pitch[,fov] - a camera in the bus's own frame.";
     OMSI_CHARACTER_MODELS: Text, Tuning, Use, "settings", "Override the character models for a game session: original (OMSI's people) or improved (the Microsoft Rocketbox avatars, drawn on this computer only).";
     OMSI_CHECK_ENTRIES: Bool, Test, Use, "off", "Map check: is there ground to stand on where a player is put down.";
