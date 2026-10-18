@@ -288,11 +288,11 @@ pub(super) fn lighter_picture(info: &wgpu::AdapterInfo, vram: Option<u64>, optio
     match picture(info.backend, info.device_type, &info.name, vram) {
         Picture::Weak => {
             log::warn!("{}: a small or shared graphics chip - no SSAO, no MSAA, shadow maps of at most 1024 (OMSI_FULL_GPU=1 keeps the settings)", info.name);
-            (RenderOptions { msaa: 1, ssao: false, shadow_size: options.shadow_size.min(1024), ..options }, true)
+            (RenderOptions { msaa: 1, ssao: false, shadow_size: options.shadow_size.min(1024), street_light: options.street_light.or(Some(false)), ..options }, true)
         }
         Picture::Modest => {
             log::info!("{}: {} MB of its own - no SSAO, at most 2x MSAA and 2048 shadow maps (OMSI_FULL_GPU=1 keeps the settings)", info.name, vram.unwrap_or(0));
-            (RenderOptions { msaa: options.msaa.min(2), ssao: false, shadow_size: options.shadow_size.min(2048), ..options }, true)
+            (RenderOptions { msaa: options.msaa.min(2), ssao: false, shadow_size: options.shadow_size.min(2048), street_light: options.street_light.or(Some(false)), ..options }, true)
         }
         Picture::AsAsked => (options, false),
     }
@@ -514,6 +514,23 @@ mod tests {
         assert_eq!(picture(Backend::Gl, DeviceType::Other, "", Some(16304)), Picture::AsAsked);
         assert_eq!(picture(Backend::Gl, DeviceType::Other, "", Some(2048)), Picture::Weak);
         assert_eq!(picture(Backend::Dx12, DeviceType::IntegratedGpu, "", Some(8192)), Picture::Weak);
+    }
+
+    /// The street-scale light is off on a small or shared chip unless the player asked for it.
+    #[test]
+    fn the_street_light_is_off_on_a_weak_chip_unless_asked_for() {
+        let chip = |device_type, backend| wgpu::AdapterInfo { name: String::new(), vendor: 0, device: 0, device_type, device_pci_bus_id: String::new(), driver: String::new(), driver_info: String::new(), backend, subgroup_min_size: 0, subgroup_max_size: 0, transient_saves_memory: false };
+        let asked = |v| super::RenderOptions { street_light: v, ..super::RenderOptions::default() };
+        let after = |info: &wgpu::AdapterInfo, vram, v| super::lighter_picture(info, vram, asked(v)).0.street_light;
+        let weak = chip(DeviceType::IntegratedGpu, Backend::Dx12);
+        assert_eq!(after(&weak, Some(8192), None), Some(false));
+        assert_eq!(after(&weak, Some(8192), Some(true)), Some(true));
+        let modest = chip(DeviceType::DiscreteGpu, Backend::Vulkan);
+        assert_eq!(after(&modest, Some(4076), None), Some(false));
+        // a big card and an Apple chip keep the automatic setting, which turns it on
+        assert_eq!(after(&chip(DeviceType::DiscreteGpu, Backend::Vulkan), Some(16304), None), None);
+        assert_eq!(after(&chip(DeviceType::IntegratedGpu, Backend::Metal), None, None), None);
+        assert_eq!(after(&chip(DeviceType::DiscreteGpu, Backend::Vulkan), Some(16304), Some(false)), Some(false));
     }
 
     #[test]

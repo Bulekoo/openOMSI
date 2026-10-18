@@ -48,6 +48,19 @@ fn gamepad_settings_round_trip_and_are_clamped() {
 
 /// The enhanced clouds' quality is kept, `high` unless the file says `low`.
 #[test]
+fn street_light_round_trips_and_reaches_the_renderer() {
+    assert_eq!(Settings::default().street_light, "auto");
+    assert_eq!(Settings::default().render_options().street_light, None);
+    for (q, want) in [("auto", None), ("on", Some(true)), ("off", Some(false))] {
+        let s = Settings::from_text(&format!("graphics=enhanced\nstreet_light={q}\n"));
+        assert_eq!(Settings::from_text(&s.to_text()).street_light, q);
+        assert_eq!(s.render_options().street_light, want);
+    }
+    assert_eq!(Settings::from_text("street_light=OFF\n").street_light, "off");
+    assert_eq!(Settings::from_text("street_light=broken\n").street_light, "auto");
+}
+
+#[test]
 fn cloud_quality_round_trips() {
     assert_eq!(Settings::default().cloud_quality, "high");
     for q in ["high", "low"] {

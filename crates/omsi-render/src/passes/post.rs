@@ -67,7 +67,7 @@ impl Renderer {
             let puddles = h.puddles.as_ref().filter(|_| puddles_on);
             let levels = h.down.len();
             // the picture for the next frame's bounced light (the window's only)
-            if lead_view && crate::lighting::bounce_wanted(f.ao_on, f.enhanced_frame) {
+            if lead_view && crate::lighting::bounce_wanted(f.ao_on, f.enhanced_frame, self.street_light()) {
                 if let Some(ao) = self.targets.ao.as_ref() {
                     post_pass(encoder, &ao.hist_view, None, &self.tone.post.history, puddles.map(|p| &p.down_bg).unwrap_or(&h.down_bg[0]));
                 }

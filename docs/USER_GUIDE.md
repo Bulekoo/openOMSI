@@ -480,7 +480,7 @@ real phase and lights the night through the same atmosphere; the stars show wher
 is dark enough, and a city's lamps light its own haze and clouds (brightest on an overcast
 night). The clouds are a volume marched through in steps; `cloud_quality=low` (Graphics:
 Cloud quality) takes fewer of them - the same clouds a little grainier at their edges, for
-less of the GPU's time (on an M4 at 1080p about 0.8 ms of a frame). The camera exposes like one: for daylight, part of the way towards the light of the
+less of the GPU's time (on an M4 at 1080p about 0.8 ms of a frame). The shade of houses and trees over a whole street and the light the surfaces send to each other (Graphics: Street light, `street_light=auto|on|off`) cost about a millisecond a frame on an M4 at 1080p: Auto turns them off on a small or shared graphics chip, and the quality optimiser turns them off when the GPU is the limit. The camera exposes like one: for daylight, part of the way towards the light of the
 moment, with a camera's middle-tone contrast; street lamps are bright points with a little
 glare in clear air and wide halos in mist and rain.
 

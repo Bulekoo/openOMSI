@@ -249,6 +249,7 @@ pub(super) fn same_value(a: &str, b: &str) -> bool {
 pub(super) fn select_options(key: &str) -> Vec<(&'static str, &'static str)> {
     match key {
         "cloud_quality" => vec![("high", "High"), ("low", "Low")],
+        "street_light" => vec![("auto", "Auto"), ("on", "On"), ("off", "Off")],
         "rain_quality" => vec![("high", "High"), ("medium", "Medium"), ("low", "Low")],
         "puddles" => vec![("high", "High"), ("low", "Low"), ("off", "Off")],
         "graphics" => vec![("vanilla", "Vanilla (as OMSI 2)"), ("vanilla_plus", "Vanilla+"), ("enhanced", "Enhanced"), ("enhanced_plus", "Enhanced+")],

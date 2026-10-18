@@ -20,7 +20,7 @@ impl Renderer {
                     height.div_ceil(2) as f32,
                 ],
                 shift: [proj.z_axis.x, proj.z_axis.y, 0.0, 0.0],
-                wide: if f.enhanced_frame { occlusion_tuning() } else { [0.0; 4] },
+                wide: if f.enhanced_frame { occlusion_tuning(self.street_light()) } else { [0.0; 4] },
                 // (the window's own view only: another eye or panel is not where it was)
                 reproj: self.tone.bounce_reproj.0,
                 history: [if f.lead_view { self.tone.bounce_reproj.1 } else { 0.0 }, 0.0, 0.0, 0.0],

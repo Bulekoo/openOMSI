@@ -49,7 +49,10 @@ pub(crate) fn meter_tuning() -> [f32; 6] {
 /// trees and hills reaches (m), how much of the occluded sky it takes away, the bounced
 /// light's gain and the brightest radiance it is taken from (1 = 10 000 cd/m²: the sun on
 /// white plaster is about 2.5). `OMSI_WIDE_AO=reach,strength,gain,max` overrides.
-pub(crate) fn occlusion_tuning() -> [f32; 4] {
+pub(crate) fn occlusion_tuning(street_light: bool) -> [f32; 4] {
+    if !street_light {
+        return [0.0; 4];
+    }
     static T: std::sync::OnceLock<[f32; 4]> = std::sync::OnceLock::new();
     *T.get_or_init(|| {
         let mut t = [WIDE_AO_REACH, WIDE_AO_STRENGTH, BOUNCE_GAIN, BOUNCE_MAX];
@@ -66,8 +69,8 @@ pub(crate) fn occlusion_tuning() -> [f32; 4] {
 /// Whether the AO pass carries the bounced light in this frame: the Enhanced picture with
 /// the AO on, and a gain and a strength to show (it reads the last frame's picture, which
 /// then costs a pass and a texture: no other pipeline pays for it).
-pub(crate) fn bounce_wanted(ao_on: bool, enhanced: bool) -> bool {
-    let t = occlusion_tuning();
+pub(crate) fn bounce_wanted(ao_on: bool, enhanced: bool, street_light: bool) -> bool {
+    let t = occlusion_tuning(street_light);
     ao_on && enhanced && t[1] > 0.0 && t[2] > 0.0
 }
 

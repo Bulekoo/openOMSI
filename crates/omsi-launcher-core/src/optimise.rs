@@ -129,6 +129,7 @@ pub fn lighter_steps(s: &Value, limit: Limit, m: &Machine) -> Vec<Step> {
             add(mirror > 512, step("mirror_size", json!(512), Apply::NextStart));
             add(lit && on(s, "ssao", true), step("ssao", json!(false), Apply::Now));
             add(enhanced && on(s, "clouds", true) && text(s, "cloud_quality", "high") == "high", step("cloud_quality", json!("low"), Apply::Now));
+            add(mode == "enhanced" && text(s, "street_light", "auto") != "off", step("street_light", json!("off"), Apply::Now));
             add(!classic && shadow > 2048, step("shadow_size", json!(2048), Apply::Rebuild));
             add(text(s, "rain_quality", "high") == "high", step("rain_quality", json!("medium"), Apply::Now));
             add(msaa > 1, step("msaa", json!(1), Apply::Rebuild));

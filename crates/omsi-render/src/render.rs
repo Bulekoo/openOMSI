@@ -143,6 +143,12 @@ pub(crate) fn half_to_f32(b: u16) -> f32 {
 }
 
 impl Renderer {
+    /// Whether the street-scale light (the wide occlusion and the bounced light) is on: the
+    /// setting's, or as the chip allows (`RenderOptions::street_light`).
+    pub(crate) fn street_light(&self) -> bool {
+        self.options.street_light.unwrap_or(true)
+    }
+
     /// The lightning strikes since the last call, as (seconds until the thunder is heard,
     /// distance in m, direction): the sound plays the thunder of what the picture showed.
     pub fn take_strikes(&mut self) -> Vec<(f32, f32, [f32; 2])> {
