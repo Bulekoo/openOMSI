@@ -600,6 +600,19 @@ mod tests {
         assert!(later.pending.is_empty(), "a running map does not put out a trip begun hours ago");
     }
 
+    /// Opened in the small hours, the map gets yesterday's trip still on its long way since
+    /// 21:40 as well as the ones of the last minutes.
+    #[test]
+    fn a_trip_from_last_evening_comes_out_at_a_start_after_midnight() {
+        let mut sim = schedule();
+        let (world, mut traffic) = (no_world(), no_traffic());
+        tours(&mut sim, &[(78_000.0 - 86_400.0, "4", None), (6_900.0, "5", None)]);
+        sim.times[0][0].duration = 5.0 * 3600.0;
+        sim.departures[0].yesterday = true;
+        sim.queue_due(&world, &mut traffic, 7_200.0, 20.0 * 60.0);
+        assert_eq!(sim.pending.iter().copied().collect::<Vec<_>>(), [0, 1]);
+    }
+
     /// A tour's bus is out only while its tour runs: the second trip of a tour whose bus is
     /// missing stands at its first stop well before it leaves (#2593), the first trip of a
     /// tour comes at its departure time and not before (#2595).
