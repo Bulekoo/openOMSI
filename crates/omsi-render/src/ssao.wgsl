@@ -226,18 +226,8 @@ fn history_light(qc: vec2<i32>, qz: f32) -> vec3<f32> {
     if (abs(was - pc.w) > 0.2 + 0.04 * pc.w) {
         return vec3<f32>(0.0);
     }
-    var l = max(textureLoad(t_hist, pq, 0).rgb, vec3<f32>(0.0));
-    // (a small bright thing - a lamp, a spot of glare, a sign's edge - is one texel among a
-    // hundred its neighbours: of the fourteen samples it takes one, and the blur turned it
-    // into a square of the blur's size. What is far brighter than what lies round it is cut
-    // down to a little more than that: a wall, a sign or a window is as bright as its
-    // neighbours)
-    let hsz = vec2<i32>(textureDimensions(t_hist)) - vec2<i32>(1);
-    let ring = (textureLoad(t_hist, clamp(pq + vec2<i32>(4, 0), vec2<i32>(0), hsz), 0).rgb
-        + textureLoad(t_hist, clamp(pq - vec2<i32>(4, 0), vec2<i32>(0), hsz), 0).rgb
-        + textureLoad(t_hist, clamp(pq + vec2<i32>(0, 4), vec2<i32>(0), hsz), 0).rgb
-        + textureLoad(t_hist, clamp(pq - vec2<i32>(0, 4), vec2<i32>(0), hsz), 0).rgb) * 0.25;
-    l = min(l, ring * 1.5 + vec3<f32>(0.02));
+    // (the picture's outliers are cut where it is made: post.wgsl `fs_history`)
+    let l = max(textureLoad(t_hist, pq, 0).rgb, vec3<f32>(0.0));
     return min(l, vec3<f32>(p.wide.w));
 }
 
@@ -254,6 +244,15 @@ fn project(v: vec3<f32>) -> vec2<f32> {
 
 // --- blur: 5x5 box over the raw AO, keeps edges by depth
 @group(0) @binding(2) var t_ao: texture_2d<f32>;
+
+const TENT = array<f32, 36>(
+    0.09901, 0.18498, 0.26915, 0.30498, 0.26915, 0.18498,
+    0.18498, 0.34559, 0.50283, 0.56978, 0.50283, 0.34559,
+    0.26915, 0.50283, 0.73162, 0.82903, 0.73162, 0.50283,
+    0.30498, 0.56978, 0.82903, 0.93941, 0.82903, 0.56978,
+    0.26915, 0.50283, 0.73162, 0.82903, 0.73162, 0.50283,
+    0.18498, 0.34559, 0.50283, 0.56978, 0.50283, 0.34559,
+);
 
 @fragment
 fn fs_blur(in: VsOut) -> @location(0) vec4<f32> {
@@ -285,29 +284,25 @@ fn fs_blur(in: VsOut) -> @location(0) vec4<f32> {
     var gi_sum = vec3<f32>(0.0);
     var wsum = 0.0;
     var gsum = 0.0;
-    // With the bounce the same 6x6 window for the occlusion, its weight falling off
-    // smoothly: a hard cut left the pattern standing wherever a slanting ground's steps
-    // from pixel to pixel came near it. The bounced light is smooth by nature and noisier
-    // by its few hits, so it is gathered over 8x8 with a looser tolerance.
+    // With the bounce the same 6x6 window for both: the occlusion's weight falls off
+    // smoothly (a hard cut left the pattern standing wherever a slanting ground's steps from
+    // pixel to pixel came near it); the bounced light, smooth by nature and noisier by its
+    // few hits, takes a looser depth tolerance and a tent over the window, so one hit
+    // leaves a soft spot, not a square.
     let tol = 0.3 + 0.04 * abs(z0);
     let gtol = 0.5 + 0.1 * abs(z0);
-    for (var y = -4; y <= 3; y = y + 1) {
-        for (var x = -4; x <= 3; x = x + 1) {
+    for (var y = -3; y <= 2; y = y + 1) {
+        for (var x = -3; x <= 2; x = x + 1) {
             let c = clamp(px + vec2<i32>(x, y), vec2<i32>(0), size - vec2<i32>(1));
             let z = lin(textureLoad(t_depth, c * 2, 0));
             let dz = abs(z - z0);
             let tap = textureLoad(t_ao, c, 0);
-            // (a tent, not a box: what one hit leaves in the picture is a soft spot, not a
-            // square of the window's size)
-            let r2 = f32(x * x + y * y) + 0.5;
-            let gw = (1.0 - smoothstep(0.5 * gtol, gtol, dz)) * exp(-r2 / 8.0);
+            let w = 1.0 - smoothstep(0.5 * tol, tol, dz);
+            sum = sum + tap.r * w;
+            wsum = wsum + w;
+            let gw = (1.0 - smoothstep(0.5 * gtol, gtol, dz)) * TENT[(y + 3) * 6 + x + 3];
             gi_sum = gi_sum + bounce_unpack(tap) * gw;
             gsum = gsum + gw;
-            if (x >= -3 && x <= 2 && y >= -3 && y <= 2) {
-                let w = 1.0 - smoothstep(0.5 * tol, tol, dz);
-                sum = sum + tap.r * w;
-                wsum = wsum + w;
-            }
         }
     }
     let blurred = select(1.0, sum / wsum, wsum > 0.0);
