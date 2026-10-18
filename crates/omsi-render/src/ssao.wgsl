@@ -260,15 +260,34 @@ fn fs_blur(in: VsOut) -> @location(0) vec4<f32> {
     let px = vec2<i32>(in.clip.xy);
     let size = vec2<i32>(i32(p.params.z), i32(p.params.w));
     let z0 = lin(textureLoad(t_depth, px * 2, 0));
+    // Without bounced light (every pipeline but the Enhanced one, and the Enhanced with the
+    // bounce off) the blur is the plain 6x6 one: as cheap and as it always was.
+    if (p.wide.z <= 0.0) {
+        var sum0 = 0.0;
+        var wsum0 = 0.0;
+        // 6x6 window: covers every rotation of the 4x4 pattern at least once in each row and
+        // column, and the depth weight keeps the occlusion from bleeding across an edge (a
+        // relative tolerance: far surfaces are allowed a larger step)
+        for (var y = -3; y <= 2; y = y + 1) {
+            for (var x = -3; x <= 2; x = x + 1) {
+                let c = clamp(px + vec2<i32>(x, y), vec2<i32>(0), size - vec2<i32>(1));
+                let z = lin(textureLoad(t_depth, c * 2, 0));
+                let tol0 = 0.3 + 0.02 * abs(z0);
+                let w = select(0.0, 1.0, abs(z - z0) < tol0);
+                sum0 = sum0 + textureLoad(t_ao, c, 0).r * w;
+                wsum0 = wsum0 + w;
+            }
+        }
+        let blurred0 = select(1.0, sum0 / wsum0, wsum0 > 0.0);
+        return vec4<f32>(select(1.0, blurred0, (bitcast<u32>(blurred0) & 0x7f800000u) != 0x7f800000u), select(-z0, 60000.0, textureLoad(t_depth, px * 2, 0) <= 0.0), 0.0, 0.0);
+    }
     var sum = 0.0;
     var gi_sum = vec3<f32>(0.0);
     var wsum = 0.0;
     var gsum = 0.0;
-    // 6x6 window: covers every rotation of the 4x4 pattern at least once in each row and
-    // column, and the depth weight keeps the occlusion from bleeding across an edge (a
-    // relative tolerance: far surfaces are allowed a larger step, and the weight falls off
+    // With the bounce the same 6x6 window for the occlusion, its weight falling off
     // smoothly: a hard cut left the pattern standing wherever a slanting ground's steps
-    // from pixel to pixel came near it). The bounced light is smooth by nature and noisier
+    // from pixel to pixel came near it. The bounced light is smooth by nature and noisier
     // by its few hits, so it is gathered over 8x8 with a looser tolerance.
     let tol = 0.3 + 0.04 * abs(z0);
     let gtol = 0.5 + 0.1 * abs(z0);

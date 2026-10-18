@@ -26,10 +26,11 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   frame's picture, so it follows a turning head and a moving bus, and not at all after a
   cut (another view, a jump) or where a surface was hidden then; the cab's own dashboard
   and pillars do not shade the street. It is the Enhanced picture's with the AO on: the
-  other pipelines pay nothing for it (two-channel targets, no history picture).
-  The `street_light` setting (Graphics: Street light: Auto, On, Off) switches it: Auto is on
-  except on a small or shared graphics chip; the optimiser turns it off when the GPU is the
-  limit. `OMSI_WIDE_AO=reach,strength,gain,max` tunes it.
+  other pipelines pay nothing for it (two-channel targets, no history picture, the old
+  blur). A lamp or a lit sign among the surfaces does not stand in the picture as a bright
+  square. The `street_light` setting (Graphics: Street light: Auto, On, Off) switches it:
+  Auto is on except on a small or shared graphics chip; the optimiser turns it off when the
+  GPU is the limit. `OMSI_WIDE_AO=reach,strength,gain,max` tunes it.
 - The physical weather model keeps the water of the grey deck (its optical depth, a thin
   stratus to a raining nimbostratus), so a rainy or winter day is as bright or as dark as
   its cloud is thick. It also gives the cumulus layer its own base (the condensation level)
