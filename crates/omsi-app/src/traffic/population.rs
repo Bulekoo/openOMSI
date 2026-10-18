@@ -133,13 +133,15 @@ impl Traffic {
     /// ground at its own place, with the ground in every line of sight to it, may come and
     /// go however near the camera is - Städtedreieck's AmpelKI buses run on a track some
     /// 10 m under the Bergerplatz crossing to stand on its detectors, and kept back while the
-    /// player stood at the crossing, the night program never came.
+    /// player stood at the crossing, the night program never came. Only for an eye that is
+    /// itself above the ground: one in the same tunnel has the ground over every point of
+    /// its line of sight as well, and would let cars come and go in front of it.
     pub fn hidden(&self, world: &World, p: DVec3, r: f64) -> bool {
         if self.sim.unseen(p, r, |v| self.occluded(world, v, p, r)) {
             return true;
         }
-        let buried = terrain_height(world, p.x, p.y).is_some_and(|g| p.z + BURIED <= g);
-        buried && self.sim.every_eye(|v| (p - v.pos).length() > r && self.occluded(world, v, p, r))
+        let under = |q: DVec3, depth: f64| terrain_height(world, q.x, q.y).is_some_and(|g| q.z + depth <= g);
+        under(p, BURIED) && self.sim.every_eye(|v| !under(v.pos, 0.0) && (p - v.pos).length() > r && self.occluded(world, v, p, r))
     }
 
     /// Whether nobody can see any car of `car` (`r`: the leading vehicle's radius; a
