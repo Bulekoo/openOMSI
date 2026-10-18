@@ -101,6 +101,8 @@ struct SettingsPage: View {
             SettingToggle(label: "Clouds", key: "clouds", fallback: true)
             if enhanced && store.flag("clouds", true) {
                 SettingSelect(label: "Cloud quality", key: "cloud_quality", options: [("high", "High"), ("low", "Low")])
+            }
+            if mode == "enhanced" {
                 SettingSelect(label: "Street light", key: "street_light", options: [("auto", "Auto"), ("on", "On"), ("off", "Off")])
             }
             SettingSelect(label: "Rain quality", key: "rain_quality", options: [("high", "High"), ("medium", "Medium"), ("low", "Low")])

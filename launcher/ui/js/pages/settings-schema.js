@@ -103,7 +103,7 @@ const graphics = {
         // (only the enhanced modes march volumetric clouds; the vanilla ones are a texture)
         { type: 'select', key: 'cloud_quality', label: 'Cloud quality', options: [['high', 'High'], ['low', 'Low']], when: (s) => enhanced(s) && s.clouds !== false },
         // (the Enhanced picture's own: the ray-traced one has its own occlusion; Auto turns it off on a small or shared chip)
-        { type: 'select', key: 'street_light', label: 'Street light (shade over a street, bounced light)', options: [['auto', 'Auto'], ['on', 'On'], ['off', 'Off']], when: (s) => mode(s) === 'enhanced' },
+        { type: 'select', key: 'street_light', label: 'Street light', options: [['auto', 'Auto'], ['on', 'On'], ['off', 'Off']], when: (s) => mode(s) === 'enhanced' },
         { type: 'select', key: 'rain_quality', label: 'Rain quality', options: [['high', 'High'], ['medium', 'Medium'], ['low', 'Low']] },
         // (the wet roads' reflections need the reflection maps on)
         { type: 'select', key: 'puddles', label: 'Puddles', options: [['high', 'High'], ['low', 'Low'], ['off', 'Off']], when: (s) => Number(s.reflections ?? 1) > 0.005 },
