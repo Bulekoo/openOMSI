@@ -146,6 +146,39 @@ pub(crate) struct PerfState {
     pub(crate) optimiser: crate::optimiser::Optimiser,
 }
 
+impl PerfState {
+    /// Nothing measured yet: the `OMSI_INPUT` script to play and when the frame count began.
+    pub(crate) fn new(input_script: Vec<(f32, String)>, fps_t: Instant) -> PerfState {
+        PerfState {
+            fps: 0.0,
+            profile: Default::default(),
+            profile_prev: Default::default(),
+            total_frames: 0,
+            input_script,
+            shot: None,
+            frames: 0,
+            fps_t,
+            log_state: Default::default(),
+            spikes: 0,
+            worst_ms: 0.0,
+            governor: (0.0, 0, 0.0),
+            governor_low: 0,
+            governor_wait_prev: 0.0,
+            play_started: None,
+            cpu_mark: None,
+            thread_cpu_mark: None,
+            instructions_mark: None,
+            profile_mark: None,
+            profile_written: false,
+            frame_times: Vec::new(),
+            frame_stages: Vec::new(),
+            overlay: crate::perf_overlay::new(),
+            texture_cut_at: None,
+            optimiser: Default::default(),
+        }
+    }
+}
+
 /// The drawing around the renderer: the wgpu instance and surface, the tile streaming, the
 /// bus mirrors, the window's visibility and what stands in for it, and the view sync's
 /// state.

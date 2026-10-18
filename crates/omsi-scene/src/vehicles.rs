@@ -948,6 +948,25 @@ impl World {
         }
     }
 
+    /// One `[matl_freetex]` of a vehicle slot, on the halves its bits name (see
+    /// `free_texture_defs`); `key` the texture it stands in for, `diffuse` whether that is
+    /// the slot's own.
+    fn free_texture(&self, var: String, diffuse: bool, key: Option<TextureId>, halves: u32, dirs: &[PathBuf]) -> FreeTex {
+        FreeTex {
+            var,
+            diffuse,
+            key,
+            halves,
+            dirs: dirs.to_vec(),
+            textures: self.textures.clone(),
+            pictures: HashMap::new(),
+            current: None,
+            shared: self.vehicle_textures.clone(),
+            held: Vec::new(),
+            wants_upgrade: self.freetex_upgrades.clone(),
+        }
+    }
+
     /// The material of one slot of a vehicle mesh being uploaded (see
     /// [`World::upload_vehicle`]); its `[matl_item]`s, `[texchanges]`, `[matl_freetex]` and
     /// generated textures are noted in `up`.
@@ -1211,27 +1230,8 @@ impl World {
         materials.extend(more.iter().copied());
         // [matl_freetex]: the file is only known at run time (the destination
         // roller builds its path from the map's depot and terminus strings)
-        // (each half's own records: an item lists the slot's free textures and its own, the
-        // NLC's switch stripes keep the white picture under their light map in item 1 while
-        // item 2 swaps it for the black one under its night map)
-        let mut halves: Vec<Vec<&MaterialDef>> = vec![ov.clone()];
-        if spec.item.is_some() {
-            halves.push(first_item.clone());
-            halves.extend(later_items.iter().map(|o| vec![*o]));
-        }
-        let free: Vec<FreeTex> = free_texture_defs(&halves).into_iter().map(|(halves, key, var)| FreeTex {
-            var,
-            diffuse: key.eq_ignore_ascii_case(&m.texture),
-            key: tex!(&subst(&key), &dirs_ref),
-            halves,
-            dirs: dirs.to_vec(),
-            textures: self.textures.clone(),
-            pictures: HashMap::new(),
-            current: None,
-            shared: self.vehicle_textures.clone(),
-            held: Vec::new(),
-            wants_upgrade: self.freetex_upgrades.clone(),
-        }).collect();
+        let defs = free_texture_defs(&slot_halves(&ov, &first_item, &later_items, spec.item.is_some()));
+        let free: Vec<FreeTex> = defs.into_iter().map(|(halves, key, var)| self.free_texture(var, key.eq_ignore_ascii_case(&m.texture), tex!(&subst(&key), &dirs_ref), halves, dirs)).collect();
         let multi_light = |base: MaterialId, item: MaterialId| -> Option<MultiLight> {
             let list = ov.iter().map(|o| &o.lightmaps).find(|l| !l.is_empty())?;
             let maps: Vec<(PathBuf, String)> = list
@@ -1258,6 +1258,20 @@ impl World {
         }
         base
     }
+}
+
+/// The records of each half of a vehicle slot in `SlotSpec` order - the plain material, its
+/// first item, then the further items, each on its own - for `free_texture_defs`: an item
+/// lists the slot's free textures and its own (the NLC's switch stripes keep the white
+/// picture under their light map in item 1 while item 2 swaps it for the black one under
+/// its night map).
+fn slot_halves<'a>(plain: &[&'a MaterialDef], first_item: &[&'a MaterialDef], later_items: &[&'a MaterialDef], has_item: bool) -> Vec<Vec<&'a MaterialDef>> {
+    let mut halves = vec![plain.to_vec()];
+    if has_item {
+        halves.push(first_item.to_vec());
+        halves.extend(later_items.iter().map(|o| vec![*o]));
+    }
+    halves
 }
 
 /// One material slot of a vehicle mesh being uploaded (see [`World::vehicle_slot_material`]).
