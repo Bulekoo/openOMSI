@@ -149,4 +149,8 @@ pub(crate) struct SsaoUniform {
     /// x the wide occlusion's reach (m), y its strength (0 = off), z the bounced light's
     /// gain (0 = off), w the largest radiance a bounce is taken from
     pub(crate) wide: [f32; 4],
+    /// From a view-space point to the last frame's clip space (the bounced light's history),
+    /// and in x whether that picture can be read (see `bounce_history`).
+    pub(crate) reproj: [[f32; 4]; 4],
+    pub(crate) history: [f32; 4],
 }

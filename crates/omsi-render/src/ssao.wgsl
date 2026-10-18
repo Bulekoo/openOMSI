@@ -8,11 +8,17 @@ struct SsaoParams {
     // x the wide occlusion's reach (m), y its strength (0 = off), z the bounced light's
     // gain (0 = off), w the largest radiance a bounce is taken from (1 = 10 000 cd/m²)
     wide: vec4<f32>,
+    // from a view-space point to the last frame's clip space, and in x whether that
+    // frame's picture (`t_hist`) can be read at all (not after a cut)
+    reproj: mat4x4<f32>,
+    history: vec4<f32>,
 };
 @group(0) @binding(0) var<uniform> p: SsaoParams;
 @group(0) @binding(1) var t_depth: texture_depth_2d;
 // The last frame's picture at this size, as absolute radiance (1 = 10 000 cd/m²): what the
-// surfaces round a point send to it (post.wgsl `fs_history`).
+// surfaces round a point send to it (post.wgsl `fs_history`). Read where the surface was
+// then (`reproj`), and only where the last frame's depth (the blurred AO's g, still in
+// `t_ao` when this pass runs) agrees: a surface that was hidden then has no picture to read.
 @group(0) @binding(3) var t_hist: texture_2d<f32>;
 
 struct VsOut {
@@ -165,12 +171,16 @@ fn fs_ssao(in: VsOut) -> @location(0) vec4<f32> {
             let dz = qz - sp.z;
             // (a surface far in front of the sample is another object's edge, not a wall
             // standing over it)
-            let range = 1.0 - smoothstep(wr * 0.6, wr * 1.6, abs(pos.z - qz));
+            // a surface counts for what it takes of the hemisphere: not further in front of
+            // the sample than the sample is from the point (a wall over the point, not
+            // another object's edge), and never the cab round the camera: a dashboard and its
+            // pillars are not the street's houses
+            let reach = max(wr * scale, 1.0);
+            let range = (1.0 - smoothstep(0.25 * reach, 0.6 * reach, dz)) * smoothstep(2.0, 6.0, -qz);
             if (dz > 0.25 && range > 0.0) {
                 wocc = wocc + range;
-                if (p.wide.z > 0.0) {
-                    let l = textureLoad(t_hist, qc, 0).rgb;
-                    gi = gi + min(max(l, vec3<f32>(0.0)), vec3<f32>(p.wide.w)) * range;
+                if (p.wide.z > 0.0 && p.history.x > 0.5) {
+                    gi = gi + history_light(qc, qz) * range;
                 }
             }
         }
@@ -190,6 +200,29 @@ fn fs_ssao(in: VsOut) -> @location(0) vec4<f32> {
     let bounce_ok = select(vec3<f32>(0.0), bounce, all((bitcast<vec3<u32>>(bounce) & vec3<u32>(0x7f800000u)) != vec3<u32>(0x7f800000u)));
     let pk = bounce_pack(bounce_ok);
     return vec4<f32>(ao_ok, dist, pk.x, pk.y);
+}
+
+// What the surface seen at pixel `qc` (view depth `qz`) sent to the last frame's picture:
+// where it was in that frame, if it was seen there.
+fn history_light(qc: vec2<i32>, qz: f32) -> vec3<f32> {
+    let sp = view_pos(qc);
+    let pc = p.reproj * vec4<f32>(sp, 1.0);
+    if (pc.w <= 0.01) {
+        return vec3<f32>(0.0);
+    }
+    let ndc = pc.xy / pc.w;
+    let q = vec2<f32>((ndc.x + 1.0) * 0.5 * p.params.z, (1.0 - ndc.y) * 0.5 * p.params.w);
+    if (q.x < 0.0 || q.y < 0.0 || q.x >= p.params.z || q.y >= p.params.w) {
+        return vec3<f32>(0.0);
+    }
+    let pq = vec2<i32>(q);
+    // (disoccluded: the surface's depth then, from the last frame's own AO, is not where
+    // it should be)
+    let was = textureLoad(t_ao, pq, 0).g;
+    if (abs(was - pc.w) > 0.2 + 0.04 * pc.w) {
+        return vec3<f32>(0.0);
+    }
+    return min(max(textureLoad(t_hist, pq, 0).rgb, vec3<f32>(0.0)), vec3<f32>(p.wide.w));
 }
 
 // pixel position of a view-space point, through the same projection the depth was made with

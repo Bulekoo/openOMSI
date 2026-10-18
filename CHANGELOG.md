@@ -16,12 +16,17 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   picture a little - and a dazzle on coming out passes in about a second. This is for the
   day: through the dusk it gives way to the old gentle metering, so the blue hour and the
   twilight of a summer night are not shown brighter than the sun under the horizon makes
-  them (a white night comes only where the sun stays a few degrees below it).
+  them (a white night comes only where the sun stays a few degrees below it). The
+  Enhanced+ picture takes the same metering.
 - The sky's occlusion by houses, trees and hills is worked out on the street's scale (18 m),
   not only the first two metres: a narrow street or the shade under a crown is darker than a
   square, and the surfaces round a point light it with what they send back (the last
   frame's picture, colour included: a sunlit wall lights the one across the street, lit
-  windows light the street at night). `OMSI_WIDE_AO=reach,strength,gain,max` tunes it.
+  windows light the street at night). The light is read where the surface was in the last
+  frame's picture, so it follows a turning head and a moving bus, and not at all after a
+  cut (another view, a jump) or where a surface was hidden then; the cab's own dashboard
+  and pillars do not shade the street. It is the Enhanced picture's with the AO on: the
+  other pipelines pay nothing for it. `OMSI_WIDE_AO=reach,strength,gain,max` tunes it.
 - The physical weather model keeps the water of the grey deck (its optical depth, a thin
   stratus to a raining nimbostratus), so a rainy or winter day is as bright or as dark as
   its cloud is thick. It also gives the cumulus layer its own base (the condensation level)
@@ -29,8 +34,14 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   thunderstorms.
 - A thunderstorm has lightning: flashes of several strokes light the clouds from inside and
   the street with a cold light, a cloud-to-ground stroke draws its crooked channel, and the
-  thunder is heard after the distance's delay. `OMSI_STORM=activity[,azimuth]` shows one.
-- The sun's shafts between houses and trees are followed up to 420 m (180 before).
+  thunder is heard after the distance's delay, from the flash's direction. The flashes are
+  worked out for every pipeline from the day's seed (the same on every client), so the
+  thunder of a storm is there without the Enhanced picture. `OMSI_STORM=activity[,azimuth]`
+  shows one.
+- The sun's shafts between houses and trees are followed up to 420 m: the first 180 m in
+  the same steps as before, the rest in a few wider ones.
+- The cumulus layer's height follows the ground under the player, so a map in the hills
+  keeps its clouds.
 
 **Navigator and city map**
 

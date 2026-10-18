@@ -101,11 +101,13 @@ impl Soundscape {
     }
 
     /// A lightning strike the picture showed: its thunder is heard `delay` seconds later (the
-    /// speed of sound over `distance` metres), from where the flash was.
-    pub fn thunder(&mut self, delay: f32, distance: f32, ear: DVec3) {
+    /// speed of sound over `distance` metres), from where the flash was (`dir`).
+    pub fn thunder(&mut self, delay: f32, distance: f32, dir: [f32; 2], ear: DVec3) {
+        if !self.active() {
+            return;
+        }
         let slot = if distance < 1500.0 { "thunder.close" } else if distance < 4000.0 { "thunder.mid" } else { "thunder.far" };
-        let a = self.rand() * std::f32::consts::TAU;
-        let at = ear + DVec3::new((a.sin() * distance) as f64, (a.cos() * distance) as f64, 800.0);
+        let at = ear + DVec3::new((dir[0] * distance) as f64, (dir[1] * distance) as f64, 800.0);
         let placing = Placing { at: Some(at), range: reference(slot), lowpass: air(at, ear) };
         self.strokes.push((slot, placing, self.now + delay as f64));
     }

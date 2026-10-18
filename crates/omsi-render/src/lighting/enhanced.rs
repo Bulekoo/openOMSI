@@ -63,6 +63,37 @@ pub(crate) fn occlusion_tuning() -> [f32; 4] {
         t
     })
 }
+/// Whether the AO pass carries the bounced light in this frame: the Enhanced picture with
+/// the AO on, and a gain and a strength to show (it reads the last frame's picture, which
+/// then costs a pass and a texture: no other pipeline pays for it).
+pub(crate) fn bounce_wanted(ao_on: bool, enhanced: bool) -> bool {
+    let t = occlusion_tuning();
+    ao_on && enhanced && t[1] > 0.0 && t[2] > 0.0
+}
+
+/// Where a view-space point of this frame was in the last frame's picture (its clip space),
+/// and whether that picture can be read at all: not after a cut (another view, a jump, a
+/// long pause, another size), where it shows unrelated surfaces.
+pub(crate) fn bounce_history(
+    prev: Option<(Mat4, DVec3, (u32, u32), Vec3, Vec3)>,
+    view: Mat4,
+    ro: DVec3,
+    size: (u32, u32),
+    pos: Vec3,
+    forward: Vec3,
+    dt: f32,
+) -> ([[f32; 4]; 4], f32) {
+    let Some((vp, pro, psize, ppos, pfwd)) = prev else {
+        return (Mat4::ZERO.to_cols_array_2d(), 0.0);
+    };
+    let moved = ((pos.as_dvec3() + ro) - (ppos.as_dvec3() + pro)).length();
+    let ok = psize == size && dt < 0.25 && moved < 25.0 && forward.dot(pfwd) > 0.5;
+    if !ok {
+        return (Mat4::ZERO.to_cols_array_2d(), 0.0);
+    }
+    ((vp * Mat4::from_translation((ro - pro).as_vec3()) * view.inverse()).to_cols_array_2d(), 1.0)
+}
+
 pub(crate) const WIDE_AO_REACH: f32 = 18.0;
 pub(crate) const WIDE_AO_STRENGTH: f32 = 0.9;
 pub(crate) const BOUNCE_GAIN: f32 = 0.85;
@@ -96,8 +127,24 @@ pub(crate) const CLOUD_SHADOW_EROSION: f32 = 0.15;
 /// How far the exposure follows the light into a cloud's shadow (log terms).
 pub(crate) const CLOUD_SHADE_ADAPT: f32 = 0.5;
 
+/// The cumulus layer's bottom and top in the render origin's frame (where the camera and the
+/// sky shader are): the weather model's heights are above the ground (the fog's base, under
+/// the player's vehicle or just under the camera), so a map in the hills keeps its clouds.
+pub(crate) fn cloud_levels(lighting: &Lighting, cam_rel: Vec3, ro: DVec3) -> [f32; 2] {
+    match lighting.cloud_layer {
+        Some([b, t]) => {
+            let ground = match lighting.fog_base.or(lighting.inside.map(|v| v.0.z)) {
+                Some(z) => (z - ro.z) as f32,
+                None => cam_rel.z - 2.0,
+            };
+            [ground + b, ground + t]
+        }
+        None => [1400.0, 2800.0],
+    }
+}
+
 pub(crate) fn cloud_sun_transmittance(shape: &[u8], lighting: &Lighting, cam_rel: Vec3, ro: DVec3) -> f32 {
-    let [bottom, top] = lighting.cloud_layer.unwrap_or([1400.0, 2800.0]);
+    let [bottom, top] = cloud_levels(lighting, cam_rel, ro);
     const PERIOD: f32 = 13000.0;
     const SIGMA: f32 = 0.035;
     let s = lighting.sun_dir.normalize_or_zero();
@@ -799,19 +846,15 @@ impl Renderer {
             None => Vec3::ZERO,
         };
         // the thunderstorm: its activity, and this frame's flash (OMSI_STORM forces both)
-        let forced = omsi_cfg::flags::OMSI_STORM.var().and_then(|v| {
-            let mut it = v.split(',').map(|x| x.trim().parse::<f32>().ok());
-            Some((it.next()??, it.next().flatten()))
-        });
+        let forced = forced_storm();
         let storm = forced.map_or(lighting.storm, |f| f.0).clamp(0.0, 1.0);
         let flash = match forced {
             Some((_, Some(seed))) => Lightning::frozen(seed),
-            _ => self.tone.lightning.step(storm, dt),
+            _ => self.tone.flash,
         };
-        let layer = match (forced, lighting.cloud_layer) {
-            (Some(_), _) => [1100.0, 1100.0 + 300.0 + 7000.0 * storm],
-            (None, Some(l)) => l,
-            (None, None) => [1400.0, 2800.0],
+        let layer = match forced {
+            Some(_) => [1100.0, 1100.0 + 300.0 + 7000.0 * storm],
+            None => cloud_levels(lighting, cam_rel, ro),
         };
         let u = EnhancedUniform {
             // (self-lit surfaces at their own brightness after the metering, see ExposureLog)

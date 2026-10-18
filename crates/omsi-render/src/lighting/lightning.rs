@@ -6,7 +6,7 @@
 //!
 //! Numbers: an active storm cell makes some ten flashes a minute within sight, a third of
 //! them to the ground (the rest between and inside the clouds, which light the cloud and
-//! the street but show no channel); a flash has three to five strokes, the first the
+//! the street but show no channel); a flash has two to four strokes, the first the
 //! brightest, 40 to 80 ms apart, each decaying over about 20 ms on a continuing glow of a
 //! tenth, which fades over 150 ms. A stroke a kilometre away lights the ground with some
 //! 20 lux (the units here: 1 = 10 000 lux, `FLASH_E1KM`), falling as the inverse square.
@@ -39,9 +39,21 @@ pub(crate) struct Flash {
 pub(crate) struct Strike {
     pub(crate) delay: f32,
     pub(crate) distance: f32,
+    /// Towards the flash: horizontal unit vector (where the thunder comes from).
+    pub(crate) dir: [f32; 2],
+}
+
+/// : the forced storm activity, and the azimuth (degrees) a
+/// flash is frozen at.
+pub(crate) fn forced_storm() -> Option<(f32, Option<f32>)> {
+    omsi_cfg::flags::OMSI_STORM.var().and_then(|v| {
+        let mut it = v.split(',').map(|x| x.trim().parse::<f32>().ok());
+        Some((it.next()??, it.next().flatten()))
+    })
 }
 
 pub(crate) struct Lightning {
+    seeded: bool,
     rng: u64,
     /// Seconds to the next flash.
     wait: f32,
@@ -61,6 +73,7 @@ pub(crate) struct Lightning {
 impl Lightning {
     pub(crate) fn new(seed: u64) -> Lightning {
         let mut l = Lightning {
+            seeded: false,
             rng: seed | 1,
             wait: 5.0,
             age: -1.0,
@@ -75,6 +88,16 @@ impl Lightning {
         };
         l.wait = l.next_wait(0.5);
         l
+    }
+
+    /// Take the day's seed (once): the flashes of a place and day come in the same order on
+    /// every client and in every replay of it.
+    pub(crate) fn seed_once(&mut self, day_seed: u32) {
+        if !self.seeded {
+            self.seeded = true;
+            self.rng = (u64::from(day_seed) ^ 0x9e37_79b9_7f4a_7c15).wrapping_mul(0x2545_F491_4F6C_DD1D) | 1;
+            self.wait = self.next_wait(0.5);
+        }
     }
 
     fn rand(&mut self) -> f32 {
@@ -111,7 +134,7 @@ impl Lightning {
         self.seed = self.rand() * 100.0;
         self.channel = self.rand() < 0.4;
         self.age = 0.0;
-        self.strikes.push(Strike { delay: self.distance / SOUND_SPEED, distance: self.distance });
+        self.strikes.push(Strike { delay: self.distance / SOUND_SPEED, distance: self.distance, dir: self.dir });
     }
 
     /// A flash standing still at its first stroke, for checks (`OMSI_STORM=activity,azimuth`):
@@ -174,5 +197,80 @@ impl Lightning {
             channel: if self.channel { 1.0 } else { 0.0 },
             bolt: bolt.min(1.0) * (if self.channel { 1.0 } else { 0.0 }),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn run(seed: u64, storm: f32, minutes: f32) -> (usize, Vec<Strike>, f32) {
+        let mut l = Lightning::new(seed);
+        let (mut flashes, mut was, mut peak) = (0, false, 0.0f32);
+        for _ in 0..(minutes * 60.0 * 60.0) as usize {
+            let f = l.step(storm, 1.0 / 60.0);
+            peak = peak.max(f.light);
+            if f.light > 0.0 && !was {
+                flashes += 1;
+            }
+            was = f.light > 0.0;
+        }
+        (flashes, std::mem::take(&mut l.strikes), peak)
+    }
+
+    #[test]
+    fn no_storm_no_flash() {
+        let (flashes, strikes, peak) = run(3, 0.05, 10.0);
+        assert_eq!((flashes, strikes.len(), peak), (0, 0, 0.0));
+    }
+
+    #[test]
+    fn a_strong_storm_flashes_at_its_rate_and_the_sound_follows() {
+        let (flashes, strikes, peak) = run(11, 0.9, 10.0);
+        // some ten a minute at full activity, a little fewer at 0.9 (activity^1.5)
+        assert!((50..140).contains(&flashes), "{flashes}");
+        assert_eq!(strikes.len(), flashes);
+        for s in &strikes {
+            assert!(s.distance >= 900.0 && s.distance <= 12_000.0, "{s:?}");
+            assert!((s.delay - s.distance / SOUND_SPEED).abs() < 1e-3);
+            assert!((s.dir[0].hypot(s.dir[1]) - 1.0).abs() < 1e-4);
+        }
+        // the nearest first stroke lights the ground well, the farthest hardly at all
+        assert!(peak > FLASH_E1KM / 16.0 && peak <= FLASH_E1KM / 0.7, "{peak}");
+    }
+
+    #[test]
+    fn the_day_seed_repeats_the_storm() {
+        let mut a = Lightning::new(1);
+        let mut b = Lightning::new(99);
+        a.seed_once(4242);
+        b.seed_once(4242);
+        for _ in 0..20_000 {
+            let (x, y) = (a.step(0.8, 1.0 / 60.0), b.step(0.8, 1.0 / 60.0));
+            assert_eq!((x.light, x.dir, x.seed), (y.light, y.dir, y.seed));
+        }
+        // (taken once: a later seed does not turn it)
+        a.seed_once(7);
+        assert_eq!(a.rng != 0, true);
+    }
+
+    #[test]
+    fn a_flash_ends() {
+        let mut l = Lightning::new(5);
+        let mut lit = 0;
+        for _ in 0..(120 * 60) {
+            if l.step(1.0, 1.0 / 60.0).light > 0.0 {
+                lit += 1;
+            }
+        }
+        // flashes of under a second, never a steady light
+        assert!(lit > 0 && lit < 120 * 60 / 2, "{lit}");
+    }
+
+    #[test]
+    fn the_frozen_flash_looks_where_asked() {
+        let f = Lightning::frozen(90.0);
+        assert!(f.dir[0].abs() < 1e-6 && (f.dir[1] - 1.0).abs() < 1e-6);
+        assert!(f.light > 0.0 && f.channel == 1.0);
     }
 }

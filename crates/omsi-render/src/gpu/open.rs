@@ -630,9 +630,10 @@ impl Renderer {
                 view_lamps: None,
                 exposure: None,
                 enh_last: bytemuck::Zeroable::zeroed(),
-                lightning: crate::lighting::Lightning::new(
-                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(7, |d| d.as_nanos() as u64),
-                ),
+                lightning: crate::lighting::Lightning::new(7),
+                flash: Default::default(),
+                bounce_prev: None,
+                bounce_reproj: (Mat4::ZERO.to_cols_array_2d(), 0.0),
             },
             shadows: ShadowRes {
                 shadow_far_cache: std::cell::Cell::new((Mat4::IDENTITY, 0, DVec3::ZERO, Vec3::ZERO)),

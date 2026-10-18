@@ -21,6 +21,8 @@ impl Renderer {
                 ],
                 shift: [proj.z_axis.x, proj.z_axis.y, 0.0, 0.0],
                 wide: if f.enhanced_frame { occlusion_tuning() } else { [0.0; 4] },
+                reproj: self.tone.bounce_reproj.0,
+                history: [self.tone.bounce_reproj.1, 0.0, 0.0, 0.0],
             };
             self.queue
                 .write_buffer(&self.ao_buf, 0, bytemuck::bytes_of(&u));
