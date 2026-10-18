@@ -278,12 +278,16 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   For a server set up before: an `admin_password` or `moderator_password` shorter than 12
   characters now lets nobody in (the log says so; the start scripts ask for a new one), and a
   `server.cfg` without `admin_web` has the web panel off until it says `admin_web = local`.
-- **Players' buses go to the server by their content** — a player's game says which bus it
-  drives by the fingerprint of the files it uses, and sends a server that lacks it those files
-  (the variant and paint driven, not the whole pack); a dedicated server keeps every version
-  its players send (`accept_uploads`, `uploads_keep_days`) and may leave the map for the
-  players to install (`share_maps`: a new `server.cfg` says 0; one without the key goes on
-  passing the map on, as before).
+- **Every player sees another player's bus exactly as its driver has it** — the same files,
+  the same paint — fetched from the server by its content when they lack it; a dedicated
+  server keeps every version its players send (`accept_uploads`, `uploads_keep_days`) and may
+  leave the map for the players to install (`share_maps`: a new `server.cfg` says 0; one
+  without the key goes on passing the map on, as before).
+- **Behaviour change:** a bus that cannot be had as its driver has it (the server takes no
+  uploads, the upload failed, it is too large to fetch) is drawn with another bus — the
+  viewer's copy of that path, else their own — and **labelled** under the player's name.
+  Before, the viewer saw their own copy of that path without being told it was not the
+  driver's. While a bus is still arriving, a neutral box of its size stands in.
 
 ## 0.3.0 - 2026-10-14
 
