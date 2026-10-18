@@ -43,7 +43,7 @@ pub(crate) struct Strike {
     pub(crate) dir: [f32; 2],
 }
 
-/// : the forced storm activity, and the azimuth (degrees) a
+/// `OMSI_STORM=activity[,azimuth]`: the forced storm activity, and the azimuth (degrees) a
 /// flash is frozen at.
 pub(crate) fn forced_storm() -> Option<(f32, Option<f32>)> {
     omsi_cfg::flags::OMSI_STORM.var().and_then(|v| {
@@ -53,7 +53,7 @@ pub(crate) fn forced_storm() -> Option<(f32, Option<f32>)> {
 }
 
 pub(crate) struct Lightning {
-    seeded: bool,
+    seeded: Option<u32>,
     rng: u64,
     /// Seconds to the next flash.
     wait: f32,
@@ -73,7 +73,7 @@ pub(crate) struct Lightning {
 impl Lightning {
     pub(crate) fn new(seed: u64) -> Lightning {
         let mut l = Lightning {
-            seeded: false,
+            seeded: None,
             rng: seed | 1,
             wait: 5.0,
             age: -1.0,
@@ -90,11 +90,12 @@ impl Lightning {
         l
     }
 
-    /// Take the day's seed (once): the flashes of a place and day come in the same order on
-    /// every client and in every replay of it.
+    /// Take the day's seed (again when the day or the session's changes): the flashes of a
+    /// place and day come in the same order in every replay of it (when the frames are the
+    /// same: each client steps them by its own frame times).
     pub(crate) fn seed_once(&mut self, day_seed: u32) {
-        if !self.seeded {
-            self.seeded = true;
+        if self.seeded != Some(day_seed) {
+            self.seeded = Some(day_seed);
             self.rng = (u64::from(day_seed) ^ 0x9e37_79b9_7f4a_7c15).wrapping_mul(0x2545_F491_4F6C_DD1D) | 1;
             self.wait = self.next_wait(0.5);
         }
@@ -249,9 +250,18 @@ mod tests {
             let (x, y) = (a.step(0.8, 1.0 / 60.0), b.step(0.8, 1.0 / 60.0));
             assert_eq!((x.light, x.dir, x.seed), (y.light, y.dir, y.seed));
         }
-        // (taken once: a later seed does not turn it)
+        // (the same seed again does not turn it; another one does)
+        a.seed_once(4242);
+        for _ in 0..2_000 {
+            let (x, y) = (a.step(0.8, 1.0 / 60.0), b.step(0.8, 1.0 / 60.0));
+            assert_eq!((x.light, x.dir, x.seed), (y.light, y.dir, y.seed));
+        }
         a.seed_once(7);
-        assert_eq!(a.rng != 0, true);
+        let differs = (0..60_000).any(|_| {
+            let (x, y) = (a.step(0.8, 1.0 / 60.0), b.step(0.8, 1.0 / 60.0));
+            (x.light, x.dir, x.seed) != (y.light, y.dir, y.seed)
+        });
+        assert!(differs);
     }
 
     #[test]

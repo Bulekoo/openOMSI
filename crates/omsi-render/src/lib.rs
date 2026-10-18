@@ -136,6 +136,9 @@ pub struct Renderer {
     /// read a depth texture texel by texel - the pipelines failed there, AO off or not (#422).
     ssao_pipeline: Option<wgpu::RenderPipeline>,
     blur_pipeline: Option<wgpu::RenderPipeline>,
+    /// (into two-channel targets: see `pipelines::ssao::Ssao`)
+    plain_ssao_pipeline: Option<wgpu::RenderPipeline>,
+    plain_blur_pipeline: Option<wgpu::RenderPipeline>,
     /// The settings this renderer was built with.
     pub options: RenderOptions,
     puddles: Option<puddles::Pipelines>,

@@ -26,7 +26,8 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   frame's picture, so it follows a turning head and a moving bus, and not at all after a
   cut (another view, a jump) or where a surface was hidden then; the cab's own dashboard
   and pillars do not shade the street. It is the Enhanced picture's with the AO on: the
-  other pipelines pay nothing for it. `OMSI_WIDE_AO=reach,strength,gain,max` tunes it.
+  other pipelines pay nothing for it (two-channel targets, no history picture).
+  `OMSI_WIDE_AO=reach,strength,gain,max` tunes it.
 - The physical weather model keeps the water of the grey deck (its optical depth, a thin
   stratus to a raining nimbostratus), so a rainy or winter day is as bright or as dark as
   its cloud is thick. It also gives the cumulus layer its own base (the condensation level)
@@ -35,7 +36,7 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 - A thunderstorm has lightning: flashes of several strokes light the clouds from inside and
   the street with a cold light, a cloud-to-ground stroke draws its crooked channel, and the
   thunder is heard after the distance's delay, from the flash's direction. The flashes are
-  worked out for every pipeline from the day's seed (the same on every client), so the
+  worked out for every pipeline from the day's seed (a replay of a day repeats them), so the
   thunder of a storm is there without the Enhanced picture. `OMSI_STORM=activity[,azimuth]`
   shows one.
 - The sun's shafts between houses and trees are followed up to 420 m: the first 180 m in

@@ -9,6 +9,10 @@ pub(crate) struct Ssao {
     pub sampler: wgpu::Sampler,
     pub ssao_pipeline: Option<wgpu::RenderPipeline>,
     pub blur_pipeline: Option<wgpu::RenderPipeline>,
+    /// The same into two-channel targets (the occlusion and its depth), for every picture
+    /// without the bounced light: half the memory and the bandwidth of the four-channel ones.
+    pub plain_ssao_pipeline: Option<wgpu::RenderPipeline>,
+    pub plain_blur_pipeline: Option<wgpu::RenderPipeline>,
 }
 
 /// The depth and the AO texture beside the uniform at 0 (ssao.wgsl, fog_lamps.wgsl).
@@ -44,9 +48,13 @@ pub(crate) fn ssao(device: &wgpu::Device, gl: bool) -> Ssao {
     // (r the occlusion, g the depth it was worked out at, b and a the bounced light)
     let targets = [target(wgpu::TextureFormat::Rgba16Float, None)];
     let make_ao = |entry: &str| no_vertex_pipeline(entry, &ao_pl, &ssao_shader, entry, &targets).create(device);
+    let plain_targets = [target(wgpu::TextureFormat::Rg16Float, None)];
+    let make_plain = |entry: &str| no_vertex_pipeline(entry, &ao_pl, &ssao_shader, entry, &plain_targets).create(device);
     let ssao_pipeline = (!gl).then(|| make_ao("fs_ssao"));
     let blur_pipeline = (!gl).then(|| make_ao("fs_blur"));
-    Ssao { layout: ao_layout, buf: ao_buf, sampler: ao_sampler, ssao_pipeline, blur_pipeline }
+    let plain_ssao_pipeline = (!gl).then(|| make_plain("fs_ssao"));
+    let plain_blur_pipeline = (!gl).then(|| make_plain("fs_blur"));
+    Ssao { layout: ao_layout, buf: ao_buf, sampler: ao_sampler, ssao_pipeline, blur_pipeline, plain_ssao_pipeline, plain_blur_pipeline }
 }
 
 pub(crate) struct FogLamps {

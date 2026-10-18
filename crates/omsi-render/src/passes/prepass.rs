@@ -21,8 +21,9 @@ impl Renderer {
                 ],
                 shift: [proj.z_axis.x, proj.z_axis.y, 0.0, 0.0],
                 wide: if f.enhanced_frame { occlusion_tuning() } else { [0.0; 4] },
+                // (the window's own view only: another eye or panel is not where it was)
                 reproj: self.tone.bounce_reproj.0,
-                history: [self.tone.bounce_reproj.1, 0.0, 0.0, 0.0],
+                history: [if f.lead_view { self.tone.bounce_reproj.1 } else { 0.0 }, 0.0, 0.0, 0.0],
             };
             self.queue
                 .write_buffer(&self.ao_buf, 0, bytemuck::bytes_of(&u));
@@ -49,8 +50,8 @@ impl Renderer {
                 });
             }
             for (pipe, bg, target, pass_label) in [
-                (&self.ssao_pipeline, &ao.ssao_bg, &ao.ao_view, "ssao"),
-                (&self.blur_pipeline, &ao.blur_bg, &ao.blur_view, "ssao blur"),
+                (if ao.bounce { &self.ssao_pipeline } else { &self.plain_ssao_pipeline }, &ao.ssao_bg, &ao.ao_view, "ssao"),
+                (if ao.bounce { &self.blur_pipeline } else { &self.plain_blur_pipeline }, &ao.blur_bg, &ao.blur_view, "ssao blur"),
             ] {
                 let Some(pipe) = pipe.as_ref().filter(|_| ao_on) else {
                     break;

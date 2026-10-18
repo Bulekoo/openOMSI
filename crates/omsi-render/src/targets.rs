@@ -201,7 +201,8 @@ impl Renderer {
                 // pass upsamples it by depth, not bilinearly (see `ao_at` in shader.wgsl);
                 // b and a the light the surfaces round the point send back to it
                 // (ssao.wgsl `bounce_pack`)
-                format: wgpu::TextureFormat::Rgba16Float,
+                // (two channels without the bounced light)
+                format: if bounce { wgpu::TextureFormat::Rgba16Float } else { wgpu::TextureFormat::Rg16Float },
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],

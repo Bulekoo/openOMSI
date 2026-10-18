@@ -695,6 +695,8 @@ impl Renderer {
             prepass_msaa_pipelines: prepass.msaa_pipelines,
             ssao_pipeline: ssao.ssao_pipeline,
             blur_pipeline: ssao.blur_pipeline,
+            plain_ssao_pipeline: ssao.plain_ssao_pipeline,
+            plain_blur_pipeline: ssao.plain_blur_pipeline,
             device,
             queue,
             adapter_name,

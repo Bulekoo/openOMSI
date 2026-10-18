@@ -151,7 +151,7 @@ fn fs_ssao(in: VsOut) -> @location(0) vec4<f32> {
     var bounce = vec3<f32>(0.0);
     if (p.wide.y > 0.0) {
         let wr = p.wide.x;
-        let wcount = 14;
+        let wcount = 8;
         var wocc = 0.0;
         var gi = vec3<f32>(0.0);
         let a2 = a + 1.7;
@@ -205,7 +205,9 @@ fn fs_ssao(in: VsOut) -> @location(0) vec4<f32> {
 // What the surface seen at pixel `qc` (view depth `qz`) sent to the last frame's picture:
 // where it was in that frame, if it was seen there.
 fn history_light(qc: vec2<i32>, qz: f32) -> vec3<f32> {
-    let sp = view_pos(qc);
+    // (the surface's view position from its pixel and depth: no second depth load)
+    let ndc0 = vec2<f32>((f32(qc.x) + 0.5) / p.params.z * 2.0 - 1.0, 1.0 - (f32(qc.y) + 0.5) / p.params.w * 2.0);
+    let sp = vec3<f32>((ndc0.x + p.shift.x) * -qz * p.inv_proj[0][0], (ndc0.y + p.shift.y) * -qz * p.inv_proj[1][1], qz);
     let pc = p.reproj * vec4<f32>(sp, 1.0);
     if (pc.w <= 0.01) {
         return vec3<f32>(0.0);
