@@ -38,6 +38,27 @@ fn eye() -> Option<DVec3> {
     *EYE.read().unwrap_or_else(|e| e.into_inner())
 }
 
+/// How much of its spray the road gives a tyre at world (x, y): 0 on dry or damp road, 1 deep
+/// in a puddle.
+pub type RoadWater = std::sync::Arc<dyn Fn(f64, f64) -> f32 + Send + Sync>;
+
+/// The water on the roads, as `set_road_water` has it.
+static ROAD_WATER: RwLock<Option<RoadWater>> = RwLock::new(None);
+
+/// The water the tyre spray comes from (the game's, every frame; None: no scaling). The
+/// stock scripts switch a wheel's `[smoke]` spray on for any wet road (`StreetCond` above 0,
+/// `tire_wet_freq` = the speed) and leave it on for as long as the road is not quite dry, in
+/// rain and long after it; with this each such emitter sprays as much as the water under it.
+pub fn set_road_water(f: Option<RoadWater>) {
+    *ROAD_WATER.write().unwrap_or_else(|e| e.into_inner()) = f;
+}
+
+/// Whether a particle system is a wheel's spray: driven by `tire_wet_freq` / `tire_wet_live`.
+pub fn is_tyre_spray(def: &ParticleSystemDef) -> bool {
+    let wet = |v: &PsValue| matches!(v, PsValue::Var(n) if n.as_bytes().get(..8).is_some_and(|p| p.eq_ignore_ascii_case(b"tire_wet")));
+    wet(&def.freq.0) || wet(&def.life.0)
+}
+
 #[derive(Debug, Clone)]
 pub struct Particle {
     pub pos: DVec3,
@@ -159,6 +180,7 @@ impl ParticleSet {
         let mut plane: Option<[f32; 3]> = None;
         let eye = eye();
         let wind = Vec3::from(*WIND.lock().unwrap_or_else(|e| e.into_inner()));
+        let road_water = ROAD_WATER.read().unwrap_or_else(|e| e.into_inner()).clone();
         for i in 0..self.emitters.len() {
             // move what is there
             let mut ended = Vec::new();
@@ -190,7 +212,11 @@ impl ParticleSet {
             // where new particles start: the emitter itself, or the particles of the one it
             // is attached to - and the ground under them: the owner's under the emitter, a
             // parent particle's own
-            let freq = eval(&def.freq.0, value).max(0.0);
+            let mut freq = eval(&def.freq.0, value).max(0.0);
+            if let Some(water) = road_water.as_ref().filter(|_| freq > 0.0 && is_tyre_spray(&def)) {
+                let k = water(own.x, own.y);
+                freq *= if k.is_finite() { k.clamp(0.0, 1.0) } else { 0.0 };
+            }
             let mut sources: Vec<(DVec3, Vec3, f64)> = Vec::new();
             let mut burst_sources: Vec<(DVec3, Vec3, f64)> = Vec::new();
             match def.attach {
@@ -386,5 +412,32 @@ mod tests {
             s.update(1.0 / 30.0, DVec3::ZERO, Mat4::IDENTITY, &|_| 500.0);
         }
         assert!(s.particles().count() <= MAX_PER_EMITTER);
+    }
+
+    /// A wheel's `[smoke]` spray, which the scripts switch on for any wet road, sprays only
+    /// as much as the water under it (and nothing once that has dried); other emitters are
+    /// not touched.
+    #[test]
+    fn a_wheels_spray_goes_with_the_water_under_it() {
+        let wheel = |name: &str| {
+            let mut d = smoke(0.0);
+            d.freq.0 = PsValue::Var(name.into());
+            ParticleSet::new(vec![d], 5)
+        };
+        let count = |mut s: ParticleSet| {
+            for _ in 0..30 {
+                s.update(1.0 / 30.0, DVec3::ZERO, Mat4::IDENTITY, &|_| 20.0);
+            }
+            s.particles().count()
+        };
+        assert!(is_tyre_spray(&wheel("Tire_Wet_Freq").emitters[0].def) && !is_tyre_spray(&wheel("auspuff_freq").emitters[0].def));
+        set_road_water(Some(std::sync::Arc::new(|_, _| 1.0)));
+        let puddle = count(wheel("tire_wet_freq"));
+        set_road_water(Some(std::sync::Arc::new(|_, _| 0.0)));
+        let (dry, exhaust) = (count(wheel("tire_wet_freq")), count(wheel("auspuff_freq")));
+        set_road_water(None);
+        assert!(puddle >= 18, "{puddle} puffs in a puddle");
+        assert_eq!(dry, 0, "a wet road without a puddle sprays nothing");
+        assert!(exhaust >= 18, "an exhaust is not a tyre: {exhaust}");
     }
 }

@@ -130,6 +130,10 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 
 ### Fixes
 
+- Tyre spray comes only from puddles: the stock cars' and buses' wheel spray no longer sprays
+  on every wet road from the first drops, and it stops as the puddles dry out after the rain
+  instead of lingering until the road is quite dry. In snow the scripts' own slush is kept.
+
 **Navigator**
 
 - Traffic on the navigator follows how fast the traffic flows: busy streets that move are no

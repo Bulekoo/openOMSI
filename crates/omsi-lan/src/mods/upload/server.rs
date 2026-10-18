@@ -37,6 +37,13 @@ pub fn accepting() -> bool {
     uploads().accepting()
 }
 
+/// Whether a player's game hosting a session takes the joining players' buses, as a server
+/// does: yes, unless `OMSI_NO_LAN_UPLOADS` (a player who hosts for strangers keeps their disk
+/// to themselves; their own bus is still sent to the others).
+pub fn a_hosting_game_takes_uploads() -> bool {
+    !omsi_cfg::flags::OMSI_NO_LAN_UPLOADS.is_set()
+}
+
 /// The server starts: the buses players sent before are opened (`vehicles`).
 pub(in crate::mods) fn open() {
     uploads().open();

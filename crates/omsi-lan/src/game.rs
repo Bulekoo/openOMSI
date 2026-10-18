@@ -543,10 +543,8 @@ pub fn share_mods(args: &mut LanConfig, lan: &mut LanSession) {
             // (a player's game hosting a session takes the joining players' buses as a server
             // does, and keeps its own for them: `mods::upload::keep_own`; a server takes them
             // as its server.cfg says)
-            // (OMSI_NO_LAN_UPLOADS: a player who hosts for strangers keeps their disk to
-            // themselves; their own bus is still sent to the others)
             if !args.server {
-                crate::mods::upload::accept(!omsi_cfg::flags::OMSI_NO_LAN_UPLOADS.is_set());
+                crate::mods::upload::accept(crate::mods::upload::a_hosting_game_takes_uploads());
             }
             if let (Some(port), Some(key)) = (lan.local_addr().map(|a| a.port()), lan.host_key()) {
                 crate::mods::serve(port, key, &mod_source(args));

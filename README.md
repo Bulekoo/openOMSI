@@ -195,11 +195,20 @@ coffee or support it on Ko-fi - thank you!
   <a href="https://ko-fi.com/usonance"><img alt="Support me on Ko-fi" src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" height="48"></a>
 </p>
 
+## Acknowledgements
+
+Some ideas and fixes in openOMSI date back to the public work of
+[neoOMSI](https://github.com/neoOMSI/neoOMSI): their reports and pull requests pointed at
+bugs and features that we then implemented in our own code. Thank you.
+
 ## License
 
 openOMSI is released under the [GNU Affero General Public License, version 3 only](LICENSE)
 (`AGPL-3.0-only`). The historical MIT copyright and permission notice is retained in
 `LICENSE`; earlier MIT releases keep their terms. Third-party files keep their own licenses.
+The launcher's bus preview encodes its pictures with
+[jpeg-encoder](https://crates.io/crates/jpeg-encoder): this software is based in part on the
+work of the Independent JPEG Group.
 The openOMSI name and original project logos are marks of `usonskyyyy`, who created
 the original codebase; see [TRADEMARKS.md](TRADEMARKS.md). The official organization is
 [openOMSI.org (`openOMSI-org`)](https://github.com/openOMSI-org).
