@@ -201,10 +201,13 @@ impl FontLibrary {
 }
 
 /// `later`, a font of the same name as `kept` in the same folder, is an edited copy of it
-/// (both cut from one alpha bitmap) with more letters (see `FontLibrary::index`).
+/// that only adds letters (see `FontLibrary::index`): cut from the same alpha bitmap, the same
+/// height, every letter of `kept` at the same place in it, and more of them. A copy that
+/// moves or drops a letter is another font, and Omsi.exe's first one stays.
 fn same_bitmap_fuller(kept: &Font, later: &Font) -> bool {
     let bitmap = |f: &Font| f.path.parent().map(|d| omsi_cfg::resolve_path(d, f.alpha.trim()).to_string_lossy().to_lowercase());
-    bitmap(kept) == bitmap(later) && later.chars.len() > kept.chars.len()
+    let keeps_every_letter = kept.chars.iter().all(|k| later.chars.iter().any(|c| c.ch == k.ch && (c.x0, c.x1, c.y) == (k.x0, k.x1, k.y)));
+    bitmap(kept) == bitmap(later) && later.height == kept.height && later.chars.len() > kept.chars.len() && keeps_every_letter
 }
 
 /// A font's colour bitmap laid over its alpha bitmap pixel for pixel. Omsi.exe reads a
@@ -390,5 +393,10 @@ mod tests {
         assert!(same_bitmap_fuller(&original, &font("matrix (2).oft", "MATRIX_A.tga", "ABCD")));
         assert!(!same_bitmap_fuller(&original, &font("matrix (2).oft", "matrix_a.tga", "AB")));
         assert!(!same_bitmap_fuller(&original, &font("matrix big.oft", "matrix_big.tga", "ABCDEFG")));
+        // more letters, but one of the original's gone or another height: not a copy
+        assert!(!same_bitmap_fuller(&original, &font("matrix (3).oft", "matrix_a.tga", "ABDE")));
+        let mut taller = font("matrix (4).oft", "matrix_a.tga", "ABCD");
+        taller.height = 9;
+        assert!(!same_bitmap_fuller(&original, &taller));
     }
 }
