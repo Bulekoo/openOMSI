@@ -169,8 +169,6 @@ fn fs_ssao(in: VsOut) -> @location(0) vec4<f32> {
             let qc = vec2<i32>(q);
             let qz = lin(textureLoad(t_depth, qc * 2, 0));
             let dz = qz - sp.z;
-            // (a surface far in front of the sample is another object's edge, not a wall
-            // standing over it)
             // a surface counts for what it takes of the hemisphere: not further in front of
             // the sample than the sample is from the point (a wall over the point, not
             // another object's edge), and never the cab round the camera: a dashboard and its
@@ -180,7 +178,11 @@ fn fs_ssao(in: VsOut) -> @location(0) vec4<f32> {
             if (dz > 0.25 && range > 0.0) {
                 wocc = wocc + range;
                 if (p.wide.z > 0.0 && p.history.x > 0.5) {
-                    gi = gi + history_light(qc, qz) * range;
+                    // (a lamp or a lit sign among the hits would be one sample of eight worth
+                    // a hundred of its neighbours' and stand in the picture as a pattern of
+                    // spots: what is brighter than a sunlit white wall is compressed)
+                    let lc = history_light(qc, qz);
+                    gi = gi + lc / (vec3<f32>(1.0) + lc * 0.35) * range;
                 }
             }
         }
@@ -224,7 +226,9 @@ fn history_light(qc: vec2<i32>, qz: f32) -> vec3<f32> {
     if (abs(was - pc.w) > 0.2 + 0.04 * pc.w) {
         return vec3<f32>(0.0);
     }
-    return min(max(textureLoad(t_hist, pq, 0).rgb, vec3<f32>(0.0)), vec3<f32>(p.wide.w));
+    // (the picture's outliers are cut where it is made: post.wgsl `fs_history`)
+    let l = max(textureLoad(t_hist, pq, 0).rgb, vec3<f32>(0.0));
+    return min(l, vec3<f32>(p.wide.w));
 }
 
 // pixel position of a view-space point, through the same projection the depth was made with
@@ -241,31 +245,68 @@ fn project(v: vec3<f32>) -> vec2<f32> {
 // --- blur: 5x5 box over the raw AO, keeps edges by depth
 @group(0) @binding(2) var t_ao: texture_2d<f32>;
 
+const TENT = array<f32, 36>(
+    0.09901, 0.18498, 0.26915, 0.30498, 0.26915, 0.18498,
+    0.18498, 0.34559, 0.50283, 0.56978, 0.50283, 0.34559,
+    0.26915, 0.50283, 0.73162, 0.82903, 0.73162, 0.50283,
+    0.30498, 0.56978, 0.82903, 0.93941, 0.82903, 0.56978,
+    0.26915, 0.50283, 0.73162, 0.82903, 0.73162, 0.50283,
+    0.18498, 0.34559, 0.50283, 0.56978, 0.50283, 0.34559,
+);
+
 @fragment
 fn fs_blur(in: VsOut) -> @location(0) vec4<f32> {
     let px = vec2<i32>(in.clip.xy);
     let size = vec2<i32>(i32(p.params.z), i32(p.params.w));
     let z0 = lin(textureLoad(t_depth, px * 2, 0));
+    // Without bounced light (every pipeline but the Enhanced one, and the Enhanced with the
+    // bounce off) the blur is the plain 6x6 one: as cheap and as it always was.
+    if (p.wide.z <= 0.0) {
+        var sum0 = 0.0;
+        var wsum0 = 0.0;
+        // 6x6 window: covers every rotation of the 4x4 pattern at least once in each row and
+        // column, and the depth weight keeps the occlusion from bleeding across an edge (a
+        // relative tolerance: far surfaces are allowed a larger step)
+        for (var y = -3; y <= 2; y = y + 1) {
+            for (var x = -3; x <= 2; x = x + 1) {
+                let c = clamp(px + vec2<i32>(x, y), vec2<i32>(0), size - vec2<i32>(1));
+                let z = lin(textureLoad(t_depth, c * 2, 0));
+                let tol0 = 0.3 + 0.02 * abs(z0);
+                let w = select(0.0, 1.0, abs(z - z0) < tol0);
+                sum0 = sum0 + textureLoad(t_ao, c, 0).r * w;
+                wsum0 = wsum0 + w;
+            }
+        }
+        let blurred0 = select(1.0, sum0 / wsum0, wsum0 > 0.0);
+        return vec4<f32>(select(1.0, blurred0, (bitcast<u32>(blurred0) & 0x7f800000u) != 0x7f800000u), select(-z0, 60000.0, textureLoad(t_depth, px * 2, 0) <= 0.0), 0.0, 0.0);
+    }
     var sum = 0.0;
     var gi_sum = vec3<f32>(0.0);
     var wsum = 0.0;
-    // 6x6 window: covers every rotation of the 4x4 pattern at least once in each row and
-    // column, and the depth weight keeps the occlusion from bleeding across an edge (a
-    // relative tolerance: far surfaces are allowed a larger step)
+    var gsum = 0.0;
+    // With the bounce the same 6x6 window for both: the occlusion's weight falls off
+    // smoothly (a hard cut left the pattern standing wherever a slanting ground's steps from
+    // pixel to pixel came near it); the bounced light, smooth by nature and noisier by its
+    // few hits, takes a looser depth tolerance and a tent over the window, so one hit
+    // leaves a soft spot, not a square.
+    let tol = 0.3 + 0.04 * abs(z0);
+    let gtol = 0.5 + 0.1 * abs(z0);
     for (var y = -3; y <= 2; y = y + 1) {
         for (var x = -3; x <= 2; x = x + 1) {
             let c = clamp(px + vec2<i32>(x, y), vec2<i32>(0), size - vec2<i32>(1));
             let z = lin(textureLoad(t_depth, c * 2, 0));
-            let tol = 0.3 + 0.02 * abs(z0);
-            let w = select(0.0, 1.0, abs(z - z0) < tol);
+            let dz = abs(z - z0);
             let tap = textureLoad(t_ao, c, 0);
+            let w = 1.0 - smoothstep(0.5 * tol, tol, dz);
             sum = sum + tap.r * w;
-            gi_sum = gi_sum + bounce_unpack(tap) * w;
             wsum = wsum + w;
+            let gw = (1.0 - smoothstep(0.5 * gtol, gtol, dz)) * TENT[(y + 3) * 6 + x + 3];
+            gi_sum = gi_sum + bounce_unpack(tap) * gw;
+            gsum = gsum + gw;
         }
     }
     let blurred = select(1.0, sum / wsum, wsum > 0.0);
-    let gi = select(vec3<f32>(0.0), gi_sum / wsum, wsum > 0.0);
+    let gi = select(vec3<f32>(0.0), gi_sum / gsum, gsum > 0.0);
     let pk = bounce_pack(gi);
     return vec4<f32>(select(1.0, blurred, (bitcast<u32>(blurred) & 0x7f800000u) != 0x7f800000u), select(-z0, 60000.0, textureLoad(t_depth, px * 2, 0) <= 0.0), pk.x, pk.y);
 }

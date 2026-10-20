@@ -184,7 +184,14 @@ fn fs_up(in: VsOut) -> @location(0) vec4<f32> {
 @fragment
 fn fs_history(in: VsOut) -> @location(0) vec4<f32> {
     let texel = 1.0 / vec2<f32>(textureDimensions(t_src));
-    let c = (src(in.uv, texel, -0.5, -0.5) + src(in.uv, texel, 0.5, -0.5) + src(in.uv, texel, -0.5, 0.5) + src(in.uv, texel, 0.5, 0.5)) * 0.25;
+    var c = (src(in.uv, texel, -0.5, -0.5) + src(in.uv, texel, 0.5, -0.5) + src(in.uv, texel, -0.5, 0.5) + src(in.uv, texel, 0.5, 0.5)) * 0.25;
+    // A small bright thing - a lamp, a spot of glare, a sign's edge - is one texel among a
+    // hundred its neighbours: of the AO's samples it takes one, and the blur turned it into a
+    // square of the blur's size. What is far brighter than what lies round it (four taps
+    // eight pixels out) is cut down to a little more than that: a wall, a sign or a window
+    // is as bright as its neighbours.
+    let ring = (src(in.uv, texel, 8.0, 0.0) + src(in.uv, texel, -8.0, 0.0) + src(in.uv, texel, 0.0, 8.0) + src(in.uv, texel, 0.0, -8.0)) * 0.25;
+    c = min(c, ring * 1.5 + vec3<f32>(0.02) * max(p.c.z, 1e-6));
     return vec4<f32>(c / max(p.c.z, 1e-6), 1.0);
 }
 
