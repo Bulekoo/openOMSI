@@ -1213,6 +1213,7 @@ impl World {
         // [matl_freetex]: the file is only known at run time (the destination
         // roller builds its path from the map's depot and terminus strings)
         let free: Vec<FreeTex> = free_texture_defs(&ov_all).into_iter().map(|(item_only, key, var)| FreeTex {
+            reloads: self.freetex_reloads.clone(),
             var,
             diffuse: key.eq_ignore_ascii_case(&m.texture),
             key: tex!(&subst(&key), &dirs_ref),
