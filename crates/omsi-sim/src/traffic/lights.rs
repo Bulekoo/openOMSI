@@ -172,7 +172,11 @@ impl TrafficLightController {
             self.time = (self.time + d).rem_euclid(cycle);
             left -= d;
             let p = self.stops[k];
-            let asked = self.request.get(p.light).copied().unwrap_or(false);
+            let asked = if p.if_request {
+                self.stops.iter().any(|q| q.if_request && q.time == p.time && q.jump_to == p.jump_to && self.request.get(q.light).copied().unwrap_or(false))
+            } else {
+                self.request.get(p.light).copied().unwrap_or(false)
+            };
             let active = if p.if_request { !asked } else { asked };
             // A stop does not hold the changeover to green: while some light shows
             // red-and-yellow the clock goes on. London's Brixton Road programs put a stop a

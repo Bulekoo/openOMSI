@@ -6839,7 +6839,7 @@ _version: 2
   ms: "Cermin"
   tl: "Mga salamin"
   sv: "Speglar"
-  sr: "Ogledala"
+  sr: "Retrovizori"
 "Low (128)":
   ca: "Baixa (128)"
   ru: "Низкое (128)"
@@ -11556,7 +11556,7 @@ _version: 2
   ms: "Simpan situasi"
   tl: "I-save ang sitwasyon"
   sv: "Spara situationen"
-  sr: "Spasite situaciju"
+  sr: "Sačuvajte situaciju"
 "Load the quicksave":
   ca: "Carrega el desament ràpid"
   ru: "Загрузить быстрое сохранение"
@@ -19260,7 +19260,7 @@ _version: 2
   hi: "इंजन बंद है  (E इलेक्ट्रिक्स, M स्टार्टर; इग्निशन की वाली मॉड बसें E से चालू होती हैं: फिर दबाकर रखें। Shift+U सब कर देता है)"
   zh-tw: "引擎已熄火（E 電源，M 啟動馬達；具點火鑰匙的模組車輛使用 E 發動：再次按下並按住。Shift+U 可一鍵完成）"
   sv: "Motorn är av (E elsystem, M startmotor; moddbussar med tändningsnyckel vrider den med E: tryck igen och håll. Shift+U gör allt)"
-  sr: "Motor je isključen (E elektrika, M starter; mod autobusi sa ključem za paljenje okreću ga sa E: pritisnite ponovo i držite. Shift+U radi sve)"
+  sr: "Motor je isključen (E elektronika, M starter; mod autobusi sa ključem za paljenje okreću ga sa E: pritisnite ponovo i držite. Shift+U radi sve)"
 "The gearbox is in N: press D (Shift+D when W A S D drive), or click it. Buses like the Citaro take D only with the brake held":
   ca: "El canvi és en N: prem D (Maj+D si condueixes amb W A S D) o clica-hi. En autobusos com el Citaro cal mantenir el fre premut per posar D"
   ru: "КПП в положении N: нажмите D (Shift+D, если едете на W A S D) или щёлкните по ней. Автобусы вроде Citaro включают D только при нажатом тормозе"
@@ -21796,7 +21796,7 @@ _version: 2
   ms: "Kadar segar semula cermin bas"
   tl: "Pag-refresh ng mga salamin ng bus"
   sv: "Uppdatering av busspeglar"
-  sr: "Osvežavanje ogledala autobusa"
+  sr: "Osvežavanje retrovizora autobusa"
 "Every frame":
   ca: "Cada fotograma"
   ru: "Каждый кадр"
@@ -21854,7 +21854,7 @@ _version: 2
   ms: "Kadar kemas kini dikongsi oleh semua cermin bas. Kadar yang lebih tinggi boleh mengurangkan FPS permainan."
   tl: "Ang dalas ng pag-update ay pinaghahatian ng lahat ng salamin ng bus. Mas mataas na dalas ay maaaring magpababa ng FPS ng laro."
   sv: "Frekvensen delas av alla busspeglar. Högre frekvenser kan minska spelets bildfrekvens."
-  sr: "Stopu dele sva ogledala autobusa. Više stope mogu smanjiti FPS u igri."
+  sr: "Stopu osvežavanja dele svi retrovizori autobusa. Veća učestalost može smanjiti broj frejmova u sekundi."
 "Show headset picture on monitor":
   ca: "Mostra la imatge del visor al monitor"
   ru: "Показывать изображение гарнитуры на мониторе"
@@ -22115,7 +22115,6 @@ _version: 2
   ms: "Paparan VR pada monitor dihidupkan"
   tl: "Naka-on ang VR sa monitor"
   sv: "VR-spegel på skrivbordet på"
-  sr: "Desktop VR ogledalo uključeno"
 "Desktop VR mirror off":
   ca: "Rèplica de RV al monitor desactivada"
   ru: "Показ VR на мониторе выключен"
@@ -22144,7 +22143,6 @@ _version: 2
   ms: "Paparan VR pada monitor dimatikan"
   tl: "Naka-off ang VR sa monitor"
   sv: "VR-spegel på skrivbordet av"
-  sr: "Desktop VR ogledalo isključeno"
 "Could not start VR":
   ca: "No s'ha pogut iniciar la RV"
   ru: "Не удалось запустить VR"
@@ -24355,6 +24353,156 @@ _version: 2
   sv: "Fler servrar: lägg till dem via adressen i datorns startprogram eller ange en ovan."
   sr: "Više servera: dodajte ih prema adresi u pokretaču radne površine ili unesite jedan iznad."
   ru: "Больше серверов: добавьте их по адресу в настольном лаунчере, либо введите адрес выше."
+
+"Show the {n} that do not fit the season":
+  ca: "Mostra els {n} que no s'adiuen amb l'estació"
+  pt: "Mostrar os {n} que não combinam com a estação"
+  pt-pt: "Mostrar os {n} que não condizem com a estação"
+  zh: "显示不符合季节的 {n} 个"
+  pl: "Pokaż {n} niepasujących do pory roku"
+  fr: "Afficher les {n} qui ne conviennent pas à la saison"
+  zh-tw: "顯示不符合季節的 {n} 個"
+  nl: "Toon de {n} die niet bij het seizoen passen"
+  de: "Die {n} zeigen, die nicht zur Jahreszeit passen"
+  ru: "Показать {n}, не подходящих к сезону"
+  uk: "Показати {n}, що не підходять до сезону"
+  be: "Паказаць {n}, якія не пасуюць да сезона"
+  kk: "Маусымға сай келмейтін {n} ауа райын көрсету"
+  cs: "Zobrazit {n}, které se nehodí k ročnímu období"
+  hu: "A(z) {n} évszakhoz nem illő mutatása"
+  es: "Mostrar los {n} que no encajan con la estación"
+  it: "Mostra i {n} che non si addicono alla stagione"
+  tr: "Mevsime uymayan {n} tanesini göster"
+  ja: "季節に合わない {n} 件を表示"
+  ko: "계절에 맞지 않는 {n}개 표시"
+  th: "แสดง {n} รายการที่ไม่เข้ากับฤดูกาล"
+  vi: "Hiện {n} kiểu không hợp với mùa"
+  id: "Tampilkan {n} yang tidak cocok dengan musim"
+  ms: "Tunjukkan {n} yang tidak sesuai dengan musim"
+  tl: "Ipakita ang {n} na hindi bagay sa panahon"
+  hi: "मौसम से मेल न खाने वाले {n} दिखाएँ"
+  sv: "Visa de {n} som inte passar årstiden"
+  sr: "Prikaži {n} koji ne odgovaraju godišnjem dobu"
+
+"{name} does not fit the season: natural weather instead":
+  ca: "{name} no s'adiu amb l'estació: es fa servir el temps natural"
+  pt: "{name} não combina com a estação: fica o clima natural"
+  pt-pt: "{name} não condiz com a estação: fica o tempo natural"
+  zh: "{name} 不符合季节：改用自然天气"
+  pl: "{name} nie pasuje do pory roku: zamiast tego pogoda naturalna"
+  fr: "{name} ne convient pas à la saison : météo naturelle à la place"
+  zh-tw: "{name} 不符合季節：改用自然天氣"
+  nl: "{name} past niet bij het seizoen: natuurlijk weer in plaats daarvan"
+  de: "{name} passt nicht zur Jahreszeit: stattdessen natürliches Wetter"
+  ru: "{name} не подходит к сезону: вместо неё естественная погода"
+  uk: "{name} не підходить до сезону: натомість природна погода"
+  be: "{name} не пасуе да сезона: замест яе натуральнае надвор'е"
+  kk: "{name} маусымға сай келмейді: оның орнына табиғи ауа райы"
+  cs: "{name} se nehodí k ročnímu období: místo toho přirozené počasí"
+  hu: "{name} nem illik az évszakhoz: helyette természetes időjárás"
+  es: "{name} no encaja con la estación: tiempo natural en su lugar"
+  it: "{name} non si addice alla stagione: meteo naturale al suo posto"
+  tr: "{name} mevsime uymuyor: onun yerine doğal hava"
+  ja: "{name} は季節に合いません：代わりに自然な天候"
+  ko: "{name}은(는) 계절에 맞지 않습니다: 대신 자연 날씨"
+  th: "{name} ไม่เข้ากับฤดูกาล: ใช้สภาพอากาศตามธรรมชาติแทน"
+  vi: "{name} không hợp với mùa: dùng thời tiết tự nhiên thay thế"
+  id: "{name} tidak cocok dengan musim: cuaca alami sebagai gantinya"
+  ms: "{name} tidak sesuai dengan musim: cuaca semula jadi sebagai gantinya"
+  tl: "Hindi bagay ang {name} sa panahon: natural na panahon na lang"
+  hi: "{name} मौसम से मेल नहीं खाता: इसके बजाय प्राकृतिक मौसम"
+  sv: "{name} passar inte årstiden: naturligt väder i stället"
+  sr: "{name} ne odgovara godišnjem dobu: umesto toga prirodno vreme"
+
+"Start another game":
+  ca: "Inicia una altra partida"
+  pt: "Iniciar outro jogo"
+  pt-pt: "Iniciar outro jogo"
+  zh: "再启动一个游戏"
+  pl: "Uruchom kolejną grę"
+  fr: "Lancer un autre jeu"
+  zh-tw: "再啟動一個遊戲"
+  nl: "Nog een spel starten"
+  de: "Weiteres Spiel starten"
+  ru: "Запустить ещё одну игру"
+  uk: "Запустити ще одну гру"
+  be: "Запусціць яшчэ адну гульню"
+  kk: "Тағы бір ойын бастау"
+  cs: "Spustit další hru"
+  hu: "Újabb játék indítása"
+  es: "Iniciar otra partida"
+  it: "Avvia un'altra partita"
+  tr: "Başka bir oyun başlat"
+  ja: "もう一つゲームを起動"
+  ko: "게임 하나 더 시작"
+  th: "เริ่มเกมอีกเกม"
+  vi: "Mở thêm một trò chơi"
+  id: "Mulai permainan lain"
+  ms: "Mulakan permainan lain"
+  tl: "Magsimula ng isa pang laro"
+  hi: "एक और गेम शुरू करें"
+  sv: "Starta ett spel till"
+  sr: "Pokreni još jednu igru"
+
+"A game is running already (its window may be behind this one - see Running games). Click again to start another one anyway.":
+  ca: "Ja hi ha una partida en marxa (la seva finestra pot ser darrere d'aquesta; mira Running games). Torna a fer clic per iniciar-ne una altra igualment."
+  pt: "Já tem um jogo rodando (a janela dele pode estar atrás desta - veja Running games). Clique de novo para iniciar outro mesmo assim."
+  pt-pt: "Já está um jogo a correr (a janela dele pode estar atrás desta - veja Running games). Clique outra vez para iniciar outro na mesma."
+  zh: "已有一个游戏在运行（它的窗口可能在本窗口后面——见 Running games）。再点一次仍可再启动一个。"
+  pl: "Gra już działa (jej okno może być za tym - zobacz Running games). Kliknij ponownie, aby mimo to uruchomić kolejną."
+  fr: "Un jeu tourne déjà (sa fenêtre est peut-être derrière celle-ci - voir Running games). Cliquez à nouveau pour en lancer un autre quand même."
+  zh-tw: "已有一個遊戲在執行（它的視窗可能在本視窗後面——見 Running games）。再按一次仍可再啟動一個。"
+  nl: "Er draait al een spel (het venster staat misschien achter dit venster - zie Running games). Klik nogmaals om toch nog een te starten."
+  de: "Ein Spiel läuft bereits (sein Fenster liegt vielleicht hinter diesem - siehe Running games). Noch einmal klicken, um trotzdem ein weiteres zu starten."
+  ru: "Игра уже запущена (её окно может быть позади этого — см. Running games). Нажмите ещё раз, чтобы всё равно запустить ещё одну."
+  uk: "Гра вже запущена (її вікно може бути позаду цього — див. Running games). Натисніть ще раз, щоб усе одно запустити ще одну."
+  be: "Гульня ўжо запушчана (яе акно можа быць ззаду гэтага — гл. Running games). Націсніце яшчэ раз, каб усё роўна запусціць яшчэ адну."
+  kk: "Ойын әлдеқашан іске қосылған (оның терезесі осының артында болуы мүмкін — Running games қараңыз). Бәрібір тағы біреуін бастау үшін қайта басыңыз."
+  cs: "Hra už běží (její okno může být za tímto - viz Running games). Klikněte znovu, chcete-li přesto spustit další."
+  hu: "Már fut egy játék (az ablaka lehet, hogy emögött van - lásd Running games). Kattintson újra, ha mégis újabbat indítana."
+  es: "Ya hay una partida en marcha (su ventana puede estar detrás de esta - mira Running games). Haz clic de nuevo para iniciar otra de todos modos."
+  it: "Una partita è già in corso (la sua finestra potrebbe essere dietro questa - vedi Running games). Fai di nuovo clic per avviarne un'altra comunque."
+  tr: "Zaten çalışan bir oyun var (penceresi bunun arkasında olabilir - Running games'e bakın). Yine de başka birini başlatmak için tekrar tıklayın."
+  ja: "ゲームはすでに起動しています（ウィンドウがこの後ろにあるかもしれません — Running games を参照）。それでももう一つ起動するには、もう一度クリックしてください。"
+  ko: "게임이 이미 실행 중입니다(창이 이 창 뒤에 있을 수 있습니다 - Running games 참조). 그래도 하나 더 시작하려면 다시 클릭하세요."
+  th: "มีเกมกำลังทำงานอยู่แล้ว (หน้าต่างอาจอยู่ด้านหลังหน้าต่างนี้ - ดู Running games) คลิกอีกครั้งเพื่อเริ่มอีกเกมอยู่ดี"
+  vi: "Đã có một trò chơi đang chạy (cửa sổ của nó có thể nằm sau cửa sổ này - xem Running games). Bấm lần nữa để vẫn mở thêm một trò."
+  id: "Sebuah permainan sudah berjalan (jendelanya mungkin ada di belakang jendela ini - lihat Running games). Klik lagi untuk tetap memulai yang lain."
+  ms: "Satu permainan sudah berjalan (tetingkapnya mungkin di belakang yang ini - lihat Running games). Klik sekali lagi untuk tetap memulakan yang lain."
+  tl: "May tumatakbo nang laro (baka nasa likod ng window na ito ang window nito - tingnan ang Running games). I-click ulit para magsimula pa rin ng isa pa."
+  hi: "एक गेम पहले से चल रहा है (उसकी विंडो शायद इसके पीछे है - Running games देखें)। फिर भी एक और शुरू करने के लिए दोबारा क्लिक करें।"
+  sv: "Ett spel körs redan (dess fönster kan ligga bakom det här - se Running games). Klicka igen för att ändå starta ett till."
+  sr: "Igra već radi (njen prozor je možda iza ovog - vidi Running games). Klikni ponovo da ipak pokreneš još jednu."
+
+"starting at {place}":
+  ca: "sortint de {place}"
+  pt: "saindo de {place}"
+  pt-pt: "a partir de {place}"
+  zh: "从 {place} 出发"
+  pl: "start: {place}"
+  fr: "départ à {place}"
+  zh-tw: "從 {place} 出發"
+  nl: "start bij {place}"
+  de: "Start an {place}"
+  ru: "старт: {place}"
+  uk: "старт: {place}"
+  be: "старт: {place}"
+  kk: "бастау: {place}"
+  cs: "start: {place}"
+  hu: "indulás: {place}"
+  es: "saliendo de {place}"
+  it: "partenza da {place}"
+  tr: "başlangıç: {place}"
+  ja: "{place} から開始"
+  ko: "{place}에서 시작"
+  th: "เริ่มที่ {place}"
+  vi: "bắt đầu tại {place}"
+  id: "mulai di {place}"
+  ms: "bermula di {place}"
+  tl: "magsisimula sa {place}"
+  hi: "{place} से शुरू"
+  sv: "start vid {place}"
+  sr: "polazak: {place}"
 
 "Weather cycle":
   ca: "Cicle del temps"
@@ -31456,7 +31604,7 @@ _version: 2
   sv: "Alla speglar har återställts till bussens ursprungliga inställningar"
   pt: "Todos os espelhos voltaram ao que o ônibus tem"
   ca: "Tots els retrovisors tornen a la configuració original de l'autobús"
-  sr: "Svako ogledalo se vratilo kao što ga ima autobus"
+  sr: "Svi retrovizori vraćeni su na podrazumevani položaj za ovaj autobus"
   ru: "Все зеркала возвращены в положение автобуса"
 
 "There is no vehicle to reload: you are on foot":
@@ -31546,7 +31694,7 @@ _version: 2
   sv: "Spegelpaneler på (Ctrl+M: av, Ctrl+Shift+M: redigera)"
   pt: "Painéis dos espelhos ligados (Ctrl+M: desligar, Ctrl+Shift+M: editar)"
   ca: "Panells dels retrovisors activats (Ctrl+M: desactiva, Ctrl+Maj+M: edita)"
-  sr: "Preslikavanje panela uključeno (Ctrl+M: isključeno, Ctrl+Shift+M: izmeni)"
+  sr: "Paneli retrovizora uključeni (Ctrl+M: isključi, Ctrl+Shift+M: uredi)"
   ru: "Панели зеркал включены (Ctrl+M: выключить, Ctrl+Shift+M: редактировать)"
 
 "Mirror panels off (Ctrl+M)":
@@ -31556,7 +31704,7 @@ _version: 2
   sv: "Spegelpaneler av (Ctrl+M)"
   pt: "Painéis dos espelhos desligados (Ctrl+M)"
   ca: "Panells dels retrovisors desactivats (Ctrl+M)"
-  sr: "Preslikavanje panela isključeno (Ctrl+M)"
+  sr: "Paneli retrovizora isključeni (Ctrl+M)"
   ru: "Панели зеркал выключены (Ctrl+M)"
 
 "Mirror editor off":
@@ -31566,7 +31714,7 @@ _version: 2
   sv: "Spegelredigeraren av"
   pt: "Editor de espelhos desligado"
   ca: "Editor de retrovisors desactivat"
-  sr: "Editor ogledala isključen"
+  sr: "Uređivač retrovizora je isključen"
   ru: "Редактор зеркал выключен"
 
 "This bus has no mirrors to show":
@@ -31576,7 +31724,7 @@ _version: 2
   sv: "Den här bussen saknar speglar att visa"
   pt: "Este ônibus não tem espelhos para mostrar"
   ca: "Aquest autobús no té cap retrovisor per mostrar"
-  sr: "Ovaj autobus nema ogledala"
+  sr: "Ovaj autobus nema retrovizore za prikaz"
   ru: "У этого автобуса нет зеркал для показа"
 
 "Mirror editor on: its keys are listed top left":
@@ -31586,7 +31734,7 @@ _version: 2
   sv: "Spegelredigeraren på: tangenterna visas uppe till vänster"
   pt: "Editor de espelhos ligado: as teclas dele estão no canto superior esquerdo"
   ca: "Editor de retrovisors activat: les tecles es mostren a dalt a l'esquerra"
-  sr: "Mirror editor uključen: njegovi tasteri su navedeni u gornjem levom uglu"
+  sr: "Uređivač retrovizora je uključen: prečice su navedene u gornjem levom uglu"
   ru: "Редактор зеркал включён: клавиши перечислены вверху слева"
 
 "Mirror editor (Ctrl+Shift+M or Esc: done)":
@@ -31596,7 +31744,7 @@ _version: 2
   sv: "Spegelredigerare (Ctrl+Shift+M eller Esc: klart)"
   pt: "Editor de espelhos (Ctrl+Shift+M ou Esc: concluir)"
   ca: "Editor de retrovisors (Ctrl+Maj+M o Esc: acaba)"
-  sr: "Editor ogledala (Ctrl+Shift+M ili Esc: gotovo)"
+  sr: "Uređivač retrovizora (Ctrl+Shift+M ili Esc: gotovo)"
   ru: "Редактор зеркал (Ctrl+Shift+M или Esc: готово)"
 
 "Not available on this system yet":
@@ -31708,7 +31856,7 @@ _version: 2
   sv: "Spegel {}: synfält {:.0}° (bussens {:.0}°)"
   pt: "Espelho {}: campo de visão {:.0}° (o do ônibus: {:.0}°)"
   ca: "Retrovisor {}: camp de visió {:.0}° (original de l'autobús: {:.0}°)"
-  sr: "Ogledalo {}: vidno polje {:.0}° (autobus {:.0}°)"
+  sr: "Retrovizor {}: ugao vidnog polja {:.0}° (u autobusu: {:.0}°)"
   ru: "Зеркало {}: угол обзора {:.0}° (у автобуса {:.0}°)"
 
 "Mirror {} shifted {:+.2} m across, {:+.2} m forward, {:+.2} m up":
@@ -31718,7 +31866,7 @@ _version: 2
   sv: "Spegel {} flyttad {:+.2} m i sidled, {:+.2} m framåt, {:+.2} m uppåt"
   pt: "Espelho {} deslocado {:+.2} m para o lado, {:+.2} m para frente, {:+.2} m para cima"
   ca: "S'ha desplaçat el retrovisor {} {:+.2} m lateralment, {:+.2} m endavant i {:+.2} m amunt"
-  sr: "Ogledalo {} pomereno {:+.2} m preko, {:+.2} m napred, {:+.2} m nagore"
+  sr: "Retrovizor {} pomeren {:+.2} m poprečno, {:+.2} m unapred, {:+.2} m nagore"
   ru: "Зеркало {} смещено на {:+.2} м вбок, {:+.2} м вперёд, {:+.2} м вверх"
 
 "Mirror {}: {:+.1}° across, {:+.1}° up":
@@ -31728,7 +31876,7 @@ _version: 2
   sv: "Spegel {}: {:+.1}° i sidled, {:+.1}° uppåt"
   pt: "Espelho {}: {:+.1}° para o lado, {:+.1}° para cima"
   ca: "Retrovisor {}: {:+.1}° lateralment, {:+.1}° amunt"
-  sr: "Ogledalo {}: {:+.1}° preko, {:+.1}° nagore"
+  sr: "Retrovizor {}: {:+.1}° poprečno, {:+.1}° nagore"
   ru: "Зеркало {}: {:+.1}° вбок, {:+.1}° вверх"
 
 "Mirror {}: {:+.1}° across, {:+.1}° up (Ctrl+Alt+arrows)":
@@ -31738,7 +31886,7 @@ _version: 2
   sv: "Spegel {}: {:+.1}° i sidled, {:+.1}° uppåt (Ctrl+Alt+piltangenter)"
   pt: "Espelho {}: {:+.1}° para o lado, {:+.1}° para cima (Ctrl+Alt+setas)"
   ca: "Retrovisor {}: {:+.1}° lateralment, {:+.1}° amunt (Ctrl+Alt+fletxes)"
-  sr: "Ogledalo {}: {:+.1}° preko, {:+.1}° nagore (Ctrl+Alt+strelice)"
+  sr: "Retrovizor {}: {:+.1}° poprečno, {:+.1}° nagore (Ctrl+Alt+strelice)"
   ru: "Зеркало {}: {:+.1}° вбок, {:+.1}° вверх (Ctrl+Alt+стрелки)"
 
 "The engine is off  ({e} electrics, {m} starter; mod buses with an ignition key turn it with {e}: press again and hold. Shift+U does it all)":
@@ -31749,7 +31897,7 @@ _version: 2
   pt: "O motor está desligado  ({e} elétrica, {m} partida; ônibus de mod com chave de ignição a giram com {e}: aperte de novo e segure. Shift+U faz tudo)"
   ca: "El motor està apagat  ({e} sistema elèctric, {m} arrencada; als autobusos de mods amb clau de contacte, gira-la amb {e}: torna a prémer i mantén la tecla. Maj+U ho fa tot)"
   de: "Der Motor ist aus ({e} Elektronik, {m} Anlasser; Mod-Busse mit einem Zündschlüssel, drehen mit {e}: nochmals drücken und halten. Umschalt+U macht alles)"
-  sr: "Motor je isključen ({e} elektrika, {m} starter; mod autobusi sa ključem za paljenje okreću ga sa {e}: pritisnite ponovo i držite. Shift+U radi sve)"
+  sr: "Motor je isključen ({e} elektronika, {m} starter; mod autobusi sa ključem za paljenje okreću ga sa {e}: pritisnite ponovo i držite. Shift+U radi sve)"
   ru: "Двигатель выключен  ({e} электрика, {m} стартер; мод-автобусы с ключом зажигания включаются через {e}: нажмите снова и удержите. Shift+U делает всё сразу)"
 
 "The gearbox is in N: press {d}, or click it. Buses like the Citaro take D only with the brake held":
@@ -31896,7 +32044,7 @@ _version: 2
   sv: "Spegel {} har återställts till bussens ursprungliga inställning (Shift+R: alla speglar)"
   pt: "O espelho {} voltou ao que o ônibus tem (Shift+R: todos os espelhos)"
   ca: "El retrovisor {} torna a la configuració original de l'autobús (Maj+R: tots els retrovisors)"
-  sr: "Ogledalo {} se vratilo kao što ga ima autobus (Shift+R: svako ogledalo)"
+  sr: "Retrovizor {} vraćen je na podrazumevani položaj za ovaj autobus (Shift+R: svi retrovizori)"
   ru: "Зеркало {} возвращено в положение автобуса (Shift+R: все зеркала)"
 
 "Saved {} tile(s) to the content folder ({})":
@@ -32130,7 +32278,7 @@ _version: 2
   sv: "Alla {n} speglar på denna buss har redan en panel"
   pt: "Os {n} espelhos deste ônibus já têm um painel"
   ca: "Els {n} retrovisors d'aquest autobús ja tenen un panell"
-  sr: "Sva {n} ogledala ovog autobusa već imaju panel"
+  sr: "Svih {n} retrovizora ovog autobusa već ima panel"
   ru: "У всех {n} зеркал этого автобуса уже есть панель"
 
 "Mirror panel added ({} in all)":
@@ -32140,7 +32288,7 @@ _version: 2
   sv: "Spegelpanel tillagd ({} totalt)"
   pt: "Painel de espelho adicionado ({} no total)"
   ca: "S'ha afegit un panell de retrovisor ({} en total)"
-  sr: "Dodato je ogledalo (ukupno {})"
+  sr: "Dodat je panel retrovizora (ukupno: {})"
   ru: "Панель зеркала добавлена (всего {})"
 
 "Mirror panel removed ({} left)":
@@ -32150,7 +32298,7 @@ _version: 2
   sv: "Spegelpanel borttagen ({} kvar)"
   pt: "Painel de espelho removido (restam {})"
   ca: "S'ha retirat un panell de retrovisor (en queden {})"
-  sr: "Uklonjena ploča ogledala ({} levo)"
+  sr: "Panel retrovizora je uklonjen (preostalo: {})"
   ru: "Панель зеркала удалена (осталось {})"
 
 "Panel shows mirror {} of {}":
@@ -32160,7 +32308,7 @@ _version: 2
   sv: "Panelen visar spegel {} av {}"
   pt: "O painel mostra o espelho {} de {}"
   ca: "El panell mostra el retrovisor {} de {}"
-  sr: "Panel prikazuje ogledalo {} od {}"
+  sr: "Panel prikazuje retrovizor {} od {}"
   ru: "Панель показывает зеркало {} из {}"
 
 "Downloading the translation model: {} %":
@@ -36739,7 +36887,7 @@ _version: 2
   hi: "दर्पण"
   ca: "Retrovisor"
   sv: "Spegel"
-  sr: "Ogledalo"
+  sr: "Retrovizor"
 
 "Save for this vehicle":
   de: "Für dieses Fahrzeug speichern"
@@ -36859,7 +37007,7 @@ _version: 2
   hi: "दृश्य और दर्पण संपादित करें"
   ca: "Edita la vista i els retrovisors"
   sv: "Redigera vyn och speglarna"
-  sr: "Uredite prikaz i ogledala"
+  sr: "Uredite prikaz i retrovizore"
 
 "A panel at the side of the driver's view: the eye, the direction, the field of view and each mirror, saved for this vehicle.":
   de: "Ein Bedienfeld neben der Fahreransicht: Auge, Blickrichtung, Sichtfeld und jeder Spiegel, gespeichert für dieses Fahrzeug."
@@ -36889,7 +37037,7 @@ _version: 2
   hi: "चालक दृश्य के बगल में एक पैनल: आँख, दिशा, दृष्टि क्षेत्र और हर दर्पण, इस वाहन के लिए सहेजा जाता है।"
   ca: "Un panell al costat de la vista del conductor: els ulls, la direcció, el camp de visió i cada retrovisor, desats per a aquest vehicle."
   sv: "En panel bredvid förarvyn: ögonposition, riktning, synfält och varje spegel, sparat för detta fordon."
-  sr: "Panel na bočnoj strani pogleda vozača: oko, pravac, vidno polje i svako ogledalo, sačuvano za ovo vozilo."
+  sr: "Panel sa strane vozačevog pogleda: položaj oka, smer, ugao vidnog polja i svaki retrovizor, sačuvan za ovo vozilo."
 
 "Running games":
   es: "Partidas en marcha"
@@ -38150,7 +38298,6 @@ _version: 2
   hi: "टूर की यात्राएँ"
   ca: "Trajectes del torn"
   sv: "Omloppets turer"
-  sr: "Izleti na turneji"
 
 "Click a trip to start with it":
   de: "Klicke eine Fahrt an, um mit ihr zu beginnen"
@@ -38622,6 +38769,126 @@ _version: 2
   fr: "lancé {when}"
   sr: "započeto {when}"
 
+"Ended":
+  es: "Terminadas"
+  zh-tw: "已結束"
+  de: "Beendet"
+  ru: "Завершённые"
+  sv: "Avslutade"
+  ca: "Acabades"
+  fr: "Terminés"
+  sr: "Završene"
+  pt: "Encerrados"
+  nl: "Beëindigd"
+  pt-pt: "Terminados"
+  zh: "已结束"
+  pl: "Zakończone"
+  uk: "Завершені"
+  it: "Terminati"
+  cs: "Ukončené"
+  tr: "Sona erenler"
+  ja: "終了済み"
+  hu: "Befejezettek"
+  kk: "Аяқталғандар"
+  hi: "समाप्त खेल"
+  be: "Завершаныя"
+  vi: "Đã kết thúc"
+  th: "เกมที่สิ้นสุดแล้ว"
+  ms: "Tamat"
+  ko: "종료된 게임"
+  id: "Selesai"
+  tl: "Natapos"
+
+"ended {when}":
+  es: "terminada {when}"
+  zh-tw: "於 {when} 結束"
+  de: "beendet {when}"
+  ru: "завершена {when}"
+  sv: "avslutat {when}"
+  ca: "acabada {when}"
+  fr: "terminé {when}"
+  sr: "završeno {when}"
+  pt: "encerrado {when}"
+  nl: "beëindigd {when}"
+  pt-pt: "terminado {when}"
+  zh: "于 {when} 结束"
+  pl: "zakończono {when}"
+  uk: "завершено {when}"
+  it: "terminato {when}"
+  cs: "ukončeno {when}"
+  tr: "{when} sona erdi"
+  ja: "{when} に終了"
+  hu: "befejezve: {when}"
+  kk: "{when} аяқталды"
+  hi: "{when} समाप्त हुआ"
+  be: "завершана {when}"
+  vi: "kết thúc {when}"
+  th: "สิ้นสุด {when}"
+  ms: "tamat {when}"
+  ko: "{when}에 종료됨"
+  id: "berakhir {when}"
+  tl: "natapos {when}"
+
+"exit code {code}":
+  es: "código de salida {code}"
+  zh-tw: "結束代碼 {code}"
+  de: "Exit-Code {code}"
+  ru: "код выхода {code}"
+  sv: "slutkod {code}"
+  ca: "codi de sortida {code}"
+  fr: "code de sortie {code}"
+  sr: "izlazni kod {code}"
+  pt: "código de saída {code}"
+  nl: "afsluitcode {code}"
+  pt-pt: "código de saída {code}"
+  zh: "退出代码 {code}"
+  pl: "kod wyjścia {code}"
+  uk: "код виходу {code}"
+  it: "codice di uscita {code}"
+  cs: "návratový kód {code}"
+  tr: "çıkış kodu {code}"
+  ja: "終了コード {code}"
+  hu: "kilépési kód: {code}"
+  kk: "шығу коды {code}"
+  hi: "निकास कोड {code}"
+  be: "код выхаду {code}"
+  vi: "mã thoát {code}"
+  th: "รหัสออก {code}"
+  ms: "kod keluar {code}"
+  ko: "종료 코드 {code}"
+  id: "kode keluar {code}"
+  tl: "exit code {code}"
+
+"killed - it did not end by itself, the run is not saved":
+  es: "cerrada a la fuerza: no terminó por sí sola, la sesión no se guarda"
+  zh-tw: "已強制終止：未自行結束，此次遊戲未儲存"
+  de: "erzwungen beendet - hat sich nicht selbst beendet, die Fahrt ist nicht gespeichert"
+  ru: "принудительно закрыта — не завершилась сама, запуск не сохранён"
+  sv: "tvångsavslutat – avslutades inte av sig självt, körningen sparas inte"
+  ca: "aturada forçosament: no s'ha tancat per si sola, la sessió no es desa"
+  fr: "arrêté de force - il ne s'est pas terminé tout seul, la session n'est pas enregistrée"
+  sr: "prinudno prekinuto — nije se završilo samo, vožnja nije sačuvana"
+  pt: "encerrado à força - não terminou sozinho, a sessão não foi salva"
+  nl: "gedwongen afgesloten - niet vanzelf beëindigd, de rit is niet opgeslagen"
+  pt-pt: "terminado à força - não terminou por si, a sessão não foi guardada"
+  zh: "已强制终止 - 未自行结束，本次游戏未保存"
+  pl: "wymuszone zamknięcie - gra nie zakończyła się sama, sesja nie została zapisana"
+  uk: "примусово закрито - гра не завершилася сама, сеанс не збережено"
+  it: "chiuso forzatamente - non è terminato da solo, la sessione non è stata salvata"
+  cs: "vynucené ukončení - hra neskončila sama, jízda není uložena"
+  tr: "zorla kapatıldı - kendiliğinden sona ermedi, oturum kaydedilmedi"
+  ja: "強制終了 - 自動的に終了しなかったため、この走行は保存されていません"
+  hu: "kényszerítve leállítva - nem magától fejeződött be, a menet nincs elmentve"
+  kk: "мәжбүрлі түрде жабылды - өзі аяқталмады, сеанс сақталмады"
+  hi: "बलपूर्वक बंद किया गया - अपने आप समाप्त नहीं हुआ, सत्र सहेजा नहीं गया"
+  be: "прымусова закрыта - гульня не завяршылася сама, сеанс не захаваны"
+  vi: "buộc dừng - không tự kết thúc, phiên chơi chưa được lưu"
+  th: "ถูกบังคับปิด - ไม่ได้สิ้นสุดเอง การเล่นครั้งนี้ไม่ได้บันทึกไว้"
+  ms: "ditamatkan secara paksa - tidak tamat sendiri, sesi tidak disimpan"
+  ko: "강제 종료됨 - 스스로 종료되지 않아 이번 운행은 저장되지 않았습니다"
+  id: "dihentikan paksa - tidak berakhir sendiri, sesi tidak disimpan"
+  tl: "sapilitang isinara - hindi kusang natapos, hindi na-save ang laro"
+
 "Show the log file":
   es: "Mostrar el archivo de registro"
   zh-tw: "顯示記錄檔"
@@ -38913,6 +39180,36 @@ _version: 2
   fr: "Aucun mod pour l'instant. Choisissez un dossier ou une archive à droite, ou déposez-en un sur la fenêtre."
   sr: "Još nema modova. Izaberite fasciklu ili arhivu sa desne strane ili je ispustite u prozor."
 
+"found in the content folder":
+  de: "im Inhaltsordner gefunden"
+  ru: "найден в папке контента"
+  fr: "trouvé dans le dossier de contenu"
+  uk: "знайдено в теці вмісту"
+  be: "знойдзены ў тэчцы змесціва"
+  kk: "мазмұн қалтасынан табылды"
+  pl: "znaleziony w folderze zawartości"
+  cs: "nalezeno ve složce obsahu"
+  hu: "a tartalommappában található"
+  es: "encontrado en la carpeta de contenido"
+  pt: "encontrado na pasta de conteúdo"
+  pt-pt: "encontrado na pasta de conteúdo"
+  it: "trovata nella cartella dei contenuti"
+  nl: "gevonden in de inhoudsmap"
+  tr: "içerik klasöründe bulundu"
+  ja: "コンテンツフォルダーで見つかりました"
+  zh-tw: "在內容資料夾中找到"
+  ko: "콘텐츠 폴더에서 발견됨"
+  th: "พบในโฟลเดอร์เนื้อหา"
+  vi: "tìm thấy trong thư mục nội dung"
+  id: "ditemukan di folder konten"
+  ms: "ditemui dalam folder kandungan"
+  tl: "nakita sa folder ng nilalaman"
+  zh: "在内容文件夹中找到"
+  hi: "सामग्री फ़ोल्डर में मिला"
+  ca: "trobat a la carpeta de contingut"
+  sv: "hittad i innehållsmappen"
+  sr: "pronađeno u fascikli sadržaja"
+
 "No mod matches.":
   de: "Kein Mod passt."
   ru: "Ни один мод не подходит."
@@ -39165,13 +39462,33 @@ _version: 2
   sr: "Kada"
 
 "Distance":
-  es: "Distancia"
-  zh-tw: "距離"
   de: "Strecke"
+  fr: "Distance"
   ru: "Расстояние"
+  uk: "Відстань"
+  be: "Адлегласць"
+  kk: "Қашықтық"
+  pl: "Odległość"
+  cs: "Vzdálenost"
+  hu: "Távolság"
+  es: "Distancia"
+  pt: "Distância"
+  pt-pt: "Distância"
+  it: "Distanza"
+  nl: "Afstand"
+  tr: "Mesafe"
+  ja: "距離"
+  zh-tw: "距離"
+  ko: "거리"
+  th: "ระยะทาง"
+  vi: "Khoảng cách"
+  id: "Jarak"
+  ms: "Jarak"
+  tl: "Distansya"
+  zh: "距离"
+  hi: "दूरी"
   sv: "Sträcka"
   ca: "Distància"
-  fr: "Distance"
   sr: "Udaljenost"
 
 "Stops":
@@ -39354,7 +39671,7 @@ _version: 2
   id: "Panel spion setiap frame"
   ms: "Panel cermin setiap bingkai"
   tl: "Mga mirror panel bawat frame"
-  sr: "Ogledalo panele u svakom okviru"
+  sr: "Panele retrovizora iscrtavaj u svakom kadru"
 
 "Touch controls":
   es: "Controles táctiles"
@@ -40049,7 +40366,7 @@ _version: 2
   uk: "Shift+U готує автобус до роботи: електрика, двигун і світло разом"
   sv: "Shift+U gör bussen körklar: elsystem, motor och belysning på en gång"
   ca: "Maj+U posa l'autobús en servei: sistema elèctric, motor i llums alhora"
-  sr: "Shift+U stavlja autobus u funkciju: elektriku, motor i svetla u jednom potezu"
+  sr: "Shift+U stavlja autobus u funkciju: elektroniku, motor i svetla u jednom potezu"
 
 "F1 is the driver's seat, F2 the passengers' view, F3 outside the bus and F4 the free camera":
   fr: "F1 est le poste de conduite, F2 la vue passagers, F3 l'extérieur du bus et F4 la caméra libre"
@@ -40115,7 +40432,7 @@ _version: 2
   uk: "P ставить гру на паузу; Alt+S зберігає ситуацію"
   sv: "P pausar spelet; Alt+S sparar situationen"
   ca: "P posa el joc en pausa; Alt+S desa la situació"
-  sr: "P pauzira igru; Alt+S spasava situaciju"
+  sr: "P pauzira igru; Alt+S čuva situaciju"
 
 "Shift+Y shows the information bar: the time, the speed, the temperatures and the next stop":
   fr: "Maj+Y affiche la barre d'informations : l'heure, la vitesse, les températures et le prochain arrêt"
@@ -40129,17 +40446,94 @@ _version: 2
   sr: "Shift+I prikazuje traku sa informacijama: vreme, brzinu, temperature i sledeću stanicu"
 
 "Next stop":
-  zh-tw: "下一站"
   de: "Nächste Haltestelle"
+  fr: "Prochain arrêt"
   ru: "Следующая остановка"
   uk: "Наступна зупинка"
-  fr: "Prochain arrêt"
-  es: "Próxima parada"
+  be: "Наступны прыпынак"
+  kk: "Келесі аялдама"
   pl: "Następny przystanek"
+  cs: "Příští zastávka"
+  hu: "Következő megálló"
+  es: "Próxima parada"
+  pt: "Próxima parada"
+  pt-pt: "Próxima paragem"
+  it: "Prossima fermata"
   nl: "Volgende halte"
+  tr: "Sonraki durak"
+  ja: "次の停留所"
+  zh-tw: "下一站"
+  ko: "다음 정류장"
+  th: "ป้ายถัดไป"
+  vi: "Trạm tiếp theo"
+  id: "Halte berikutnya"
+  ms: "Hentian seterusnya"
+  tl: "Susunod na hintuan"
+  zh: "下一站"
+  hi: "अगला स्टॉप"
   sv: "Nästa hållplats"
   ca: "Propera parada"
   sr: "Sledeća stanica"
+
+"Fuel":
+  de: "Kraftstoff"
+  fr: "Carburant"
+  ru: "Топливо"
+  uk: "Паливо"
+  be: "Паліва"
+  kk: "Жанармай"
+  pl: "Paliwo"
+  cs: "Palivo"
+  hu: "Üzemanyag"
+  es: "Combustible"
+  pt: "Combustível"
+  pt-pt: "Combustível"
+  it: "Carburante"
+  nl: "Brandstof"
+  tr: "Yakıt"
+  ja: "燃料"
+  zh-tw: "油量"
+  ko: "연료"
+  th: "เชื้อเพลิง"
+  vi: "Nhiên liệu"
+  id: "Bahan bakar"
+  ms: "Bahan api"
+  tl: "Panggatong"
+  zh: "燃油"
+  hi: "ईंधन"
+  ca: "Combustible"
+  sv: "Bränsle"
+  sr: "Gorivo"
+
+"Outside / cabin":
+  de: "Außen / Kabine"
+  fr: "Extérieur / cabine"
+  ru: "Снаружи / салон"
+  uk: "Зовні / салон"
+  be: "Звонку / салон"
+  kk: "Сыртта / салон"
+  pl: "Na zewnątrz / kabina"
+  cs: "Venku / kabina"
+  hu: "Kint / utastér"
+  es: "Exterior / cabina"
+  pt: "Exterior / cabine"
+  pt-pt: "Exterior / cabine"
+  it: "Esterno / abitacolo"
+  nl: "Buiten / cabine"
+  tr: "Dış / kabin"
+  ja: "車外 / 車内"
+  zh-tw: "車外 / 車廂"
+  ko: "외부 / 실내"
+  th: "ภายนอก / ห้องโดยสาร"
+  vi: "Bên ngoài / cabin"
+  id: "Luar / kabin"
+  ms: "Luar / kabin"
+  tl: "Labas / cabin"
+  zh: "车外 / 车厢"
+  hi: "बाहरी / केबिन"
+  ca: "Exterior / cabina"
+  sv: "Utomhus / kupé"
+  sr: "Spolja / kabina"
 
 "Best Weather":
   zh-tw: "晴朗"
@@ -48352,7 +48746,7 @@ _version: 2
   hi: "नया टूर"
   ca: "Torn nou"
   sv: "Nytt omlopp"
-  sr: "Nova turneja"
+  sr: "Nova tura"
 
 "Copy +min":
   de: "Kopie +min"
@@ -49235,7 +49629,7 @@ _version: 2
   ms: "Kualiti cermin"
   tl: "Kalidad ng mga salamin"
   sv: "Spegelkvalitet"
-  sr: "Kvalitet ogledala"
+  sr: "Kvalitet retrovizora"
 
 "As the picture (Enhanced)":
   zh-tw: "與主畫面相同（增強）"
@@ -49433,7 +49827,6 @@ _version: 2
   pt: "Nenhuma escala tem uma viagem futura correspondente."
   ca: "Cap torn amb trajectes pendents coincideix."
   fr: "Aucun service n'a de voyage à venir qui correspond."
-  sr: "Nijedna turneja još ne predstoji putovanje koje se podudara."
   ru: "Нет подходящего рейса, который ещё предстоит выполнить."
 
 "No tour left at this time: show the ended tours, or start earlier.":
@@ -49876,7 +50269,7 @@ _version: 2
   ms: "Kekerapan cermin dilukis: setiap bingkai, jalan bergerak di dalamnya selancar melalui cermin depan"
   tl: "Gaano kadalas iginuguhit ang mga salamin: bawat frame, gumagalaw ang kalye sa mga ito nang kasingkinis ng sa windshield"
   sv: "Hur ofta speglarna ritas: varje bildruta rör sig gatan i dem lika jämnt som genom vindrutan"
-  sr: "Koliko često se ogledala crtaju: svaki okvir, ulica se kreće kroz njih glatko kao kroz vetrobran"
+  sr: "Koliko često se retrovizori iscrtavaju: pri svakom kadru saobraćaj kroz njih prolazi glatko kao kroz vetrobran"
 
 "In Enhanced and Enhanced+: the mirrors shaded as the picture is, with its light and its sky, instead of the plain light":
   zh-tw: "在 Enhanced 與 Enhanced+ 模式下，後視鏡使用與主畫面相同的光照與天空"
@@ -49906,7 +50299,7 @@ _version: 2
   ms: "Dalam Dipertingkat dan Dipertingkat+: cermin diterangi seperti gambar utama, dengan cahaya dan langitnya, bukan cahaya biasa"
   tl: "Sa Pinahusay at Pinahusay+: naiilawan ang mga salamin gaya ng larawan, kasama ang ilaw at langit nito, sa halip na simpleng ilaw"
   sv: "I Förbättrad och Förbättrad+: speglarna skuggas som bilden, med dess ljus och dess himmel, i stället för det enkla ljuset"
-  sr: "U Enhanced and Enhanced+: ogledala zasenčena kao što je slika, sa svojom svetlošću i nebom, umesto običnog svetla"
+  sr: "U režimima Enhanced i Enhanced+: retrovizori prikazuju senke, osvetljenje i nebo iz scene umesto običnog osvetljenja"
 
 "The mirror panels in the cab (Ctrl+M) are drawn every frame, as in ETS2, instead of taking turns with the other mirrors":
   zh-tw: "車內後視鏡面板（Ctrl+M）會如 ETS2 一樣每幀更新，不與其他後視鏡輪流更新"
@@ -49936,7 +50329,7 @@ _version: 2
   ms: "Panel cermin dalam kabin (Ctrl+M) dilukis setiap bingkai, seperti dalam ETS2, bukan bergilir dengan cermin lain"
   tl: "Iginuguhit bawat frame ang mga mirror panel sa cab (Ctrl+M), gaya sa ETS2, sa halip na magsalitan sa ibang salamin"
   sv: "Spegelpanelerna i hytten (Ctrl+M) ritas varje bildruta, som i ETS2, i stället för att turas om med de andra speglarna"
-  sr: "Paneli ogledala u kabini (Ctrl+M) se crtaju u svakom kadru, kao u ETS2, umesto da se smenjuju sa ostalim retrovizorima"
+  sr: "Paneli retrovizora u kabini (Ctrl+M) iscrtavaju se u svakom kadru, kao u ETS2, umesto da se smenjuju sa ostalim retrovizorima"
 
 "Plain":
   es: "Sencillo"
@@ -50243,7 +50636,7 @@ _version: 2
   es: "Borrar {}"
   zh-tw: "清除 {}"
   ca: "Esborra {}"
-  sr: "Clear {}"
+  sr: "Ukloni {}"
   ru: "Очистить {}"
 
 "Connection":
@@ -50779,7 +51172,7 @@ _version: 2
   hi: "रुकने का अनुरोध"
   ca: "Parada sol·licitada"
   sv: "Stoppsignal"
-  sr: "Zahtjev za zaustavljanje"
+  sr: "Zahtevano zaustavljanje"
 
 "Drive it on that day":
   de: "An diesem Tag fahren"
@@ -51019,7 +51412,7 @@ _version: 2
   hi: "समय-सारणी इस टूर को जो बसें देती है:"
   ca: "Autobusos que l'horari assigna a aquest servei:"
   sv: "Bussar som tidtabellen ger denna tur:"
-  sr: "Vozni red autobusa daje ovu turneju:"
+  sr: "Vozni red autobusa daje ovu turu:"
 
 "Add a note":
   de: "Notiz hinzufügen"
@@ -53564,192 +53957,254 @@ _version: 2
 
 "Variables":
   zh-tw: "變數"
+  sr: "Promenljive"
 
 "Overlays":
   zh-tw: "疊加項目"
+  sr: "Slojevi"
 
 "Files":
   zh-tw: "檔案"
+  sr: "Datoteke"
 
 "Watched":
   zh-tw: "監看的變數"
+  sr: "Praćene"
 
 "All variables":
   zh-tw: "所有變數"
+  sr: "Sve promenljive"
 
 "Search variables ($ for string variables)":
   zh-tw: "搜尋變數（字串變數請加上 $）"
+  sr: "Pretraži promenljive ($ za tekstualne promenljive)"
 
 "no bus of one's own":
   zh-tw: "尚未選擇巴士"
+  sr: "nema sopstvenog autobusa"
 
 "held":
   zh-tw: "固定中"
+  sr: "zadržano"
 
 "Set":
   zh-tw: "設定"
+  sr: "Postavi"
 
 "Hold":
   zh-tw: "固定"
+  sr: "Zadrži"
 
 "Let go":
   zh-tw: "解除固定"
+  sr: "Pusti"
 
 "Variable value":
   zh-tw: "變數值"
+  sr: "Vrednost promenljive"
 
 "Across":
   zh-tw: "橫向"
+  sr: "Poprečno"
 
 "Along":
   zh-tw: "縱向"
+  sr: "Uzdužno"
 
 "Turn":
   zh-tw: "水平旋轉"
 
 "Paths":
   zh-tw: "路徑"
+  sr: "Putanje"
 
 "Entry point":
   zh-tw: "入口"
+  sr: "Ulazna tačka"
 
 "Exit point":
   zh-tw: "出口"
+  sr: "Izlazna tačka"
 
 "Path points":
   zh-tw: "路徑節點"
+  sr: "Tačke putanje"
 
 "Driver position":
   zh-tw: "駕駛員位置"
+  sr: "Položaj vozača"
 
 "Standing position":
   zh-tw: "站立位置"
+  sr: "Mesto za stajanje"
 
 "Bounding box":
   zh-tw: "包圍盒"
+  sr: "Granični okvir"
 
 "Axle":
   zh-tw: "車軸"
+  sr: "Osovina"
 
 "Money point":
   zh-tw: "收款點"
+  sr: "Mesto naplate"
 
 "Change point":
   zh-tw: "找零點"
+  sr: "Mesto za vraćanje kusura"
 
 "Interior light":
   zh-tw: "燈光"
+  sr: "Unutrašnje svetlo"
 
 "stamper":
   zh-tw: "打票機"
+  sr: "Poništavač karata"
 
 "ticket sale":
   zh-tw: "售票位置"
+  sr: "Prodaja karata"
 
 "driver view":
   zh-tw: "駕駛員視角"
+  sr: "Pogled vozača"
 
 "passenger view":
   zh-tw: "乘客視角"
+  sr: "Pogled putnika"
 
 "Driver camera {n} of {count}":
   zh-tw: "駕駛員視角 {n}／{count}"
+  sr: "Kamera vozača {n} od {count}"
 
 "Passenger camera {n} of {count}":
   zh-tw: "乘客視角 {n}／{count}"
+  sr: "Kamera putnika {n} od {count}"
 
 "(path point {})":
   zh-tw: "（路徑節點 {}）"
+  sr: "(tačka putanje {})"
 
 "Log opened":
   zh-tw: "已開啟記錄檔"
+  sr: "Dnevnik je otvoren"
 
 "Model":
   zh-tw: "模型"
+  sr: "Model"
 
 "Constant files":
   zh-tw: "常數檔案"
+  sr: "Datoteke konstanti"
 
 "Scripts":
   zh-tw: "腳本"
+  sr: "Skripte"
 
 "(none)":
   zh-tw: "（無）"
+  sr: "(nijedno)"
 
 "yaw":
   zh-tw: "偏航"
+  sr: "Skretanje"
 
 "pitch":
   zh-tw: "俯仰"
+  sr: "Nagib"
 
 "fov":
   zh-tw: "視野角"
+  sr: "Ugao vidnog polja"
 
 "paths.cfg and passenger cabin":
   zh-tw: "paths.cfg 與乘客艙"
+  sr: "paths.cfg i putnički prostor"
 
 "sound.cfg":
   zh-tw: "sound.cfg"
+  sr: "sound.cfg"
 
 ".bus (physics, cameras, mirrors, box)":
   zh-tw: ".bus（物理、攝影機、後視鏡、包圍盒）"
+  sr: ".bus (fizika, kamere, retrovizori, granični okvir)"
 
 "model.cfg (animations, lights)":
   zh-tw: "model.cfg（動畫、燈光）"
+  sr: "model.cfg (animacije, svetla)"
 
 "constfiles":
   zh-tw: "常數檔案"
+  sr: "Datoteke konstanti"
 
 "driven":
   zh-tw: "驅動"
+  sr: "vožen"
 
 "mirror {}  fov {:.0}":
   zh-tw: "後視鏡 {}　視野角 {:.0}"
+  sr: "retrovizor {}  ugao vidnog polja {:.0}"
 
 "mirror {}: its [add_camera_reflexion_2] block copied":
   zh-tw: "已複製後視鏡 {} 的 [add_camera_reflexion_2] 設定區塊"
+  sr: "retrovizor {}: blok [add_camera_reflexion_2] je kopiran"
 
 "mirror {}: the clipboard is not there - the block is in the log":
   zh-tw: "無法使用剪貼簿；後視鏡 {} 的設定區塊已輸出至記錄檔"
+  sr: "retrovizor {}: sadržaj nije u ostavi - blok se nalazi u dnevniku"
 
 "Reloaded {} in {:.0} ms: {}":
   zh-tw: "已重新載入 {}，耗時 {:.0} 毫秒：{}"
+  sr: "{} je ponovo učitan za {:.0} ms: {}"
 
 "Reload failed for {}: {}":
   zh-tw: "重新載入 {} 失敗：{}"
+  sr: "Ponovno učitavanje stavke {} nije uspelo: {}"
 
 "no sound":
   zh-tw: "沒有音效設定檔"
+  sr: "nema zvuka"
 
 "animations, lights and visibility taken over":
   zh-tw: "動畫、燈光與可見度已套用"
+  sr: "Animacije, svetla i vidljivost su preuzeti"
 
 "the bus has no model":
   zh-tw: "此巴士沒有模型"
+  sr: "autobus nema model"
 
 "a script changed since: place the bus anew":
   zh-tw: "腳本已變更：請重新放置巴士"
+  sr: "skripta je promenjena: ponovo postavite autobus"
 
 "constants and curves taken over":
   zh-tw: "常數與曲線已套用"
+  sr: "Konstante i krive su preuzete"
 
 "scripts are not read again: place the bus anew":
   zh-tw: "無法重新讀取腳本：請重新放置巴士"
+  sr: "skripte se ne učitavaju ponovo: ponovo postavite autobus"
 
 "a script or a variable list changed: place the bus anew to run it":
   zh-tw: "腳本或變數清單已變更：請重新放置巴士以套用"
+  sr: "skripta ili spisak promenljivih je izmenjen: ponovo postavite autobus da bi se pokrenuo"
 
 "Cabin drawn anew (no passengers in this game)":
   zh-tw: "乘客艙已重新建立（本場遊戲沒有乘客）"
+  sr: "Putnički prostor je ponovo nacrtan (u ovoj igri nema putnika)"
 
 "Cannot reload cabin: {} people aboard and the new cabin has fewer places, doors or points - let them off first":
   zh-tw: "無法重新載入乘客艙：目前有 {} 名乘客，而新乘客艙的座位、車門或路徑點較少，請先讓乘客下車"
+  sr: "Putnički prostor ne može ponovo da se učita: u autobusu je {} putnika, a novi prostor ima manje mesta, vrata ili tačaka - prvo ih iskrcajte"
 
 "no passenger cabin now":
   zh-tw: "目前沒有乘客艙"
+  sr: "trenutno nema putničkog prostora"
 
 "Cabin reloaded: {} path points, {} places, {} entries, {} exits":
   zh-tw: "乘客艙已重新載入：{} 個路徑點、{} 個位置、{} 個入口、{} 個出口"
+  sr: "Putnički prostor je ponovo učitan: {} tačaka putanje, {} mesta, {} ulaza, {} izlaza"
 
 "Close (Ctrl+Shift+D)":
   zh-tw: "關閉（Ctrl+Shift+D）"
@@ -53792,7 +54247,7 @@ _version: 2
   es: "Este autobús no tiene espejos"
   pt: "Este ônibus não tem espelhos"
   ca: "Aquest autobús no té retrovisors"
-  sr: "Ovaj autobus nema ogledala"
+  sr: "Ovaj autobus nema retrovizore"
   ru: "У этого автобуса нет зеркал"
 
 "Copy the block":
@@ -53889,6 +54344,7 @@ _version: 2
   ru: "автоматически"
 
 "on":
+  pt: "ligado"
   zh-tw: "開啟"
   es: "activado"
   ca: "activat"
@@ -53896,6 +54352,7 @@ _version: 2
   ru: "вкл."
 
 "off":
+  pt: "desligado"
   zh-tw: "關閉"
   es: "desactivado"
   ca: "desactivat"
@@ -56151,6 +56608,7 @@ _version: 2
   sr: "gas"
   ru: "газ"
 "brake":
+  pt: "freio"
   zh-tw: "煞車"
   sr: "kočnica"
   ru: "тормоз"
@@ -56311,6 +56769,7 @@ _version: 2
   hi: "बस चला रहा है"
   ca: "condueix un autobús"
   sv: "kör en buss"
+  sr: "vozi autobus"
 "on foot":
   pt: "a pé"
   pt-pt: "a pé"
@@ -56339,6 +56798,7 @@ _version: 2
   hi: "पैदल"
   ca: "a peu"
   sv: "till fots"
+  sr: "peške"
 "aboard the bus of":
   pt: "a bordo do ônibus de"
   pt-pt: "a bordo do autocarro de"
@@ -56367,6 +56827,7 @@ _version: 2
   hi: "इसकी बस में सवार:"
   ca: "a bord de l'autobús de"
   sv: "ombord på bussen hos"
+  sr: "u autobusu igrača"
 "joining":
   pt: "entrando"
   pt-pt: "a entrar"
@@ -56395,6 +56856,7 @@ _version: 2
   hi: "जुड़ रहा है"
   ca: "s'està unint"
   sv: "ansluter"
+  sr: "povezuje se"
 "admin":
   pt: "admin"
   pt-pt: "admin"
@@ -56423,6 +56885,7 @@ _version: 2
   hi: "एडमिन"
   ca: "administrador"
   sv: "admin"
+  sr: "administrator"
 "moderator":
   pt: "moderador"
   pt-pt: "moderador"
@@ -56451,6 +56914,7 @@ _version: 2
   hi: "मॉडरेटर"
   ca: "moderador"
   sv: "moderator"
+  sr: "moderator"
 "The server does not answer the new menu (it may be older than this game): the full list below still works":
   pt: "O servidor não responde ao menu novo (pode ser mais antigo que este jogo): a lista completa abaixo continua funcionando"
   pt-pt: "O servidor não responde ao menu novo (pode ser mais antigo do que este jogo): a lista completa abaixo continua a funcionar"
@@ -56479,6 +56943,7 @@ _version: 2
   hi: "सर्वर नए मेनू का जवाब नहीं देता (शायद यह इस गेम से पुराना है): नीचे की पूरी सूची अब भी काम करती है"
   ca: "El servidor no respon al menú nou (potser és més antic que aquest joc): la llista completa de sota continua funcionant"
   sv: "Servern svarar inte på den nya menyn (den kan vara äldre än det här spelet): hela listan nedan fungerar fortfarande"
+  sr: "Server ne odgovara na novi meni (možda je starija verzija od ove igre); potpuna lista ispod i dalje radi"
 "You administer this server":
   pt: "Você administra este servidor"
   pt-pt: "Administra este servidor"
@@ -56507,6 +56972,7 @@ _version: 2
   hi: "आप इस सर्वर का प्रबंधन कर रहे हैं"
   ca: "Administres aquest servidor"
   sv: "Du administrerar den här servern"
+  sr: "Upravljate ovim serverom"
 "Players":
   pt: "Jogadores"
   pt-pt: "Jogadores"
@@ -56535,6 +57001,7 @@ _version: 2
   hi: "खिलाड़ी"
   ca: "Jugadors"
   sv: "Spelare"
+  sr: "Igrači"
 "Full list of commands (older menu)...":
   pt: "Lista completa de comandos (menu antigo)..."
   pt-pt: "Lista completa de comandos (menu antigo)..."
@@ -56563,6 +57030,7 @@ _version: 2
   hi: "आदेशों की पूरी सूची (पुराना मेनू)..."
   ca: "Llista completa d'ordres (menú antic)..."
   sv: "Fullständig lista med kommandon (gammal meny)..."
+  sr: "Potpuna lista komandi (stariji meni)..."
 "Stop administering":
   pt: "Parar de administrar"
   pt-pt: "Deixar de administrar"
@@ -56591,6 +57059,7 @@ _version: 2
   hi: "प्रबंधन बंद करें"
   ca: "Deixa d'administrar"
   sv: "Sluta administrera"
+  sr: "Prekini upravljanje"
 "The clock, the weather, the traffic and the passengers are for an admin":
   pt: "Relógio, clima, tráfego e passageiros são só para admin"
   pt-pt: "O relógio, o tempo, o tráfego e os passageiros são só para um admin"
@@ -56619,6 +57088,7 @@ _version: 2
   hi: "घड़ी, मौसम, ट्रैफ़िक और यात्री केवल एडमिन के लिए हैं"
   ca: "El rellotge, el temps, el trànsit i els passatgers són per a un administrador"
   sv: "Klockan, vädret, trafiken och passagerarna är för en admin"
+  sr: "Samo administrator može da menja sat, vreme, saobraćaj i putnike"
 "Clock: follows the server's real time (it cannot be moved)":
   pt: "Relógio: segue a hora real do servidor (não dá para mudar)"
   pt-pt: "Relógio: segue a hora real do servidor (não pode ser alterado)"
@@ -56647,6 +57117,7 @@ _version: 2
   hi: "घड़ी: सर्वर के असली समय पर चलती है (इसे बदला नहीं जा सकता)"
   ca: "Rellotge: segueix l'hora real del servidor (no es pot moure)"
   sv: "Klocka: följer serverns verkliga tid (den kan inte flyttas)"
+  sr: "Sat: prati stvarno vreme servera (ne može da se pomera)"
 "Weather: follows the METAR report (it cannot be changed)":
   pt: "Clima: segue o METAR (não dá para mudar)"
   pt-pt: "Tempo: segue o boletim METAR (não pode ser alterado)"
@@ -56675,6 +57146,7 @@ _version: 2
   hi: "मौसम: METAR रिपोर्ट के अनुसार (इसे बदला नहीं जा सकता)"
   ca: "Temps: segueix l'informe METAR (no es pot canviar)"
   sv: "Väder: följer METAR-rapporten (det kan inte ändras)"
+  sr: "Vreme: prati METAR izveštaj (ne može da se menja)"
 "Passengers: off on this server (passengers = 0)":
   pt: "Passageiros: desligados neste servidor (passengers = 0)"
   pt-pt: "Passageiros: desligados neste servidor (passengers = 0)"
@@ -56703,6 +57175,7 @@ _version: 2
   hi: "यात्री: इस सर्वर पर बंद (passengers = 0)"
   ca: "Passatgers: desactivats en aquest servidor (passengers = 0)"
   sv: "Passagerare: av på den här servern (passengers = 0)"
+  sr: "Putnici: isključeni na ovom serveru (passengers = 0)"
 "waiting":
   pt: "esperando"
   pt-pt: "à espera"
@@ -56731,6 +57204,7 @@ _version: 2
   hi: "इंतज़ार कर रहा है"
   ca: "esperant"
   sv: "väntar"
+  sr: "čeka"
 "walking":
   pt: "andando"
   pt-pt: "a pé"
@@ -56759,6 +57233,7 @@ _version: 2
   hi: "चल रहा है"
   ca: "caminant"
   sv: "går"
+  sr: "hoda"
 "aboard":
   pt: "a bordo"
   pt-pt: "a bordo"
@@ -56787,6 +57262,7 @@ _version: 2
   hi: "सवार"
   ca: "a bord"
   sv: "ombord"
+  sr: "u autobusu"
 "Passenger density":
   pt: "Densidade de passageiros"
   pt-pt: "Densidade de passageiros"
@@ -56815,6 +57291,7 @@ _version: 2
   hi: "यात्रियों का घनत्व"
   ca: "Densitat de passatgers"
   sv: "Passagerartäthet"
+  sr: "Gustina putnika"
 "Nobody else is on the server":
   pt: "Não há mais ninguém no servidor"
   pt-pt: "Não está mais ninguém no servidor"
@@ -56843,6 +57320,7 @@ _version: 2
   hi: "सर्वर पर और कोई नहीं है"
   ca: "No hi ha ningú més al servidor"
   sv: "Ingen annan är på servern"
+  sr: "Nema nikog drugog na serveru"
 "more not listed":
   pt: "a mais, fora da lista"
   pt-pt: "a mais, fora da lista"
@@ -56871,6 +57349,7 @@ _version: 2
   hi: "और सूची में नहीं"
   ca: "més no llistats"
   sv: "till visas inte"
+  sr: "još igrača nije prikazano"
 "That player is no longer on the server (or came back on a new connection): pick them again":
   pt: "Esse jogador não está mais no servidor (ou voltou com outra conexão): escolha de novo"
   pt-pt: "Esse jogador já não está no servidor (ou voltou com outra ligação): escolha-o de novo"
@@ -56899,6 +57378,7 @@ _version: 2
   hi: "वह खिलाड़ी अब सर्वर पर नहीं है (या नए कनेक्शन से लौटा है): उसे फिर से चुनें"
   ca: "Aquest jugador ja no és al servidor (o ha tornat amb una connexió nova): torna'l a triar"
   sv: "Den spelaren är inte längre på servern (eller kom tillbaka med en ny anslutning): välj den igen"
+  sr: "Taj igrač više nije na serveru (ili se ponovo povezao): izaberite ga ponovo"
 "connection":
   pt: "conexão"
   pt-pt: "ligação"
@@ -56927,6 +57407,7 @@ _version: 2
   hi: "कनेक्शन"
   ca: "connexió"
   sv: "anslutning"
+  sr: "veza"
 "Send away...":
   pt: "Expulsar..."
   pt-pt: "Expulsar..."
@@ -56955,6 +57436,7 @@ _version: 2
   hi: "बाहर निकालें..."
   ca: "Expulsa..."
   sv: "Skicka bort..."
+  sr: "Udalji..."
 "Send away for this server run...":
   pt: "Expulsar até o servidor reiniciar..."
   pt-pt: "Expulsar até o servidor reiniciar..."
@@ -56983,6 +57465,7 @@ _version: 2
   hi: "सर्वर दोबारा शुरू होने तक बाहर निकालें..."
   ca: "Expulsa fins que es reiniciï el servidor..."
   sv: "Skicka bort tills servern startas om..."
+  sr: "Udalji do ponovnog pokretanja servera..."
 "Send this player away for the rest of this server run?":
   pt: "Expulsar este jogador até o servidor reiniciar?"
   pt-pt: "Expulsar este jogador até o servidor reiniciar?"
@@ -57011,6 +57494,7 @@ _version: 2
   hi: "इस खिलाड़ी को सर्वर दोबारा शुरू होने तक बाहर निकालें?"
   ca: "Vols expulsar aquest jugador fins que es reiniciï el servidor?"
   sv: "Skicka bort den här spelaren tills servern startas om?"
+  sr: "Udaljiti ovog igrača do ponovnog pokretanja servera?"
 "Send this player away?":
   pt: "Expulsar este jogador?"
   pt-pt: "Expulsar este jogador?"
@@ -57039,6 +57523,7 @@ _version: 2
   hi: "इस खिलाड़ी को बाहर निकालें?"
   ca: "Vols expulsar aquest jugador?"
   sv: "Skicka bort den här spelaren?"
+  sr: "Udaljiti ovog igrača?"
 "Yes, send them away":
   pt: "Sim, expulsar"
   pt-pt: "Sim, expulsar"
@@ -57067,6 +57552,7 @@ _version: 2
   hi: "हाँ, बाहर निकालें"
   ca: "Sí, expulsa'l"
   sv: "Ja, skicka bort"
+  sr: "Da, udalji igrača"
 "Applied":
   pt: "Aplicado"
   pt-pt: "Aplicado"
@@ -57095,6 +57581,7 @@ _version: 2
   hi: "लागू हुआ"
   ca: "Aplicat"
   sv: "Utfört"
+  sr: "Primenjeno"
 "Sent":
   pt: "Enviado"
   pt-pt: "Enviado"
@@ -57123,6 +57610,7 @@ _version: 2
   hi: "भेजा गया"
   ca: "Enviat"
   sv: "Skickat"
+  sr: "Poslato"
 "Refused":
   pt: "Recusado"
   pt-pt: "Recusado"
@@ -57151,6 +57639,7 @@ _version: 2
   hi: "अस्वीकृत"
   ca: "Rebutjat"
   sv: "Nekad"
+  sr: "Odbijeno"
 "Waiting":
   pt: "Aguardando"
   pt-pt: "À espera"
@@ -57179,6 +57668,7 @@ _version: 2
   hi: "प्रतीक्षा में"
   ca: "En espera"
   sv: "Väntar"
+  sr: "Čeka se"
 "Sent to the server":
   pt: "Enviado ao servidor"
   pt-pt: "Enviado ao servidor"
@@ -57207,6 +57697,7 @@ _version: 2
   hi: "सर्वर को भेजा गया"
   ca: "Enviat al servidor"
   sv: "Skickat till servern"
+  sr: "Poslato serveru"
 
 "Simulation on its own thread":
   pt: "Simulação em uma thread própria"
@@ -57836,6 +58327,7 @@ _version: 2
   hi: "यहाँ यात्रियों का घनत्व विकल्प में सेट होता है"
   ca: "Aquí la densitat de passatgers es configura a les Opcions"
   sv: "Passagerartätheten ställs in här under Alternativ"
+  sr: "Gustina putnika se podešava ovde, u Opcijama"
 
 "Preparing your bus for the other players...":
   ca: "Preparant el teu autobús per als altres jugadors..."
@@ -60628,7 +61120,7 @@ _version: 2
 "Insert: new panel - Delete: remove it - C: show another mirror":
   zh-tw: "Insert：新增面板；Delete：移除面板；C：顯示其他後視鏡"
   fr: "Inser : nouveau panneau - Suppr : le retirer - C : afficher un autre rétroviseur"
-  sr: "Insert: dodaj novi panel — Delete: ukloni ga — C: prikaži drugo ogledalo"
+  sr: "Insert: dodaj novi panel — Delete: ukloni ga — C: prikaži drugi retrovizor"
   ru: "Insert: новая панель — Delete: удалить её — C: показать другое зеркало"
 "Interior lights":
   zh-tw: "車廂燈"
@@ -60733,7 +61225,7 @@ _version: 2
 "R: put the cursor on a mirror panel (Shift+R: every mirror)":
   zh-tw: "R：將游標移至後視鏡面板（Shift+R：切換所有後視鏡）"
   fr: "R : placer le curseur sur un panneau de rétroviseur (Maj+R : tous les rétroviseurs)"
-  sr: "R: postavite pokazivač na panel ogledala (Shift+R: sva ogledala)"
+  sr: "R: postavi pokazivač na panel retrovizora (Shift+R: svi retrovizori)"
   ru: "R: навести курсор на панель зеркала (Shift+R: все зеркала)"
 "Saloon lights on":
   fr: "Lumières allumées"
@@ -60864,6 +61356,82 @@ _version: 2
   fr: "Cycle météo {}"
   sr: "Ciklus vremenskih prilika {}"
   ru: "Цикл погоды {}"
+"Online: {n} other players":
+  zh-tw: "線上：另有 {n} 位玩家"
+  sr: "Onlajn: drugih {n} igrača"
+"Online: connecting ...":
+  zh-tw: "線上：正在連線..."
+  sr: "Onlajn: povezivanje..."
+"Online: not connected: {reason} (chat /reconnect)":
+  zh-tw: "線上：尚未連線：{reason}（在聊天室輸入 /reconnect）"
+  sr: "Onlajn: nije povezano: {reason} (u čet unesite /reconnect)"
+"Online: in {host}'s game, {others}":
+  zh-tw: "線上：已加入 {host} 的遊戲，{others}"
+  sr: "Onlajn: u igri domaćina {host}, {others}"
+"Online: {warning}":
+  zh-tw: "線上：{warning}"
+  sr: "Onlajn: {warning}"
+"nobody else yet":
+  zh-tw: "尚無其他玩家"
+  sr: "za sada nema drugih igrača"
+"1 other player":
+  zh-tw: "另有 1 位玩家"
+  sr: "još 1 igrač"
+"{n} other players":
+  zh-tw: "另有 {n} 位玩家"
+  sr: "još {n} igrača"
+
+"connected to {host}'s session ({players} player(s))":
+  zh-tw: "已連線至 {host} 的遊戲（{players} 位玩家）"
+  sr: "Povezano sa sesijom domaćina {host} ({players} igrača)"
+"In this session: {players}":
+  zh-tw: "本次連線的玩家：{players}"
+  sr: "U ovoj sesiji: {players}"
+"{name} (host, {vehicle})":
+  zh-tw: "{name}（房主，{vehicle}）"
+  sr: "{name} (domaćin, {vehicle})"
+"{name} (host)":
+  zh-tw: "{name}（房主）"
+  sr: "{name} (domaćin)"
+"{name} joined with {vehicle}":
+  zh-tw: "{name} 已加入，駕駛 {vehicle}"
+  sr: "Igrač {name} se pridružio za volanom vozila {vehicle}"
+"{name} joined":
+  zh-tw: "{name} 已加入"
+  sr: "Igrač {name} se pridružio"
+"{name} is back":
+  zh-tw: "{name} 已重新加入"
+  sr: "Igrač {name} se vratio"
+"{name} left":
+  zh-tw: "{name} 已離開"
+  sr: "Igrač {name} je napustio sesiju"
+"{name} lost the connection":
+  zh-tw: "{name} 已中斷連線"
+  sr: "Igrač {name} je izgubio vezu"
+"{name} was sent away by the host":
+  zh-tw: "{name} 已被房主移出遊戲"
+  sr: "Domaćin je izbacio igrača {name}"
+"the host turned us away: {reason}":
+  zh-tw: "房主拒絕連線：{reason}"
+  sr: "Domaćin nas je odbio: {reason}"
+"the host sent you away: {reason}":
+  zh-tw: "房主已將你移出遊戲：{reason}"
+  sr: "Domaćin vas je izbacio: {reason}"
+"reconnecting ...":
+  zh-tw: "正在重新連線..."
+  sr: "Ponovno povezivanje..."
+"only a joined game can reconnect":
+  zh-tw: "只有加入其他房間的遊戲才能重新連線"
+  sr: "Ponovno povezivanje je moguće samo ako ste se već pridružili igri"
+"asked the server for its administration":
+  zh-tw: "已向伺服器申請管理權限"
+  sr: "Zatražen je administratorski pristup serveru"
+"the host ended the session":
+  zh-tw: "房主已結束遊戲"
+  sr: "Domaćin je završio sesiju"
+"the host has gone quiet; trying to reach it again":
+  zh-tw: "房主暫無回應；正在嘗試重新連線"
+  sr: "Domaćin ne odgovara; pokušaj ponovnog povezivanja"
 "Add a bus":
   ca: "Afegeix un autobús"
   ru: "Добавить автобус"
@@ -61968,14 +62536,19 @@ _version: 2
   zh-tw: "{h} 小時 {m} 分鐘"
 "m":
   zh-tw: "米"
+  sr: "m"
 "km":
   zh-tw: "公里"
+  sr: "km"
 "yd":
   zh-tw: "碼"
+  sr: "yd"
 "ft":
   zh-tw: "英尺"
+  sr: "ft"
 "mi":
   zh-tw: "英里"
+  sr: "mi"
 "Terrain":
   es: "Relieve"
   ca: "Relleu"
@@ -62005,3 +62578,949 @@ _version: 2
   ms: "Rupa bumi"
   tl: "Lupain"
   sr: "Teren"
+
+"Vehicle smoke":
+  be: "Дым ад транспарту"
+  ca: "Fum dels vehicles"
+  cs: "Kouř vozidel"
+  de: "Fahrzeugrauch"
+  es: "Humo de los vehículos"
+  fr: "Fumée des véhicules"
+  hi: "वाहनों का धुआँ"
+  hu: "Járművek füstje"
+  id: "Asap kendaraan"
+  it: "Fumo dei veicoli"
+  ja: "車両の煙"
+  kk: "Көлік түтіні"
+  ko: "차량 연기"
+  ms: "Asap kenderaan"
+  nl: "Voertuigrook"
+  pl: "Dym pojazdów"
+  pt: "Fumaça dos veículos"
+  pt-pt: "Fumo dos veículos"
+  ru: "Дым от транспорта"
+  sr: "Dim vozila"
+  sv: "Fordonsrök"
+  th: "ควันจากยานพาหนะ"
+  tl: "Usok ng mga sasakyan"
+  tr: "Araç dumanı"
+  uk: "Дим від транспорту"
+  vi: "Khói xe"
+  zh: "车辆烟雾"
+  zh-tw: "車輛煙霧"
+
+"All vehicles":
+  be: "Усе транспартныя сродкі"
+  ca: "Tots els vehicles"
+  cs: "Všechna vozidla"
+  de: "Alle Fahrzeuge"
+  es: "Todos los vehículos"
+  fr: "Tous les véhicules"
+  hi: "सभी वाहन"
+  hu: "Minden jármű"
+  id: "Semua kendaraan"
+  it: "Tutti i veicoli"
+  ja: "すべての車両"
+  kk: "Барлық көліктер"
+  ko: "모든 차량"
+  ms: "Semua kenderaan"
+  nl: "Alle voertuigen"
+  pl: "Wszystkie pojazdy"
+  pt: "Todos os veículos"
+  pt-pt: "Todos os veículos"
+  ru: "Все транспортные средства"
+  sr: "Sva vozila"
+  sv: "Alla fordon"
+  th: "ยานพาหนะทั้งหมด"
+  tl: "Lahat ng sasakyan"
+  tr: "Tüm araçlar"
+  uk: "Усі транспортні засоби"
+  vi: "Tất cả xe"
+  zh: "所有车辆"
+  zh-tw: "所有車輛"
+
+"Player only":
+  be: "Толькі гулец"
+  ca: "Només el jugador"
+  cs: "Pouze hráč"
+  de: "Nur Spieler"
+  es: "Solo el jugador"
+  fr: "Joueur uniquement"
+  hi: "केवल खिलाड़ी"
+  hu: "Csak a játékos"
+  id: "Hanya pemain"
+  it: "Solo il giocatore"
+  ja: "プレイヤーのみ"
+  kk: "Тек ойыншы"
+  ko: "플레이어만"
+  ms: "Pemain sahaja"
+  nl: "Alleen de speler"
+  pl: "Tylko gracz"
+  pt: "Apenas o jogador"
+  pt-pt: "Apenas o jogador"
+  ru: "Только игрок"
+  sr: "Samo igrač"
+  sv: "Endast spelaren"
+  th: "เฉพาะผู้เล่น"
+  tl: "Manlalaro lamang"
+  tr: "Yalnızca oyuncu"
+  uk: "Лише гравець"
+  vi: "Chỉ người chơi"
+  zh: "仅玩家"
+  zh-tw: "僅玩家"
+
+"Controls the vehicles' smoke particles, not scenery effects or glowing particles.":
+  be: "Кіруе часціцамі дыму транспарту, не закранаючы эфекты асяроддзя і святлівыя часціцы."
+  ca: "Controla les partícules de fum dels vehicles, sense afectar els efectes de l'escenari ni les partícules lluminoses."
+  cs: "Ovládá kouřové částice vozidel, nikoli efekty okolí nebo svítící částice."
+  de: "Steuert die Rauchpartikel der Fahrzeuge, ohne Szenerieeffekte oder leuchtende Partikel zu beeinflussen."
+  es: "Controla las partículas de humo de los vehículos, sin afectar a los efectos del escenario ni a las partículas luminosas."
+  fr: "Contrôle les particules de fumée des véhicules, sans affecter les effets du décor ni les particules lumineuses."
+  hi: "वाहनों के धुएँ के कणों को नियंत्रित करता है; परिवेश के प्रभावों या चमकते कणों को प्रभावित नहीं करता।"
+  hu: "A járművek füstrészecskéit szabályozza, a környezeti hatásokat és a világító részecskéket nem érinti."
+  id: "Mengatur partikel asap kendaraan tanpa memengaruhi efek lingkungan atau partikel bercahaya."
+  it: "Controlla le particelle di fumo dei veicoli, senza modificare gli effetti dello scenario o le particelle luminose."
+  ja: "車両の煙パーティクルを制御します。背景のエフェクトや発光パーティクルには影響しません。"
+  kk: "Көліктердің түтін бөлшектерін басқарады; қоршаған орта әсерлері мен жарқыраған бөлшектерге әсер етпейді."
+  ko: "차량의 연기 입자를 제어하며 배경 효과나 발광 입자에는 영향을 주지 않습니다."
+  ms: "Mengawal zarah asap kenderaan tanpa menjejaskan kesan persekitaran atau zarah bercahaya."
+  nl: "Regelt de rookpartikels van voertuigen, zonder omgevingseffecten of lichtgevende partikels te beïnvloeden."
+  pl: "Steruje cząsteczkami dymu pojazdów, bez wpływu na efekty otoczenia i świecące cząsteczki."
+  pt: "Controla as partículas de fumaça dos veículos, sem afetar efeitos do cenário ou partículas luminosas."
+  pt-pt: "Controla as partículas de fumo dos veículos, sem afetar os efeitos do cenário ou as partículas luminosas."
+  ru: "Управляет частицами дыма транспорта, не затрагивая эффекты окружения и светящиеся частицы."
+  sr: "Upravlja česticama dima vozila, bez uticaja na efekte okruženja ili svetleće čestice."
+  sv: "Styr fordonens rökpartiklar utan att påverka omgivningseffekter eller lysande partiklar."
+  th: "ควบคุมอนุภาคควันของยานพาหนะ โดยไม่กระทบเอฟเฟกต์ฉากหรืออนุภาคเรืองแสง"
+  tl: "Kinokontrol ang mga partikulo ng usok ng mga sasakyan, hindi ang mga epekto sa paligid o mga kumikinang na partikulo."
+  tr: "Araçların duman parçacıklarını kontrol eder; çevre efektlerini veya ışık yayan parçacıkları etkilemez."
+  uk: "Керує частинками диму транспорту, не впливаючи на ефекти оточення та світні частинки."
+  vi: "Điều khiển các hạt khói của xe, không ảnh hưởng đến hiệu ứng cảnh vật hoặc các hạt phát sáng."
+  zh: "控制车辆的烟雾粒子，不影响场景特效或发光粒子。"
+  zh-tw: "控制車輛的煙霧粒子，不影響場景特效或發光粒子。"
+"North":
+  es: "Norte"
+  ca: "Nord"
+  zh-tw: "北"
+  sv: "Norr"
+  pt: "Norte"
+  fr: "Nord"
+  de: "Norden"
+  nl: "Noord"
+  pt-pt: "Norte"
+  zh: "北"
+  ru: "Север"
+  pl: "Północ"
+  uk: "Північ"
+  it: "Nord"
+  cs: "Sever"
+  tr: "Kuzey"
+  hu: "Észak"
+  ja: "北"
+  be: "Поўнач"
+  kk: "Солтүстік"
+  hi: "उत्तर"
+  ko: "북"
+  th: "เหนือ"
+  vi: "Bắc"
+  id: "Utara"
+  ms: "Utara"
+  tl: "Hilaga"
+  sr: "Sever"
+"Heading":
+  es: "Rumbo"
+  ca: "Rumb"
+  zh-tw: "航向"
+  sv: "Kurs"
+  pt: "Rumo"
+  fr: "Cap"
+  de: "Kurs"
+  nl: "Koers"
+  pt-pt: "Rumo"
+  zh: "航向"
+  ru: "Курс"
+  pl: "Kurs"
+  uk: "Курс"
+  it: "Rotta"
+  cs: "Kurz"
+  tr: "Rota"
+  hu: "Irány"
+  ja: "進行方向"
+  be: "Курс"
+  kk: "Бағыт"
+  hi: "दिशा"
+  ko: "진행 방향"
+  th: "ทิศทาง"
+  vi: "Hướng đi"
+  id: "Haluan"
+  ms: "Haluan"
+  tl: "Direksyon"
+  sr: "Pravac"
+
+"Heating control temperature":
+  pt: "Controle de temperatura do aquecimento"
+
+"Heating control footwell":
+  pt: "Controle de aquecimento da área dos pés"
+
+"Mirror heating on/off":
+  pt: "Aquecimento dos espelhos: ligar/desligar"
+
+"Lift down switch on/off":
+  pt: "Interruptor de descida do elevador: ligar/desligar"
+
+"Driver's door":
+  pt: "Porta do motorista"
+
+"Left driver's door":
+  pt: "Porta esquerda do motorista"
+
+"Right driver's door":
+  pt: "Porta direita do motorista"
+
+"Ignition key":
+  pt: "Chave de ignição"
+
+"Door lock":
+  pt: "Trava da porta"
+
+"Parking Brake On/Off":
+  pt: "Freio de estacionamento: ligar/desligar"
+
+"Parking Brake Set":
+  pt: "Acionar freio de estacionamento"
+
+"Parking Brake Release":
+  pt: "Liberar freio de estacionamento"
+
+"Electricity On/Off":
+  pt: "Alimentação elétrica: ligar/desligar"
+
+"Front Door, 1st Wing Open/Close":
+  pt: "Porta dianteira, primeira folha: abrir/fechar"
+
+"Front Door, 2nd Wing Open/Close":
+  pt: "Porta dianteira, segunda folha: abrir/fechar"
+
+"Stop Request Button":
+  pt: "Botão de solicitação de parada"
+
+"Buggy Request Button":
+  pt: "Botão de solicitação para carrinho de bebê"
+
+"Buggy Switch (Open Rear Door Manually)":
+  pt: "Interruptor para carrinho de bebê (abrir porta traseira manualmente)"
+
+"Cabin Light Lower Deck On/Off":
+  pt: "Iluminação do andar inferior: ligar/desligar"
+
+"Cabin Light Upper Deck On/Off":
+  pt: "Iluminação do andar superior: ligar/desligar"
+
+"Cabin Light Lower Deck, First on the Right On/Off":
+  pt: "Primeira luz à direita do andar inferior: ligar/desligar"
+
+"Driver's Light On/Off":
+  pt: "Luz do motorista: ligar/desligar"
+
+"Driving Slip Regulation System On/Off":
+  pt: "Controle de tração: ligar/desligar"
+
+"Dimmed Headlights On/Off":
+  pt: "Farol baixo: ligar/desligar"
+
+"Full Beam On/Off / Flash Light":
+  pt: "Farol alto: ligar/desligar / lampejar"
+
+"Engine On/Off":
+  pt: "Motor: ligar/desligar"
+
+"Engine Shut Down":
+  pt: "Desligar motor"
+
+"Engine Cooling On/Off":
+  pt: "Arrefecimento do motor: ligar/desligar"
+
+"Heater Blower On/Off":
+  pt: "Ventilador do aquecedor: ligar/desligar"
+
+"Microphone Switch (Announcements)":
+  pt: "Interruptor do microfone (anúncios)"
+
+"Parking Light On/Off":
+  pt: "Luz de posição: ligar/desligar"
+
+"Park Heating On/Off":
+  pt: "Aquecedor auxiliar: ligar/desligar"
+
+"Rear Fog Light On/Off":
+  pt: "Luz de neblina traseira: ligar/desligar"
+
+"Retarder Direct Mode On/Off":
+  pt: "Modo direto do retardador: ligar/desligar"
+
+"Retarder On/Off":
+  pt: "Retardador: ligar/desligar"
+
+"Station Brake & Door Release On/Off":
+  pt: "Freio de parada e liberação das portas: ligar/desligar"
+
+"Only Station Brake (20h switch) On/Off":
+  pt: "Freio de parada (interruptor 20h): ligar/desligar"
+
+"Warning Lights On/Off":
+  pt: "Pisca-alerta: ligar/desligar"
+
+"Set Blinker Left":
+  pt: "Acionar seta esquerda"
+
+"Set Blinker Right":
+  pt: "Acionar seta direita"
+
+"Set Blinker Off":
+  pt: "Desligar setas"
+
+"Blinker Left via Off":
+  pt: "Seta esquerda passando pela posição desligada"
+
+"Blinker Right via Off":
+  pt: "Seta direita passando pela posição desligada"
+
+"Steering Left":
+  pt: "Virar à esquerda"
+
+"Steering Right":
+  pt: "Virar à direita"
+
+"Steering Neutral":
+  pt: "Centralizar direção"
+
+"Throttle Boost/Brake release":
+  pt: "Reforço do acelerador / liberar freio"
+
+"Give Ticket":
+  pt: "Entregar bilhete"
+
+"Give Change":
+  pt: "Entregar troco"
+
+"Take the change":
+  pt: "Pegar troco"
+
+"Wiper On/Off":
+  pt: "Limpador do para-brisa: ligar/desligar"
+
+"Wiper Fast On/Off":
+  pt: "Limpador rápido: ligar/desligar"
+
+"Wiper Intermittent On/Off":
+  pt: "Limpador intermitente: ligar/desligar"
+
+"Wiper: Washer":
+  pt: "Limpador: lavador do para-brisa"
+
+"Cassette Recorder Play":
+  pt: "Reproduzir fita"
+
+"Cassette Recorder Stop":
+  pt: "Parar fita"
+
+"Release Curtain":
+  pt: "Soltar cortina"
+
+"Move Rollsign To Next Notch":
+  pt: "Avançar letreiro de lona uma posição"
+
+"Move Rollsign To Previous Notch":
+  pt: "Recuar letreiro de lona uma posição"
+
+"Wind Rollsign Down":
+  pt: "Rolar letreiro de lona para baixo"
+
+"Wind Rollsign Up":
+  pt: "Rolar letreiro de lona para cima"
+
+"Select Terminus Rollsign":
+  pt: "Selecionar destino do letreiro de lona"
+
+"IBIS: Back":
+  pt: "IBIS: voltar"
+
+"IBIS: Delete":
+  pt: "IBIS: apagar"
+
+"IBIS: Enter":
+  pt: "IBIS: confirmar"
+
+"IBIS: Forward":
+  pt: "IBIS: avançar"
+
+"IBIS: Forward (Mute)":
+  pt: "IBIS: avançar (sem anúncio)"
+
+"IBIS: Line/Course":
+  pt: "IBIS: linha / serviço"
+
+"IBIS: Route":
+  pt: "IBIS: itinerário"
+
+"IBIS: Terminus":
+  pt: "IBIS: destino final"
+
+"Ticket Printer: Cancel":
+  pt: "Impressora de bilhetes: cancelar"
+
+"Ticket Printer: Enter":
+  pt: "Impressora de bilhetes: confirmar"
+
+"Manuel Gearbox: Reverse Gear":
+  pt: "Câmbio manual: marcha à ré"
+
+"Manuel Gearbox: No Gear":
+  pt: "Câmbio manual: ponto morto"
+
+"Manuel Gearbox: Next Gear":
+  pt: "Câmbio manual: próxima marcha"
+
+"Manuel Gearbox: Prev. Gear":
+  pt: "Câmbio manual: marcha anterior"
+
+"Switch Steering Visible/Invisible":
+  pt: "Mostrar / ocultar volante"
+
+"Automatic Gearbox: 1":
+  pt: "Câmbio automático: 1"
+
+"Automatic Gearbox: 2":
+  pt: "Câmbio automático: 2"
+
+"Automatic Gearbox: D":
+  pt: "Câmbio automático: D"
+
+"Automatic Gearbox: N":
+  pt: "Câmbio automático: N"
+
+"Automatic Gearbox: R":
+  pt: "Câmbio automático: R"
+
+"Manuel Gearbox: 1st Gear":
+  pt: "Câmbio manual: 1ª marcha"
+
+"Manual Gearbox: 1st Gear (only while gamectrler button is pressed)":
+  pt: "Câmbio manual: 1ª marcha (enquanto o botão do controle estiver pressionado)"
+
+"Manuel Gearbox: 2nd Gear":
+  pt: "Câmbio manual: 2ª marcha"
+
+"Manual Gearbox: 2nd Gear (only while gamectrler button is pressed)":
+  pt: "Câmbio manual: 2ª marcha (enquanto o botão do controle estiver pressionado)"
+
+"Manuel Gearbox: 3rd Gear":
+  pt: "Câmbio manual: 3ª marcha"
+
+"Manual Gearbox: 3rd Gear (only while gamectrler button is pressed)":
+  pt: "Câmbio manual: 3ª marcha (enquanto o botão do controle estiver pressionado)"
+
+"Manuel Gearbox: 4th Gear":
+  pt: "Câmbio manual: 4ª marcha"
+
+"Manual Gearbox: 4th Gear (only while gamectrler button is pressed)":
+  pt: "Câmbio manual: 4ª marcha (enquanto o botão do controle estiver pressionado)"
+
+"Manuel Gearbox: 5th Gear":
+  pt: "Câmbio manual: 5ª marcha"
+
+"Manual Gearbox: 5th Gear (only while gamectrler button is pressed)":
+  pt: "Câmbio manual: 5ª marcha (enquanto o botão do controle estiver pressionado)"
+
+"Manuel Gearbox: 6th Gear":
+  pt: "Câmbio manual: 6ª marcha"
+
+"Manual Gearbox: 6th Gear (only while gamectrler button is pressed)":
+  pt: "Câmbio manual: 6ª marcha (enquanto o botão do controle estiver pressionado)"
+
+"Manual Gearbox: Reverse Gear (only while gamectrler button is pressed)":
+  pt: "Câmbio manual: marcha à ré (enquanto o botão do controle estiver pressionado)"
+
+"IBIS: 0":
+  pt: "IBIS: 0"
+
+"IBIS: 1":
+  pt: "IBIS: 1"
+
+"IBIS: 2":
+  pt: "IBIS: 2"
+
+"IBIS: 3":
+  pt: "IBIS: 3"
+
+"IBIS: 4":
+  pt: "IBIS: 4"
+
+"IBIS: 5":
+  pt: "IBIS: 5"
+
+"IBIS: 6":
+  pt: "IBIS: 6"
+
+"IBIS: 7":
+  pt: "IBIS: 7"
+
+"IBIS: 8":
+  pt: "IBIS: 8"
+
+"IBIS: 9":
+  pt: "IBIS: 9"
+
+"Ticket Printer: Select Ticket 1":
+  pt: "Impressora de bilhetes: selecionar bilhete 1"
+
+"Ticket Printer: Select Ticket 2":
+  pt: "Impressora de bilhetes: selecionar bilhete 2"
+
+"Ticket Printer: Select Ticket 3":
+  pt: "Impressora de bilhetes: selecionar bilhete 3"
+
+"Ticket Printer: Select Ticket 4":
+  pt: "Impressora de bilhetes: selecionar bilhete 4"
+
+"Ticket Printer: Select Ticket 5":
+  pt: "Impressora de bilhetes: selecionar bilhete 5"
+
+"Select Line Rollsign 1":
+  pt: "Selecionar linha do letreiro de lona 1"
+
+"Select Line Rollsign 2":
+  pt: "Selecionar linha do letreiro de lona 2"
+
+"Select Line Rollsign 3":
+  pt: "Selecionar linha do letreiro de lona 3"
+
+"Cashdesk: give 0.05":
+  pt: "Mesa de cobrança: entregar 0,05"
+
+"Cashdesk: give 0.10":
+  pt: "Mesa de cobrança: entregar 0,10"
+
+"Cashdesk: give 0.15":
+  pt: "Mesa de cobrança: entregar 0,15"
+
+"Cashdesk: give 0.30":
+  pt: "Mesa de cobrança: entregar 0,30"
+
+"Cashdesk: give 0.50":
+  pt: "Mesa de cobrança: entregar 0,50"
+
+"Cashdesk: give 1.00":
+  pt: "Mesa de cobrança: entregar 1,00"
+
+"Cashdesk: give 1.50":
+  pt: "Mesa de cobrança: entregar 1,50"
+
+"Cashdesk: give 2.00":
+  pt: "Mesa de cobrança: entregar 2,00"
+
+"Cashdesk: give 4.00":
+  pt: "Mesa de cobrança: entregar 4,00"
+
+"Cashdesk: give 5.00":
+  pt: "Mesa de cobrança: entregar 5,00"
+
+"Cashdesk: give 8.00":
+  pt: "Mesa de cobrança: entregar 8,00"
+
+"Cashdesk: give 15.00":
+  pt: "Mesa de cobrança: entregar 15,00"
+
+"SD83: Rollsign Line Start":
+  pt: "SD83: iniciar letreiro de linha"
+
+"SD83: Rollsign Line Select 100s +":
+  pt: "SD83: aumentar centenas do letreiro de linha"
+
+"SD83: Rollsign Line Select 100s -":
+  pt: "SD83: diminuir centenas do letreiro de linha"
+
+"SD83: Rollsign Line Select 10s +":
+  pt: "SD83: aumentar dezenas do letreiro de linha"
+
+"SD83: Rollsign Line Select 10s -":
+  pt: "SD83: diminuir dezenas do letreiro de linha"
+
+"SD83: Rollsign Line Select 1s +":
+  pt: "SD83: aumentar unidades do letreiro de linha"
+
+"SD83: Rollsign Line Select 1s -":
+  pt: "SD83: diminuir unidades do letreiro de linha"
+
+"SD83: Rollsign Terminus Start":
+  pt: "SD83: iniciar letreiro de destino final"
+
+"SD83: Rollsign Terminus Select 100s +":
+  pt: "SD83: aumentar centenas do letreiro de destino final"
+
+"SD83: Rollsign Terminus Select 100s -":
+  pt: "SD83: diminuir centenas do letreiro de destino final"
+
+"SD83: Rollsign Terminus Select 10s +":
+  pt: "SD83: aumentar dezenas do letreiro de destino final"
+
+"SD83: Rollsign Terminus Select 10s -":
+  pt: "SD83: diminuir dezenas do letreiro de destino final"
+
+"SD83: Rollsign Terminus Select 1s +":
+  pt: "SD83: aumentar unidades do letreiro de destino final"
+
+"SD83: Rollsign Terminus Select 1s -":
+  pt: "SD83: diminuir unidades do letreiro de destino final"
+
+" (outside)":
+  pt: " (externo)"
+"Mirror panels on the screen":
+  de: "Spiegelpanels auf dem Bildschirm"
+  fr: "Rétroviseurs à l'écran"
+  ru: "Панели зеркал на экране"
+  uk: "Панелі дзеркал на екрані"
+  be: "Панэлі люстэркаў на экране"
+  kk: "Экрандағы айна панельдері"
+  pl: "Panele lusterek na ekranie"
+  cs: "Panely zrcátek na obrazovce"
+  hu: "Tükörpanelek a képernyőn"
+  es: "Paneles de espejos en pantalla"
+  pt: "Painéis dos espelhos na tela"
+  pt-pt: "Painéis dos espelhos no ecrã"
+  it: "Pannelli specchietti sullo schermo"
+  nl: "Spiegelpanelen op het scherm"
+  tr: "Ekranda ayna panelleri"
+  ja: "画面上のミラーパネル"
+  zh-tw: "螢幕上的後視鏡面板"
+  ko: "화면 거울 패널"
+  th: "แผงกระจกมองหลังบนหน้าจอ"
+  vi: "Bảng gương trên màn hình"
+  id: "Panel spion di layar"
+  ms: "Panel cermin pada skrin"
+  tl: "Mga mirror panel sa screen"
+  zh: "屏幕上的后视镜面板"
+  hi: "स्क्रीन पर मिरर पैनल"
+  ca: "Panells de retrovisors a la pantalla"
+  sv: "Spegelpaneler på skärmen"
+  sr: "Paneli retrovizora na ekranu"
+"Copies of the bus's mirrors over the picture in the cab, as in ETS2 (Ctrl+M shows or hides them); a bus whose panels you arranged keeps its own":
+  de: "Kopien der Busspiegel über dem Bild in der Kabine, wie in ETS2 (Strg+M blendet sie ein oder aus); ein Bus, dessen Panels du angeordnet hast, behält seine eigenen"
+  fr: "Des copies des rétroviseurs du bus par-dessus l'image en cabine, comme dans ETS2 (Ctrl+M les affiche ou les masque) ; un bus dont vous avez placé les rétroviseurs garde les siens"
+  ru: "Копии зеркал автобуса поверх картинки в кабине, как в ETS2 (Ctrl+M показывает или скрывает их); автобус, где вы расставили панели, сохраняет свои"
+  uk: "Копії дзеркал автобуса поверх зображення в кабіні, як в ETS2 (Ctrl+M показує або ховає їх); автобус, де ви розставили панелі, зберігає свої"
+  be: "Копіі люстэркаў аўтобуса паверх выявы ў кабіне, як у ETS2 (Ctrl+M паказвае або хавае іх); аўтобус, дзе вы расставілі панэлі, захоўвае свае"
+  kk: "Кабинада сурет үстінде автобус айналарының көшірмелері, ETS2-дегідей (Ctrl+M оларды көрсетеді не жасырады); панельдерін өзіңіз орналастырған автобус өзінікін сақтайды"
+  pl: "Kopie lusterek autobusu na obrazie w kabinie, jak w ETS2 (Ctrl+M pokazuje lub ukrywa je); autobus, w którym rozmieściłeś panele, zachowuje swoje"
+  cs: "Kopie zrcátek autobusu přes obraz v kabině, jako v ETS2 (Ctrl+M je zobrazí nebo skryje); autobus, kde jste panely rozmístili, si ponechá své"
+  hu: "A busz tükreinek másolatai a kép fölött a fülkében, mint az ETS2-ben (Ctrl+M megjeleníti vagy elrejti őket); az a busz, amelynek paneljeit elrendezted, megtartja a sajátját"
+  es: "Copias de los espejos del autobús sobre la imagen en la cabina, como en ETS2 (Ctrl+M las muestra u oculta); un autobús cuyos paneles hayas colocado conserva los suyos"
+  pt: "Cópias dos espelhos do ônibus sobre a imagem na cabine, como no ETS2 (Ctrl+M mostra ou esconde); um ônibus cujos painéis você posicionou mantém os seus"
+  pt-pt: "Cópias dos espelhos do autocarro sobre a imagem na cabina, como no ETS2 (Ctrl+M mostra ou esconde); um autocarro cujos painéis posicionou mantém os seus"
+  it: "Copie degli specchietti del bus sopra l'immagine in cabina, come in ETS2 (Ctrl+M le mostra o le nasconde); un bus di cui hai disposto i pannelli mantiene i suoi"
+  nl: "Kopieën van de spiegels van de bus over het beeld in de cabine, zoals in ETS2 (Ctrl+M toont of verbergt ze); een bus waarvan je de panelen hebt ingedeeld, houdt die van zichzelf"
+  tr: "Kabinde görüntünün üzerinde otobüs aynalarının kopyaları, ETS2'deki gibi (Ctrl+M gösterir veya gizler); panellerini yerleştirdiğin bir otobüs kendi düzenini korur"
+  ja: "運転席で画面の上にバスのミラーを表示します。ETS2 と同じです(Ctrl+M で表示/非表示)。パネルを配置したバスはその配置を保ちます"
+  zh-tw: "在駕駛室畫面上顯示公車後視鏡的副本,如同 ETS2(Ctrl+M 顯示或隱藏);已排列過面板的公車保留自己的配置"
+  ko: "운전석 화면 위에 버스 거울의 사본을 표시합니다. ETS2처럼 (Ctrl+M으로 표시/숨기기); 패널을 배치한 버스는 그 배치를 유지합니다"
+  th: "สำเนากระจกมองหลังของรถบัสบนภาพในห้องคนขับ แบบ ETS2 (Ctrl+M เพื่อแสดงหรือซ่อน) รถบัสที่คุณจัดวางแผงไว้แล้วจะคงแบบของตัวเอง"
+  vi: "Bản sao gương của xe buýt trên hình trong cabin, như trong ETS2 (Ctrl+M hiện hoặc ẩn); xe buýt mà bạn đã sắp xếp bảng sẽ giữ bố cục riêng"
+  id: "Salinan spion bus di atas gambar di kabin, seperti di ETS2 (Ctrl+M menampilkan atau menyembunyikannya); bus yang panelnya sudah kamu atur tetap memakai susunannya sendiri"
+  ms: "Salinan cermin bas di atas gambar dalam kabin, seperti dalam ETS2 (Ctrl+M menunjukkan atau menyembunyikannya); bas yang panelnya telah anda susun mengekalkan susunannya sendiri"
+  tl: "Mga kopya ng salamin ng bus sa ibabaw ng larawan sa kabina, tulad ng sa ETS2 (Ctrl+M para ipakita o itago); ang bus na inayos mo na ang mga panel ay mananatili sa sarili nitong ayos"
+  zh: "在驾驶室画面上显示公交车后视镜的副本,如同 ETS2(Ctrl+M 显示或隐藏);已排列过面板的公交车保留自己的布局"
+  hi: "केबिन में तस्वीर के ऊपर बस के शीशों की प्रतियाँ, ETS2 की तरह (Ctrl+M उन्हें दिखाता या छिपाता है); जिस बस के पैनल आपने व्यवस्थित किए हैं, वह अपने ही रखती है"
+  ca: "Còpies dels retrovisors de l'autobús sobre la imatge a la cabina, com a ETS2 (Ctrl+M les mostra o les amaga); un autobús on hagis col·locat els panells conserva els seus"
+  sv: "Kopior av bussens speglar över bilden i hytten, som i ETS2 (Ctrl+M visar eller döljer dem); en buss där du har placerat panelerna behåller sina egna"
+  sr: "Kopije retrovizora autobusa preko prikaza u kabini, kao u ETS2 (Ctrl+M ih prikazuje ili skriva); autobus kome si rasporedio panele zadržava svoje"
+"Left and right":
+  de: "Links und rechts"
+  fr: "Gauche et droit"
+  ru: "Левое и правое"
+  uk: "Ліве і праве"
+  be: "Левае і правае"
+  kk: "Сол және оң"
+  pl: "Lewe i prawe"
+  cs: "Levé a pravé"
+  hu: "Bal és jobb"
+  es: "Izquierdo y derecho"
+  pt: "Esquerdo e direito"
+  pt-pt: "Esquerdo e direito"
+  it: "Sinistro e destro"
+  nl: "Links en rechts"
+  tr: "Sol ve sağ"
+  ja: "左と右"
+  zh-tw: "左和右"
+  ko: "왼쪽과 오른쪽"
+  th: "ซ้ายและขวา"
+  vi: "Trái và phải"
+  id: "Kiri dan kanan"
+  ms: "Kiri dan kanan"
+  tl: "Kaliwa at kanan"
+  zh: "左和右"
+  hi: "बायाँ और दायाँ"
+  ca: "Esquerre i dret"
+  sv: "Vänster och höger"
+  sr: "Levo i desno"
+"Left, right and front":
+  de: "Links, rechts und vorne"
+  fr: "Gauche, droit et avant"
+  ru: "Левое, правое и переднее"
+  uk: "Ліве, праве і переднє"
+  be: "Левае, правае і пярэдняе"
+  kk: "Сол, оң және алдыңғы"
+  pl: "Lewe, prawe i przednie"
+  cs: "Levé, pravé a přední"
+  hu: "Bal, jobb és első"
+  es: "Izquierdo, derecho y delantero"
+  pt: "Esquerdo, direito e dianteiro"
+  pt-pt: "Esquerdo, direito e dianteiro"
+  it: "Sinistro, destro e anteriore"
+  nl: "Links, rechts en voor"
+  tr: "Sol, sağ ve ön"
+  ja: "左、右、前"
+  zh-tw: "左、右和前"
+  ko: "왼쪽, 오른쪽, 앞"
+  th: "ซ้าย ขวา และหน้า"
+  vi: "Trái, phải và trước"
+  id: "Kiri, kanan, dan depan"
+  ms: "Kiri, kanan dan hadapan"
+  tl: "Kaliwa, kanan at harap"
+  zh: "左、右和前"
+  hi: "बायाँ, दायाँ और सामने का"
+  ca: "Esquerre, dret i davanter"
+  sv: "Vänster, höger och fram"
+  sr: "Levo, desno i napred"
+"Arrange the mirror panels":
+  de: "Spiegelpanels anordnen"
+  fr: "Placer les rétroviseurs à l'écran"
+  ru: "Расставить панели зеркал"
+  uk: "Розставити панелі дзеркал"
+  be: "Расставіць панэлі люстэркаў"
+  kk: "Айна панельдерін орналастыру"
+  pl: "Rozmieść panele lusterek"
+  cs: "Rozmístit panely zrcátek"
+  hu: "Tükörpanelek elrendezése"
+  es: "Colocar los paneles de espejos"
+  pt: "Posicionar os painéis dos espelhos"
+  pt-pt: "Posicionar os painéis dos espelhos"
+  it: "Disponi i pannelli specchietti"
+  nl: "Spiegelpanelen indelen"
+  tr: "Ayna panellerini yerleştir"
+  ja: "ミラーパネルを配置"
+  zh-tw: "排列後視鏡面板"
+  ko: "거울 패널 배치"
+  th: "จัดวางแผงกระจกมองหลัง"
+  vi: "Sắp xếp bảng gương"
+  id: "Atur panel spion"
+  ms: "Susun panel cermin"
+  tl: "Ayusin ang mga mirror panel"
+  zh: "排列后视镜面板"
+  hi: "मिरर पैनल व्यवस्थित करें"
+  ca: "Col·locar els panells de retrovisors"
+  sv: "Placera spegelpanelerna"
+  sr: "Rasporedi panele retrovizora"
+"Drag them where you want them and change their size, saved for this vehicle (Ctrl+Shift+M).":
+  de: "Zieh sie, wohin du willst, und ändere ihre Größe, gespeichert für dieses Fahrzeug (Strg+Umschalt+M)."
+  fr: "Faites-les glisser où vous voulez et changez leur taille, enregistré pour ce véhicule (Ctrl+Maj+M)."
+  ru: "Перетащите их куда нужно и измените размер, сохраняется для этого транспорта (Ctrl+Shift+M)."
+  uk: "Перетягніть їх куди потрібно і змініть розмір, зберігається для цього транспорту (Ctrl+Shift+M)."
+  be: "Перацягніце іх куды трэба і змяніце памер, захоўваецца для гэтага транспарту (Ctrl+Shift+M)."
+  kk: "Оларды қалаған жерге сүйреп, өлшемін өзгертіңіз, осы көлік үшін сақталады (Ctrl+Shift+M)."
+  pl: "Przeciągnij je, gdzie chcesz, i zmień ich rozmiar, zapisane dla tego pojazdu (Ctrl+Shift+M)."
+  cs: "Přetáhněte je, kam chcete, a změňte jejich velikost, uloženo pro toto vozidlo (Ctrl+Shift+M)."
+  hu: "Húzd őket, ahová szeretnéd, és változtasd a méretüket, ehhez a járműhöz mentve (Ctrl+Shift+M)."
+  es: "Arrástralos donde quieras y cambia su tamaño, se guarda para este vehículo (Ctrl+Mayús+M)."
+  pt: "Arraste-os para onde quiser e mude o tamanho, salvo para este veículo (Ctrl+Shift+M)."
+  pt-pt: "Arraste-os para onde quiser e mude o tamanho, guardado para este veículo (Ctrl+Shift+M)."
+  it: "Trascinali dove vuoi e cambiane la dimensione, salvato per questo veicolo (Ctrl+Maiusc+M)."
+  nl: "Sleep ze waar je wilt en verander hun grootte, opgeslagen voor dit voertuig (Ctrl+Shift+M)."
+  tr: "İstediğin yere sürükle ve boyutlarını değiştir, bu araç için kaydedilir (Ctrl+Shift+M)."
+  ja: "好きな場所へドラッグしてサイズを変えられます。この車両用に保存されます(Ctrl+Shift+M)。"
+  zh-tw: "拖到想要的位置並調整大小,為此車輛儲存(Ctrl+Shift+M)。"
+  ko: "원하는 곳으로 끌어 놓고 크기를 바꿀 수 있으며 이 차량에 저장됩니다 (Ctrl+Shift+M)."
+  th: "ลากไปวางตรงที่ต้องการและปรับขนาด บันทึกไว้สำหรับรถคันนี้ (Ctrl+Shift+M)"
+  vi: "Kéo chúng đến nơi bạn muốn và đổi kích thước, được lưu cho xe này (Ctrl+Shift+M)."
+  id: "Seret ke mana pun dan ubah ukurannya, disimpan untuk kendaraan ini (Ctrl+Shift+M)."
+  ms: "Seret ke mana sahaja dan ubah saiznya, disimpan untuk kenderaan ini (Ctrl+Shift+M)."
+  tl: "I-drag kung saan mo gusto at baguhin ang laki, naka-save para sa sasakyang ito (Ctrl+Shift+M)."
+  zh: "拖到想要的位置并调整大小,为此车辆保存(Ctrl+Shift+M)。"
+  hi: "उन्हें जहाँ चाहें खींचें और आकार बदलें, इस वाहन के लिए सहेजा जाता है (Ctrl+Shift+M)।"
+  ca: "Arrossega'ls on vulguis i canvia'n la mida, desat per a aquest vehicle (Ctrl+Maj+M)."
+  sv: "Dra dem dit du vill och ändra storleken, sparas för det här fordonet (Ctrl+Shift+M)."
+  sr: "Prevuci ih gde želiš i promeni im veličinu, sačuvano za ovo vozilo (Ctrl+Shift+M)."
+"Left mirror":
+  de: "Linker Spiegel"
+  fr: "Rétroviseur gauche"
+  ru: "Левое зеркало"
+  uk: "Ліве дзеркало"
+  be: "Левае люстэрка"
+  kk: "Сол жақ айна"
+  pl: "Lewe lusterko"
+  cs: "Levé zrcátko"
+  hu: "Bal tükör"
+  es: "Espejo izquierdo"
+  pt: "Espelho esquerdo"
+  pt-pt: "Espelho esquerdo"
+  it: "Specchietto sinistro"
+  nl: "Linkerspiegel"
+  tr: "Sol ayna"
+  ja: "左ミラー"
+  zh-tw: "左後視鏡"
+  ko: "왼쪽 거울"
+  th: "กระจกซ้าย"
+  vi: "Gương trái"
+  id: "Spion kiri"
+  ms: "Cermin kiri"
+  tl: "Kaliwang salamin"
+  zh: "左后视镜"
+  hi: "बायाँ शीशा"
+  ca: "Retrovisor esquerre"
+  sv: "Vänster spegel"
+  sr: "Levi retrovizor"
+"Right mirror":
+  de: "Rechter Spiegel"
+  fr: "Rétroviseur droit"
+  ru: "Правое зеркало"
+  uk: "Праве дзеркало"
+  be: "Правае люстэрка"
+  kk: "Оң жақ айна"
+  pl: "Prawe lusterko"
+  cs: "Pravé zrcátko"
+  hu: "Jobb tükör"
+  es: "Espejo derecho"
+  pt: "Espelho direito"
+  pt-pt: "Espelho direito"
+  it: "Specchietto destro"
+  nl: "Rechterspiegel"
+  tr: "Sağ ayna"
+  ja: "右ミラー"
+  zh-tw: "右後視鏡"
+  ko: "오른쪽 거울"
+  th: "กระจกขวา"
+  vi: "Gương phải"
+  id: "Spion kanan"
+  ms: "Cermin kanan"
+  tl: "Kanang salamin"
+  zh: "右后视镜"
+  hi: "दायाँ शीशा"
+  ca: "Retrovisor dret"
+  sv: "Höger spegel"
+  sr: "Desni retrovizor"
+"Share the HOF files of {map} with every bus?":
+  ca: "Vols compartir els fitxers HOF de {map} amb tots els autobusos?"
+  ru: "Поделиться HOF-файлами карты {map} со всеми автобусами?"
+  de: "HOF-Dateien von {map} mit allen Bussen teilen?"
+  fr: "Partager les fichiers HOF de {map} avec tous les bus ?"
+  uk: "Поділитися HOF-файлами {map} з усіма автобусами?"
+  be: "Падзяліцца HOF-файламі {map} з усімі аўтобусамі?"
+  kk: "{map} HOF файлдарын барлық автобустармен бөлісу керек пе?"
+  pl: "Udostępnić pliki HOF mapy {map} wszystkim autobusom?"
+  cs: "Sdílet soubory HOF mapy {map} se všemi autobusy?"
+  hu: "Megosztod a(z) {map} HOF-fájljait az összes busszal?"
+  es: "¿Compartir los archivos HOF de {map} con todos los autobuses?"
+  pt: "Compartilhar os arquivos HOF de {map} com todos os ônibus?"
+  pt-pt: "Partilhar os ficheiros HOF de {map} com todos os autocarros?"
+  it: "Condividere i file HOF di {map} con tutti gli autobus?"
+  nl: "De HOF-bestanden van {map} met alle bussen delen?"
+  tr: "{map} HOF dosyaları tüm otobüslerle paylaşılsın mı?"
+  ja: "{map} のHOFファイルをすべてのバスで共有しますか?"
+  zh: "要将 {map} 的 HOF 文件共享给所有巴士吗?"
+  hi: "क्या {map} की HOF फ़ाइलें सभी बसों के साथ साझा करें?"
+  zh-tw: "要將 {map} 的 HOF 檔案分享給所有巴士嗎?"
+  ko: "{map}의 HOF 파일을 모든 버스와 공유할까요?"
+  th: "แชร์ไฟล์ HOF ของ {map} ให้รถบัสทุกคันหรือไม่?"
+  vi: "Chia sẻ các tệp HOF của {map} cho mọi xe buýt?"
+  id: "Bagikan file HOF {map} ke semua bus?"
+  ms: "Kongsi fail HOF {map} dengan semua bas?"
+  tl: "Ibahagi ang mga HOF file ng {map} sa lahat ng bus?"
+  sv: "Dela HOF-filerna för {map} med alla bussar?"
+  sr: "Podeliti HOF datoteke mape {map} sa svim autobusima?"
+"Every bus can then show this map's lines and destinations. Some maps have one HOF file per company or bus: sharing them can give buses with their own IBIS wrong destinations.":
+  ca: "Així tots els autobusos poden mostrar les línies i destinacions d'aquest mapa. Alguns mapes tenen un fitxer HOF per companyia o per autobús: compartir-los pot donar destinacions errònies als autobusos amb IBIS propi."
+  ru: "Тогда любой автобус сможет показывать линии и направления этой карты. На некоторых картах свой HOF-файл у каждой компании или автобуса: при общем доступе автобусы со своим IBIS могут показывать неверные направления."
+  de: "Dann kann jeder Bus die Linien und Ziele dieser Karte anzeigen. Manche Karten haben eine HOF-Datei pro Unternehmen oder Bus: Werden sie geteilt, können Busse mit eigenem IBIS falsche Ziele anzeigen."
+  fr: "Tous les bus pourront alors afficher les lignes et destinations de cette carte. Certaines cartes ont un fichier HOF par compagnie ou par bus : les partager peut donner de mauvaises destinations aux bus qui ont leur propre IBIS."
+  uk: "Тоді кожен автобус зможе показувати лінії й напрямки цієї карти. На деяких картах окремий HOF-файл для кожної компанії чи автобуса: спільний доступ може дати автобусам із власним IBIS хибні напрямки."
+  be: "Тады кожны аўтобус зможа паказваць лініі і кірункі гэтай карты. На некаторых картах асобны HOF-файл для кожнай кампаніі ці аўтобуса: агульны доступ можа даць аўтобусам з уласным IBIS няправільныя кірункі."
+  kk: "Сонда әр автобус осы картаның желілері мен бағыттарын көрсете алады. Кейбір карталарда әр компанияға немесе автобусқа бөлек HOF файлы бар: оларды бөлісу өз IBIS жүйесі бар автобустарға қате бағыт беруі мүмкін."
+  pl: "Każdy autobus będzie mógł wtedy pokazywać linie i kierunki tej mapy. Niektóre mapy mają osobny plik HOF dla każdej firmy lub autobusu: udostępnienie ich może dać autobusom z własnym IBIS złe kierunki."
+  cs: "Každý autobus pak může zobrazovat linky a cíle této mapy. Některé mapy mají jeden soubor HOF pro každého dopravce nebo autobus: sdílení může autobusům s vlastním IBIS dát špatné cíle."
+  hu: "Így minden busz mutathatja a térkép vonalait és célállomásait. Egyes térképeken minden társaságnak vagy busznak saját HOF-fájlja van: megosztva a saját IBIS-szel rendelkező buszok rossz célállomást kaphatnak."
+  es: "Así todos los autobuses podrán mostrar las líneas y destinos de este mapa. Algunos mapas tienen un archivo HOF por compañía o por autobús: compartirlos puede dar destinos erróneos a los autobuses con IBIS propio."
+  pt: "Assim todos os ônibus poderão mostrar as linhas e destinos deste mapa. Alguns mapas têm um arquivo HOF por empresa ou por ônibus: compartilhá-los pode dar destinos errados aos ônibus com IBIS próprio."
+  pt-pt: "Assim todos os autocarros poderão mostrar as linhas e destinos deste mapa. Alguns mapas têm um ficheiro HOF por empresa ou por autocarro: partilhá-los pode dar destinos errados aos autocarros com IBIS próprio."
+  it: "Così ogni autobus potrà mostrare le linee e le destinazioni di questa mappa. Alcune mappe hanno un file HOF per azienda o per autobus: condividerli può dare destinazioni sbagliate agli autobus con un IBIS proprio."
+  nl: "Dan kan elke bus de lijnen en bestemmingen van deze kaart tonen. Sommige kaarten hebben één HOF-bestand per vervoerder of bus: delen kan bussen met een eigen IBIS verkeerde bestemmingen geven."
+  tr: "Böylece her otobüs bu haritanın hatlarını ve varış noktalarını gösterebilir. Bazı haritalarda her şirket veya otobüs için ayrı bir HOF dosyası vardır: paylaşmak, kendi IBIS'i olan otobüslere yanlış varış noktaları verebilir."
+  ja: "すべてのバスがこのマップの路線と行先を表示できるようになります。会社やバスごとにHOFファイルがあるマップもあり、共有すると独自のIBISを持つバスの行先が誤ることがあります。"
+  zh: "这样所有巴士都能显示此地图的线路和目的地。有些地图每家公司或每辆巴士都有单独的 HOF 文件:共享后,自带 IBIS 的巴士可能显示错误的目的地。"
+  hi: "तब हर बस इस मैप की लाइनें और गंतव्य दिखा सकेगी। कुछ मैप में हर कंपनी या बस की अलग HOF फ़ाइल होती है: इन्हें साझा करने से अपने IBIS वाली बसों को गलत गंतव्य मिल सकते हैं।"
+  zh-tw: "這樣所有巴士都能顯示此地圖的路線和目的地。有些地圖每家公司或每輛巴士都有各自的 HOF 檔案:分享後,自帶 IBIS 的巴士可能顯示錯誤的目的地。"
+  ko: "그러면 모든 버스가 이 맵의 노선과 행선지를 표시할 수 있습니다. 회사나 버스마다 HOF 파일이 따로 있는 맵도 있어, 공유하면 자체 IBIS가 있는 버스의 행선지가 틀릴 수 있습니다."
+  th: "รถบัสทุกคันจะแสดงสายและปลายทางของแผนที่นี้ได้ บางแผนที่มีไฟล์ HOF แยกตามบริษัทหรือรถบัส: การแชร์อาจทำให้รถบัสที่มี IBIS ของตัวเองแสดงปลายทางผิด"
+  vi: "Khi đó mọi xe buýt có thể hiển thị các tuyến và điểm đến của bản đồ này. Một số bản đồ có một tệp HOF cho mỗi công ty hoặc mỗi xe: chia sẻ chúng có thể khiến xe buýt có IBIS riêng hiển thị sai điểm đến."
+  id: "Semua bus lalu bisa menampilkan jalur dan tujuan peta ini. Beberapa peta punya satu file HOF per perusahaan atau per bus: membagikannya bisa membuat bus dengan IBIS sendiri menampilkan tujuan yang salah."
+  ms: "Semua bas kemudian boleh memaparkan laluan dan destinasi peta ini. Sesetengah peta ada satu fail HOF bagi setiap syarikat atau bas: berkongsi fail itu boleh memberi destinasi yang salah kepada bas yang ada IBIS sendiri."
+  tl: "Maipapakita na ng bawat bus ang mga linya at destinasyon ng mapang ito. May mga mapa na may isang HOF file bawat kompanya o bus: ang pagbabahagi nito ay maaaring magbigay ng maling destinasyon sa mga bus na may sariling IBIS."
+  sv: "Då kan varje buss visa kartans linjer och destinationer. Vissa kartor har en HOF-fil per bolag eller buss: delar du dem kan bussar med egen IBIS få fel destinationer."
+  sr: "Tada svaki autobus može da prikaže linije i odredišta ove mape. Neke mape imaju po jednu HOF datoteku za svaku kompaniju ili autobus: deljenje može autobusima sa sopstvenim IBIS-om dati pogrešna odredišta."
+"Share with every bus":
+  ca: "Comparteix amb tots els autobusos"
+  ru: "Поделиться со всеми автобусами"
+  de: "Mit allen Bussen teilen"
+  fr: "Partager avec tous les bus"
+  uk: "Поділитися з усіма автобусами"
+  be: "Падзяліцца з усімі аўтобусамі"
+  kk: "Барлық автобустармен бөлісу"
+  pl: "Udostępnij wszystkim autobusom"
+  cs: "Sdílet se všemi autobusy"
+  hu: "Megosztás az összes busszal"
+  es: "Compartir con todos los autobuses"
+  pt: "Compartilhar com todos os ônibus"
+  pt-pt: "Partilhar com todos os autocarros"
+  it: "Condividi con tutti gli autobus"
+  nl: "Met alle bussen delen"
+  tr: "Tüm otobüslerle paylaş"
+  ja: "すべてのバスで共有"
+  zh: "共享给所有巴士"
+  hi: "सभी बसों के साथ साझा करें"
+  zh-tw: "分享給所有巴士"
+  ko: "모든 버스와 공유"
+  th: "แชร์ให้รถบัสทุกคัน"
+  vi: "Chia sẻ cho mọi xe buýt"
+  id: "Bagikan ke semua bus"
+  ms: "Kongsi dengan semua bas"
+  tl: "Ibahagi sa lahat ng bus"
+  sv: "Dela med alla bussar"
+  sr: "Podeli sa svim autobusima"
+"Not for this map":
+  ca: "No per a aquest mapa"
+  ru: "Не для этой карты"
+  de: "Nicht für diese Karte"
+  fr: "Pas pour cette carte"
+  uk: "Не для цієї карти"
+  be: "Не для гэтай карты"
+  kk: "Бұл карта үшін емес"
+  pl: "Nie dla tej mapy"
+  cs: "Ne pro tuto mapu"
+  hu: "Ennél a térképnél ne"
+  es: "No para este mapa"
+  pt: "Não para este mapa"
+  pt-pt: "Não para este mapa"
+  it: "Non per questa mappa"
+  nl: "Niet voor deze kaart"
+  tr: "Bu harita için değil"
+  ja: "このマップでは共有しない"
+  zh: "此地图不共享"
+  hi: "इस मैप के लिए नहीं"
+  zh-tw: "此地圖不分享"
+  ko: "이 맵은 공유 안 함"
+  th: "ไม่แชร์สำหรับแผนที่นี้"
+  vi: "Không chia sẻ cho bản đồ này"
+  id: "Tidak untuk peta ini"
+  ms: "Bukan untuk peta ini"
+  tl: "Hindi para sa mapang ito"
+  sv: "Inte för den här kartan"
+  sr: "Ne za ovu mapu"

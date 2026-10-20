@@ -9,7 +9,7 @@ import { BusPreview } from '../preview.js';
 import { BusList, BusOptions, withoutMaker } from './bus-list.js';
 import { DayStep } from './drive-day.js';
 import { DutyStep, DutyStage } from './drive-duty.js';
-import { depotRun, tripAt } from './drive.js';
+import { depotRun, tripAt, hms, entryName } from './drive.js';
 
 const STEPS = [['bus', 'Bus'], ['day', 'Day & weather'], ['duty', 'Map & duty']];
 
@@ -65,26 +65,48 @@ export function StartBar({ step, go }) {
   const line = curLine();
   const tour = curTour();
   const [busy, setBusy] = useState(false);
+  // a start while a game runs asks for a second click within 6 s (its window may be behind
+  // this one), as the game's own launcher did
+  const [armed, setArmed] = useState(0);
+  useEffect(() => {
+    if (!armed) return;
+    const id = setTimeout(() => setArmed(0), 6000);
+    return () => clearTimeout(id);
+  }, [armed]);
   const trip = tour && !c.free ? (pickedTrip() != null ? tour.trips.find((x) => x.index === pickedTrip()) : tour.trips[tripAt(tour, c.time * 60)]) : null;
   const joined = c.lan_mode === 'join';
   const ready = m && v && (c.free || (line && tour)) && !noServerBus();
   const running = s.poll.instances?.length || 0;
+  const another = running > 0 && armed > 0;
   const next = STEPS.findIndex(([id]) => id === step) + 1;
   const launch = async (extra) => {
+    if (running > 0 && !armed) {
+      setArmed(Date.now());
+      toast(t('A game is running already (its window may be behind this one - see Running games). Click again to start another one anyway.'), 'error');
+      return;
+    }
+    setArmed(0);
     setBusy(true);
     await start(extra);
     setBusy(false);
   };
+  const entry = m && c.entry >= 0 ? m.entry_points[c.entry] : null;
   const where = joined && c.lan_map ? mapName(c.lan_map.replace(/\\/g, '/')) : m ? m.friendly || m.name : '';
   const when = joined ? `${c.lan_server?.time || ''} ${t("(the server's clock)")}` : `${hhmm(c.time)}, ${longDate(c.date)}`;
-  const service = c.free ? t('Free drive') : [line && `${t('Line')} ${line.name}`, tour && `${t('Tour')} ${tour.number}`].filter(Boolean).join(' | ');
+  // (and the trip the duty begins with: when it runs and how long it is, as the game's own launcher said)
+  const service = c.free ? t('Free drive') : [line && `${t('Line')} ${line.name}`, tour && `${t('Tour')} ${tour.number}`, trip && `${hms(trip.departure)} - ${hms(trip.arrival)}`, trip?.km > 0 && `${trip.km.toFixed(1)} km`].filter(Boolean).join(' | ');
+  const place = entry && t('starting at {place}', { place: entryName(entry) });
+  // (whole in the tooltip: a narrow bar cuts the lines off)
+  const title = `${v ? withoutMaker(v.name, v.manufacturer) : t('No bus is installed.')}${service ? ` | ${service}` : ''}`;
+  const sub = [when, joined ? c.lan_server?.weather || t("the map's (the server's)") : weatherName(c.weather, s.weather), where, place].filter(Boolean).join(' | ');
   return html`<div class="drive-bar">
     ${trip && !depotRun(trip)
       ? html`<div class="sign"><span class="no">${trip.line}</span><span class="to">${trip.terminus}</span></div>`
       : html`<div class="sign icon"><${Icon} name=${c.free ? 'route' : 'bus'} /></div>`}
     <div class="what">
-      <b class="ellipsis">${v ? withoutMaker(v.name, v.manufacturer) : t('No bus is installed.')}${service ? ` | ${service}` : ''}</b>
-      <span class="ellipsis">${[when, joined ? c.lan_server?.weather || t("the map's (the server's)") : weatherName(c.weather, s.weather), where].filter(Boolean).join(' | ')}</span>
+      <b class="ellipsis" title=${title}>${title}</b>
+      <span class="ellipsis" title=${sub}>${sub}</span>
+      ${v?.missing_packs?.length > 0 && html`<span class="ellipsis" style="color:var(--warn)" title=${v.missing_packs.join(', ')}>${t('Parts of this bus come from packs that are not installed: {packs}', { packs: v.missing_packs.join(', ') })}</span>`}
     </div>
     <div class="bar-actions">
       ${joined && html`<span class="tag accent"><${Icon} name="users" size=${14} />${t('Joining {server}', { server: c.lan_server?.name || c.lan_addr })}</span>
@@ -93,7 +115,7 @@ export function StartBar({ step, go }) {
       <${Continue} go=${launch} busy=${busy} />
       ${next < STEPS.length && html`<${Button} big onClick=${() => go(STEPS[next][0])}>${t('Next:')} ${t(STEPS[next][1])}<${Icon} name="right" /></${Button}>`}
       <${Button} kind="primary" big icon="play" disabled=${!ready || busy} onClick=${() => launch()}>
-        ${busy ? t('Starting…') : joined ? t('Join and drive') : c.free ? t('Start driving') : t('Start the duty')}
+        ${busy ? t('Starting…') : another ? t('Start another game') : joined ? t('Join and drive') : c.free ? t('Start driving') : t('Start the duty')}
       </${Button}>
     </div>
   </div>`;

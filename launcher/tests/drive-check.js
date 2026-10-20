@@ -1,5 +1,5 @@
 import { S, set, remember } from '../ui/js/store.js';
-import { applyTheme, LAUNCHER_LAYOUTS } from '../ui/js/data.js';
+import { applyTheme, choose, LAUNCHER_LAYOUTS } from '../ui/js/data.js';
 
 const OPTIONS = {
   Map: () => one('.page-drive .map-row'),
@@ -318,6 +318,26 @@ async function options(where) {
   return Object.keys(OPTIONS).filter((k) => !found.has(k)).map((k) => `${where}: "${k}" cannot be found`);
 }
 
+/** A date the player typed stays when a duty is chosen, even outside the map's `[years]`. */
+async function dateOutsideTheMapsYears() {
+  const out = [];
+  const maps = S.maps;
+  const choice = { ...S.choice };
+  const lines = S.lines;
+  const map = maps?.find((m) => m.file === choice.map) || maps?.[0];
+  if (!map) return ['date: no map to choose a date on'];
+  set({ maps: maps.map((m) => (m.file === map.file ? { ...m, year_span: [1986, 2000] } : m)) });
+  set({ choice: { ...choice, map: map.file, date: '1989-05-30', line: null, tour: null, start_trip: null } });
+  choose({ date: '2025-06-01' });
+  await settle(150);
+  if (S.choice.date !== '2025-06-01') out.push(`date: typing 2025-06-01 gave ${S.choice.date}`);
+  choose({ line: S.choice.line, tour: S.choice.tour, start_trip: null });
+  await settle(150);
+  if (S.choice.date !== '2025-06-01') out.push(`date: choosing a duty changed it to ${S.choice.date}`);
+  set({ maps, choice, lines });
+  return out;
+}
+
 export async function run({ themes = ['dark', 'light'], layouts = LAUNCHER_LAYOUTS.map(([id]) => id), check = ['options', 'use'] } = {}) {
   const report = {};
   for (const theme of themes) for (const layout of layouts) {
@@ -342,5 +362,6 @@ export async function run({ themes = ['dark', 'light'], layouts = LAUNCHER_LAYOU
     }
     report[where] = [...new Set(out)];
   }
+  report['duty date'] = await dateOutsideTheMapsYears();
   return report;
 }

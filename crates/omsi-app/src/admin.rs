@@ -209,6 +209,7 @@ pub(crate) fn teleport(app: &mut App, at: glam::DVec3, heading: f64) {
         let origin = glam::DVec3::new(at.x, at.y, z);
         p.vehicle.position = origin;
         p.vehicle.heading = heading;
+        crate::rail_drive::placed(p, z);
         if let Some(rb) = p.vehicle.rigid.as_mut() {
             rb.place(origin, heading);
         }

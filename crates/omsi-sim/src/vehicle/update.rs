@@ -166,6 +166,7 @@ impl VehicleInstance {
         self.update_engine_vars(dt);
         crate::timetable_run::apply_pending_destination(self);
         self.apply_scheme_vars_each_frame();
+        self.run_control_cables();
         let p = self.ty.program.clone();
         self.vm.run_frame(&p, &mut self.state, &mut self.host);
         self.show_radio_text();
@@ -190,6 +191,12 @@ impl VehicleInstance {
         }
     }
 
+    pub(super) fn run_control_cables(&mut self) {
+        for &(write, read) in &self.v_cables {
+            self.state.vars[read as usize] = self.state.vars[write as usize];
+        }
+    }
+
     /// Run the scripts' frame once with no time passing (no physics, no clock): what a
     /// switch just pressed makes of the variables the scripts derive from it.
     pub fn update_scripts_only(&mut self, _dt: f32) {
@@ -197,6 +204,7 @@ impl VehicleInstance {
         let p = self.ty.program.clone();
         let gap = self.host.clock.timegap;
         self.host.clock.timegap = 0.0;
+        self.run_control_cables();
         self.vm.run_frame(&p, &mut self.state, &mut self.host);
         self.host.clock.timegap = gap;
     }
@@ -380,6 +388,7 @@ impl VehicleInstance {
         // below, must win over them - its v_font 7 for the Cyrillic font stood reset to the
         // scheme's 0 here, and its display read Latin in the other players' games)
         self.apply_scheme_vars_each_frame();
+        self.run_control_cables();
         for &(id, v) in inputs.iter().chain(pinned) {
             self.put(Some(id), v);
         }

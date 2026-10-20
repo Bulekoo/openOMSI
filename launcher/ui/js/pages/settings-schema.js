@@ -103,6 +103,7 @@ const graphics = {
         // (only the enhanced modes march volumetric clouds; the vanilla ones are a texture)
         { type: 'select', key: 'cloud_quality', label: 'Cloud quality', options: [['high', 'High'], ['low', 'Low']], when: (s) => enhanced(s) && s.clouds !== false },
         { type: 'select', key: 'rain_quality', label: 'Rain quality', options: [['high', 'High'], ['medium', 'Medium'], ['low', 'Low']] },
+        { type: 'select', key: 'vehicle_smoke', label: 'Vehicle smoke', options: [['all', 'All vehicles'], ['player', 'Player only'], ['off', 'Off']], help: 'Controls the vehicles\' smoke particles, not scenery effects or glowing particles.' },
         // (the wet roads' reflections need the reflection maps on)
         { type: 'select', key: 'puddles', label: 'Puddles', options: [['high', 'High'], ['low', 'Low'], ['off', 'Off']], when: (s) => Number(s.reflections ?? 1) > 0.005 },
         { type: 'toggle', key: 'windy_trees', label: 'Windy trees' },
@@ -233,6 +234,7 @@ const camera = {
         { type: 'toggle', key: 'driverview_smooth', label: 'Camera glides between viewpoints' },
         { type: 'toggle', key: 'hands_in_cab', label: "Driver's hands in the cab view" },
         { type: 'toggle', key: 'alt_view', label: 'Right mouse button turns the view, Shift+right zooms (off: right zooms as in OMSI, the wheel button turns)' },
+        { type: 'select', key: 'mirror_hud', label: 'Mirror panels on the screen', options: [['0', 'Off'], ['2', 'Left mirror'], ['1', 'Right mirror'], ['3', 'Left and right'], ['7', 'Left, right and front']] },
         { type: 'toggle', key: 'precision_zoom', label: 'Precision mouse zoom (FOV curve instead of the linear way)' },
       ],
     },
@@ -437,6 +439,6 @@ export const SETTINGS_TABS = [graphics, driving, camera, sound, gameplay, genera
 
 /** The settings a saved graphics profile holds (`GRAPHICS_PROFILE_KEYS`). */
 export const GRAPHICS_PROFILE_KEYS = [
-  'graphics', 'msaa', 'render_scale', 'anisotropy', 'shadow_size', 'ssao', 'shadows', 'shadow_casters', 'detail_textures', 'night_brightness', 'led_glow', 'led_mips', 'shadow_blobs', 'reflections', 'clouds', 'cloud_quality', 'rain_quality', 'puddles', 'windy_trees',
+  'graphics', 'msaa', 'render_scale', 'anisotropy', 'shadow_size', 'ssao', 'shadows', 'shadow_casters', 'detail_textures', 'night_brightness', 'led_glow', 'led_mips', 'shadow_blobs', 'reflections', 'clouds', 'cloud_quality', 'rain_quality', 'vehicle_smoke', 'puddles', 'windy_trees',
   'vsync', 'max_fps', 'view_distance', 'max_obj_dist', 'min_obj_size', 'mirror_size', 'mirror_refresh', 'mirror_quality', 'mirror_hud_every_frame', 'video_memory', 'texture_compression', 'gpu_texture_compression',
 ];

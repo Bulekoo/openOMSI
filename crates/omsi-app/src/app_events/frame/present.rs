@@ -421,15 +421,17 @@ impl App {
         // screen, not a small picture far off. The other mirrors take their turns below without
         // them. (In VR the panels are not drawn.)
         let mut panel_cams = std::mem::take(&mut self.gfx.mirror_panel_cams);
-        if self.settings.mirror_hud_every_frame && self.settings.mirror_size != 0 && !vr_active && self.cam.in_cab && self.gfx.mirror_hud.active() {
+        if self.settings.mirror_size != 0 && !vr_active && self.cam.in_cab && self.gfx.mirror_hud.active() {
             self.gfx.mirror_hud.cams_into(&mut panel_cams);
         } else {
             panel_cams.clear();
         }
-        if !panel_cams.is_empty() {
+        let every_frame = self.settings.mirror_hud_every_frame;
+        let (skip, on_screen): (&[usize], &[usize]) = if every_frame { (&panel_cams, &[]) } else { (&[], &panel_cams) };
+        if every_frame && !panel_cams.is_empty() {
             if let (Some(w), Some(p)) = (self.world.as_ref(), self.player.as_ref()) {
                 let view = (*cam, s.config.width as f32 / s.config.height.max(1) as f32);
-                render_mirrors(r, scene, w, p, lighting, MirrorPick::Only(&panel_cams), Some(view));
+                render_mirrors(r, scene, w, p, lighting, MirrorPick::Only(&panel_cams), Some(view), &[]);
             }
         }
         if self.settings.mirror_size == 0 {
@@ -440,7 +442,7 @@ impl App {
             // as through the windscreen (in turns, each picture was a step behind, and the
             // steps grew with the speed - the mirrors seemed to shake)
             self.gfx.mirror_budget = 0.0;
-            let mirror_view = if self.settings.triple.enabled || (self.gfx.mirror_hud.active() && self.cam.in_cab && panel_cams.is_empty()) {
+            let mirror_view = if self.settings.triple.enabled {
                 None
             } else {
                 Some((*cam, s.config.width as f32 / s.config.height.max(1) as f32))
@@ -448,7 +450,7 @@ impl App {
             let near = self.player.as_ref().is_some_and(|p| (p.vehicle.position - cam.position).length() < 12.0);
             if let (Some(w), Some(p)) = (self.world.as_ref(), self.player.as_ref()) {
                 if self.cam.in_cab || near {
-                    self.gfx.mirrors_seen = render_mirrors(r, scene, w, p, lighting, MirrorPick::All(&panel_cams), mirror_view);
+                    self.gfx.mirrors_seen = render_mirrors(r, scene, w, p, lighting, MirrorPick::All(skip), mirror_view, on_screen);
                 }
             }
         } else if self.settings.mirror_refresh == "off" {
@@ -461,7 +463,7 @@ impl App {
                 let next = since.max(0.0) + raw_dt.min(0.1);
                 // (and while the driver turns a mirror, so it can be aimed)
                 if since < 0.0 || (since < MIRROR_FREEZE_REDRAW && next >= MIRROR_FREEZE_REDRAW) || p.mirrors_dirty {
-                    self.gfx.mirrors_seen = render_mirrors(r, scene, w, p, lighting, MirrorPick::All(&panel_cams), None);
+                    self.gfx.mirrors_seen = render_mirrors(r, scene, w, p, lighting, MirrorPick::All(skip), None, on_screen);
                 }
                 self.gfx.frozen_mirrors = Some(FrozenMirrors { bus: p.uid, since: next });
             }
@@ -483,12 +485,9 @@ impl App {
             // its frustum can leave a mirror visible in VR uninitialised
             // (black). Refresh all bus mirrors in VR, still taking turns
             // within the configured budget; keep desktop visibility culling.
-            // (Panels taking their turns show mirrors out of the picture: all of them take
-            // turns then. Panels drawn every frame above are left out of the turns instead.)
-            let mirror_view = if vr_active
-                || self.settings.triple.enabled
-                || (self.gfx.mirror_hud.active() && self.cam.in_cab && panel_cams.is_empty())
-            {
+            // (Panels taking their turns keep their mirrors in the turns, in the picture or
+            // not. Panels drawn every frame above are left out of the turns instead.)
+            let mirror_view = if vr_active || self.settings.triple.enabled {
                 None
             } else {
                 Some((*cam, s.config.width as f32 / s.config.height.max(1) as f32))
@@ -513,7 +512,7 @@ impl App {
                 // mirrors are due, including the Every frame mode.
                 if let (Some(w), Some(p)) = (self.world.as_ref(), self.player.as_ref()) {
                     self.gfx.mirror_turn = self.gfx.mirror_turn.wrapping_add(draw_limit);
-                    self.gfx.mirrors_seen = render_mirrors(r, scene, w, p, lighting, MirrorPick::All(&panel_cams), mirror_view);
+                    self.gfx.mirrors_seen = render_mirrors(r, scene, w, p, lighting, MirrorPick::All(skip), mirror_view, on_screen);
                     drawn = draw_limit;
                 }
             }
@@ -527,8 +526,9 @@ impl App {
                     w,
                     p,
                     lighting,
-                    MirrorPick::Turn(self.gfx.mirror_turn, &panel_cams),
+                    MirrorPick::Turn(self.gfx.mirror_turn, skip),
                     mirror_view,
+                    on_screen,
                 );
             }
         }

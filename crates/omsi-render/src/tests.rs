@@ -1458,6 +1458,7 @@ mod lamp_shadows;
 mod light_grid;
 mod light_maps;
 mod more;
+mod night_coverage;
 mod prepass_reach;
 mod transparency;
 mod vanilla_lighting;

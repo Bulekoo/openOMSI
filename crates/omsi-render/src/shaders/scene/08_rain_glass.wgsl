@@ -76,6 +76,9 @@ fn rain_turn(q: vec2<f32>, a: f32) -> vec2<f32> {
 }
 
 fn rain_glass(world: vec3<f32>, uv: vec2<f32>, n: vec3<f32>, water: f32, t: f32, outside_in: bool, pane: vec3<f32>) -> RainGlass {
+    // Match the collector map's larger visible caps (#3019). Scale the cell spacing
+    // too, so larger drops replace fine specks rather than multiplying their cover.
+    let drop_scale = 2.0;
     let wet = clamp(water, 0.0, 1.0);
     let wiped_film = clamp(-water * 25.0, 0.0, 1.0);
     var g: RainGlass;
@@ -239,7 +242,7 @@ fn rain_glass(world: vec3<f32>, uv: vec2<f32>, n: vec3<f32>, water: f32, t: f32,
         let y0 = (seg + 0.02 + 0.08 * h3.x) * seg_h;
         let x0 = (lane + 0.4 + 0.2 * h3.y) * lane_w;
         let drift = (h2.y - 0.5) * 0.025;
-        let rh = (0.001 + 0.0012 * h1.y * h1.y) * mix(0.3, 1.0, smoothstep(0.0, sit, tau));
+        let rh = drop_scale * (0.001 + 0.0012 * h1.y * h1.y) * mix(0.3, 1.0, smoothstep(0.0, sit, tau));
         let bend = 0.0015 * sin(travel * (30.0 + 25.0 * h3.y) + h2.x * 6.283185);
         var head_d = vec2<f32>(qr.x - (x0 + drift * travel + bend), qr.y - (y0 + travel));
         head_d.y *= select(0.65, 1.0, head_d.y > 0.0);
@@ -288,7 +291,7 @@ fn rain_glass(world: vec3<f32>, uv: vec2<f32>, n: vec3<f32>, water: f32, t: f32,
     for (var layer = 0; layer < 3; layer = layer + 1) {
         if (tracked && layer == 0) { continue; }
         let fl = f32(layer);
-        let cellsz = select(select(0.018, 0.005, layer == 1), 0.0085, layer == 2);
+        let cellsz = drop_scale * select(select(0.018, 0.005, layer == 1), 0.0085, layer == 2);
         let turn = 0.61 + fl * 1.37;
         let g2 = rain_turn(q, turn) / cellsz + vec2<f32>(fl * 17.3, fl * 5.1);
         let c = floor(g2);
@@ -338,7 +341,7 @@ fn rain_glass(world: vec3<f32>, uv: vec2<f32>, n: vec3<f32>, water: f32, t: f32,
         d = d / max(wob, 0.4);
         d.y = d.y * mix(1.0, 0.88, h.y * h.y * h3.x);
         // Large drops belong to moving water; stationary spray stays fine.
-        let radius = min(r * cellsz, 0.0015);
+        let radius = min(r * cellsz, drop_scale * 0.0015);
         let drop = rain_dome(d, radius, px);
         let cover = drop.z * present;
         if (cover > best) {

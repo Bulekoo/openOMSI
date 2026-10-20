@@ -333,6 +333,7 @@ flags! {
     OMSI_NAV_LINES: Text, Test, Use, "-", "Offscreen: open the city map's lines panel on the line with this number (a route, then a departure time, after semicolons: 5;1 or 5;1;14:07, which opens its timetable).";
     OMSI_NAV_MAP: Bool, Test, Use, "off", "Open the navigation map.";
     OMSI_NAV_MAP_MPP: Num, Test, Use, "2.5", "Navigation map zoom in metres per pixel.";
+    OMSI_NAV_ORIENT: Text, Test, Use, "map", "Offscreen: how the city map is turned: map (as it is drawn), north (real north up, where the package says it lies) or heading (the bus's heading up).";
     OMSI_NAV_PROBE: Text, Test, Use, "-", "x,y[,r]: the network lanes that start or end within r of that point.";
     OMSI_NAV_SCHEDULE: Bool, Test, Use, "off", "Navigation map shows the schedule.";
     OMSI_NOZCHECK_BIAS: Bool, Switch, Use, "off", "The old reading of [matl_noZcheck] (A/B).";

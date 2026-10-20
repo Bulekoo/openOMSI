@@ -163,14 +163,14 @@ const LOOKS = {
     park: '#d3eac1', built: '#efebe3', sport: '#cfe9c8', river: '#a6d3f5', border: '#b9a9c9',
     road: '#ffffff', roadEdge: '#dcd8cf', main: '#fbe08a', mainEdge: '#e5bd55', foot: '#f8f7f3', footEdge: '#e4e1d9', area: '#efedea', areaEdge: '#dedbd6',
     roof: '#e9e6df', roofEdge: '#d6d1c7', shadow: 'rgba(60,64,52,0.10)', rail: '#b2afa8', railDash: '#ffffff', tram: '#a59fb2',
-    route: '#0a84ff', routeEdge: '#0060df', pin: '#ffffff', card: 'rgba(255,255,255,0.96)', cardShadow: 'rgba(0,0,0,0.16)', text: '#1c1c1e', dim: '#6e6e73', entry: '#ff9f0a',
+    route: '#0a84ff', routeEdge: '#0060df', pin: '#ffffff', card: 'rgba(255,255,255,0.96)', cardShadow: 'rgba(0,0,0,0.16)', text: '#1c1c1e', dim: '#6e6e73', entry: '#ff9f0a', end: '#1c1c1e',
   },
   dark: {
     land: '#22322a', grass: '#22322a', forest: '#1f3527', field: '#2b2f29', paved: '#2e3033', sand: '#36332b', water: '#1d3550',
     park: '#213628', built: '#2c2d31', sport: '#22362b', river: '#1d3550', border: '#6b5d7a',
     road: '#4a4d53', roadEdge: '#323438', main: '#8a7a4e', mainEdge: '#5c5236', foot: '#34363a', footEdge: '#2c2e31', area: '#313337', areaEdge: '#2a2c2f',
     roof: '#3a3c41', roofEdge: '#46494f', shadow: 'rgba(0,0,0,0.28)', rail: '#5d5f64', railDash: '#2f3134', tram: '#6a6478',
-    route: '#0a84ff', routeEdge: '#0a5bd1', pin: '#f2f2f7', card: 'rgba(44,44,46,0.96)', cardShadow: 'rgba(0,0,0,0.5)', text: '#f2f2f7', dim: '#98989d', entry: '#ff9f0a',
+    route: '#0a84ff', routeEdge: '#0a5bd1', pin: '#f2f2f7', card: 'rgba(44,44,46,0.96)', cardShadow: 'rgba(0,0,0,0.5)', text: '#f2f2f7', dim: '#98989d', entry: '#ff9f0a', end: '#1c1c1e',
   },
 };
 let LOOK = LOOKS.light;
@@ -711,14 +711,21 @@ export function RouteMap({ map, date, trip, stops = [], entry = -1, onEntry, hei
       const x = X(s.at[0]);
       const y = Y(s.at[1]);
       if (x < -300 || x > W + 300 || y < -30 || y > H + 30) continue;
+      const end = stops.length && (s.k === 0 || s.k === stops.length - 1);
       g.fillStyle = LOOK.pin;
       g.beginPath();
-      g.arc(x, y, 5.5, 0, Math.PI * 2);
+      g.arc(x, y, end ? 7 : 5.5, 0, Math.PI * 2);
       g.fill();
-      g.fillStyle = routeColor;
+      g.fillStyle = end ? LOOK.end : routeColor;
       g.beginPath();
-      g.arc(x, y, 3.6, 0, Math.PI * 2);
+      g.arc(x, y, end ? 5 : 3.6, 0, Math.PI * 2);
       g.fill();
+      if (end && s.k === 0) {
+        g.fillStyle = LOOK.pin;
+        g.beginPath();
+        g.arc(x, y, 2.4, 0, Math.PI * 2);
+        g.fill();
+      }
       const st = stops[s.k];
       if (st) {
         const label = `${st.time}  ${st.name}`;

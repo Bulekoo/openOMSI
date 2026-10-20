@@ -2,7 +2,7 @@
 // OMSI 2 folder is never written to), the installs under way, and the installed mods.
 
 import { html, useState, useEffect } from '../../vendor/preact-htm.js';
-import { useStore, set, toast } from '../store.js';
+import { useStore, set, toast, remembered, remember } from '../store.js';
 import { t, bytes, ago } from '../i18n.js';
 import { call, onPhone } from '../api.js';
 import { Icon } from '../icons.js';
@@ -10,6 +10,20 @@ import { Button, Card, Dialog, Empty, PageHead, Search, Select, Spinner, Tag, To
 import { pollNow, loadContent, cached, installMod, jobRunning } from '../data.js';
 
 const KIND = { bus: ['bus', 'Bus'], map: ['map', 'Map'], archive: ['folder', 'Archive'], other: ['puzzle', 'Other'] };
+
+/** What a mod holds, by the game's folder it put things into, in the order it lists them:
+ *  ["Vehicles/MAN_SD202", "Fonts/a.oft", "Fonts/b.oft"] → [["Vehicles", ["MAN_SD202"]], ["Fonts", ["a.oft", "b.oft"]]]. */
+export function modTree(paths) {
+  const out = [];
+  for (const p of paths || []) {
+    const i = p.indexOf('/');
+    const [folder, rest] = i > 0 ? [p.slice(0, i), p.slice(i + 1)] : ['', p];
+    const group = out.find(([f]) => f.toLowerCase() === folder.toLowerCase());
+    if (group) group[1].push(rest);
+    else out.push([folder, [rest]]);
+  }
+  return out;
+}
 
 export function ModsPage() {
   const s = useStore();
@@ -47,6 +61,23 @@ export function ModsPage() {
     read();
     loadContent();
   };
+  const [declined, setDeclined] = useState(() => remembered('hofDeclined', '').split('\n').filter(Boolean));
+  const decline = (map) => {
+    const next = [...declined, map];
+    remember('hofDeclined', next.join('\n'));
+    setDeclined(next);
+  };
+  const shareHofs = async (map) => {
+    try {
+      const added = await call('share_map_hofs', { map });
+      toast(added > 0 ? t('HOF files added for every bus.') : t('These HOF files were already there.'), 'ok');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+    read();
+    loadContent();
+  };
+  const offers = (status?.hof_offers || []).filter((o) => !declined.includes(o.map));
   const jobs = s.poll.jobs || [];
   const all = status?.installed || [];
   const counts = { all: all.length, bus: 0, map: 0, archive: 0, other: 0, off: 0 };
@@ -115,24 +146,33 @@ export function ModsPage() {
             : mods.length === 0
               ? html`<${Empty} icon="puzzle" text=${q || kind !== 'all' ? 'No mod matches.' : 'No mods yet. Choose a folder or an archive on the right, or drop one onto the window.'} />`
               : html`<div class="list" style="margin:0 -8px">
-                  ${mods.map((m) => html`<div>
+                  ${mods.map((m) => {
+                    const tree = modTree(m.paths);
+                    // (the game's folders it holds and how many in each, as the game's own launcher said:
+                    // "Vehicles 1, Fonts 2"; an archive is the one file)
+                    const holds = m.kind === 'archive' ? '' : tree.filter(([f]) => f).map(([f, items]) => `${f} ${items.length}`).join(', ');
+                    return html`<div>
                     <div class="list-item" onClick=${() => setOpen(open === m.id ? null : m.id)}>
                       <${Icon} name=${KIND[m.kind]?.[0] || 'puzzle'} />
                       <div class="grow" style="min-width:0">
                         <div class="title ellipsis" style=${m.enabled ? '' : 'opacity:.55'}>${m.name}</div>
-                        <div class="sub">${t(KIND[m.kind]?.[1] || 'Other')} - ${bytes(m.bytes)}${m.installed ? ` - ${ago(m.installed)}` : ''}</div>
+                        <div class="sub">${[t(KIND[m.kind]?.[1] || 'Other'), holds, bytes(m.bytes), m.installed ? ago(m.installed) : !m.noted ? t('found in the content folder') : ''].filter(Boolean).join(' - ')}</div>
                       </div>
                       ${busy[m.id] && html`<${Spinner} />`}
                       <div onClick=${(e) => e.stopPropagation()}><${Toggle} checked=${m.enabled} disabled=${!!busy[m.id]} onChange=${(on) => toggle(m, on)} /></div>
                       <${Button} small kind="ghost" icon="trash" disabled=${!!busy[m.id]} title="Delete this mod (asks first; switch it off instead to keep it)" onClick=${(e) => (e.stopPropagation(), remove(m))} />
                     </div>
-                    ${open === m.id && html`<div style="padding:4px 12px 12px 44px" class="muted small selectable">${m.paths.map((p) => html`<div>${p}</div>`)}</div>`}
-                  </div>`)}
+                    ${open === m.id && html`<div style="padding:4px 12px 12px 44px" class="small selectable stack">${tree.map(([folder, items]) => html`<div class="row" style="align-items:baseline;gap:12px">
+                      <b class="muted" style="flex:none;min-width:96px">${folder}</b><span class="dim" style="min-width:0;overflow-wrap:anywhere">${items.join(', ')}</span>
+                    </div>`)}</div>`}
+                  </div>`;
+                  })}
                 </div>`}
         </${Card}>
         ${status?.waiting?.length > 0 && html`<${Card} title="Waiting for their bus" hint="Packs installed before the bus they belong to: they go in once it is there.">
           <div class="row wrap">${status.waiting.map((w) => html`<${Tag}>${w}</${Tag}>`)}</div>
         </${Card}>`}
+        ${offers.map((o) => html`<${Notice} key=${o.map}><b>${t('Share the HOF files of {map} with every bus?', { map: o.map })}</b><div class="small selectable">${o.files.join(', ')}</div><div>${t("Every bus can then show this map's lines and destinations. Some maps have one HOF file per company or bus: sharing them can give buses with their own IBIS wrong destinations.")}</div><div class="row wrap" style="gap:8px;margin-top:6px"><${Button} small kind="primary" label="Share with every bus" onClick=${() => shareHofs(o.map)} /><${Button} small label="Not for this map" onClick=${() => decline(o.map)} /></div></${Notice}>`)}
         ${status?.hof_warnings?.length > 0 && html`<${Notice} kind="warn"><b>${t('Map HOF issue')}</b><div>${t('Some map HOF files could not be added. Check launcher.log for details.')}</div><ul class="small selectable" style="margin:4px 0 0;padding-left:18px">${status.hof_warnings.slice(0, 10).map((warning) => html`<li>${warning}</li>`)}</ul></${Notice}>`}
         ${status?.archives?.length > 0 && html`<${Card} title="Archives" hint="Read in place by the game, without unpacking.">
           <table class="table"><tbody>${status.archives.map(([n, b]) => html`<tr><td>${n}</td><td class="num muted" style="text-align:right">${bytes(b)}</td></tr>`)}</tbody></table>

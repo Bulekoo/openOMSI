@@ -8,6 +8,9 @@ const RAIN_LIMIT: usize = LIMIT - 4; // leave room for runoff from the wiper ban
 const MAP: usize = 512;
 const TRAIL: usize = 4;
 const BAND: usize = 32;
+// Enlarge the visible footprint without changing the water volume, pinning or runoff.
+// Millimetre-sized caps otherwise fade into subpixel specks from the driver's seat (#3019).
+const DROP_SCALE: f32 = 2.0;
 
 #[derive(Clone)]
 pub struct Drop {
@@ -34,6 +37,10 @@ impl Drop {
 
     fn radius(&self) -> f32 {
         self.radius
+    }
+
+    fn paint_radius(&self) -> f32 {
+        self.radius().min(0.0022) * DROP_SCALE
     }
 
     pub fn displace(&mut self, pos: Vec2, velocity: Vec2) {
@@ -80,7 +87,8 @@ impl Drops {
             canvas: Canvas::new(size),
         };
         // Match an already wet script state without making all the drops the same age.
-        for _ in 0..((wet * size.element_product() * 60.0) as usize).min(RAIN_LIMIT) {
+        // Larger visible caps need fewer collectors to obstruct the view.
+        for _ in 0..((wet * size.element_product() * 30.0) as usize).min(RAIN_LIMIT) {
             let pos = Vec2::new(this.random(), this.random()) * size;
             let water = 0.4 + this.random().powi(3) * 14.0;
             this.drops.push(Drop::new(pos, water));
@@ -139,7 +147,7 @@ impl Drops {
             drop.previous = drop.pos;
         }
         for _ in 0..steps {
-            self.arrivals += step * rain * self.size.element_product() * 24.0;
+            self.arrivals += step * rain * self.size.element_product() * 12.0;
             while self.arrivals >= 1.0 {
                 self.arrivals -= 1.0;
                 let pos = Vec2::new(self.random(), self.random()) * self.size;
@@ -288,7 +296,7 @@ impl Canvas {
         self.dirty.clear();
         for drop in drops {
             let pos = drop.pos;
-            let radius = drop.radius().min(0.0022);
+            let radius = drop.paint_radius();
             let tail = drop.tail;
             // A short, narrowing filament is distinct from the rounded moving head.
             if drop.velocity.length_squared() > 0.0001 {
@@ -388,7 +396,7 @@ mod tests {
         }
         for i in 0..drops.drops.len() {
             let drop = &drops.drops[i];
-            let (pos, radius, tail) = (drop.pos, drop.radius().min(0.0022), drop.tail);
+            let (pos, radius, tail) = (drop.pos, drop.paint_radius(), drop.tail);
             if drop.velocity.length_squared() > 0.0001 {
                 let mut start = pos;
                 for (k, &end) in tail.iter().enumerate() {
@@ -440,6 +448,41 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn visible_caps_cover_more_glass_without_changing_their_water() {
+        let drop = Drop::new(Vec2::splat(0.5), 8.0);
+        let mut physical = Canvas::new(Vec2::ONE);
+        physical.stamp(drop.pos, drop.pos, drop.radius(), false);
+        let mut visible = Canvas::new(Vec2::ONE);
+        visible.paint(std::slice::from_ref(&drop));
+        let coverage = |canvas: &Canvas| {
+            canvas
+                .image
+                .rgba
+                .chunks_exact(4)
+                .map(|p| p[3] as u32)
+                .sum::<u32>()
+        };
+        assert!(coverage(&visible) > coverage(&physical) * 3);
+        assert_eq!(drop.water, 8.0);
+        assert!((drop.radius() - 0.002).abs() < 1e-6);
+        // Wiping the last drop also removes its enlarged footprint.
+        assert!(visible.paint(&[]));
+        assert!(visible.image.rgba.chunks_exact(4).all(|p| p[3] == 0));
+        assert!(!visible.paint(&[]));
+    }
+
+    #[test]
+    fn larger_caps_use_fewer_collectors_and_still_rewet_the_pane() {
+        assert_eq!(Drops::new(Vec2::ONE, 1.0, 7).drops.len(), 30);
+        let mut drops = Drops::new(Vec2::ONE, 0.0, 7);
+        drops.advance(1.0, 1.0, Vec2::ZERO, Vec2::ZERO, 0.0, |_| 1.0);
+        assert!((10..=12).contains(&drops.drops.len()));
+        let mut wiped = Drops::new(Vec2::ONE, 0.0, 7);
+        wiped.advance(1.0, 1.0, Vec2::ZERO, Vec2::ZERO, 0.0, |_| -0.04);
+        assert!(wiped.drops.is_empty());
     }
 
     #[test]

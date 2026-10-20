@@ -166,7 +166,10 @@ jobs:
         shell: bash
         run: |
           export PATH="/c/Program Files (x86)/NSIS:$PATH"
-          command -v makensis >/dev/null || choco install nsis -y --no-progress
+          for i in 1 2 3 4 5; do
+            command -v makensis >/dev/null && break
+            choco install nsis -y --no-progress || sleep 30
+          done
           sh scripts/windows/make-installer.sh dist/windows "out/openOMSI-$OPENOMSI_VERSION-windows-${{ matrix.arch }}-setup.exe"
       - name: Installer install and uninstall
         if: matrix.arch == 'x64'

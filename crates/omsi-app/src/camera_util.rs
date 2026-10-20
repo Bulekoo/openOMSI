@@ -216,6 +216,7 @@ pub(crate) fn render_mirrors(
     lighting: &omsi_render::Lighting,
     pick: MirrorPick,
     view: Option<(Camera, f32)>,
+    on_screen: &[usize],
 ) -> usize {
     // (aimed from the eye of the view being drawn, as Omsi.exe aims them - from the
     // driver's without one)
@@ -281,7 +282,7 @@ pub(crate) fn render_mirrors(
         MirrorPick::Only(set) => (0..cams.len()).filter(|i| set.contains(i)).collect(),
         MirrorPick::All(skip) | MirrorPick::Turn(_, skip) => (0..cams.len())
             .filter(|i| !skip.contains(i))
-            .filter(|&i| cams[i].0.fixed || view.as_ref().map(|v| mirror_in_view(cams[i].1 .0, cams[i].0.extra.unwrap_or(0.0).max(MIRROR_MIN_RADIUS), v)).unwrap_or(true))
+            .filter(|&i| cams[i].0.fixed || on_screen.contains(&i) || view.as_ref().map(|v| mirror_in_view(cams[i].1 .0, cams[i].0.extra.unwrap_or(0.0).max(MIRROR_MIN_RADIUS), v)).unwrap_or(true))
             .collect(),
     };
     if seen.is_empty() {

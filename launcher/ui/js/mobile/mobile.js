@@ -11,7 +11,7 @@ import { Spinner, Toggle, Slider } from '../ui.js';
 import { BusPreview } from '../preview.js';
 import { RouteMap } from '../routemap.js';
 import { choose, curMap, curBus, curLine, curTour, pickedTrip, realTime, realDate, start, weatherName, weatherOfItsOwn, askJoined, noServerBus, mapName, serverBuses, busFile } from '../data.js';
-import { hms, mapPicture, tripAt, depotRun, pickTrip, lineMatches, findTours, chooseLine, chooseTour, setSeason, localNow, SEASONS, PHASES } from '../pages/drive.js';
+import { hms, mapPicture, tripAt, depotRun, pickTrip, lineMatches, findTours, chooseLine, chooseTour, setSeason, localNow, SEASONS, PHASES, TripEnds, weatherFacts, entryName } from '../pages/drive.js';
 import { MultiplayerPage } from '../pages/multiplayer.js';
 import { ProfilePage } from '../pages/profile.js';
 import { ModsPage } from '../pages/mods.js';
@@ -137,7 +137,7 @@ function MobileDrive() {
         ${!c.free && row('line', 'route', 'Line', line ? line.name : s.lines.loading ? html`<${Spinner} />` : '-')}
         ${!c.free && row('tour', 'calendar', 'Tour', tour ? `${tour.number} - ${tour.days}` : '-')}
         ${!c.free && row('trip', 'history', 'First trip', trip ? `${hms(trip.departure)} ${trip.from}` : '-')}
-        ${row('entry', 'person', 'Start at', c.entry < 0 ? t('Automatic') : m?.entry_points[c.entry]?.name || '-')}
+        ${row('entry', 'person', 'Start at', c.entry < 0 ? t('Automatic') : (m?.entry_points[c.entry] ? entryName(m.entry_points[c.entry]) : '-'))}
       </div>
       <div class="m-group">
         ${row('time', 'clock', 'Time and date', joined ? srv.time || '-' : `${hhmm(c.time)} - ${c.date}`, joined ? t("(the server's clock)") : rt(c), joined)}
@@ -238,7 +238,7 @@ function TourSheet({ close }) {
     ${shown.map(({ tour: x, ended, at, via }) => {
       const trip = x.trips[at];
       const found = tq && trip && !x.number.toLowerCase().includes(tq);
-      const what = found ? `${hms(trip.departure)} ${trip.from} → ${trip.terminus}${via ? ` (${t('via {stop}', { stop: via })})` : ''}` : `${x.days} - ${x.trips.length} ${t('trips')}${x.trips.length ? ` - ${hms(x.first)}-${hms(x.last)}` : ''}`;
+      const what = found ? html`${hms(trip.departure)} <${TripEnds} trip=${trip} />${via ? ` (${t('via {stop}', { stop: via })})` : ''}` : `${x.days} - ${x.trips.length} ${t('trips')}${x.trips.length ? ` - ${hms(x.first)}-${hms(x.last)}` : ''}`;
       return pick(x.number === s.choice.tour, () => (chooseTour(x, found ? trip : null), close()), html`<span class="m-pick-text"><b>${t('Tour')} ${x.number}</b><small>${what}${!x.runs ? ` - ${t('not on this day')}` : ended ? ` - ${t('ended')}` : ''}</small></span>`, x.runs && !ended ? '' : ' dim');
     })}
   </div>`;
@@ -254,7 +254,7 @@ function TripSheet({ close }) {
   const trip = tour.trips[cur];
   return html`<div class="m-split">
     <div class="m-split-list">
-      ${tour.trips.map((x, i) => pick(i === cur, () => pickTrip(x), html`<span class="m-time">${hms(x.departure)}</span>${depotRun(x) ? html`<span class="muted">${t('Depot run')}</span>` : html`<span class="line-badge">${x.line}</span>`}<span class="m-pick-text"><b>${x.terminus}</b><small>${t('From')} ${x.from} - ${hms(x.arrival)}</small></span>`))}
+      ${tour.trips.map((x, i) => pick(i === cur, () => pickTrip(x), html`<span class="m-time">${hms(x.departure)}<small>${hms(x.arrival)}</small></span>${depotRun(x) ? html`<span class="muted">${t('Depot run')}</span>` : html`<span class="line-badge">${x.line}</span>`}<span class="m-pick-text"><${TripEnds} trip=${x} stack /></span>`))}
     </div>
     <div class="m-split-map">
       ${trip && html`<${RouteMap} map=${c.map} date=${c.date} trip=${trip.name} entry=${c.entry} height=${0} stops=${trip.stops.map((x) => ({ time: hms(x.dep || x.arr), name: x.name }))} onEntry=${(entry) => choose({ entry })} />`}
@@ -270,7 +270,7 @@ function EntrySheet({ close }) {
   return html`<div class="m-split">
     <div class="m-split-list">
       ${pick(c.entry < 0, () => (choose({ entry: -1 }), close()), html`<span class="m-pick-text"><b>${t('Automatic')}</b><small>${t(c.free ? "Automatic (the map's first)" : 'Automatic (nearest to the first stop)')}</small></span>`)}
-      ${m.entry_points.map((e, i) => pick(c.entry === i, () => (choose({ entry: i }), close()), html`<span class="m-pick-text"><b>${e.name}</b></span>`))}
+      ${m.entry_points.map((e, i) => pick(c.entry === i, () => (choose({ entry: i }), close()), html`<span class="m-pick-text"><b>${entryName(e)}</b></span>`))}
     </div>
     <div class="m-split-map"><${RouteMap} map=${c.map} date=${c.date} trip="" entry=${c.entry} height=${0} onEntry=${(entry) => choose({ entry })} /></div>
   </div>`;
@@ -308,6 +308,6 @@ function WeatherSheet({ close }) {
   return html`<div>
     ${pick(!s.choice.weather, () => (choose({ weather: '' }), close()), html`<span class="m-pick-text"><b>${t('Natural weather')}</b><small>${t('Develops by itself through the day and the season')}</small></span>`)}
     ${weatherOfItsOwn(s.choice.weather) && pick(true, close, html`<span class="m-pick-text"><b>${weatherName(s.choice.weather)}</b></span>`)}
-    ${(s.weather || []).map((w) => pick(s.choice.weather === w.file, () => (choose({ weather: w.file }), close()), html`<span class="m-pick-text"><b>${w.name}</b><small>${Math.round(w.temp)} °C - ${w.precip} - ${w.fog_m >= 20000 ? t('clear air') : `${Math.round(w.fog_m)} m`}</small></span>`))}
+    ${(s.weather || []).map((w) => pick(s.choice.weather === w.file, () => (choose({ weather: w.file }), close()), html`<span class="m-pick-text"><b>${w.name}</b><small>${weatherFacts(w)}</small></span>`))}
   </div>`;
 }

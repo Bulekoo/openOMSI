@@ -204,12 +204,13 @@ impl MeshDef {
         self.visible_any.iter().filter(|g| !g.is_empty())
     }
 
-    /// Whether the mesh is shown with its variables read by `var` (a variable the vehicle
-    /// does not have reads 0); None: the mesh has no condition.
+    /// Whether the mesh is shown with its variables read by `var`. A condition on a
+    /// missing variable is ignored; a declared variable at zero is still compared.
+    /// None: the mesh has no condition.
     pub fn visible_by(&self, var: impl Fn(&str) -> Option<f32>) -> Option<bool> {
         let mut groups = self.visible_groups().peekable();
         groups.peek()?;
-        Some(groups.any(|g| g.iter().all(|c| c.holds(var(&c.variable).unwrap_or(0.0)))))
+        Some(groups.any(|g| g.iter().all(|c| var(&c.variable).is_none_or(|x| c.holds(x)))))
     }
 }
 
@@ -1300,6 +1301,20 @@ pub fn load_texchanges(base: &Path, files: &[String]) -> Vec<TexChangeMaster> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn missing_visible_names_ignore_comparisons_but_declared_zero_is_compared() {
+        for value in 0..=2 {
+            let model = super::Model::parse(&omsi_cfg::CfgFile::from_str(
+                "visibility.cfg",
+                &format!("[mesh]\nindicator.o3d\n[visible]\nmissing\n{value}\n"),
+            ));
+            let mesh = &model.meshes[0];
+            assert_eq!(mesh.visible_by(|_| None), Some(true));
+            assert_eq!(mesh.visible_by(|_| Some(0.0)), Some(value == 0));
+        }
+        assert_eq!(super::MeshDef::default().visible_by(|_| None), None);
+    }
+
     /// `[visible]` conditions combined (#729): plain `[visible]` blocks alone keep the last,
     /// with a range they all hold, a `!` turns one round, `||` between blocks gives another
     /// group; one alone is as before.

@@ -88,40 +88,12 @@ impl VehicleInstance {
             };
             state.vars[id as usize] = value;
         }
-        // Model directives such as [visible] refer to vehicle variables too. Register their
-        // names before mesh properties are resolved, even when the vehicle's varlists omit
-        // them; scripts and model directives then share the same runtime variable table.
-        // A model-only variable has no script slot to initialise it: it starts at the value
-        // its meshes' [visible] ask for when they all ask for the same one (a display shown
-        // as the model means it), and at 0 when several meshes pick between values with it
-        // (a selector: the one for 0 shows, as with a declared variable nobody set).
-        let mut model_only: Vec<(String, Option<f32>)> = Vec::new();
-        for (name, value) in ty.model.meshes.iter().filter_map(|m| m.visible.as_ref()) {
-            let key = name.to_ascii_lowercase();
-            if var_index.contains_key(&key) {
-                continue;
-            }
-            match model_only.iter_mut().find(|(k, _)| *k == key) {
-                Some((_, v)) => {
-                    if *v != Some(*value) {
-                        *v = None;
-                    }
-                }
-                None => model_only.push((key, Some(*value))),
-            }
-        }
-        // (the variables of the further conditions - a range, a negated one, the second of a
-        // mesh's `[visible]`s - start at 0)
+        let mut model_only_vars: Vec<String> = Vec::new();
         for c in ty.model.meshes.iter().flat_map(|m| m.visible_groups()).flatten() {
             let key = c.variable.to_ascii_lowercase();
-            if !var_index.contains_key(&key) && !model_only.iter().any(|(k, _)| *k == key) {
-                model_only.push((key, None));
+            if !var_index.contains_key(&key) && !model_only_vars.contains(&key) {
+                model_only_vars.push(key);
             }
-        }
-        for (key, value) in model_only {
-            let id = state.vars.len() as omsi_script::VarId;
-            state.vars.push(value.unwrap_or(0.0));
-            var_index.insert(key, id);
         }
         // `Axle_Springfactor_*` (varlist_roadvehicle.txt): the engine's spring scale, which
         // air-suspension scripts overwrite with their bellows pressure; a steel-sprung bus
@@ -145,8 +117,14 @@ impl VehicleInstance {
         if let Some(scheme) = host.paint_scheme {
             let scheme = scheme.filter(|i| *i < ty.paint_schemes.len());
             let mut put = |name: &str, v: f32| {
-                if let Some(id) = var_index.get(&name.to_ascii_lowercase()) {
-                    state.vars[*id as usize] = v;
+                let key = name.to_ascii_lowercase();
+                match var_index.get(&key) {
+                    Some(id) => state.vars[*id as usize] = v,
+                    None if model_only_vars.contains(&key) => {
+                        var_index.insert(key, state.vars.len() as omsi_script::VarId);
+                        state.vars.push(v);
+                    }
+                    None => {}
                 }
             };
             put("Colorscheme", scheme.map(|i| i as f32).unwrap_or(-1.0));
@@ -252,6 +230,7 @@ impl VehicleInstance {
                 .flat_map(|i| [format!("PAX_Entry{i}_Req"), format!("PAX_Exit{i}_Req"), format!("PAX_Entry{i}_Busy"), format!("PAX_Exit{i}_Busy")])
                 .filter_map(|n| v(&n))
                 .collect(),
+            v_cables: control_cables(&ty),
             v_accel: [v("A_Trans_X"), v("A_Trans_Y"), v("A_Trans_Z")],
             v_wheels,
             ty,
@@ -271,6 +250,7 @@ impl VehicleInstance {
             ground: None,
             trailers: Vec::new(),
             skin_rest: Vec::new(),
+            skin_plans: SkinPlans::default(),
             collision: None,
             dynamic_boxes: Vec::new(),
             dynamic_impacts: Vec::new(),
@@ -296,6 +276,7 @@ impl VehicleInstance {
             ai_visuals_missed: 0.0,
             trailers_stepped: false,
             var_index: std::sync::Arc::new(var_index),
+            model_only_vars,
             props_plan: PropsPlan::default(),
             pax_vars: std::sync::OnceLock::new(),
             engine_ids: std::sync::OnceLock::new(),
@@ -443,4 +424,14 @@ impl VehicleInstance {
             }
         }
     }
+}
+
+pub(super) fn control_cables(ty: &VehicleType) -> Vec<(omsi_script::VarId, omsi_script::VarId)> {
+    let v = |name: &str| ty.program.var(name);
+    let mut cables: Vec<_> = ty.def.control_cable_front.iter().chain(&ty.def.control_cable_back)
+        .filter_map(|c| Some((v(c.lines.get(3)?)?, v(c.lines.get(2)?)?)))
+        .collect();
+    cables.sort_unstable();
+    cables.dedup();
+    cables
 }

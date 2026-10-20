@@ -165,7 +165,8 @@ fn fs_fog_lamps(in: FogVsOut) -> @location(0) vec4<f32> {
         return vec4<f32>(seen, 0.0, 0.0, 0.0);
     }
     let r = pixel_ray(floor(in.clip.xy) * 2.0 + vec2<f32>(0.5));
-    let ign = fract(52.9829189 * fract(dot(floor(in.clip.xy), vec2<f32>(0.06711056, 0.00583715))));
+    let q = vec2<i32>(in.clip.xy) & vec2<i32>(1);
+    let ign = (f32(q.x * 2 + (q.x ^ q.y)) + 0.5) * 0.25;
     // (the lamps' halo and cones only from the mist's and fog's droplets: fp.size.w)
     let l = (lamp_airlight(camera.cam_pos.xyz, r.xyz, 0.0, r.w, ign) * fp.size.w + sun_shafts(camera.cam_pos.xyz, r.xyz, r.w, ign)) * enh.exposure.x;
     return vec4<f32>(clamp(l, vec3<f32>(-4000.0), vec3<f32>(4000.0)), r.w);

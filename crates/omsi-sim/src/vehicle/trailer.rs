@@ -106,6 +106,8 @@ pub struct TrailerPart {
     pub(super) props_plan: PropsPlan,
     /// The meshes' transforms in the modelled pose, for `[smoothskin]` (made when needed).
     pub(super) skin_rest: Vec<Mat4>,
+    /// What `[smoothskin]` needs of each skinned mesh, worked out once (see [`SkinPlan`]).
+    pub(super) skin_plans: SkinPlans,
     /// The part's own `[texttexture]`s, written from the leading vehicle's string
     /// variables (`[scriptshare]`: the rear section of an articulated bus shows the
     /// number and the destination the front's scripts set).
@@ -366,6 +368,7 @@ impl TrailerPart {
             text_textures: Vec::new(),
             axle_ids: AxleVarIds::default(),
             skin_rest: Vec::new(),
+            skin_plans: SkinPlans::default(),
             coupled_at: [true, false],
             runs_itself: super::car_run::uses_place_in_train(&ty),
             run: None,
@@ -407,7 +410,8 @@ impl TrailerPart {
         if self.skin_rest.len() != self.animators.len() {
             self.skin_rest = rest_transforms(&self.animators, n_vars);
         }
-        skin_vertices(&self.ty, i, &self.mesh_transforms, &self.skin_rest)
+        let plan = self.skin_plans.get(&self.ty, i)?;
+        skin_vertices(&self.ty, i, &self.mesh_transforms, &self.skin_rest, plan)
     }
 
     /// Prepare the part's text textures with fonts from `lib`.

@@ -17,14 +17,14 @@ test('bare addresses use WS in Auto, explicit ports use UDP', () => {
     assert.equal(serverJoinAddress(address, 'udp', info), address);
     assert.equal(serverJoinAddress(address, 'websocket', info), info.reached_at);
   }
-  for (const address of ['play.example.org:65536', 'play.example.org:notaport', '2001:db8::27015']) {
+  for (const address of ['play.example.org:65536', 'play.example.org:notaport', '2001:db8::27015', 'play.example.org/abc.trycloudflare.com/', 'play.example.org?abc.trycloudflare.com', 'play.example.org#abc.trycloudflare.com', 'evil.example\\.trycloudflare.com/ws', 'abc.trycloudflare.com@evil.example/ws', 'abc.trycloudflare.com:1@evil.example/ws', 'evil.example%5C.trycloudflare.com/ws', '.trycloudflare.com', 'a..trycloudflare.com', 'abc.trycloudflare.com:x/ws', '\u212Aevil.trycloudflare.com']) {
     assert.equal(serverJoinAddress(address, 'auto', info), info.reached_at);
   }
   assert.equal(serverJoinAddress('  play.example.org:27015  ', 'auto', info), 'play.example.org:27015');
 });
 
 test('web links, official alias and tunnels require WS', () => {
-  for (const address of ['https://play.example.org', 'http://play.example.org:27025', 'https://play.example.org:27015', 'ws://play.example.org/ws', 'wss://play.example.org/ws', 'openomsi', 'OpenOMSI', 'abc.trycloudflare.com', 'abc.trycloudflare.com/ws']) {
+  for (const address of ['https://play.example.org', 'http://play.example.org:27025', 'https://play.example.org:27015', 'ws://play.example.org/ws', 'wss://play.example.org/ws', 'openomsi', 'OpenOMSI', 'abc.trycloudflare.com', 'abc.trycloudflare.com/ws', 'abc.trycloudflare.com:443/ws', 'ABC.TryCloudflare.com/ws', 'me@abc.trycloudflare.com/ws']) {
     assert.equal(serverJoinAddress(address, 'auto', info), address);
     assert.equal(serverJoinAddress(address, 'websocket', info), address);
     assert.throws(() => serverJoinAddress(address, 'udp', info), /UDP needs the game's address/);

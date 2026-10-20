@@ -579,6 +579,7 @@ fn log_rigid_body(vehicle: &omsi_sim::VehicleInstance) {
 /// The player around a vehicle just set up, everything else at its start.
 fn new_player(vehicle: omsi_sim::VehicleInstance, render: scene::VehicleRender, trailer_renders: Vec<scene::VehicleRender>, bindings: Vec<omsi_content::KeyBinding>, rail_bound: bool, vt: &Arc<omsi_sim::VehicleType>) -> Player {
     static NEXT_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    let rail_placed_z = vehicle.position.z;
     Player {
         uid: NEXT_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
         vehicle,
@@ -605,6 +606,7 @@ fn new_player(vehicle: omsi_sim::VehicleInstance, render: scene::VehicleRender, 
         hand_coupled: 0,
         rail_bound,
         rail: None,
+        rail_placed_z,
         head: Vec3::ZERO,
         head_vel: Vec3::ZERO,
         head_omega: Vec3::ZERO,

@@ -822,6 +822,25 @@ pub(crate) struct NearLights {
     coronas: Vec<Corona>,
 }
 
+/// Which vehicles may draw their script-authored smoke particles. Scenery smoke and
+/// emissive vehicle effects (sparks, flares) are independent of this option.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VehicleSmoke {
+    All,
+    PlayerOnly,
+    Off,
+}
+
+impl VehicleSmoke {
+    pub fn from_setting(s: &str) -> Self {
+        match s {
+            "player" => Self::PlayerOnly,
+            "off" => Self::Off,
+            _ => Self::All,
+        }
+    }
+}
+
 /// Fill the scene's lights for this frame, the lamps' cones in the weather `cone`.
 pub fn collect(
     world: &World,
@@ -830,6 +849,8 @@ pub fn collect(
     camera_pos: DVec3,
     vehicles: &[&VehicleInstance],
     cone: ConeWeather,
+    smoke_mode: VehicleSmoke,
+    player_first: bool,
 ) {
     scene.lights.clear();
     scene.coronas.clear();
@@ -922,9 +943,16 @@ pub fn collect(
     let beams = cars_with_beams(vehicles, camera_pos);
     for (k, v) in vehicles.iter().enumerate() {
         vehicle_lights(v, &mut scene.coronas, &mut scene.lights, night, &world.cookie_fades, beams.contains(&k));
-        particle_sprites(&v.particles, &mut scene.smoke, &mut scene.coronas);
+        // light_vehicles puts the player's bus first (if any). LAN guests and AI
+        // traffic must not be mistaken for it when no bus is driven locally.
+        let vehicle_smoke_enabled = match smoke_mode {
+            VehicleSmoke::All => true,
+            VehicleSmoke::PlayerOnly => player_first && k == 0,
+            VehicleSmoke::Off => false,
+        };
+        particle_sprites_filtered(&v.particles, &mut scene.smoke, &mut scene.coronas, vehicle_smoke_enabled);
         for t in &v.trailers {
-            particle_sprites(&t.particles, &mut scene.smoke, &mut scene.coronas);
+            particle_sprites_filtered(&t.particles, &mut scene.smoke, &mut scene.coronas, vehicle_smoke_enabled);
         }
     }
     crate::puddles::keep_out_of_cab(vehicles, camera_pos, &mut scene.smoke, vehicle_smoke);
@@ -1004,7 +1032,15 @@ const SMOKE_Z_OFFSET: f32 = 0.1;
 /// The particles of a particle set as the renderer draws them: smoke blended over the scene,
 /// and the glowing ones (`--PS_emissive--`: sparks, rockets, a flame) as coronas.
 pub fn particle_sprites(set: &omsi_sim::particles::ParticleSet, smoke: &mut Vec<omsi_render::SmokeParticle>, coronas: &mut Vec<Corona>) {
+    particle_sprites_filtered(set, smoke, coronas, true);
+}
+
+/// Keep glowing effects even when a vehicle's non-emissive smoke is hidden.
+fn particle_sprites_filtered(set: &omsi_sim::particles::ParticleSet, smoke: &mut Vec<omsi_render::SmokeParticle>, coronas: &mut Vec<Corona>, smoke_enabled: bool) {
     for (p, def) in set.particles() {
+        if !smoke_enabled && !def.emissive {
+            continue;
+        }
         let alpha = p.alpha();
         if alpha <= 0.002 {
             continue;

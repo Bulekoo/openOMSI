@@ -103,6 +103,7 @@ struct SettingsPage: View {
                 SettingSelect(label: "Cloud quality", key: "cloud_quality", options: [("high", "High"), ("low", "Low")])
             }
             SettingSelect(label: "Rain quality", key: "rain_quality", options: [("high", "High"), ("medium", "Medium"), ("low", "Low")])
+            SettingSelect(label: "Vehicle smoke", key: "vehicle_smoke", options: [("all", "All vehicles"), ("player", "Player only"), ("off", "Off")])
             SettingToggle(label: "Windy trees", key: "windy_trees", fallback: true)
         }
     }

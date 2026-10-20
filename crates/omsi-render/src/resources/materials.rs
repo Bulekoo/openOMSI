@@ -173,6 +173,9 @@ pub struct MaterialExtra {
     /// variable, a vehicle mesh's `[visible]`: it glows by day as well (warning lamps,
     /// dashboard displays), not only at night.
     pub night_switched: bool,
+    /// A blended lamp with a completely clear diffuse placeholder takes its coverage
+    /// from the active night texture. The unpowered material keeps its own alpha.
+    pub night_alpha: bool,
     /// A display's text (`[useTextTexture]`): in the enhanced picture it glows a little
     /// by itself, as a lit matrix does, instead of taking only the light that reaches it
     /// under the bus's front overhang, where it was hardly readable by day.
@@ -786,11 +789,14 @@ impl Renderer {
                 envmap.map(|e| e.1).unwrap_or(0.0),
                 moisture,
                 // bit 1: a [matl_envmap_mask]; bit 2: a [matl_transmap]; bit 4: a vehicle's
-                // part that may be metal; bit 8: a body, never foliage (see the shaders)
+                // part that may be metal; bit 8: a body, never foliage; bit 16: the active
+                // night texture supplies a clear vehicle material's coverage
                 (if env_mask.is_some() { 1.0 } else { 0.0 })
                     + if extra.transmap_declared || transmap.is_some() { 2.0 } else { 0.0 }
                     + if extra.metal_ok { 4.0 } else { 0.0 }
-                    + if extra.solid { 8.0 } else { 0.0 },
+                    + if extra.solid { 8.0 } else { 0.0 }
+                    + if extra.night_alpha && alpha == AlphaMode::Blend && nightmap.is_some()
+                        && !extra.transmap_declared && transmap.is_none() { 16.0 } else { 0.0 },
             ],
             emissive: [emissive[0], emissive[1], emissive[2], if extra.rain_film { 2.0 } else if extra.glass { 1.0 } else if extra.led && extra.led_sign { -3.0 } else if extra.led { -2.0 } else if extra.display { -1.0 } else { 0.0 }],
             specular: extra.specular,

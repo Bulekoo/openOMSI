@@ -885,53 +885,105 @@ pub(crate) fn vehicle_temperatures(p: &Player) -> (f32, f32) {
     (outside, inside)
 }
 
-/// OMSI's information bar: the time, the speed, the kilometres driven this session and the
-/// bus's odometer, temperatures, the passengers aboard, and the trip with its next stop and delay.
-fn info_line(clock: &omsi_sim::SimClock, player: Option<&Player>, duty: Option<&crate::schedule::PlayerDuty>, passengers: Option<usize>, metres: f64, speed_limit: Option<f32>) -> String {
+#[derive(Default)]
+struct InfoLineData {
+    time: String,
+    speed: Option<String>,
+    speed_limit: Option<String>,
+    stop_requested: bool,
+    route: Option<(String, String)>,
+    next_stop: Option<String>,
+    delay: Option<String>,
+    distance: Option<String>,
+    odometer: Option<String>,
+    temperatures: Option<(String, String)>,
+    passengers: Option<(&'static str, String)>,
+    fuel: Option<f32>,
+}
+
+fn info_bar(data: InfoLineData) -> crate::ui::InfoBar {
+    use crate::ui::InfoItemStyle;
+    let item = crate::ui::InfoItem::new;
+    let mut info = crate::ui::InfoBar {
+        primary: vec![item("Time", data.time, InfoItemStyle::Clock)],
+        secondary: Vec::new(),
+    };
+    if let Some((line, terminus)) = data.route {
+        let mut route = item("Route", terminus, InfoItemStyle::Route);
+        route.badge = Some(line);
+        info.primary.insert(0, route);
+    }
+    if let Some(value) = data.speed {
+        info.primary.push(item("Speed", value, InfoItemStyle::Speed));
+    }
+    if let Some(value) = data.speed_limit {
+        info.primary.push(item("Speed limit", value, InfoItemStyle::SpeedLimit));
+    }
+    if data.stop_requested {
+        info.primary.push(item("Stop requested", String::new(), InfoItemStyle::Status));
+    }
+    if let Some(value) = data.next_stop {
+        info.primary.push(item("Next stop", value, InfoItemStyle::NextStop));
+    }
+    if let Some(value) = data.delay {
+        info.primary.push(item("Delay", value, InfoItemStyle::Delay));
+    }
+    if let Some(value) = data.distance {
+        info.secondary.push(item("Distance", value, InfoItemStyle::Detail));
+    }
+    if let Some(value) = data.odometer {
+        info.secondary.push(item("Odometer", value, InfoItemStyle::Detail));
+    }
+    if let Some((outside, cabin)) = data.temperatures {
+        info.secondary.push(item("Outside / cabin", format!("{outside} / {cabin}"), InfoItemStyle::Detail));
+    }
+    if let Some((label, value)) = data.passengers {
+        info.secondary.push(item(label, value, InfoItemStyle::Detail));
+    }
+    if let Some(progress) = data.fuel {
+        let mut fuel = item("Fuel", format!("{:.0}%", progress * 100.0), InfoItemStyle::Fuel);
+        fuel.progress = Some(progress);
+        info.secondary.push(fuel);
+    }
+    info
+}
+
+/// The information bar's driving details and vehicle data, kept as translated labels and live values.
+fn info_line(clock: &omsi_sim::SimClock, player: Option<&Player>, duty: Option<&crate::schedule::PlayerDuty>, passengers: Option<usize>, metres: f64, speed_limit: Option<f32>) -> crate::ui::InfoBar {
     let t = clock.time;
-    let mut parts = vec![format!("{:02}:{:02}:{:02}", ((t / 3600.0) as i64).rem_euclid(24), ((t % 3600.0) / 60.0) as i64, (t % 60.0) as i64)];
+    let mut data = InfoLineData { time: format!("{:02}:{:02}:{:02}", ((t / 3600.0) as i64).rem_euclid(24), ((t % 3600.0) / 60.0) as i64, (t % 60.0) as i64), ..Default::default() };
     if let Some(p) = player {
-        parts.push(crate::units::Units::now().speed_text(p.vehicle.physics.velocity_kmh().abs()));
+        data.speed = Some(crate::units::Units::now().speed_text(p.vehicle.physics.velocity_kmh().abs()));
         // the road's speed limit, as the navigator's top bar has it (#2476: its sign there is small)
-        if let Some(v) = speed_limit {
+        data.speed_limit = speed_limit.map(|v| {
             let u = crate::units::Units::now();
-            parts.push(format!("{} {:.0}", omsi_ui::tr("Speed limit"), u.speed_limit(v)));
-        }
+            format!("{:.0}", u.speed_limit(v))
+        });
         // a stop asked for, as OMSI's Shift+Z overlay says (#1767: seen from outside too)
-        if crate::navigator::stop_requested(&p.vehicle) {
-            parts.push(omsi_ui::tr("Stop requested").into_owned());
-        }
-        parts.push(distance_driven(metres));
+        data.stop_requested = crate::navigator::stop_requested(&p.vehicle);
+        data.distance = Some(distance_driven(metres));
         // the bus's whole mileage, as OMSI's Shift+Z overlay reads it ("Mileometer", the
         // `kmcounter_*` the cockpit shows, whole kilometres and the metres of the fraction)
-        if let Some(km) = p.vehicle.var("kmcounter_km").filter(|v| v.is_finite()) {
-            parts.push(odometer_reading(km as f64 + p.vehicle.var("kmcounter_m").unwrap_or(0.0) as f64 / 1000.0));
-        }
+        data.odometer = p.vehicle.var("kmcounter_km").filter(|v| v.is_finite()).map(|km| odometer_value(km as f64 + p.vehicle.var("kmcounter_m").unwrap_or(0.0) as f64 / 1000.0));
         let (outside, inside) = vehicle_temperatures(p);
         let u = crate::units::Units::now();
-        parts.push(format!("EXT {} / INT {}", u.temperature(outside), u.temperature(inside)));
-        // the tank as the bus's script says it (OMSI's RL_TankContent: tank_percent)
-        if let Some(tank) = p.vehicle.var("tank_percent").filter(|v| v.is_finite()) {
-            parts.push(format!("tank {:.0} %", (tank * 100.0).round()));
-        }
+        data.temperatures = Some((u.temperature(outside), u.temperature(inside)));
         // how many are aboard right now, out of the bus's places (None: the passengers are
         // switched off for this drive, so there is nothing to count)
-        if let Some(n) = passengers {
-            parts.push(passengers_aboard(n, passenger_capacity(&p.vehicle)));
-        }
+        data.passengers = passengers.map(|n| (if n == 1 { "Passenger" } else { "Passengers" }, passenger_count(n, passenger_capacity(&p.vehicle))));
+        // the tank as the bus's script says it (OMSI's RL_TankContent: tank_percent)
+        data.fuel = p.vehicle.var("tank_percent").filter(|v| v.is_finite()).map(|tank| tank.clamp(0.0, 1.0));
         if let Some(d) = duty {
             if let Some(trip) = d.trips.get(d.trip_index) {
                 let line = if trip.line.trim().is_empty() { d.line.trim() } else { trip.line.trim() };
-                parts.push(format!("{line} › {}", trip.terminus.trim()));
-                if let Some(s) = trip.stops.get(d.next_stop) {
-                    parts.push(format!("next: {}", s.name.trim()));
-                }
+                data.route = Some((line.to_string(), trip.terminus.trim().to_string()));
+                data.next_stop = trip.stops.get(d.next_stop).map(|s| s.name.trim().to_string());
                 let delay = p.vehicle.host.tt_delay;
-                parts.push(format!("{}{}:{:02}", if delay < 0.0 { "-" } else { "+" }, (delay.abs() / 60.0) as i64, (delay.abs() % 60.0) as i64));
+                data.delay = Some(format!("{}{}:{:02}", if delay < 0.0 { "-" } else { "+" }, (delay.abs() / 60.0) as i64, (delay.abs() % 60.0) as i64));
             }
         }
     }
-    parts.join(ui::INFO_SEP)
+    info_bar(data)
 }
 
 /// The kilometres driven this session (`Career::metres`), to a hundred metres.
@@ -955,20 +1007,12 @@ fn passenger_capacity(vehicle: &omsi_sim::VehicleInstance) -> Option<usize> {
     found_cabin.then_some(capacity)
 }
 
-/// The bus's odometer to a hundred metres, as the stock cockpits show it (km and tenths).
-fn odometer_reading(km: f64) -> String {
-    format!("{} {}", omsi_ui::tr("Odometer"), crate::units::Units::now().long_distance(km.max(0.0), 1))
+fn odometer_value(km: f64) -> String {
+    crate::units::Units::now().long_distance(km.max(0.0), 1)
 }
 
-/// `n` (out of `capacity` places, where known) with the word for a passenger in the
-/// interface's language (singular for one; both words are keys of the tables - the whole
-/// line is too much of a sentence to translate).
-fn passengers_aboard(n: usize, capacity: Option<usize>) -> String {
-    let count = capacity.map_or_else(|| n.to_string(), |capacity| format!("{n}/{capacity}"));
-    format!(
-        "{count} {}",
-        omsi_ui::tr(if n == 1 { "Passenger" } else { "Passengers" })
-    )
+fn passenger_count(n: usize, capacity: Option<usize>) -> String {
+    capacity.map_or_else(|| n.to_string(), |capacity| format!("{n}/{capacity}"))
 }
 
 #[cfg(test)]
@@ -985,7 +1029,7 @@ mod governor_tests {
 
 #[cfg(test)]
 mod info_tests {
-    use super::{distance_driven, odometer_reading, passengers_aboard};
+    use super::{distance_driven, odometer_value, passenger_count};
 
     #[test]
     fn the_distance_driven_is_written_in_kilometres() {
@@ -995,21 +1039,80 @@ mod info_tests {
 
     #[test]
     fn the_odometer_reads_kilometres_and_tenths() {
-        assert_eq!(odometer_reading(75_556.639), "Odometer 75556.6 km");
+        assert_eq!(odometer_value(75_556.639), "75556.6 km");
     }
 
-    /// The count stands before the word, which is singular for one passenger (in the
-    /// tables' language; without a lookup the English key is drawn as it is).
     #[test]
-    fn one_passenger_is_written_in_the_singular() {
-        assert_eq!(passengers_aboard(0, None), "0 Passengers");
-        assert_eq!(passengers_aboard(1, None), "1 Passenger");
-        assert_eq!(passengers_aboard(23, None), "23 Passengers");
+    fn passenger_count_stays_separate_from_its_localized_label() {
+        assert_eq!(passenger_count(0, None), "0");
+        assert_eq!(passenger_count(1, None), "1");
+        assert_eq!(passenger_count(23, None), "23");
     }
 
     #[test]
     fn passenger_count_includes_the_bus_capacity() {
-        assert_eq!(passengers_aboard(4, Some(65)), "4/65 Passengers");
+        assert_eq!(passenger_count(4, Some(65)), "4/65");
+    }
+
+    #[test]
+    fn the_information_bar_separates_driving_details_from_vehicle_data() {
+        let info = super::info_bar(super::InfoLineData {
+            time: "09:00:00".into(),
+            speed: Some("48 km/h".into()),
+            speed_limit: Some("50".into()),
+            stop_requested: true,
+            route: Some(("76".into(), "Central".into())),
+            next_stop: Some("Market".into()),
+            delay: Some("+2:14".into()),
+            distance: Some("12.3 km".into()),
+            odometer: Some("75556.6 km".into()),
+            temperatures: Some(("15 °C".into(), "20 °C".into())),
+            passengers: Some(("Passengers", "4/65".into())),
+            fuel: Some(0.8),
+            ..Default::default()
+        });
+        assert_eq!(
+            info.primary.iter().map(|item| (item.label, item.value.as_str())).collect::<Vec<_>>(),
+            [
+                ("Route", "Central"),
+                ("Time", "09:00:00"),
+                ("Speed", "48 km/h"),
+                ("Speed limit", "50"),
+                ("Stop requested", ""),
+                ("Next stop", "Market"),
+                ("Delay", "+2:14"),
+            ]
+        );
+        assert_eq!(
+            info.secondary.iter().map(|item| (item.label, item.value.as_str())).collect::<Vec<_>>(),
+            [
+                ("Distance", "12.3 km"),
+                ("Odometer", "75556.6 km"),
+                ("Outside / cabin", "15 °C / 20 °C"),
+                ("Passengers", "4/65"),
+                ("Fuel", "80%"),
+            ]
+        );
+        assert_eq!(
+            info.primary.iter().map(|item| item.style).collect::<Vec<_>>(),
+            [
+                crate::ui::InfoItemStyle::Route,
+                crate::ui::InfoItemStyle::Clock,
+                crate::ui::InfoItemStyle::Speed,
+                crate::ui::InfoItemStyle::SpeedLimit,
+                crate::ui::InfoItemStyle::Status,
+                crate::ui::InfoItemStyle::NextStop,
+                crate::ui::InfoItemStyle::Delay,
+            ]
+        );
+        assert!(info.secondary.iter().take(4).all(|item| item.style == crate::ui::InfoItemStyle::Detail));
+        assert_eq!(info.secondary[4].style, crate::ui::InfoItemStyle::Fuel);
+        assert_eq!(info.primary[0].badge.as_deref(), Some("76"));
+        assert_eq!(info.secondary[4].progress, Some(0.8));
+
+        let bare = super::info_bar(super::InfoLineData { time: "09:00:00".into(), ..Default::default() });
+        assert_eq!(bare.primary.iter().map(|item| item.label).collect::<Vec<_>>(), ["Time"]);
+        assert!(bare.secondary.is_empty());
     }
 }
 

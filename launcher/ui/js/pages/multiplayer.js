@@ -8,7 +8,7 @@ import { call } from '../api.js';
 import { Icon } from '../icons.js';
 import { serverJoinProtocol, serverJoinSettings } from '../server-join.js';
 import { Button, Card, Field, Input, Empty, PageHead, Spinner, Tabs, Segmented, Select, Notice, Tag } from '../ui.js';
-import { choose, cached, serverJoined, allowedBus } from '../data.js';
+import { choose, cached, serverJoined, allowedBus, mapName } from '../data.js';
 
 export function MultiplayerPage() {
   const [tab, setTab] = useState('code');
@@ -196,11 +196,18 @@ function Servers() {
   const [info, setInfo] = useState({});
   const [address, setAddress] = useState('');
   const [name, setName] = useState('');
-  const ask = (a) => {
-    setInfo((x) => ({ ...x, [a]: { loading: true } }));
+  const asking = useRef(new Set());
+  const shown = useRef(null);
+  shown.current = list;
+  // `quiet`: the answer replaces the last one without "Asking the server..." in between
+  const ask = (a, quiet) => {
+    if (asking.current.has(a)) return;
+    asking.current.add(a);
+    if (!quiet) setInfo((x) => ({ ...x, [a]: { loading: true } }));
     call('server_query', { address: a })
       .then((r) => setInfo((x) => ({ ...x, [a]: { ok: r } })))
-      .catch((e) => setInfo((x) => ({ ...x, [a]: { err: e.message } })));
+      .catch((e) => setInfo((x) => ({ ...x, [a]: { err: e.message } })))
+      .finally(() => asking.current.delete(a));
   };
   useEffect(() => {
     cached('servers', 'servers_get').then((l) => {
@@ -208,6 +215,10 @@ function Servers() {
       setList(l);
       l.forEach((x) => ask(x.address));
     });
+    // asked again every 15 s while the list is open, as the game's own launcher did: the
+    // player counts, the time and the weather stay current
+    const id = setInterval(() => !document.hidden && (shown.current || []).forEach((x) => ask(x.address, true)), 15000);
+    return () => clearInterval(id);
   }, []);
   const save = (l) => {
     setList(l);
@@ -255,13 +266,17 @@ function Servers() {
             const st = info[x.address] || {};
             const i = st.ok;
             const autoLabel = i ? `${t('Auto')} (${serverJoinProtocol(x.address, 'auto', i) === 'udp' ? 'UDP' : 'WS'})` : t('Auto');
+            // the name the player gave it first (one added without a name keeps its address there)
+            const official = x.address === 'openomsi';
+            const own = !official && x.name && x.name !== x.address ? x.name : '';
             return html`<${Card} body=${false}><div class="card-body row" style="align-items:flex-start;gap:14px">
               ${i?.icon ? html`<img src=${i.icon} width="48" height="48" style="border-radius:8px" />` : html`<div class="avatar" style="width:48px;height:48px;border-radius:8px"><${Icon} name="globe" /></div>`}
               <div class="grow stack" style="gap:4px;min-width:0">
-                <div class="row"><b style="font-size:15px">${i?.name || x.name}</b>${i?.password && html`<${Tag}>${t('Password')}</${Tag}>`}</div>
+                <div class="row"><b style="font-size:15px">${own || i?.name || x.name || x.address}</b>${i?.password && html`<${Tag}>${t('Password')}</${Tag}>`}</div>
                 ${st.loading && html`<div class="row muted small"><${Spinner} /> ${t('Asking the server...')}</div>`}
                 ${st.err && html`<div class="small" style="color:var(--danger)">${t("Can't reach the server: {err}", { err: st.err })}</div>`}
-                ${i && html`<div class="muted small">${[i.map, t('{n} of {max} players', { n: i.players, max: i.max_players }), i.time, i.weather].filter(Boolean).join(' - ')}</div>`}
+                ${st.err && !official && html`<div class="muted small selectable">${x.address}</div>`}
+                ${i && html`<div class="muted small">${[i.map && mapName(i.map), t('{n} of {max} players', { n: i.players, max: i.max_players }), i.time, i.weather].filter(Boolean).join(' - ')}</div>`}
                 ${i?.motd && html`<div class="dim small">${i.motd}</div>`}
               </div>
               <div style="width:130px"><${Select} raw value=${x.protocol || 'auto'} options=${[['auto', autoLabel], ['udp', t('UDP')], ['websocket', t('WebSocket')]]} onChange=${(protocol) => save(list.map((y) => y === x ? { ...y, protocol } : y))} /></div>

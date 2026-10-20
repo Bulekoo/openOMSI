@@ -81,7 +81,11 @@ pub(super) fn lights(cx: LightsCx, dt: f32, daylight: omsi_sim::Daylight, behind
         }
         let vehicles = steps::light_vehicles(cx.player.player.as_ref(), cx.traffic.traffic.as_ref(), &cx.net.remotes);
         let __tc = Instant::now();
-        lights::collect(w, scene, &daylight, cam.position, &vehicles, cone);
+        lights::collect(
+            w, scene, &daylight, cam.position, &vehicles, cone,
+            lights::VehicleSmoke::from_setting(&cx.common.settings.vehicle_smoke),
+            cx.player.player.is_some(),
+        );
         drop(vehicles);
         cx.perf.profile.add(crate::profile_keys::ProfKey::LightsCollect, __tc.elapsed().as_secs_f64());
         // the object editor's pick: a magenta glow over it

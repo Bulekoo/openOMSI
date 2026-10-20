@@ -11,8 +11,9 @@ use crate::MeshData;
 
 /// The most flat surfaces kept of one material slot of a mesh (the largest).
 const FLATS_PER_SLOT: usize = 32;
-/// How far apart two planes may lie and still be one (the meshes' own rounding).
+/// How far a surface's tilt may lift its edge off another's plane and it still lie on it.
 const PLANE_GAP: f32 = 2e-4;
+const CENTRE_GAP: f32 = 2e-5;
 /// How far apart two surfaces' boxes may be and still overlap.
 const BOX_GAP: f32 = 1e-3;
 /// The highest step: a surface on a surface on a surface ... is rare beyond that.
@@ -43,13 +44,16 @@ pub(crate) fn mesh_flats(data: &MeshData) -> Vec<Flat> {
     let mut out = Vec::new();
     for &(first, count, slot) in &data.ranges {
         // (plane key -> flat, area)
-        let mut planes: HashMap<(i32, i32, i32, i32), (Flat, f32)> = HashMap::new();
+        // (a hashbrown map sized ahead, no list per triangle: a GPM street lamp of 150 000 triangles took 23 ms)
         let end = (first + count).min(data.indices.len() as u32);
+        let mut planes: hashbrown::HashMap<(i32, i32, i32, i32), (Flat, f32)> = hashbrown::HashMap::with_capacity((end.saturating_sub(first) / 3) as usize);
         let mut k = first as usize;
+        let at = |i: u32| data.positions.get(i as usize).copied();
         while k + 2 < end as usize {
             let idx = [data.indices[k], data.indices[k + 1], data.indices[k + 2]];
             k += 3;
-            let Some(p) = idx.iter().map(|&i| data.positions.get(i as usize).copied()).collect::<Option<Vec<Vec3>>>() else { continue };
+            let (Some(a), Some(b), Some(c)) = (at(idx[0]), at(idx[1]), at(idx[2])) else { continue };
+            let p = [a, b, c];
             let cross = (p[1] - p[0]).cross(p[2] - p[0]);
             let area = cross.length() * 0.5;
             if area < 1e-8 {
@@ -64,8 +68,13 @@ pub(crate) fn mesh_flats(data: &MeshData) -> Vec<Flat> {
             e.1 += area;
         }
         let mut flats: Vec<(Flat, f32)> = planes.into_values().collect();
+        // (the largest picked out before they are sorted: a curved mesh has a plane per triangle)
+        if flats.len() > FLATS_PER_SLOT {
+            flats.select_nth_unstable_by(FLATS_PER_SLOT, |a, b| b.1.total_cmp(&a.1));
+            flats.truncate(FLATS_PER_SLOT);
+        }
         flats.sort_by(|a, b| b.1.total_cmp(&a.1));
-        out.extend(flats.into_iter().take(FLATS_PER_SLOT).map(|(f, _)| f));
+        out.extend(flats.into_iter().map(|(f, _)| f));
     }
     out
 }
@@ -91,8 +100,8 @@ fn normal_key(n: Vec3) -> (i32, i32, i32) {
     ((n.x * 100.0).round() as i32, (n.y * 100.0).round() as i32, (n.z * 100.0).round() as i32)
 }
 
-/// Whether `f` lies on `g`: its middle within `PLANE_GAP` of `g`'s plane, its tilt against
-/// it lifting no edge further than that, and their boxes overlapping.
+/// Whether `f` lies on `g`: its middle within `CENTRE_GAP` of `g`'s plane, its tilt against
+/// it lifting no edge further than `PLANE_GAP`, and their boxes overlapping.
 fn lies_on(f: &Flat, g: &Flat) -> bool {
     let overlap = (f.lo - Vec3::splat(BOX_GAP)).cmple(g.hi).all() && (g.lo - Vec3::splat(BOX_GAP)).cmple(f.hi).all();
     if !overlap || f.normal.dot(g.normal).abs() <= 0.9995 {
@@ -101,7 +110,7 @@ fn lies_on(f: &Flat, g: &Flat) -> bool {
     let c = (f.lo + f.hi) * 0.5;
     let c = c - f.normal * (f.normal.dot(c) - f.offset);
     let lift = f.normal.cross(g.normal).length() * (f.hi - f.lo).length() * 0.5;
-    (g.normal.dot(c) - g.offset).abs() < PLANE_GAP && lift < PLANE_GAP
+    (g.normal.dot(c) - g.offset).abs() < CENTRE_GAP && lift < PLANE_GAP
 }
 
 impl ObjectRun {
@@ -209,6 +218,19 @@ mod tests {
             *p += at;
         }
         m
+    }
+
+    #[test]
+    fn a_slots_triangles_in_one_plane_are_one_flat_and_broken_ones_are_left_out() {
+        let mut m = quad(1.0, 0.5, 2, false);
+        // (a degenerate triangle and one with an index past the vertices)
+        m.indices.extend_from_slice(&[0, 0, 1, 0, 1, 9]);
+        m.ranges = vec![(0, 12, 2)];
+        let flats = mesh_flats(&m);
+        assert_eq!(flats.len(), 1);
+        let f = flats[0];
+        assert_eq!((f.slot, f.normal, f.offset), (2, Vec3::Z, 1.0));
+        assert_eq!((f.lo, f.hi), (Vec3::new(-0.5, -0.5, 1.0), Vec3::new(0.5, 0.5, 1.0)));
     }
 
     /// The bus case (#1488): its meshes all stand at one place, the dashboard and its
@@ -319,6 +341,12 @@ mod tests {
         let at = Vec3::new(0.0, 5.5, 1.2);
         assert_eq!(levels_of(&[tilted(at, 0.3, 45.0), tilted(at, 0.05, 45.0)]), vec![0, 1]);
         assert_eq!(levels_of(&[tilted(at, 0.3, 44.999), tilted(at, 0.05, 45.001)]), vec![0, 1]);
+    }
+
+    #[test]
+    fn a_board_drawn_after_the_text_a_tenth_of_a_millimetre_in_front_of_it_takes_no_step() {
+        assert_eq!(levels_of(&[quad(1.0001, 0.2, 0, false), quad(1.0, 0.4, 0, true)]), vec![0, 0]);
+        assert_eq!(levels_of(&[quad(1.0, 0.2, 0, false), quad(1.0001, 0.4, 0, true)]), vec![0, 0]);
     }
 
     #[test]

@@ -45,6 +45,9 @@ pub struct CityMap {
     pub(super) three_d: Option<bool>,
     /// How far the view is tilted into 3D (0 flat … 1), eased.
     tilt: f32,
+    /// The turn of the view (radians): the map direction that points up on the screen lies this far clockwise from the
+    /// map's up. Eased.
+    pub(super) phi: f64,
 }
 
 /// A city map ground being built: what for.
@@ -68,7 +71,7 @@ struct CityGround {
 }
 
 /// The city map's camera: its view-projection (relative to `centre`) and its inverse.
-struct CityCam {
+pub(super) struct CityCam {
     vp: Mat4,
     inv: Mat4,
 }
@@ -274,12 +277,15 @@ impl Navigator {
 
     /// The camera at `mpp` with the view `tilt`ed, looking at `centre` (relative to it), for a
     /// window of `w` x `h` pixels: north up.
-    fn city_cam(mpp: f64, tilt: f32, w: f32, h: f32) -> CityCam {
+    pub(super) fn city_cam(mpp: f64, tilt: f32, phi: f64, w: f32, h: f32) -> CityCam {
         let t = (CITY_FOV.to_radians() * 0.5).tan();
         let dist = (mpp * h as f64 / (2.0 * t as f64)) as f32;
         let pitch = (90.0 - 40.0 * tilt).to_radians();
         let eye = Vec3::new(0.0, -dist * pitch.cos(), dist * pitch.sin());
         let up = Vec3::new(0.0, pitch.sin(), pitch.cos());
+        // (the view turned: the camera goes round the vertical axis)
+        let turn = Mat3::from_rotation_z(-phi as f32);
+        let (eye, up) = (turn * eye, turn * up);
         let view = Mat4::look_at_rh(eye, Vec3::ZERO, up);
         let proj = Mat4::perspective_rh(CITY_FOV.to_radians(), w / h.max(1.0), (dist * 0.02).max(0.5), dist * 6.0 + 4000.0);
         let vp = proj * view;
@@ -288,7 +294,7 @@ impl Navigator {
 
     /// The ground point under a window point (pixels from the map's top left), relative to the
     /// view's centre.
-    fn unproject(cam: &CityCam, w: f32, h: f32, x: f32, y: f32) -> Option<DVec2> {
+    pub(super) fn unproject(cam: &CityCam, w: f32, h: f32, x: f32, y: f32) -> Option<DVec2> {
         let ndc = Vec2::new(x / w * 2.0 - 1.0, 1.0 - y / h * 2.0);
         let a = cam.inv.project_point3(ndc.extend(0.0));
         let b = cam.inv.project_point3(ndc.extend(1.0));
@@ -308,7 +314,7 @@ impl Navigator {
     /// The world point under a window point at the view as it is.
     fn city_world_at(&self, x: f32, y: f32) -> Option<DVec2> {
         let (w, h) = self.city_size();
-        let cam = Self::city_cam(self.city.mpp, self.city.tilt, w, h);
+        let cam = Self::city_cam(self.city.mpp, self.city.tilt, self.city.phi, w, h);
         Self::unproject(&cam, w, h, x - self.city.rect[0], y - self.city.rect[1]).map(|d| self.city.center + d)
     }
 
@@ -330,6 +336,7 @@ impl Navigator {
         match hit {
             Some(5) => self.city.lines.toggle(),
             Some(6) => self.show_contours = !self.show_contours,
+            Some(7) => self.orient = (self.orient + 1) % 3,
             Some(0) => self.city.follow = true,
             Some(1) => self.city.mpp = (self.city.mpp / 1.6).max(MIN_MPP),
             Some(2) => self.city.mpp = (self.city.mpp * 1.6).min(self.max_mpp()),
@@ -534,6 +541,7 @@ impl Navigator {
         if (self.city.tilt - want_tilt).abs() < 0.01 {
             self.city.tilt = want_tilt;
         }
+        let phi = self.ease_turn(f.heading, f.dt as f64);
         let s = (h / 760.0).clamp(0.95, 2.0) * f.ui_scale;
         let global = self.global.clone();
         let net = global.as_deref().or(f.traffic.map(|t| &t.net));
@@ -548,7 +556,7 @@ impl Navigator {
         let ln_verts = self.lines_mesh(anchor, w, h, s);
         let ln_n = self.lines_mesh_len();
         // the camera, relative to the anchor
-        let cam = Self::city_cam(self.city.mpp, self.city.tilt, w, h);
+        let cam = Self::city_cam(self.city.mpp, self.city.tilt, self.city.phi, w, h);
         let shift = (self.city.center - anchor).as_vec2();
         let vpm = cam.vp * Mat4::from_translation(-shift.extend(0.0));
         let vp = [0.0, 0.0, w, h];
@@ -670,7 +678,7 @@ impl Navigator {
         }
         for pl in &f.players {
             let Some(p) = to_screen(pl.position).filter(|p| win.contains(*p)) else { continue };
-            puck(&mut ui, p, (pl.heading as f32).to_radians(), 8.5 * s, PLAYER);
+            puck(&mut ui, p, ((pl.heading as f64).to_radians() - phi) as f32, 8.5 * s, PLAYER);
             let px = 11.0 * s;
             let name = self.fonts.fit(&pl.name, px, Weight::Bold, 140.0 * s);
             let tw = self.fonts.width(&name, px, Weight::Bold) + 12.0 * s;
@@ -683,7 +691,7 @@ impl Navigator {
             ui.text_in(&mut self.atlas, &self.fonts, &name, px, Weight::Bold, r, Align::Center, Color::WHITE);
         }
         if let Some(bp) = to_screen(f.bus) {
-            puck(&mut ui, bp, (f.heading as f32).to_radians(), 10.0 * s, pal.route);
+            puck(&mut ui, bp, ((f.heading as f64).to_radians() - phi) as f32, 10.0 * s, pal.route);
         }
         let icon_verts = self.city_icons(&on_screen, win, s);
         // --- the cards: the trip top left, the buttons top right, the scale bottom left
@@ -707,7 +715,7 @@ impl Navigator {
         ui.text_in(&mut self.atlas, &self.fonts, &title, 15.0 * s, Weight::Bold, Rect::new(x, head.y + 8.0 * s, head.right() - x - 12.0 * s, 24.0 * s), Align::Left, pal.card_text);
         let sub = match f.stops.first() {
             Some(st) => {
-                let d = self.next_dist.map(|d| omsi_ui::units::Units::now().distance(d)).unwrap_or_default();
+                let d = self.next_dist.map(|(_, d)| omsi_ui::units::Units::now().distance(d)).unwrap_or_default();
                 format!("{}  ·  {}  ·  {:02}:{:02}", st.name.trim(), d, (st.arrival / 3600.0) as i32 % 24, ((st.arrival % 3600.0) / 60.0) as i32)
             }
             None => self.street_here.clone().unwrap_or_default(),
@@ -742,12 +750,8 @@ impl Navigator {
             }
             self.city.buttons.push((r, id));
         }
-        // the Lines button, left of the close button, and its panel, left of the column
-        let right = self.draw_lines_ui(&mut ui, (w, h, s), (pad, bs, bx, close), &on_line, &on_screen);
-        self.draw_terrain_button(&mut ui, pad, bs, right, s);
-        if self.show_surface && self.place.has_location() {
-            self.place.draw_chips(&mut ui, &mut self.atlas, &self.fonts, head, w, pad, s);
-        }
+        // the Terrain and Lines buttons left of the close button, the lines panel left of the column, the compass
+        self.draw_top_controls(&mut ui, (w, h, s), (pad, bs, bx, close), &on_line, &on_screen);
         if self.show_surface && self.place.has_location() {
             self.place.draw_chips(&mut ui, &mut self.atlas, &self.fonts, head, w, pad, s);
         }

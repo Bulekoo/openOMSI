@@ -73,6 +73,18 @@ use omsi_sim::traffic::LaneKey;
 use omsi_sim::traffic::Lane;
 
 #[test]
+fn next_stop_distance_is_exposed_only_for_its_stop_id() {
+    let mut n = Navigator::new(true, 0.85, "bottom-left");
+    assert_eq!(n.next_stop_distance(), None);
+    n.next_dist = Some((10, 123.5));
+    assert_eq!(n.next_stop_distance(), Some(123.5));
+    assert_eq!(n.next_stop_distance_for(10), Some(123.5));
+    assert_eq!(n.next_stop_distance_for(11), None);
+    n.invalidate_next_stop_distance();
+    assert_eq!(n.next_stop_distance(), None);
+}
+
+#[test]
 fn stop_request_icon_reserves_space_only_while_active() {
     let mut atlas = Atlas::new(256);
     for scale in [0.75, 1.0, 2.0] {
@@ -407,6 +419,36 @@ fn the_terrain_view_needs_a_button_a_package_with_relief_and_has_a_band_for_each
 }
 
 #[test]
+fn the_turned_view_has_the_chosen_direction_up_on_the_screen() {
+    let (w, h) = (1000.0f32, 600.0f32);
+    let top = |phi: f64| Navigator::unproject(&Navigator::city_cam(2.0, 0.0, phi, w, h), w, h, w * 0.5, 0.0).unwrap();
+    let centre = |phi: f64| Navigator::unproject(&Navigator::city_cam(2.0, 0.0, phi, w, h), w, h, w * 0.5, h * 0.5).unwrap();
+    // as drawn: north (+y) is up; the middle of the view is the point looked at, however the view is turned
+    assert!(top(0.0).y > 100.0 && top(0.0).x.abs() < 1e-3);
+    assert!(centre(1.234).length() < 1e-3);
+    // turned a quarter clockwise: the direction a quarter clockwise from the map's up (east, +x) is up
+    let east = top(std::f64::consts::FRAC_PI_2);
+    assert!(east.x > 100.0 && east.y.abs() < 1e-2, "{east:?}");
+    // half a turn: south is up; the same distance from the middle whichever way it is turned
+    let south = top(std::f64::consts::PI);
+    assert!(south.y < -100.0 && (south.length() - top(0.0).length()).abs() < 1e-2, "{south:?}");
+}
+
+#[test]
+fn the_compass_changes_how_the_map_is_turned_in_turn() {
+    let mut n = with_example_lines();
+    n.city.open = true;
+    n.city.rect = [0.0, 0.0, 800.0, 500.0];
+    n.city.buttons.push((Rect::new(10.0, 10.0, 40.0, 40.0), 7));
+    assert_eq!(n.orient, 0);
+    for want in [1, 2, 0] {
+        n.map_press(20.0, 20.0);
+        n.map_release();
+        assert_eq!(n.orient, want);
+    }
+}
+
+#[test]
 fn the_timetable_is_read_on_a_worker_and_the_frame_does_not_wait_for_it() {
     let mut n = with_example_lines();
     n.date = 19900101;
@@ -453,6 +495,19 @@ fn the_map_zooms_in_for_a_turn_and_out_on_the_straight() {
     assert_eq!(zoom_target(70.0, Some(0.0), 0.0), 150.0);
     assert!(zoom_target(50.0, None, 30.0) < zoom_target(50.0, None, 5.0));
     assert!(zoom_target(50.0, None, -30.0) >= 150.0);
+}
+
+/// A stop a plugin closed (`duty.set_closed_stops`) is still on the list, marked with the
+/// way round, so it is drawn struck through.
+#[test]
+fn closed_stops_stay_on_the_list_marked() {
+    use omsi_sim::timetable_run::{PlannedStop, PlannedTrip, PlayerDuty};
+    let stop = |name: &str, arr: f64| PlannedStop { object_id: 0, name: name.into(), arr, dep: arr, position: None, dir: Default::default(), stops: true, closed: None };
+    let trip = PlannedTrip { name: "5_1".into(), line: "5".into(), terminus: "Bahnhof".into(), departure: 0.0, end: 120.0, stops: vec![stop("Markt", 0.0), stop("Rathaus", 60.0), stop("Bahnhof", 120.0)] };
+    let mut d = PlayerDuty::new("5".into(), "1".into(), vec![trip], 0, 0, true);
+    d.set_closed_stops(&["rathaus".into()], "via Kirchweg");
+    let (_, _, stops, _) = duty_parts(Some(&d));
+    assert_eq!(stops.iter().map(|s| s.closed.as_deref()).collect::<Vec<_>>(), [None, Some("via Kirchweg"), None]);
 }
 
 #[test]
@@ -505,4 +560,18 @@ fn opening_a_line_does_not_read_the_timetable_but_pressing_the_button_does() {
     assert!(n.city.lines.sheet);
     let first = n.line_times();
     assert!(first.is_some() || n.times_job.is_some());
+}
+
+#[test]
+fn the_compass_keeps_clear_of_the_open_lines_panel() {
+    let (w, h, s) = (1600.0f32, 900.0f32, 1.0f32);
+    let r = 24.0 * s;
+    // no panel: bottom right
+    let free = orient::compass_centre(w, h, s, None);
+    assert!((free.x - (w - 36.0 * s - r)).abs() < 1e-3);
+    // the panel open (its left edge as the city map lays it out: the column at w - 52, 12 px of gap, 332 px wide)
+    let left = (w - 52.0 * s) - 12.0 * s - 332.0 * s;
+    let beside = orient::compass_centre(w, h, s, Some(left));
+    assert!(beside.x + r <= left, "the disc ends before the panel begins: {} vs {left}", beside.x + r);
+    assert_eq!(beside.y, free.y, "only moved sideways");
 }

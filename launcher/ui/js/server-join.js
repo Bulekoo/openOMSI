@@ -2,7 +2,12 @@
 function isWebAddress(address) {
   return /^(https?|wss?):\/\//.test(address)
     || address.toLowerCase() === 'openomsi'
-    || address.endsWith('.trycloudflare.com') || address.includes('.trycloudflare.com/');
+    || isTunnel(address);
+}
+
+function isTunnel(address) {
+  const host = address.split(/[/?#\\]/)[0].split('@').pop().replace(/:[0-9]*$/, '');
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)*\.trycloudflare\.com$/i.test(host);
 }
 
 export function serverJoinProtocol(address, protocol = 'auto', info) {

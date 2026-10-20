@@ -71,13 +71,15 @@ impl VehicleInstance {
     }
 
     pub fn set_var(&mut self, name: &str, v: f32) -> bool {
-        match omsi_script::compile::with_lower(name, |k| self.var_index.get(k).copied()) {
-            Some(i) => {
-                self.state.vars[i as usize] = v;
-                true
-            }
-            None => false,
+        let slot = omsi_script::compile::with_lower(name, |k| {
+            self.var_index.get(k).copied().ok_or_else(|| self.model_only_vars.iter().any(|n| n == k))
+        });
+        match slot {
+            Ok(i) => self.state.vars[i as usize] = v,
+            Err(true) => self.add_var(name, v),
+            Err(false) => return false,
         }
+        true
     }
 
     /// Variables the engine feeds the model directly (`Dirt_Norm`, `AI`, …): OMSI's
@@ -85,12 +87,16 @@ impl VehicleInstance {
     /// read as 1.0 - every bus wore its dirt film at full strength from the first frame.
     pub fn set_engine_var(&mut self, name: &str, v: f32) {
         if !self.set_var(name, v) {
-            let id = self.state.vars.len() as omsi_script::VarId;
-            self.state.vars.push(v);
-            std::sync::Arc::make_mut(&mut self.var_index).insert(name.to_ascii_lowercase(), id);
-            self.pax_vars = std::sync::OnceLock::new();
-            self.engine_ids = std::sync::OnceLock::new();
+            self.add_var(name, v);
         }
+    }
+
+    fn add_var(&mut self, name: &str, v: f32) {
+        let id = self.state.vars.len() as omsi_script::VarId;
+        self.state.vars.push(v);
+        std::sync::Arc::make_mut(&mut self.var_index).insert(name.to_ascii_lowercase(), id);
+        self.pax_vars = std::sync::OnceLock::new();
+        self.engine_ids = std::sync::OnceLock::new();
     }
 
     pub fn trigger(&mut self, name: &str) -> bool {

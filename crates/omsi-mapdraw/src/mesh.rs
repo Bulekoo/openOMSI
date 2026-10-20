@@ -33,9 +33,9 @@ const PAVED_CELL: f32 = 2.0;
 
 #[derive(Default)]
 struct Cell {
-    land: Vec<Vec<Vec2>>,
-    paved: Vec<Vec<Vec2>>,
-    paint: Vec<Vec<Vec2>>,
+    land: Vec<Vec<u32>>,
+    paved: Vec<Vec<u32>>,
+    paint: Vec<Vec<u32>>,
     buildings: Vec<u32>,
     /// Placed house models (`Layers::instances`).
     instances: Vec<u32>,
@@ -46,6 +46,10 @@ const CELL: f32 = 200.0;
 
 fn cell_of(p: Vec2) -> (i32, i32) {
     ((p.x / CELL).floor() as i32, (p.y / CELL).floor() as i32)
+}
+
+fn tri(all: &[Vec2], i: u32) -> &[Vec2] {
+    &all[i as usize * 3..i as usize * 3 + 3]
 }
 
 /// What to draw of the ground.
@@ -63,21 +67,21 @@ impl MapData {
         let mut cells: HashMap<(i32, i32), Cell> = HashMap::new();
         let new_cell = || Cell { land: vec![Vec::new(); layers::LAND_CLASSES], paved: vec![Vec::new(); layers::PAVE_CLASSES], paint: vec![Vec::new(); layers::PAINT_CLASSES], ..Default::default() };
         for (class, tris) in layers.land.iter().enumerate() {
-            for t in tris.chunks_exact(3) {
+            for (i, t) in tris.chunks_exact(3).enumerate() {
                 let c = cell_of((t[0] + t[1] + t[2]) / 3.0);
-                cells.entry(c).or_insert_with(new_cell).land[class].extend_from_slice(t);
+                cells.entry(c).or_insert_with(new_cell).land[class].push(i as u32);
             }
         }
         for (class, tris) in layers.paved.iter().enumerate() {
-            for t in tris.chunks_exact(3) {
+            for (i, t) in tris.chunks_exact(3).enumerate() {
                 let c = cell_of((t[0] + t[1] + t[2]) / 3.0);
-                cells.entry(c).or_insert_with(new_cell).paved[class].extend_from_slice(t);
+                cells.entry(c).or_insert_with(new_cell).paved[class].push(i as u32);
             }
         }
         for (class, tris) in layers.paint.iter().enumerate() {
-            for t in tris.chunks_exact(3) {
+            for (i, t) in tris.chunks_exact(3).enumerate() {
                 let c = cell_of((t[0] + t[1] + t[2]) / 3.0);
-                cells.entry(c).or_insert_with(new_cell).paint[class].extend_from_slice(t);
+                cells.entry(c).or_insert_with(new_cell).paint[class].push(i as u32);
             }
         }
         for (i, b) in layers.buildings.iter().enumerate() {
@@ -197,7 +201,7 @@ impl MapData {
         ];
         for (class, col) in land_order {
             for cell in &cells {
-                for t in cell.land[class].chunks_exact(3) {
+                for t in cell.land[class].iter().map(|&i| tri(&self.layers.land[class], i)) {
                     p.world_poly(&[v(t[0]), v(t[1]), v(t[2])], col);
                 }
             }
@@ -224,7 +228,7 @@ impl MapData {
         for (classes, fill) in [(&[layers::PAVE_GREEN][..], pal.grass), (&[layers::PAVE_AREA][..], pal.area), (&[layers::PAVE_FOOT, layers::PAVE_ROAD][..], pal.foot), (&[layers::PAVE_INNER][..], pal.road)] {
             for cell in &cells {
                 for &class in classes {
-                    for t in cell.paved[class].chunks_exact(3) {
+                    for t in cell.paved[class].iter().map(|&i| tri(&self.layers.paved[class], i)) {
                         p.world_poly(&[v(t[0]), v(t[1]), v(t[2])], fill);
                     }
                 }
@@ -235,7 +239,7 @@ impl MapData {
         if look.surfaces {
             for (class, col) in [(layers::PAINT_WHITE, pal.lane_paint), (layers::PAINT_AMBER, pal.lane_amber)] {
                 for cell in &cells {
-                    for t in cell.paint[class].chunks_exact(3) {
+                    for t in cell.paint[class].iter().map(|&i| tri(&self.layers.paint[class], i)) {
                         p.world_poly(&[v(t[0]), v(t[1]), v(t[2])], col);
                     }
                 }
@@ -476,5 +480,30 @@ fn dashes(p: &mut Painter, pts: &[Vec3], on: f32, off: f32, w_m: f32, w_px: f32,
     }
     if drawing && run.len() >= 2 {
         p.ribbon(&run, w_m, w_px, c, false);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_build_draws_the_paved_triangles_of_the_cells_near_it_only() {
+        let mut l = Layers::empty(DVec2::ZERO);
+        let near = [Vec2::new(10.0, 10.0), Vec2::new(20.0, 10.0), Vec2::new(10.0, 20.0)];
+        let far = [Vec2::new(5010.0, 10.0), Vec2::new(5020.0, 10.0), Vec2::new(5010.0, 20.0)];
+        let other = [Vec2::new(40.0, 40.0), Vec2::new(50.0, 40.0), Vec2::new(40.0, 50.0)];
+        l.paved[layers::PAVE_INNER] = [near, far, other].concat();
+        let md = MapData::new(std::sync::Arc::new(l));
+        let mut p = Painter::new();
+        let look = GroundLook { surfaces: false, trees: false, dashes: false };
+        md.build_paved(&mut p, DVec2::ZERO, DVec2::new(15.0, 15.0), 300.0, crate::style::palette(false), look);
+        assert!(!p.verts.is_empty());
+        assert!(p.verts.iter().all(|v| v.pos[0] < 100.0), "{:?}", p.verts.iter().map(|v| v.pos).collect::<Vec<_>>());
+        let mut q = Painter::new();
+        q.world_poly(&near.map(|v| v.extend(0.0)), crate::style::palette(false).road);
+        assert_eq!(p.verts.len(), 2 * q.verts.len());
+        assert!(p.verts.iter().any(|v| v.pos[0] == 50.0 && v.pos[1] == 40.0));
+        assert!(p.verts.iter().any(|v| v.pos[0] == 20.0 && v.pos[1] == 10.0));
     }
 }

@@ -351,3 +351,21 @@ fn puddles_round_trip() {
     }
     assert_eq!(Settings::from_text("puddles=ultra\n").puddles, "high");
 }
+
+#[test]
+fn vehicle_smoke_setting_round_trips_through_game_and_launcher() {
+    assert_eq!(Settings::default().vehicle_smoke, "all");
+    for mode in ["all", "player", "off"] {
+        let s = Settings::from_text(&format!("vehicle_smoke={mode}\n"));
+        assert_eq!(s.vehicle_smoke, mode);
+        assert_eq!(Settings::from_text(&s.to_text()).vehicle_smoke, mode);
+        let mut launcher = omsi_launcher_lib::settings_from_text(None);
+        launcher["vehicle_smoke"] = serde_json::json!(mode);
+        let saved = omsi_launcher_lib::settings_to_text(&launcher, None);
+        assert_eq!(Settings::from_text(&saved).vehicle_smoke, mode);
+        assert_eq!(omsi_launcher_lib::settings_from_text(Some(&saved))["vehicle_smoke"], mode);
+    }
+    assert_eq!(Settings::from_text("vehicle_smoke=unknown\n").vehicle_smoke, "all");
+    assert_eq!(Settings::from_text("vehicle_smoke=PLAYER_ONLY\n").vehicle_smoke, "player");
+}
+

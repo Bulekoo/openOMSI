@@ -266,6 +266,14 @@ impl App {
             return false;
         }
         self.input.cursor = (x, y);
+        if !self.input.buttons_held.0 {
+            self.menus.hud_resize = None;
+        }
+        if let Some((k, size0, at, w0)) = self.menus.hud_resize {
+            let grow = ((x - at[0]) + (y - at[1])) * 0.5;
+            self.settings.hud_sizes[k] = crate::ui::window_size((size0 * (w0 + grow) / w0 * 20.0).round() / 20.0);
+            return true;
+        }
         // the navigator held by the mouse follows it
         if let Some(n) = self.menus.navigator.as_mut() {
             if n.panel_move(x, y) {
@@ -415,6 +423,19 @@ impl App {
         // the city map: a click on the navigator opens it; while it is open the mouse is
         // the map's (a click outside closes it)
         let (x, y) = self.input.cursor;
+        if !pressed {
+            if let Some((k, ..)) = self.menus.hud_resize.take() {
+                crate::game_lists::remember_setting(crate::ui::SIZE_KEYS[k], &format!("{:.2}", self.settings.hud_sizes[k]));
+                return;
+            }
+        }
+        if pressed && self.menus.game_menu.is_none() {
+            if let Some((k, w0, shown)) = self.ui.as_ref().and_then(|u| u.grip_at(x, y)) {
+                self.settings.hud_sizes[k] = shown;
+                self.menus.hud_resize = Some((k, shown, [x, y], w0));
+                return;
+            }
+        }
         let vr_active = self.vr_active();
         if let Some(n) = self.menus.navigator.as_mut() {
             if n.map_open() {

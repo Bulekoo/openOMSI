@@ -1075,6 +1075,27 @@
       "permission": null
     },
     {
+      "name": "duty.set_closed_stops",
+      "group": "duty",
+      "since": "0.3.36",
+      "doc": "Closes stops of the duty's route for today - a diversion, roadworks: a list of their names (on every trip of the duty), and the way round them (`via`). The navigator strikes them through and shows `via` for the next one; the bus does not call there, and the duty goes on past them without counting them missed (no `stops_skipped`). Each call replaces the list (64 names at most), an empty one opens them all again; a duty taken anew (`duty.start`) starts with none. `duty.stops` marks them `closed`. `true` when there is a duty.",
+      "params": [
+        {
+          "name": "stops",
+          "type": "table",
+          "optional": false
+        },
+        {
+          "name": "via",
+          "type": "string",
+          "optional": true
+        }
+      ],
+      "returns": "boolean",
+      "multi": false,
+      "permission": "world_write"
+    },
+    {
       "name": "duty.skip_stop",
       "group": "duty",
       "since": "0.2.22",
@@ -1135,7 +1156,7 @@
       "name": "duty.stops",
       "group": "duty",
       "since": "0.2.22",
-      "doc": "The stops of the trip now: `{number, name, id, arrival, departure, stops, passed, x, y, z}` (`stops` false: the bus passes it; `x, y, z` where the stop's place is known; `id` the map's object id).",
+      "doc": "The stops of the trip now: `{number, name, id, arrival, departure, stops, closed, passed, x, y, z}` (`stops` false: the bus passes it; `closed`: closed today, `duty.set_closed_stops`; `x, y, z` where the stop's place is known; `id` the map's object id).",
       "params": [],
       "returns": "list of tables",
       "multi": false,
@@ -1709,7 +1730,7 @@
       "name": "info",
       "group": "game",
       "since": "0.1.10",
-      "doc": "What the game is doing: `map`, `clock` (seconds since midnight), `day`, `year`, `view`, `paused`, `on_foot`, `multiplayer`, `traffic`, `speed`, `delay`, `map_path`, `version`; with a bus also `tile_x`, `tile_y`, `tile_pos_x`, `tile_pos_y`, `heading`, `vehicle_manufacturer`, `vehicle_model`, `destination`, `passengers`; `crashes`, `heavy_crashes`, `pedestrians_hit`; `situation`; on a duty also `line`, `tour`, `trip`, `trips`, `trip_name`, `terminus`, `stops`, `trip_done`, `next_stop`, `next_stop_number`, `next_stop_arrival`, `next_stop_departure`, `next_stop_id`, `at_stop`, `previous_stop`, `previous_stop_id`, `next_stop_distance`, `previous_stop_distance` (see the plugin docs for each).",
+      "doc": "What the game is doing: `map`, `clock` (seconds since midnight), `day`, `year`, `view`, `paused`, `on_foot`, `multiplayer`, `traffic`, `speed`, `delay`, `map_path`, `version`; with a bus also `tile_x`, `tile_y`, `tile_pos_x`, `tile_pos_y`, `heading`, `vehicle_manufacturer`, `vehicle_model`, `destination`, `passengers`; `crashes`, `heavy_crashes`, `pedestrians_hit`; `situation`; on a duty also `line`, `tour`, `trip`, `trips`, `trip_name`, `terminus`, `stops`, `trip_done`, `next_stop`, `next_stop_number`, `next_stop_arrival`, `next_stop_departure`, `next_stop_id`, `at_stop`, `previous_stop`, `previous_stop_id`, `next_stop_distance`, `next_stop_distance_nav`, `previous_stop_distance` (see the plugin docs for each).",
       "params": [],
       "returns": "table",
       "multi": false,
@@ -3237,6 +3258,22 @@
       "permission": "ui"
     },
     {
+      "name": "ui.remove_menu_item",
+      "group": "ui",
+      "since": "0.3.36",
+      "doc": "Takes the plugin's line `id` out of the pause menu; `true` when there was one.",
+      "params": [
+        {
+          "name": "id",
+          "type": "string",
+          "optional": false
+        }
+      ],
+      "returns": "boolean",
+      "multi": false,
+      "permission": "ui"
+    },
+    {
       "name": "ui.screen",
       "group": "ui",
       "since": "0.2.21",
@@ -3261,6 +3298,32 @@
           "name": "panel",
           "type": "table",
           "optional": false
+        }
+      ],
+      "returns": "true, or false and the reason",
+      "multi": true,
+      "permission": "ui"
+    },
+    {
+      "name": "ui.set_menu_item",
+      "group": "ui",
+      "since": "0.3.36",
+      "doc": "Puts a line in the game's pause menu, or changes the plugin's line `id`: its label (40 characters at most, shown as it is) and a Material Symbols icon of the game's (`\"departure_board\"`; the plugins' own icon without one). Choosing it closes the menu and sends `menu_item` with `id` - to open the plugin's panel, say. A plugin has 3 lines at most; they go when it stops.",
+      "params": [
+        {
+          "name": "id",
+          "type": "string",
+          "optional": false
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "optional": false
+        },
+        {
+          "name": "icon",
+          "type": "string",
+          "optional": true
         }
       ],
       "returns": "true, or false and the reason",
@@ -4273,6 +4336,14 @@
       ],
       "doc": "A button (or another clickable part) of one of the plugin's panels was clicked; `element` is `nil` for the panel itself. Enter in a text field is a click on it.",
       "since": "0.2.21"
+    },
+    {
+      "name": "menu_item",
+      "args": [
+        "id"
+      ],
+      "doc": "The player chose one of the plugin's lines in the pause menu (`ui.set_menu_item`); the menu has closed.",
+      "since": "0.3.36"
     },
     {
       "name": "ui_focus",

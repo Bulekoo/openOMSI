@@ -459,6 +459,34 @@ fn a_backwards_jump_replays_its_phase_once() {
 }
 
 #[test]
+fn coincident_skips_wait_for_any_of_their_lights() {
+    let p = |s: [i32; 9]| -> Vec<(i32, f32)> { s.into_iter().zip([3.0, 10.0, 3.0, 3.0, 10.0, 3.0, 3.0, 10.0, 3.0]).collect() };
+    for asking in [3, 4] {
+        let mut c = TrafficLightController::from_program(
+            vec![
+                (p([3, 6, 9, 0, 0, 0, 0, 0, 0]), Some(20.0)),
+                (p([6, 6, 6, 6, 6, 9, 0, 0, 0]), None),
+                (p([6, 6, 6, 6, 6, 9, 0, 0, 0]), None),
+                (p([0, 0, 0, 0, 0, 0, 3, 6, 9]), Some(20.0)),
+                (p([0, 0, 0, 0, 0, 0, 3, 6, 9]), None),
+                (p([0, 0, 0, 3, 6, 9, 0, 0, 0]), Some(14.0)),
+            ],
+            Some(48.0),
+            &[],
+            &[[3.0, 32.0, 1.0, 48.0], [4.0, 32.0, 1.0, 48.0], [5.0, 16.0, 1.0, 32.0], [5.0, 0.0, 0.0, 16.0], [5.0, 5.0, 0.0, 16.0], [5.0, 10.0, 0.0, 16.0], [0.0, 13.0, 0.0, 8.0]],
+        );
+        c.start(0.0);
+        c.request[asking] = true;
+        let mut green = false;
+        for _ in 0..600 {
+            c.advance(0.1);
+            green |= c.state(asking) == 6;
+        }
+        assert!(green, "light {asking} asking alone never got its green");
+    }
+}
+
+#[test]
 fn simultaneous_inactive_events_do_not_stall_the_cycle() {
     let mut c = TrafficLightController::from_program(
         vec![(vec![(0, 4.0), (6, 16.0)], None); 2],

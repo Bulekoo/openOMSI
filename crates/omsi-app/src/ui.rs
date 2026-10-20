@@ -9,11 +9,16 @@
 use ab_glyph::{Font, FontVec, PxScale, ScaleFont, VariableFont};
 use omsi_render::{Renderer, Scene, TextureId};
 
+mod chat;
+mod hud;
+pub(crate) use hud::{window_size, SIZE_KEYS};
 mod menu;
+mod information_bar;
 mod perf_panel;
 mod text;
 
 pub use text::TextCache;
+pub use information_bar::{InfoBar, InfoItem, InfoItemStyle};
 use menu::*;
 use text::*;
 
@@ -55,12 +60,12 @@ impl NoticeKind {
     /// do, red for an alert, green for done, blue for an update) and its Material icon.
     pub fn look(self) -> ([u8; 3], &'static str) {
         match self {
-            NoticeKind::Info => ([184, 184, 184], "info"),
-            NoticeKind::Warn => ([224, 164, 58], "warning"),
-            NoticeKind::Alert => ([229, 83, 75], "error"),
-            NoticeKind::Update => ([96, 160, 232], "system_update"),
-            NoticeKind::Action => ([232, 160, 48], "touch_app"),
-            NoticeKind::Success => ([76, 183, 130], "check_circle"),
+            NoticeKind::Info => ([142, 142, 147], "info"),
+            NoticeKind::Warn => ([235, 170, 60], "warning"),
+            NoticeKind::Alert => ([255, 69, 58], "error"),
+            NoticeKind::Update => ([47, 124, 246], "system_update"),
+            NoticeKind::Action => ([235, 170, 60], "touch_app"),
+            NoticeKind::Success => ([47, 168, 79], "check_circle"),
         }
     }
 
@@ -202,6 +207,7 @@ pub struct ChatWidget {
     pub rect: [f32; 4],
     pub hovered: bool,
     pub caret_t: f32,
+    translations: chat::TranslationCache,
 }
 
 impl ChatWidget {
@@ -308,6 +314,8 @@ pub struct Frame<'a> {
     /// How strongly the backgrounds are drawn (`backdrop`): the menu's and the timetable's
     /// panels, the chat's box, the plates under the notes, the tooltip and the frame rate.
     pub opacity: f32,
+    pub light: bool,
+    pub sizes: [f32; 3],
     pub width: f32,
     pub height: f32,
     pub cursor: (f32, f32),
@@ -347,8 +355,8 @@ pub struct Frame<'a> {
     pub menu_disabled: &'a [&'a str],
     /// The timetable window (Insert).
     pub timetable: Option<TimetableView>,
-    /// The information bar along the top: its parts between [`INFO_SEP`]s.
-    pub info: Option<String>,
+    /// The information bar along the top, split between driving details and vehicle data.
+    pub info: Option<InfoBar>,
     /// The room the information bar has along the top: from x to x, from y down (on a
     /// touch screen the gap between its buttons); none: the window's width.
     pub info_room: Option<[f32; 3]>,
@@ -438,26 +446,9 @@ pub struct Ui {
     /// navigator to keep out of its way.
     pub info_rect: Option<[f32; 4]>,
     perf: perf_panel::PerfPanel,
-}
-
-/// Between the information bar's parts.
-pub(crate) const INFO_SEP: &str = "   |   ";
-
-/// The information bar's parts in rows no wider than `room` (as `width` measures a text),
-/// each as many parts as fit: in one line it ran off both sides of a narrow window, and on a
-/// phone it lay under the buttons along the top (#1164).
-pub(crate) fn info_rows(line: &str, room: f32, width: impl Fn(&str) -> f32) -> Vec<String> {
-    let mut rows: Vec<String> = Vec::new();
-    for part in line.split(INFO_SEP) {
-        match rows.last_mut() {
-            Some(row) if width(&format!("{row}{INFO_SEP}{part}")) <= room => {
-                row.push_str(INFO_SEP);
-                row.push_str(part);
-            }
-            _ => rows.push(part.to_string()),
-        }
-    }
-    rows
+    hud: hud::Hud,
+    grips: [Option<([f32; 4], f32, f32)>; 3],
+    caps: [f32; 3],
 }
 
 impl Ui {
@@ -485,6 +476,7 @@ impl Ui {
             .chain(self.menu_scroll_track.iter_mut())
             .chain(self.menu_pane_go.iter_mut())
             .chain(self.menu_pane_box.iter_mut())
+            .chain(self.grips.iter_mut().flatten().map(|g| &mut g.0))
         {
             rect[0] += x;
             rect[2] += x;
@@ -510,13 +502,15 @@ impl Ui {
         self.chat.rect[2] += x;
     }
     pub fn new() -> Option<Ui> {
-        Some(Ui { origin_x: 0.0, text: TextCache::new()?, chat: ChatWidget::default(), menu_rects: Vec::new(), menu_arrows: Vec::new(), menu_scroll_thumb: None, menu_scroll_track: None, menu_ctl: Vec::new(), dd_rects: Vec::new(), dd_top: 0, dd_rows: 8, dd_scroll: None, menu_side: Vec::new(), menu_pane: Vec::new(), menu_pane_start: 0, menu_pane_go: None, menu_pane_box: None, menu_pane_scroll: None, menu_time: Vec::new(), anim: Default::default(), anim_dt: 0.0, menu_overlay_range: 0..0, vr_cursor_overlay: None, vr_tooltip_overlay: None, menu_start: 0, menu_rows: 0, menu_row_h: 1.0, images: Default::default(), info_rect: None, perf: Default::default() })
+        Some(Ui { origin_x: 0.0, text: TextCache::new()?, chat: ChatWidget::default(), menu_rects: Vec::new(), menu_arrows: Vec::new(), menu_scroll_thumb: None, menu_scroll_track: None, menu_ctl: Vec::new(), dd_rects: Vec::new(), dd_top: 0, dd_rows: 8, dd_scroll: None, menu_side: Vec::new(), menu_pane: Vec::new(), menu_pane_start: 0, menu_pane_go: None, menu_pane_box: None, menu_pane_scroll: None, menu_time: Vec::new(), anim: Default::default(), anim_dt: 0.0, menu_overlay_range: 0..0, vr_cursor_overlay: None, vr_tooltip_overlay: None, menu_start: 0, menu_rows: 0, menu_row_h: 1.0, images: Default::default(), info_rect: None, perf: Default::default(), hud: hud::Hud::new(false), grips: [None; 3], caps: [f32::MAX; 3] })
     }
 
     /// Draw the frame's interface: its overlays go after the HUD's in `scene.overlays`.
     pub fn draw(&mut self, r: &Renderer, scene: &mut Scene, f: &Frame, dt: f32) {
         let s = f.scale.max(0.5) * f.ui_scale;
         self.text.backdrop = f.opacity;
+        self.hud = hud::Hud::new(f.light);
+        self.grips = [None; 3];
         // --- name tags above the other players' buses
         for ((x, y), name, sub, alpha) in &f.tags {
             let a = (alpha.clamp(0.0, 1.0) * 255.0) as u8;
@@ -535,6 +529,7 @@ impl Ui {
         // the top of the windows in the corners: the notes on the left start on the line of
         // the timetable and a tutorial page on the right (14 px down, they stood higher)
         let corner_top = 60.0 * s;
+        self.draw_info_bar(r, scene, f, s);
         // --- the notes, top left: only the editors' keys while one is on (what the driver
         // has to do comes as a notification): one flat card, the lines in it
         let notes_bottom = {
@@ -550,10 +545,11 @@ impl Ui {
                 let lh = (px as f32 * 1.5).round();
                 let (pad_x, pad_y) = (12.0 * s, 8.0 * s);
                 let w = lines.iter().map(|t| self.text.width_raw(t, px as f32)).fold(0.0f32, f32::max) + pad_x * 2.0;
+                let y0 = self.below_info(x0, x0 + w, y0, s);
                 let h = pad_y * 2.0 + lh * lines.len() as f32;
-                self.text.rounded(r, scene, [x0, y0, x0 + w, y0 + h], 8.0 * s, [28, 28, 28, (235.0 * self.text.backdrop.min(1.0)) as u8]);
+                self.hud_card(r, scene, [x0, y0, x0 + w, y0 + h], hud::RADIUS * s, self.text.backdrop, s);
                 for (i, t) in lines.iter().enumerate() {
-                    let l = self.text.label_op(r, scene, t, px, [184, 184, 184, 0], 1.0);
+                    let l = self.text.label_op(r, scene, t, px, hud::text(self.hud.dim), 1.0);
                     let ly = (y0 + pad_y + lh * (i as f32 + 0.5) - l.h as f32 * 0.5).round();
                     scene.overlays.push((l.tex, [x0 + pad_x, ly, x0 + pad_x + l.w as f32, ly + l.h as f32]));
                 }
@@ -584,12 +580,16 @@ impl Ui {
             {
                 let tc = &self.text;
                 let measure = |t: &str| tc.width_raw(t, px as f32);
+                let language = omsi_ui::i18n::language();
                 let mut i = end;
                 while i > 0 && rows.len() < CHAT_SHOWN {
                     i -= 1;
                     let line = &c.lines[i];
                     let color = if line.starts_with("* ") { [255, 226, 140, 230] } else { [255, 255, 255, 230] };
-                    for (k, t) in wrap_rows(line, width, indent, &measure).into_iter().enumerate().rev() {
+                    let line = self.chat.translations.line(line, &language, |key| {
+                        crate::_rust_i18n_try_translate(&language, key).map(|text| text.into_owned())
+                    });
+                    for (k, t) in wrap_rows(line.as_ref(), width, indent, &measure).into_iter().enumerate().rev() {
                         if rows.len() == CHAT_SHOWN {
                             break;
                         }
@@ -600,7 +600,7 @@ impl Ui {
             }
             let mut y = y0 + lh * (CHAT_SHOWN - rows.len()) as f32;
             for (dx, text, color) in rows {
-                let l = self.text.label(r, scene, &text, px, color);
+                let l = self.text.label_raw(r, scene, &text, px, color);
                 scene.overlays.push((l.tex, [x0 + dx, y, x0 + dx + l.w as f32, y + l.h as f32]));
                 y += lh;
             }
@@ -608,16 +608,15 @@ impl Ui {
                 // the input box: shown when the cursor is over the chat or it is typed into
                 let by = y0 + lh * CHAT_SHOWN as f32 + lh * 0.2;
                 let bh = lh * 1.25;
-                let plate = self.text.plate(r, scene, 0);
-                scene.overlays.push((plate, [x0 - 4.0 * s, by, x0 + width, by + bh]));
+                self.hud_card(r, scene, [x0 - 4.0 * s, by, x0 + width, by + bh], bh * 0.5, self.text.backdrop, s);
                 self.chat.caret_t += dt;
                 let caret = if open && (self.chat.caret_t % 1.0) < 0.55 { "|" } else { "" };
                 let (text, color) = match c.typing {
-                    Some(t) => (format!("{t}{caret}"), [255, 255, 255, 240]),
+                    Some(t) => (format!("{t}{caret}"), hud::text(self.hud.ink)),
                     None => match &c.open_key {
-                        Some(k) => (format!("Click here or press {} to chat", k), [190, 190, 190, 200]),
+                        Some(k) => (format!("Click here or press {} to chat", k), hud::text(self.hud.dim)),
                         // chat_open unbound: no "(unbound)" in the hint
-                        None => ("Click here to chat".to_string(), [190, 190, 190, 200]),
+                        None => ("Click here to chat".to_string(), hud::text(self.hud.dim)),
                     },
                 };
                 let text = clip_left(&self.text, &text, px as f32, width - 10.0 * s);
@@ -644,35 +643,13 @@ impl Ui {
         self.draw_notices(r, scene, f, s);
         if let Some(fps) = f.fps {
             // (on a small flat card, as the other plates: over a bright sky bare text was hard to read)
-            let l = self.text.label_op(r, scene, &format!("{fps:.0} fps"), (12.0 * s).round() as u32, [184, 184, 184, 0], 1.0);
+            let l = self.text.label_op(r, scene, &format!("{fps:.0} fps"), (12.0 * s).round() as u32, hud::text(self.hud.dim), 1.0);
             let x = (f.width - l.w as f32 - 14.0 * s).round();
             let y = (10.0 * s).round();
-            self.text.rounded(r, scene, [x - 6.0 * s, y, x + l.w as f32 + 6.0 * s, y + l.h as f32], 6.0 * s, [28, 28, 28, (220.0 * self.text.backdrop.min(1.0)) as u8]);
+            self.hud_card(r, scene, [x - 8.0 * s, y, x + l.w as f32 + 8.0 * s, y + l.h as f32], hud::RADIUS * s, self.text.backdrop, s);
             scene.overlays.push((l.tex, [x, y, x + l.w as f32, y + l.h as f32]));
         }
         self.draw_perf(r, scene, f, s, dt);
-        // --- the information bar, along the top in the middle: in as many rows as the room
-        // it has needs
-        self.info_rect = None;
-        // (not under the pause menu's rail, from under which it stood out)
-        let rail = f.menu.is_some() && f.menu_kind == MenuKind::Game && f.menu_head.is_none() && !f.vr;
-        if let Some(info) = f.info.as_ref().filter(|_| !rail) {
-            let px = (15.0 * s) as u32;
-            let pad = 10.0 * s;
-            let [x0, x1, y] = f.info_room.unwrap_or([12.0 * s, f.width - 12.0 * s, 8.0 * s]);
-            let rows = info_rows(info, (x1 - x0 - pad * 2.0).max(1.0), |t| self.text.width(t, px as f32));
-            let labels: Vec<Label> = rows.iter().map(|t| self.text.label_op(r, scene, &omsi_ui::tr(t), px, [237, 237, 237, 0], 1.0)).collect();
-            let lw = labels.iter().map(|l| l.w).max().unwrap_or(0) as f32;
-            let lh = labels.iter().map(|l| l.h).max().unwrap_or(0) as f32;
-            let (w, h) = (lw + pad * 2.0, lh * labels.len() as f32 + pad * 0.8);
-            let x = (x0 + x1 - w) * 0.5;
-            self.text.rounded(r, scene, [x, y, x + w, y + h], 8.0 * s, [28, 28, 28, (255.0 * self.text.backdrop.min(1.0)) as u8]);
-            for (k, l) in labels.iter().enumerate() {
-                let (lx, ly) = (x + (w - l.w as f32) * 0.5, y + pad * 0.4 + k as f32 * lh);
-                scene.overlays.push((l.tex, [lx, ly, lx + l.w as f32, ly + l.h as f32]));
-            }
-            self.info_rect = Some([x, y, x + w, y + h]);
-        }
         let tutorial_w = (420.0 * s).min(f.width * 0.42);
         // --- the timetable window, on the right (left of a tutorial page, which has the
         // same corner)
@@ -684,7 +661,7 @@ impl Ui {
         if let Some((title, text, image, at, count)) = f.tutorial {
             let w = tutorial_w;
             let x = f.width - w - 16.0 * s;
-            let mut y = corner_top;
+            let mut y = self.below_info(x, x + w, corner_top, s);
             let top = y;
             let pad = 14.0 * s;
             let mut items: Vec<(TextureId, [f32; 4])> = Vec::new();
@@ -706,7 +683,7 @@ impl Ui {
             let tp = (18.0 * s) as u32;
             if !title.is_empty() {
                 for line in wrap(&self.text, title, tp as f32, w - pad * 2.0) {
-                    let l = self.text.label(r, scene, &line, tp, [255, 200, 110, 0]);
+                    let l = self.text.label_op(r, scene, &omsi_ui::tr(&line), tp, hud::text(self.hud.ink), 1.0);
                     items.push((l.tex, [x + pad, y, x + pad + l.w as f32, y + l.h as f32]));
                     y += l.h as f32;
                 }
@@ -719,7 +696,7 @@ impl Ui {
                     if y > max_y {
                         break 'text;
                     }
-                    let l = self.text.label(r, scene, &line, bp, [235, 235, 235, 0]);
+                    let l = self.text.label_op(r, scene, &omsi_ui::tr(&line), bp, hud::text(self.hud.dim), 1.0);
                     items.push((l.tex, [x + pad, y, x + pad + l.w as f32, y + l.h as f32]));
                     y += l.h as f32 * 0.95;
                 }
@@ -727,12 +704,11 @@ impl Ui {
             }
             let tr = |t: &str| omsi_ui::tr(t).into_owned();
             let foot = format!("{} {}/{}   |   {}   |   {}   |   {}", tr("Page"), at + 1, count, tr("Enter next"), tr("Page Up back"), tr("Ctrl+T hide"));
-            let l = self.text.label(r, scene, &foot, (12.0 * s) as u32, [150, 150, 150, 0]);
+            let l = self.text.label_op(r, scene, &foot, (12.0 * s) as u32, hud::text(self.hud.muted), 1.0);
             y += 4.0 * s;
             items.push((l.tex, [x + pad, y, x + pad + l.w as f32, y + l.h as f32]));
             y += l.h as f32 + pad;
-            let plate = self.text.plate(r, scene, 3);
-            scene.overlays.push((plate, [x, top, x + w, y]));
+            self.hud_card(r, scene, [x, top, x + w, y], hud::RADIUS * s, self.text.backdrop, s);
             scene.overlays.extend(items);
         }
         // --- the game menu and its lists, in the middle over a dimmed picture
@@ -743,7 +719,8 @@ impl Ui {
         // --- the mouse-over name, right of the cursor
         self.vr_tooltip_overlay = None;
         if let Some(t) = f.tooltip.as_ref().filter(|t| !t.is_empty()) {
-            let l = self.text.label_op(r, scene, &omsi_ui::tr(t), (13.0 * s).round() as u32, [237, 237, 237, 0], 1.0);
+            let ink = if f.vr { [237, 237, 237, 0] } else { hud::text(self.hud.ink) };
+            let l = self.text.label_op(r, scene, &tooltip_label(t), (13.0 * s).round() as u32, ink, 1.0);
             let mut x = f.cursor.0.clamp(0.0, f.width) + 16.0 * s;
             let mut y = f.cursor.1 + 2.0 * s;
             if f.tooltip_above {
@@ -759,7 +736,7 @@ impl Ui {
                 self.vr_tooltip_overlay = Some(scene.overlays.len());
             } else {
                 // (in a headset the text alone is placed in front of the eye)
-                self.text.rounded(r, scene, [x - 7.0 * s, y, x + l.w as f32 + 7.0 * s, y + l.h as f32], 6.0 * s, [28, 28, 28, 230]);
+                self.hud_card(r, scene, [x - 9.0 * s, y, x + l.w as f32 + 9.0 * s, y + l.h as f32], hud::RADIUS * s, 1.0, s);
             }
             scene.overlays.push((l.tex, [x, y, x + l.w as f32, y + l.h as f32]));
         }
@@ -807,15 +784,17 @@ fn steer_cross_pixels(n: usize) -> Vec<u8> {
 }
 
 impl Ui {
-    /// The timetable window as the launcher's card: a header with the line on an amber sign,
+    /// The timetable window as the navigator's card: a header with the line on its red tag,
     /// the terminus and how late, the tour and trip under it; then the stops as the
     /// launcher's trips table (arrives, stop, departs), the stops passed muted, the next one
-    /// on a soft amber band with an amber bar at its left; the next trip at the end.
+    /// on a soft band of the route's colour with a bar at its left; the next trip at the end.
     #[allow(clippy::too_many_arguments)]
     fn draw_timetable(&mut self, r: &Renderer, scene: &mut Scene, f: &Frame, t: &TimetableView, top: f32, beside: f32, s: f32) {
-        const INK: [u8; 4] = [237, 237, 237, 0];
-        const INK_2: [u8; 4] = [184, 184, 184, 0];
-        const MUTED: [u8; 4] = [138, 138, 138, 0];
+        let size = self.shown_size(1, f.sizes[1]);
+        let s = s * size;
+        let ink_1 = hud::text(self.hud.ink);
+        let ink_2 = hud::text(self.hud.dim);
+        let muted = hud::text(self.hud.muted);
         let hpx = (11.5 * s).round() as u32 | BOLD;
         let time_w = 44.0 * s;
         let exp_w = self.text.width_bold("Expected", (11.5 * s).round()).max(time_w) + 16.0 * s;
@@ -823,6 +802,7 @@ impl Ui {
         let roomy = wide - 98.0 * s - time_w - exp_w >= 150.0 * s;
         let w = if roomy { wide } else { (400.0 * s).min(f.width * 0.42).round() };
         let x = (f.width - w - 16.0 * s - beside).max(16.0 * s).round();
+        let top = self.below_info(x, x + w, top, s).round();
         let pad = (16.0 * s).round();
         let px = (13.0 * s).round() as u32;
         let lh = (30.0 * s).round();
@@ -835,15 +815,13 @@ impl Ui {
         let next = t.rows.iter().position(|r| r.state == 1).unwrap_or(0);
         let first = next.saturating_sub(1).min(n.saturating_sub(shown));
         let h = (head_h + th_h + lh * shown as f32 + pad * 0.6).round();
-        let a = (255.0 * self.text.backdrop.min(1.0)) as u8;
-        self.text.shadow(r, scene, [x, top, x + w, top + h], 8.0 * s, 18.0 * s, 4.0 * s, 60);
-        self.text.rounded(r, scene, [x, top, x + w, top + h], 8.0 * s, [28, 28, 28, a]);
+        self.hud_card(r, scene, [x, top, x + w, top + h], hud::RADIUS * s, self.text.backdrop, s);
         // the header: the line's sign, the terminus, how late
         let cy = top + pad + 11.0 * s;
-        let sign = self.text.label_op(r, scene, &t.line, (13.0 * s).round() as u32 | BOLD, [26, 18, 6, 0], 1.0);
+        let sign = self.text.label_op(r, scene, &t.line, (13.0 * s).round() as u32 | BOLD, [255, 255, 255, 0], 1.0);
         let sw = (sign.w as f32 + 10.0 * s).max(30.0 * s).round();
         let sh = (22.0 * s).round();
-        self.text.rounded(r, scene, [x + pad, cy - sh * 0.5, x + pad + sw, cy + sh * 0.5], 4.0 * s, [232, 160, 48, 255]);
+        self.text.rounded(r, scene, [x + pad, cy - sh * 0.5, x + pad + sw, cy + sh * 0.5], 4.0 * s, hud::LINE);
         let (sx, sy) = ((x + pad + (sw - sign.w as f32) * 0.5).round(), (cy - sign.h as f32 * 0.5).round());
         scene.overlays.push((sign.tex, [sx, sy, sx + sign.w as f32, sy + sign.h as f32]));
         let d = t.delay;
@@ -851,23 +829,23 @@ impl Ui {
             let m = (d.abs() / 60.0) as i64;
             let sec = (d.abs() % 60.0) as i64;
             let sign = if d < 0.0 { "-" } else { "+" };
-            let col = if d > 59.0 { [229, 83, 75, 0] } else if d < -59.0 { [96, 160, 232, 0] } else { [76, 183, 130, 0] };
-            (format!("{sign}{m}:{sec:02}"), col)
+            (format!("{sign}{m}:{sec:02}"), hud::delay_color(d as f32))
         };
-        let dl = self.text.label_op(r, scene, &dtext, (13.0 * s).round() as u32 | BOLD, dcol, 1.0);
-        let dx = (x + w - pad - dl.w as f32).round();
+        let dl = self.text.label_op(r, scene, &dtext, (13.0 * s).round() as u32 | BOLD, hud::text(dcol), 1.0);
+        let dx = (x + w - pad - 7.0 * s - dl.w as f32).round();
+        self.text.rounded(r, scene, [dx - 7.0 * s, cy - dl.h as f32 * 0.5 - 2.0 * s, dx + dl.w as f32 + 7.0 * s, cy + dl.h as f32 * 0.5 + 2.0 * s], hud::RADIUS * s, hud::tint(dcol, 41));
         scene.overlays.push((dl.tex, [dx, (cy - dl.h as f32 * 0.5).round(), dx + dl.w as f32, (cy - dl.h as f32 * 0.5).round() + dl.h as f32]));
         let tx = x + pad + sw + 10.0 * s;
         let term = clip_to(&self.text, &t.terminus, 15.0 * s, dx - 10.0 * s - tx);
-        let tl = self.text.label_op(r, scene, &term, (15.0 * s).round() as u32 | BOLD, INK, 1.0);
+        let tl = self.text.label_op(r, scene, &term, (15.0 * s).round() as u32 | BOLD, ink_1, 1.0);
         scene.overlays.push((tl.tex, [tx.round(), (cy - tl.h as f32 * 0.5).round(), tx.round() + tl.w as f32, (cy - tl.h as f32 * 0.5).round() + tl.h as f32]));
         let my = top + pad + 34.0 * s;
         let icon_px = (14.0 * s).round() as u32;
-        if let Some(ic) = self.text.icon(r, scene, "departure_board", icon_px, [138, 138, 138, 255]) {
+        if let Some(ic) = self.text.icon(r, scene, "departure_board", icon_px, self.hud.muted) {
             let iy = (my - icon_px as f32 * 0.5).round();
             scene.overlays.push((ic, [x + pad, iy, x + pad + icon_px as f32, iy + icon_px as f32]));
         }
-        let ml = self.text.label_op(r, scene, &t.meta, (12.0 * s).round() as u32, MUTED, 1.0);
+        let ml = self.text.label_op(r, scene, &t.meta, (12.0 * s).round() as u32, muted, 1.0);
         let mx = (x + pad + icon_px as f32 + 6.0 * s).round();
         scene.overlays.push((ml.tex, [mx, (my - ml.h as f32 * 0.5).round(), mx + ml.w as f32, (my - ml.h as f32 * 0.5).round() + ml.h as f32]));
         // the table's head
@@ -878,7 +856,7 @@ impl Ui {
         let col_dep = if roomy { col_exp - exp_w } else { col_exp };
         let heads = [(omsi_ui::tr("Arrives"), col_arr, false), (omsi_ui::tr("Stop"), col_stop, false), (omsi_ui::tr("Departs"), col_dep, true), (omsi_ui::tr("Expected"), col_exp, true)];
         for (txt, at, right) in heads.into_iter().take(if roomy { 4 } else { 3 }) {
-            let l = self.text.label_op(r, scene, &txt, hpx, MUTED, 1.0);
+            let l = self.text.label_op(r, scene, &txt, hpx, muted, 1.0);
             let lx = if right { at - l.w as f32 } else { at };
             let ly = (hy - l.h as f32 * 0.5).round();
             scene.overlays.push((l.tex, [lx.round(), ly, lx.round() + l.w as f32, ly + l.h as f32]));
@@ -895,19 +873,19 @@ impl Ui {
                 },
             };
             if state == 1 {
-                self.text.rounded(r, scene, band, 4.0 * s, [232, 160, 48, 26]);
-                self.text.rounded(r, scene, [band[0], band[1], band[0] + 3.0 * s, band[3]], 1.5 * s, [232, 160, 48, 255]);
+                self.text.rounded(r, scene, band, 4.0 * s, self.hud.shade(self.hud.accent, 0.16, self.text.backdrop));
+                self.text.rounded(r, scene, [band[0], band[1], band[0] + 3.0 * s, band[3]], 1.5 * s, self.hud.accent);
             } else if (k - first) % 2 == 1 {
-                self.text.rounded(r, scene, band, 4.0 * s, [33, 33, 33, a]);
+                self.text.rounded(r, scene, band, 4.0 * s, self.hud.shade(self.hud.ink, 0.04, self.text.backdrop));
             }
             let (ink, time_ink) = match state {
-                0 | 3 => (MUTED, MUTED),
-                1 => (INK, [255, 200, 110, 0]),
-                _ => (INK_2, INK),
+                0 | 3 => (muted, muted),
+                1 => (ink_1, hud::text(self.hud.accent)),
+                _ => (ink_2, ink_1),
             };
             let size = if state == 1 { px | BOLD } else { px };
             let cy = ry + (lh - 2.0 * s) * 0.5;
-            for (txt, at, right, col) in [(&arr, col_arr, false, time_ink), (&dep, col_dep, true, time_ink), (&expected, col_exp, true, dcol)] {
+            for (txt, at, right, col) in [(&arr, col_arr, false, time_ink), (&dep, col_dep, true, time_ink), (&expected, col_exp, true, hud::text(dcol))] {
                 if txt.is_empty() {
                     continue;
                 }
@@ -921,9 +899,10 @@ impl Ui {
             let ly = (cy - l.h as f32 * 0.5).round();
             scene.overlays.push((l.tex, [col_stop.round(), ly, col_stop.round() + l.w as f32, ly + l.h as f32]));
         }
+        self.hud_grip(r, scene, 1, [x, top, x + w, top + h], size, f, s);
     }
 
-    /// The notifications as the launcher's cards: flat graphite, no edge, the kind's icon in
+    /// The notifications as the navigator's cards: no edge, a soft shadow, the kind's icon in
     /// its colour, the text wrapped to as many rows as it needs. A card comes in rising a
     /// little and fading, and goes fading while the room it took closes; the newest stands
     /// on top of the stack.
@@ -948,7 +927,7 @@ impl Ui {
                 let place = if left { (a[0].max(8.0 * s), 0) } else { (a[2].min(f.width - 8.0 * s), 2) };
                 if a[1] > f.height * 0.5 { (true, a[1] - gap, place) } else { (false, a[3] + gap, place) }
             }
-            None => (false, 70.0 * s, (f.width * 0.5, 1)),
+            None => (false, self.below_info(f.width * 0.5 - 200.0 * s, f.width * 0.5 + 200.0 * s, 70.0 * s, s), (f.width * 0.5, 1)),
         };
         // (growing up, the oldest stands by the navigator and the newest on top; growing
         // down, the newest first)
@@ -986,15 +965,14 @@ impl Ui {
             let ty = top + (1.0 - p) * 10.0 * s;
             let k = (p * 16.0).round() / 16.0;
             let (rgb, icon) = n.kind.look();
-            self.text.shadow(r, scene, [x0, ty, x0 + w, ty + h], 8.0 * s, 18.0 * s, 4.0 * s, (70.0 * k) as u8);
-            self.text.rounded(r, scene, [x0, ty, x0 + w, ty + h], 8.0 * s, [28, 28, 28, (246.0 * k) as u8]);
+            self.hud_card(r, scene, [x0, ty, x0 + w, ty + h], hud::RADIUS * s, k, s);
             if let Some(t) = self.text.icon(r, scene, icon, icon_px, [rgb[0], rgb[1], rgb[2], (255.0 * k) as u8]) {
                 let iy = (ty + pad_y + lh * 0.5 - icon_px as f32 * 0.5).round();
                 let ix = (x0 + pad_l).round();
                 scene.overlays.push((t, [ix, iy, ix + icon_px as f32, iy + icon_px as f32]));
             }
             for (i, row) in rows.iter().enumerate() {
-                let l = self.text.label_op(r, scene, row, px, [237, 237, 237, 0], k);
+                let l = self.text.label_op(r, scene, row, px, hud::text(self.hud.ink), k);
                 let cy = ty + pad_y + lh * (i as f32 + 0.5);
                 let ly = (cy - l.h as f32 * 0.5).round();
                 let lx = (x0 + text_x).round();
@@ -1418,8 +1396,84 @@ fn vr_settings_sidebar_step(available: f32, pages: usize, scale: f32) -> f32 {
     (available.max(0.0) / pages.max(1) as f32).min(42.0 * scale)
 }
 
+/// Mouse variants append suffixes to an official control label. Those cannot be
+/// catalogue templates (they have no leading text), so translate the base separately.
+fn tooltip_label(label: &str) -> std::borrow::Cow<'_, str> {
+    let translated = omsi_ui::tr(label);
+    if translated != label {
+        return translated;
+    }
+    for suffix in [" (outside)", " 2"] {
+        if let Some(base) = label.strip_suffix(suffix) {
+            return format!("{}{}", omsi_ui::tr(base), omsi_ui::tr(suffix)).into();
+        }
+    }
+    translated
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn cockpit_tooltips_use_complete_catalogue_labels_and_mouse_suffixes() {
+        let names = omsi_input::describe::ControlNames::from_table(
+            "ENG",
+            &[
+                ("parking_brake_toggle", "Parking Brake On/Off"),
+                ("bus_doorfront0", "Front Door, 1st Wing Open/Close"),
+            ],
+        );
+        crate::with_test_language("pt", || {
+            for (event, expected) in [
+                (
+                    "parking_brake_mouse",
+                    "Freio de estacionamento: ligar/desligar",
+                ),
+                (
+                    "parking_brake_2",
+                    "Freio de estacionamento: ligar/desligar 2",
+                ),
+                (
+                    "bus_doorfront0_external",
+                    "Porta dianteira, primeira folha: abrir/fechar (externo)",
+                ),
+                (
+                    "cp_heizregler_temp",
+                    "Controle de temperatura do aquecimento",
+                ),
+            ] {
+                assert_eq!(tooltip_label(&names.control(event)), expected, "{event}");
+            }
+            // A numbered full label takes precedence over the mouse suffix fallback.
+            assert_eq!(
+                tooltip_label("Ticket Printer: Select Ticket 2"),
+                "Impressora de bilhetes: selecionar bilhete 2"
+            );
+            for event in ["ALMEX_Funktion", "Zahltisch_Wechsler_0_05"] {
+                let label = names.control(event);
+                assert_eq!(tooltip_label(&label), label, "untranslated mod: {event}");
+            }
+        });
+        crate::with_test_language("ENG", || {
+            for event in [
+                "parking_brake_mouse",
+                "parking_brake_2",
+                "bus_doorfront0_external",
+            ] {
+                let label = names.control(event);
+                assert_eq!(tooltip_label(&label), label);
+            }
+        });
+    }
+
+    #[test]
+    fn cockpit_mouse_suffixes_use_the_selected_catalogue_language() {
+        // An existing Spanish text also works as a mod's control label.
+        let names = omsi_input::describe::ControlNames::from_table("ENG", &[("mod_toggle", "on")]);
+        crate::with_test_language("es", || {
+            assert_eq!(tooltip_label(&names.control("mod_2")), "activado 2");
+        });
+    }
+
     /// The steering cross: white arms with a dark edge, open in the middle, nothing in the
     /// corners - the same in all four directions.
     #[test]
@@ -1437,25 +1491,6 @@ mod tests {
     }
 
     use super::*;
-
-    /// The information bar is broken between its parts into rows that fit the room it has,
-    /// as many parts to a row as go in; a part wider than the room alone is a row of its own
-    /// (#1164).
-    #[test]
-    fn the_information_bar_breaks_into_rows_that_fit() {
-        let line = ["09:00:07", "0 km/h", "EXT 15 °C / INT 15 °C", "tank 80 %", "0 Passengers", "76 › Krankenhaus", "next: Bauernhof", "-6:52"].join(INFO_SEP);
-        let w = |t: &str| t.chars().count() as f32 * 10.0;
-        assert_eq!(info_rows(&line, 5000.0, w), vec![line.clone()]);
-        let rows = info_rows(&line, 500.0, w);
-        assert_eq!(rows, vec![
-            format!("09:00:07{INFO_SEP}0 km/h{INFO_SEP}EXT 15 °C / INT 15 °C"),
-            format!("tank 80 %{INFO_SEP}0 Passengers"),
-            format!("76 › Krankenhaus{INFO_SEP}next: Bauernhof{INFO_SEP}-6:52"),
-        ]);
-        assert!(rows.iter().all(|r| w(r) <= 500.0));
-        assert_eq!(rows.join(INFO_SEP), line);
-        assert_eq!(info_rows(&line, 50.0, w).len(), 8);
-    }
 
     #[test]
     fn a_server_notice_is_read_and_fades() {

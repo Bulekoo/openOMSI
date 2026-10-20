@@ -320,6 +320,14 @@ table.table { width: 100%; border-collapse: collapse; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; flex: none; }
 .dot.ok { background: var(--ok); }
 .dot.danger { background: var(--danger); }
+.trip-ends .from::before, .trip-ends .to::before { content: ''; display: inline-block; box-sizing: border-box; width: 8px; height: 8px; margin-right: 6px; border: 2px solid currentColor; border-radius: 50%; }
+.trip-ends .to::before { background: currentColor; }
+.trip-ends.stacked { position: relative; display: flex; flex-direction: column; min-width: 0; padding-left: 14px; }
+.trip-ends.stacked::before { content: ''; position: absolute; left: 3px; top: 14px; bottom: 14px; width: 2px; background: currentColor; opacity: 0.35; }
+.trip-ends.stacked > span { line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trip-ends.stacked > span::before { position: absolute; left: 0; margin: 0; }
+.trip-ends.stacked .from::before { top: 6px; }
+.trip-ends.stacked .to::before { bottom: 6px; }
 
 /* the line badge: a line number as the stops' signs show it */
 .line-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 24px; padding: 0 7px; border-radius: 4px; background: var(--text); color: var(--bg); font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -389,6 +397,9 @@ table.table { width: 100%; border-collapse: collapse; }
 .table.ibis td:first-child { width: 100%; max-width: 0; }
 .table.ibis td, .table.ibis th { padding: 6px 6px; }
 .table.ibis td:first-child, .table.ibis th:first-child { padding-left: 0; }
+.table.ibis tr.on td { background: var(--accent-soft); font-weight: 600; }
+.table.ibis tr.on td:first-child { padding-left: 6px; border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.table.ibis tr.on td:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
 
 .page-drive { padding: 20px 24px; overflow: hidden; container: drive / inline-size; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -482,9 +493,10 @@ table.table { width: 100%; border-collapse: collapse; }
 .roadbook { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--surface); border-left: 1px solid var(--line-strong); }
 .roadbook-head { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px 10px; }
 .roadbook-head b { font-size: 15px; }
-.roadbook-trips { flex: 1; min-height: 0; overflow: auto; padding: 0 8px 8px; }
+.roadbook-trips { flex: 1; min-height: 0; overflow: auto; padding: 0 8px 8px; container-type: inline-size; }
 .trip-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border-radius: var(--radius-sm); background: none; color: inherit; text-align: left; cursor: pointer; }
-.trip-row .time { width: 44px; flex: none; font-weight: 700; }
+.trip-row .time { width: 44px; flex: none; font-weight: 700; display: flex; flex-direction: column; }
+.trip-row .time small, .m-time small { font-weight: 400; font-size: 12px; color: var(--muted); }
 /* (wide enough for the longest depot run label, "Garázsmenet" in Hungarian, about 72 px; a
    longer one ends in an ellipsis rather than running into the terminus) */
 .trip-row .kind { flex: none; width: 76px; display: flex; align-items: center; min-width: 0; }
@@ -493,11 +505,26 @@ table.table { width: 100%; border-collapse: collapse; }
 .trip-row .grow { display: flex; flex-direction: column; min-width: 0; }
 .trip-row:hover { background: var(--surface-2); }
 .trip-row.on { background: var(--accent-soft); }
+@container (max-width: 280px) {
+  .trip-row { gap: 6px; padding: 7px 4px; }
+  .trip-row .kind { width: 40px; }
+}
 .trip-row.past { color: var(--muted); }
+/* the chosen trip's stops under it: a line with a dot per stop, the ends bold */
+.trip-stops { list-style: none; margin: 0 0 6px; padding: 0 8px 0 18px; font-size: 12px; }
+.trip-stops li { position: relative; display: flex; gap: 10px; align-items: center; min-width: 0; padding: 2px 0 2px 16px; color: var(--muted); }
+.trip-stops li::before { content: ''; position: absolute; left: 0; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--muted); }
+.trip-stops li:not(:last-child)::after { content: ''; position: absolute; left: 2px; top: 50%; bottom: -50%; width: 2px; background: var(--line-strong); }
+.trip-stops li.end { color: var(--text); font-weight: 600; }
+.trip-stops li.end::before { background: var(--text); }
+.trip-stops .num { flex: none; width: 40px; }
+.trip-stops li.km::before, .trip-stops li.km::after, .trip-stops li:has(+ li.km)::after { display: none; }
 .ibis-box { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px 14px; border-top: 1px solid var(--line-strong); }
 @container (max-width: 700px) {
   .duty-stage:not(.alone) { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 45%); }
   .roadbook { border-left: 0; border-top: 1px solid var(--line-strong); }
+  .duty-stage .roadbook { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 44%); grid-template-rows: auto minmax(0, 1fr); }
+  .duty-stage .ibis-box { grid-column: 2; grid-row: 1 / 3; overflow: auto; border-top: 0; border-left: 1px solid var(--line-strong); }
 }
 
 .drive-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; min-width: 0; padding: 14px 16px; background: var(--surface); border-radius: var(--radius); }
@@ -639,6 +666,9 @@ table.table { width: 100%; border-collapse: collapse; }
 @container (min-width: 480px) and (max-width: 700px) {
   .lay-classicplus .duty-stage:not(.alone) { grid-template-columns: minmax(0, 1fr) 220px; grid-template-rows: minmax(0, 1fr); }
   .lay-classicplus .roadbook { border-top: 0; }
+}
+@container (max-width: 479px) {
+  .lay-classicplus .duty-stage ~ .cp-pip { top: 14px; bottom: auto; }
 }
 
 @container drive (max-width: 1000px) {
@@ -992,7 +1022,7 @@ html.phone, html.phone body { font-size: 15px; -webkit-tap-highlight-color: tran
 .m-pick-text b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .m-pick-text small { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .m-check { color: var(--accent); display: inline-flex; }
-.m-time { font-weight: 700; font-variant-numeric: tabular-nums; width: 48px; }
+.m-time { font-weight: 700; font-variant-numeric: tabular-nums; width: 48px; display: flex; flex-direction: column; }
 .m-search { width: 100%; height: 46px; border-radius: 12px; border: 0; background: var(--surface-2); padding: 0 14px; margin-bottom: 10px; outline: none; font-size: 15px; }
 .m-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .m-tile { background: var(--surface); border-radius: 12px; overflow: hidden; text-align: left; padding: 0 0 10px; cursor: pointer; display: flex; flex-direction: column; }
@@ -1003,6 +1033,9 @@ html.phone, html.phone body { font-size: 15px; -webkit-tap-highlight-color: tran
 .m-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; height: 100%; }
 .m-split-list { overflow: auto; min-height: 0; }
 .m-split-map .routemap { height: 100%; min-height: 220px; border-radius: 12px; }
+@media (max-width: 560px) {
+  .m-split { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 240px; }
+}
 .m-time-sheet { display: flex; flex-direction: column; gap: 14px; max-width: 620px; margin: 0 auto; }
 .m-dial { display: flex; align-items: center; gap: 8px; background: var(--surface); border-radius: 12px; padding: 10px; }
 .m-dial b { flex: 1; text-align: center; font-size: 22px; font-weight: 700; }

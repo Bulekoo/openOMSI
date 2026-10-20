@@ -127,6 +127,11 @@ fn picture(r: &mut Renderer, w: &mut Wall, camera: &Camera, lighting: &Lighting)
     r.render_to_image(&mut w.scene, SIZE, SIZE, camera, lighting).unwrap()
 }
 
+fn settle(r: &mut Renderer, w: &mut Wall, camera: &Camera, lighting: &Lighting, parts: usize) {
+    picture(r, w, camera, lighting);
+    assert_eq!(r.history.bundle_stats.get(), (parts, 0), "the first repeat records again to keep what it binds");
+}
+
 #[test]
 #[ignore = "requires a graphics adapter; run with --ignored on a GPU host"]
 fn kept_bundles_draw_what_a_fresh_recording_draws() {
@@ -142,6 +147,7 @@ fn kept_bundles_draw_what_a_fresh_recording_draws() {
     assert_eq!(reused, 0);
     assert!(recorded >= 4, "the wall should take four bundles or more, got {recorded}");
     let parts = recorded;
+    settle(&mut kept, &mut w, &camera, &lighting, parts);
     for (n, &change) in CASES.iter().enumerate() {
         apply(&mut kept, &mut w, change, &camera, &lighting);
         let now = picture(&mut kept, &mut w, &camera, &lighting);
@@ -165,6 +171,7 @@ fn kept_bundles_draw_what_a_fresh_recording_draws() {
         let again = picture(&mut kept, &mut w, &camera, &lighting);
         assert_eq!(kept.history.bundle_stats.get().1, 0);
         assert!(now == again, "{change:?}: kept bundles drew something else than recorded ones");
+        settle(&mut kept, &mut w, &camera, &lighting, parts);
         // and the same scene drawn by another renderer for the first time
         let mut other = wall(&fresh);
         for &c in &CASES[..=n] {

@@ -2713,9 +2713,9 @@ pub fn hud_lines(lan: &LanSession, tr: &dyn Fn(&str) -> String) -> Vec<String> {
     let mut lines = Vec::new();
     let players = lan.peer_count();
     let others = match players {
-        0 => "nobody else yet".to_string(),
-        1 => "1 other player".to_string(),
-        n => format!("{n} other players"),
+        0 => tr("nobody else yet"),
+        1 => tr("1 other player"),
+        n => tr("{n} other players").replace("{n}", &n.to_string()),
     };
     match lan.role {
         Role::Host => {
@@ -2723,23 +2723,28 @@ pub fn hud_lines(lan: &LanSession, tr: &dyn Fn(&str) -> String) -> Vec<String> {
             // (translated apart from the code, which stays as it is)
             lines.push(format!(
                 "{}   {}",
-                tr(&format!("Online: {others}")),
+                match players {
+                    0 => tr("Online: nobody else yet"),
+                    1 => tr("Online: 1 other player"),
+                    n => tr("Online: {n} other players").replace("{n}", &n.to_string()),
+                },
                 c.as_ref().map(|c| c.encode()).unwrap_or_default(),
             ));
         }
         Role::Client => {
             if let Some(why) = lan.rejected.as_ref() {
-                lines.push(format!("Online: not connected: {why} (chat /reconnect)"));
+                lines.push(tr("Online: not connected: {reason} (chat /reconnect)").replace("{reason}", &tr(why)));
             } else if lan.connected {
                 let name = lan.welcome.as_ref().map(|w| w.host_name.clone()).unwrap_or_default();
-                lines.push(format!("Online: in {name}'s game, {others}"));
+                // Substitute the name last so a player's text is never treated as a placeholder.
+                lines.push(tr("Online: in {host}'s game, {others}").replace("{others}", &others).replace("{host}", &name));
             } else {
-                lines.push("Online: connecting ...".to_string());
+                lines.push(tr("Online: connecting ..."));
             }
         }
     }
     if let Some(w) = lan.warnings.first() {
-        lines.push(format!("Online: {w}"));
+        lines.push(tr("Online: {warning}").replace("{warning}", &tr(w)));
     }
     // OMSI_DEBUG_LAN: what the HUD shows, every few seconds
     if omsi_cfg::flags::OMSI_DEBUG_LAN.is_set() {

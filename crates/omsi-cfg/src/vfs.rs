@@ -427,6 +427,11 @@ fn memory_file(path: &Path) -> Option<Arc<[u8]>> {
     MEMORY.read().unwrap().as_ref().and_then(|m| m.get(path).cloned())
 }
 
+/// Whether a VFS layer takes precedence over the plain file at this path.
+pub fn is_virtual(path: &Path) -> bool {
+    memory_file(path).is_some() || is_sealed(path) || archive_of(path).is_some()
+}
+
 /// Read a whole file, from a folder, a mounted archive or a sealed store.
 pub fn read(path: &Path) -> io::Result<Vec<u8>> {
     if let Some(b) = memory_file(path) {

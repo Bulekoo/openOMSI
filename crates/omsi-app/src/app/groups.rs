@@ -442,6 +442,7 @@ pub(crate) struct MenuState {
     pub(crate) info_bar: bool,
     /// OMSI's timetable window (`view_set_schedule`, Insert).
     pub(crate) timetable: bool,
+    pub(crate) hud_resize: Option<(usize, f32, [f32; 2], f32)>,
     /// The notifications on the screen (the server's `notify`, the plugins', the update
     /// check's and the game's own), oldest first.
     pub(crate) notices: Vec<crate::ui::Notice>,

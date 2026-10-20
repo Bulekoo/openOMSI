@@ -274,10 +274,14 @@ impl Navigator {
                 }
                 if lo.x <= hi.x {
                     let (free_w, free_h) = (((w - 332.0 * s) - 60.0 * s).max(300.0) as f64, (h - 44.0 * s - 60.0 * s).max(200.0) as f64);
-                    let mpp = (((hi.x - lo.x) / free_w).max((hi.y - lo.y) / free_h) * 1.12).clamp(0.25, self.max_mpp());
+                    // (a view turned needs more room: the box of the way turns with it)
+                    let (sn, cs) = self.city.phi.sin_cos();
+                    let mpp = (((hi.x - lo.x) / free_w).max((hi.y - lo.y) / free_h) * 1.12 * (sn.abs() + cs.abs())).clamp(0.25, self.max_mpp());
                     self.city.mpp = mpp;
                     // (the panel takes the right side: the way is centred in what is left)
-                    self.city.center = (lo + hi) * 0.5 + DVec2::new(166.0 * s as f64 * mpp, 0.0);
+                    // (to the right on the screen, wherever that lies on the map)
+                    let off = DVec2::new(166.0 * s as f64 * mpp, 0.0);
+                    self.city.center = (lo + hi) * 0.5 + DVec2::new(off.x * cs, -off.x * sn);
                     self.city.follow = false;
                 }
             }
@@ -352,24 +356,28 @@ impl Navigator {
         on_line
     }
 
-    /// The Lines button left of the close button and its panel left of the column of buttons (`size`: the window's width
-    /// and height and the interface scale; `at`: the pad, the button size, the column's x and the close button).
-    pub(super) fn draw_lines_ui(&mut self, ui: &mut Painter, size: (f32, f32, f32), at: (f32, f32, f32, Rect), on_line: &HashMap<usize, usize>, on_screen: &dyn Fn(DVec3) -> Vec2) -> f32 {
+    /// The Lines button left of the close button, the Terrain button left of it, the lines panel left of the column of
+    /// buttons and the compass (`size`: the window's width and height and the interface scale; `at`: the pad, the button
+    /// size, the column's x and the close button).
+    pub(super) fn draw_top_controls(&mut self, ui: &mut Painter, size: (f32, f32, f32), at: (f32, f32, f32, Rect), on_line: &HashMap<usize, usize>, on_screen: &dyn Fn(DVec3) -> Vec2) {
         let ((w, h, s), (pad, bs, bx, close)) = (size, at);
         // (a map without lines: no texts are looked up and no Lines button or panel is made; the next button goes where it would be)
-        if !self.surface.as_ref().is_some_and(|sf| !sf.lines().is_empty()) {
-            return close.x - 8.0 * s;
-        }
-        let lt = lines_text();
-        let right = self.draw_lines_button(ui, pad, bs, close.x - 8.0 * s, s, &lt);
-        if self.city.lines.open && self.surface.as_ref().is_some_and(|sf| !sf.lines().is_empty()) {
-            // (a departure picked: the time at each stop, on the map)
-            if let (true, Some(sf), Some(i)) = (self.city.lines.sheet, self.surface.clone(), self.city.lines.focus) {
-                self.sheet_labels(ui, &sf, i, s, on_screen, (w, h));
+        let mut right = close.x - 8.0 * s;
+        if self.surface.as_ref().is_some_and(|sf| !sf.lines().is_empty()) {
+            let lt = lines_text();
+            right = self.draw_lines_button(ui, pad, bs, right, s, &lt);
+            if self.city.lines.open {
+                // (a departure picked: the time at each stop, on the map)
+                if let (true, Some(sf), Some(i)) = (self.city.lines.sheet, self.surface.clone(), self.city.lines.focus) {
+                    self.sheet_labels(ui, &sf, i, s, on_screen, (w, h));
+                }
+                self.lines_panel(ui, w, h, s, close.bottom() + 12.0 * s, bx - 12.0 * s, &lt, on_line);
             }
-            self.lines_panel(ui, w, h, s, close.bottom() + 12.0 * s, bx - 12.0 * s, &lt, on_line);
         }
-        right
+        self.draw_terrain_button(ui, pad, bs, right, s);
+        // (the panel's left edge, when it is open: the compass keeps to the left of it)
+        let panel_left = (self.city.lines.open && self.surface.as_ref().is_some_and(|sf| !sf.lines().is_empty())).then(|| bx - 12.0 * s - (332.0 * s).min(w * 0.42));
+        self.draw_compass(ui, w, h, s, panel_left);
     }
 
     /// The Lines button, only where the package has lines: `bs` high at `y`, its right edge at `right`; returns the new `right`.

@@ -56,7 +56,7 @@ const NEAR_TRACK: f64 = 100.0;
 /// two apart, so the nearest one is as often the one going the opposite way, and the whole
 /// consist is then laid out along it facing back the way it came.
 pub(crate) fn attach(p: &mut Player, net: &Network, reach: f64) -> Option<RailDrive> {
-    let pos = p.vehicle.position;
+    let pos = search_point(p.vehicle.position, p.rail_placed_z);
     let heading = p.vehicle.heading;
     let (lane, s, dist) = track_for(net, pos, heading, reach)?;
     let (_, h) = net.lanes[lane].at(s);
@@ -84,6 +84,15 @@ pub(crate) fn attach(p: &mut Player, net: &Network, reach: f64) -> Option<RailDr
     r.trail = points.into_iter().rev().chain(std::iter::once((0.0, here))).collect();
     log::info!("rail: {} stands on rail lane {lane} at {s:.1} m ({dist:.1} m away) at ({:.1}, {:.1})", p.vehicle.ty.def.path.display(), net.lanes[lane].at(s).0.x, net.lanes[lane].at(s).0.y);
     Some(r)
+}
+
+fn search_point(at: DVec3, placed_z: f64) -> DVec3 {
+    DVec3::new(at.x, at.y, placed_z)
+}
+
+pub(crate) fn placed(p: &mut Player, z: f64) {
+    p.rail_placed_z = z;
+    p.rail = None;
 }
 
 /// The rail lane to put a vehicle at `pos` on: the nearest one within `reach` that runs
@@ -552,5 +561,16 @@ mod tests {
         assert!(track_for(&net, DVec3::new(500.0, 50.0, 0.0), 0.0, 0.5).is_none());
     }
 
+    #[test]
+    fn the_track_is_looked_for_at_the_height_the_vehicle_was_placed_at() {
+        use omsi_sim::traffic::LaneBuilder;
+        let level = |z: f64| LaneBuilder::polyline(vec![DVec3::new(0.0, 0.0, z), DVec3::new(0.0, 100.0, z)], LaneKind::Rail, 1.435);
+        let net = Network { lanes: vec![level(0.0), level(20.0)], ..Default::default() };
+        let lifted = DVec3::new(0.0, 50.0, 50005.0);
+        assert!(track_for(&net, lifted, 0.0, 3000.0).is_none());
+        let (lane, ..) = track_for(&net, search_point(lifted, 0.0), 0.0, 3000.0).unwrap();
+        assert_eq!(lane, 0);
+        let (lane, ..) = track_for(&net, search_point(lifted, 20.0), 0.0, 3000.0).unwrap();
+        assert_eq!(lane, 1);
+    }
 }
-

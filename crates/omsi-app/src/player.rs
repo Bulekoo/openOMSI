@@ -183,6 +183,7 @@ pub(crate) struct Player {
     /// Bound to the rails (see `rail_drive`), and where on them once it is placed.
     pub(crate) rail_bound: bool,
     pub(crate) rail: Option<crate::rail_drive::RailDrive>,
+    pub(crate) rail_placed_z: f64,
     /// The driver camera chosen before the timetable or ticket desk camera took over.
     pub(crate) cam_before_special: Option<usize>,
     /// The actions a key started, by its scan code: its release lets go of the same ones,

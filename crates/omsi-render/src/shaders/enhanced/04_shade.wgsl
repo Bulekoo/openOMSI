@@ -80,6 +80,14 @@ fn shade_enhanced(in: FsIn, puddle_weight: ptr<function, vec2<f32>>, capture: bo
             tex.a = smoothstep(0.32, 0.68, tex.a);
         }
     }
+    // One night-map read supplies both coverage and lighting. Keep the tile map
+    // in its north-up UVs; vehicle maps use the unscrolled material UVs.
+    var night_sample = vec4<f32>(0.0);
+    if (material.extra.w > 0.5) {
+        let nuv = select(buv, vec2<f32>(in.uv.x, 1.0 - in.uv.y), terrain);
+        night_sample = sample_nightmap(nuv);
+    }
+    tex.a = night_coverage(tex.a, night_sample.a);
     let mode = material.params.x;
     // Keep the filtered fractional coverage, but tighten its transition around the cutout
     // edge before MSAA turns it into sample coverage. The MSAA depth prepass skips these
@@ -726,12 +734,11 @@ fn shade_enhanced(in: FsIn, puddle_weight: ptr<function, vec2<f32>>, capture: bo
     // other surface - added on top it lit the roads twice, with a hard edge where a road
     // met a square that is an object)
     if (material.extra.w > 0.5) {
-        let nuv = select(buv, vec2<f32>(in.uv.x, 1.0 - in.uv.y), terrain);
         let switched = material.extra.w > 1.5;
         let night = select(camera.sun_color.w, 1.0, switched);
         // (a switched one is the display's own state: not dimmed with the instance's night
         // lighting, which is 0 by day and left the Procity's pressure screen black)
-        let nm = sample_nightmap(nuv).rgb * night * select(clamp(in.params2.y, 0.0, 1.0), 1.0, switched);
+        let nm = night_sample.rgb * night * select(clamp(in.params2.y, 0.0, 1.0), 1.0, switched);
         if (terrain) {
             // the tile's light map: the lamps' light on the ground
             rgb = rgb + sf.albedo / PI * nm * enh.lights.y * 3.0 * pre;

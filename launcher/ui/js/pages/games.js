@@ -1,4 +1,6 @@
-// Running games: every game the launcher started, its log, and Stop.
+// Running games: every game the launcher started, its log, and Stop; and the games that
+// ended in the last half hour, how they ended (the exit code, or killed by Stop: the run not
+// saved) and their logs.
 
 import { html, useState, useEffect } from '../../vendor/preact-htm.js';
 import { useStore, toast } from '../store.js';
@@ -11,12 +13,15 @@ import { pollNow, busName, mapName } from '../data.js';
 export function GamesPage() {
   const s = useStore();
   const list = s.poll.instances || [];
+  const ended = s.poll.ended || [];
   const [ask, confirm] = useConfirm();
   return html`
     <${PageHead} title="Running games" text="Any number of games can run at once; each writes its own log." />
     ${list.length === 0
       ? html`<${Card}><${Empty} icon="gamepad" title="No game is running" text="Start one on the Drive page." /></${Card}>`
       : html`<div class="stack">${list.map((g) => html`<${Game} key=${g.pid} g=${g} ask=${ask} />`)}</div>`}
+    ${ended.length > 0 && html`<div class="section-title" style="margin-top:20px">${t('Ended')}</div>
+      <div class="stack">${[...ended].sort((a, b) => (b.ended || 0) - (a.ended || 0)).map((g) => html`<${Game} key=${g.pid} g=${g} ask=${ask} />`)}</div>`}
     ${confirm}
   `;
 }
@@ -34,24 +39,29 @@ function Game({ g, ask }) {
     if (!(await ask({ title: 'Stop this game?', text: 'The game ends as if Escape and Quit were chosen; an unsaved session is lost.', yes: 'Stop', danger: true }))) return;
     setStopping(true);
     try {
-      await call('stop_game', { pid: g.pid });
-      toast(t('The game was stopped.'), 'ok');
+      const r = await call('stop_game', { pid: g.pid });
+      if (r?.ended_by_itself === false) toast(t('Game {pid} did not end by itself and was killed - this run is not saved.', { pid: g.pid }), 'error');
+      else toast(t('The game was stopped.'), 'ok');
     } catch (e) {
       toast(e.message, 'error');
     }
     setStopping(false);
     pollNow();
   };
+  const done = g.running === false;
+  // (how an ended game ended: nothing more to say when it quit as asked)
+  const how = !done || g.exit_code === 0 ? '' : g.killed ? t('killed - it did not end by itself, the run is not saved') : g.exit_code != null ? t('exit code {code}', { code: g.exit_code }) : '';
+  const state = done ? `${t('ended {when}', { when: ago(g.ended || g.started) })}${how ? ` (${how})` : ''}` : g.stopping ? t('stopping - saving the run...') : t('started {when}', { when: ago(g.started) });
   return html`<${Card} body=${false}>
     <div class="card-body row" style="align-items:flex-start">
       <div class="grow stack" style="gap:6px">
-        <div class="row"><span class="dot ok"></span><b style="font-size:15px">${mapName(g.map)}</b>${g.line && html`<span class="line-badge">${g.line}</span>`}${g.tour && html`<${Tag}>${t('Tour')} ${g.tour}</${Tag}>`}</div>
-        <div class="muted small">${busName(g.bus)} - ${g.profile || '-'} - ${g.stopping ? t('stopping - saving the run...') : t('started {when}', { when: ago(g.started) })} - PID ${g.pid}</div>
+        <div class="row"><span class=${'dot' + (!done ? ' ok' : how ? ' danger' : '')}></span><b style="font-size:15px">${mapName(g.map)}</b>${g.line && html`<span class="line-badge">${g.line}</span>`}${g.tour && html`<${Tag}>${t('Tour')} ${g.tour}</${Tag}>`}</div>
+        <div class=${'small ' + (how ? 'warn-text' : 'muted')}>${busName(g.bus)} - ${g.profile || '-'} - ${state} - PID ${g.pid}</div>
         ${g.last_line && html`<div class="muted small ellipsis" title=${g.last_line}>${g.last_line}</div>`}
       </div>
       <${Button} small icon="file" label=${log == null ? 'Show log' : 'Hide log'} onClick=${() => (log == null ? call('game_log', { pid: g.pid, lines: 120 }).then(setLog).catch((e) => setLog([e.message])) : setLog(null))} />
       <${Button} small icon="folder" title="Show the log file" onClick=${() => call('open_path', { path: g.log.replace(/[^/\\]*$/, '') }).catch((e) => toast(e.message, 'error'))} />
-      <${Button} small kind="danger" icon="stop" label="Stop" disabled=${stopping} onClick=${stop} />
+      ${!done && html`<${Button} small kind="danger" icon="stop" label="Stop" disabled=${stopping} onClick=${stop} />`}
     </div>
     ${g.lan_status && html`<${Lobby} lan=${g.lan_status} />`}
     ${log != null && html`<div style="padding:0 20px 18px"><div class="log">${log.map((l) => html`<div class=${/ ERROR /.test(l) ? 'log-error' : / WARN /.test(l) ? 'log-warn' : ''}>${l || ' '}</div>`)}</div></div>`}

@@ -62,6 +62,7 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         switch_row(app, "clouds", "Clouds", later),
         pick("cloud_quality", "Cloud quality", "Enhanced: the volumetric clouds marched in fewer steps - faster, a little grainier").filter(|_| shown("cloud_quality") && app.settings.clouds),
         pick("rain_quality", "Rain quality", "Lower is faster: the drops on the glass painted less often, less spray and fewer streaks; Low shows OMSI 2's own rain on the glass (from the next bus loaded)"),
+        pick("vehicle_smoke", "Vehicle smoke", "Controls the vehicles' smoke particles, not scenery effects or glowing particles."),
         pick("puddles", "Puddles", "The wet roads' reflections in the rain: Low only near the bus and in fewer rays, much cheaper; Off none (the reflections on paint and glass stay)").filter(|_| app.settings.reflections > 0.0),
         switch_row(app, "windy_trees", "Windy trees", "The trees' leaves bend and sway in the wind and its gusts; with no wind they stand still"),
     ]
@@ -209,6 +210,8 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         .flatten()
         .collect();
     camera.push(button("Reset the seat position", "Reset", "Put the seat back where the vehicle has it.", "seat_reset"));
+    camera.extend(pick("mirror_hud", "Mirror panels on the screen", "Copies of the bus's mirrors over the picture in the cab, as in ETS2 (Ctrl+M shows or hides them); a bus whose panels you arranged keeps its own"));
+    if app.player.is_some() && !app.vr_active() && s.mirror_size != 0 { camera.push(button("Arrange the mirror panels", "Open", "Drag them where you want them and change their size, saved for this vehicle (Ctrl+Shift+M).", "mirror_hud_edit")); }
     if app.player.is_some() && !app.vr_active() { camera.push(button("Edit the view and mirrors", "Open", "A panel at the side of the driver's view: the eye, the direction, the field of view and each mirror, saved for this vehicle.", "view_editor")); }
     if cfg!(windows) {
         camera.extend(

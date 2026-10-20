@@ -152,3 +152,29 @@ fn a_plate_a_centimetre_over_another_objects_ground_stays_over_it() {
     let [r, g, _] = count(&mut renderer, &mut scene);
     assert!(g > 3_000 && r == 0, "{r} pixels of the ground through the plate a centimetre over it, {g} of the plate");
 }
+
+#[test]
+#[ignore = "requires a graphics adapter; run with --ignored on a GPU host"]
+fn a_text_a_tenth_of_a_millimetre_over_a_later_board_stays_seen_from_far() {
+    let mut renderer = renderer();
+    let mut scene = renderer.new_scene();
+    let red = renderer.add_material(&mut scene, None, AlphaMode::Opaque, [1.0, 0.0, 0.0, 1.0], true);
+    let green = renderer.add_material(&mut scene, None, AlphaMode::Opaque, [0.0, 1.0, 0.0, 1.0], true);
+    let text = renderer.add_mesh(&mut scene, &grid(0.0, 0.0, 0.0001, 2.0, 4, 0.0, false));
+    let board = renderer.add_mesh(&mut scene, &grid(0.0, 0.0, 0.0, 4.0, 4, 0.0, true));
+    renderer.begin_object(&mut scene);
+    renderer.add_instance(&mut scene, text, DVec3::ZERO, Mat4::IDENTITY, vec![green]);
+    renderer.add_instance(&mut scene, board, DVec3::ZERO, Mat4::IDENTITY, vec![red]);
+    let lighting = Lighting { shadows: false, fog_density: 0.0, ..Default::default() };
+    for d in [3.0, 15.0, 30.0] {
+        for pitch in [-90.0f64, -45.0] {
+            let (s, c) = pitch.to_radians().sin_cos();
+            let camera = Camera { position: DVec3::new(0.0, -d * c, -d * s), yaw: 0.0, pitch: pitch as f32, roll: 0.0, fov_deg: 60.0, near: 0.1, far: 3000.0 };
+            scene.dirty = true;
+            let rgba = renderer.render_to_image(&mut scene, 256, 256, &camera, &lighting).unwrap();
+            let green = rgba.chunks(4).filter(|p| p[1] > 150 && p[0] < 60 && p[2] < 60).count();
+            let red = rgba.chunks(4).filter(|p| p[0] > 150 && p[1] < 60 && p[2] < 60).count();
+            assert!(green * 4 > red, "at {d} m, pitch {pitch}: {green} pixels of the text, {red} of the board");
+        }
+    }
+}

@@ -194,11 +194,12 @@ impl Offscreen<'_> {
             ref camera,
             ref mut scene,
             ref spray,
+            ref settings,
             ..
         } = *self;
         {
             let vehicles = steps::light_vehicles(player_ref.as_ref(), traffic.as_ref(), remotes_off);
-            world_lights(renderer, world, scene, weather, daylight, camera.position, &vehicles);
+            world_lights(renderer, world, scene, weather, daylight, camera.position, &vehicles, &settings.vehicle_smoke, player_ref.is_some());
             let (kind, rate) = precip_of(weather);
             let mut rn = rain::Rain::new();
             rn.set(kind, rate, world.settings.rain_quality());
@@ -328,6 +329,11 @@ impl Offscreen<'_> {
                 nav.set_surface(omsi_map::package::Package::open(&world.map_dir));
                 nav.set_layers(world.map_layers());
                 nav.show_contours = omsi_cfg::flags::OMSI_NAV_CONTOURS.is_set();
+                nav.orient = match omsi_cfg::flags::OMSI_NAV_ORIENT.var().as_deref().map(str::to_ascii_lowercase).as_deref() {
+                    Some("north") => 1,
+                    Some("heading") => 2,
+                    _ => 0,
+                };
                 if let Some(spec) = omsi_cfg::flags::OMSI_NAV_LINES.var() {
                     nav.debug_lines(spec);
                 }
@@ -429,7 +435,7 @@ impl Offscreen<'_> {
             for k in 0..n {
                 let t = Instant::now();
                 if let Some(p) = player_ref.as_ref() {
-                    render_mirrors(renderer, scene, world, p, lighting, MirrorPick::Turn(k, &[]), None);
+                    render_mirrors(renderer, scene, world, p, lighting, MirrorPick::Turn(k, &[]), None, &[]);
                 }
                 renderer.render(scene, &view, w, h, camera, lighting);
                 let drawn = t.elapsed().as_secs_f64();
@@ -528,7 +534,7 @@ impl Offscreen<'_> {
         } = *self;
         let t0 = Instant::now();
         if let Some(p) = player_ref.as_ref() {
-            render_mirrors(renderer, scene, world, p, lighting, MirrorPick::All(&[]), None);
+            render_mirrors(renderer, scene, world, p, lighting, MirrorPick::All(&[]), None, &[]);
         }
         if let Some(p) = player_ref.as_ref() {
             let mode = omsi_cfg::flags::OMSI_MIRROR_HUD.parse::<u8>().unwrap_or(settings.mirror_hud);

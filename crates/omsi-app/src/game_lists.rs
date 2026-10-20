@@ -933,6 +933,7 @@ pub(crate) fn run_move(app: &mut App, kind: &ListKind, action: &str, mv: Move) -
                     }
                 }
                 "view_editor" if step => { crate::game_panels::view_editor::open(app); return None; }
+                "mirror_hud_edit" if step => { app.page_action(verb); return None; }
                 "seat_reset" if step => {
                     // (this bus's views as its .bus file has them again)
                     app.settings.seat = [0.0; 3];

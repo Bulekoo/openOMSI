@@ -43,6 +43,7 @@ impl VehicleInstance {
         // (the scripts stay those compiled: the program is not made again)
         def.scripts = self.ty.def.scripts.clone();
         self.retyped(|ty| ty.def = def);
+        self.v_cables = super::instance::control_cables(&self.ty);
         // the simple physics: the new sizes and masses, the motion as it was
         let mut physics = VehiclePhysics::from_definition(&self.ty.def);
         let old = &self.physics;

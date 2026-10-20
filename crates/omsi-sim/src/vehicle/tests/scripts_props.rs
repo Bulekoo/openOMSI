@@ -501,3 +501,24 @@ fn a_lightmap_on_an_unknown_variable_is_on() {
     assert_eq!(light(Some("no_such_var"), 0.3), 1.0);
     assert_eq!(light(None, 0.3), 0.0);
 }
+
+#[test]
+fn a_control_cable_hands_what_the_scripts_write_to_what_they_read() {
+    let base = crate::timetable_run::tests::script_test_vehicle(
+        "{frame}\n0.6 (S.L.CCW_Throttle)\n(L.L.CCR_Throttle) (S.L.seen)\n{end}\n",
+        "CCW_Throttle\nCCR_Throttle\nseen\n",
+        "",
+    );
+    let cable = omsi_vehicle::vehicle::ControlCable { lines: ["C", "2", "CCR_Throttle", "CCW_Throttle", "E-Kupplung_Front"].map(String::from).to_vec() };
+    let mut ty = (*base.ty).clone();
+    ty.def.control_cable_front.push(cable.clone());
+    ty.def.control_cable_back.push(cable);
+    for (cabled, expected) in [(false, 0.0), (true, 0.6)] {
+        let ty = if cabled { Arc::new(ty.clone()) } else { base.ty.clone() };
+        let mut v = VehicleInstance::new(ty, VehicleHost::new(Default::default()));
+        v.update(1.0 / 30.0);
+        assert_eq!(v.var("seen"), Some(0.0));
+        v.update(1.0 / 30.0);
+        assert_eq!(v.var("seen"), Some(expected), "cabled {cabled}");
+    }
+}

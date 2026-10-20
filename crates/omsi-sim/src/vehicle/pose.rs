@@ -1,6 +1,7 @@
 //! The body's and the meshes' transforms in the world, the cameras, and the skinned vertices.
 
 use super::*;
+use glam::{Affine3A, Mat3A, Vec3A};
 
 impl VehicleInstance {
     /// Rotation of the vehicle body (model frame → world, without translation).
@@ -170,52 +171,111 @@ pub fn skin_vertices(
     i: usize,
     transforms: &[Mat4],
     rest: &[Mat4],
+    plan: &SkinPlan,
 ) -> Option<(Vec<Vec3>, Vec<Vec3>)> {
     let vm = ty.meshes.get(i)?;
     let n = vm.data.positions.len();
-    if vm.skin.is_empty()
-        || n == 0
-        || transforms.len() < ty.meshes.len()
-        || rest.len() < ty.meshes.len()
-    {
+    if n == 0 || plan.starts.len() != n + 1 || transforms.len() < ty.meshes.len() || rest.len() < ty.meshes.len() {
         return None;
     }
-    let mut sum = vec![Mat4::ZERO; n];
-    let mut total = vec![0.0f32; n];
-    for b in &vm.skin {
-        let bone = match b.def_index {
-            None => Mat4::IDENTITY,
-            Some(d) => {
-                let Some(k) = ty.meshes.iter().position(|m| m.def_index == d) else {
-                    continue;
-                };
-                transforms[k] * rest[k].inverse()
-            }
-        };
-        for &(v, w) in &b.weights {
-            let v = v as usize;
-            if v < n && w.is_finite() && w > 0.0 {
-                sum[v] += bone * w;
-                total[v] += w;
-            }
-        }
-    }
-    // (the renderer puts the mesh's transform on top: in the modelled pose, the vertices
-    // are where the file has them)
+    // (the renderer puts the mesh's transform on top; its modelled pose is taken off each bone once)
     let own_rest_inv = rest[i].inverse();
+    let bones: Vec<Affine3A> = plan
+        .bones
+        .iter()
+        .map(|k| Affine3A::from_mat4(match *k {
+            None => own_rest_inv,
+            Some(k) => own_rest_inv * transforms[k] * rest[k].inverse(),
+        }))
+        .collect();
     let mut pos = Vec::with_capacity(n);
     let mut nrm = Vec::with_capacity(n);
     for v in 0..n {
         let p = vm.data.positions[v];
         let q = vm.data.normals.get(v).copied().unwrap_or(Vec3::Z);
-        if total[v] < 1e-4 {
+        let held = &plan.weights[plan.starts[v] as usize..plan.starts[v + 1] as usize];
+        if held.is_empty() {
             pos.push(p);
             nrm.push(q);
             continue;
         }
-        let m = own_rest_inv * (sum[v] * (1.0 / total[v]));
-        pos.push(m.transform_point3(p));
-        nrm.push(m.transform_vector3(q).normalize_or_zero());
+        let (mut m, mut t) = (Mat3A::ZERO, Vec3A::ZERO);
+        for &(b, w) in held {
+            m += bones[b as usize].matrix3 * w;
+            t += bones[b as usize].translation * w;
+        }
+        pos.push(Vec3::from(m * Vec3A::from(p) + t));
+        nrm.push(Vec3::from(m * Vec3A::from(q)).normalize_or_zero());
     }
     Some((pos, nrm))
+}
+
+/// A `[smoothskin]` mesh's vertex bones and weights made up to 1, and each bone's mesh (`None`: unbound).
+#[derive(Debug, Clone, Default)]
+pub struct SkinPlan {
+    bones: Vec<Option<usize>>,
+    starts: Vec<u32>,
+    weights: Vec<(u32, f32)>,
+}
+
+impl SkinPlan {
+    /// The plan of mesh `i`, None for a mesh without bones or vertices.
+    pub fn new(ty: &VehicleType, i: usize) -> Option<SkinPlan> {
+        let vm = ty.meshes.get(i)?;
+        let n = vm.data.positions.len();
+        if vm.skin.is_empty() || n == 0 {
+            return None;
+        }
+        let mut bones = Vec::new();
+        let mut held: Vec<Vec<(u32, f32)>> = vec![Vec::new(); n];
+        for b in &vm.skin {
+            let k = match b.def_index {
+                None => None,
+                Some(d) => match ty.meshes.iter().position(|m| m.def_index == d) {
+                    Some(k) => Some(k),
+                    None => continue,
+                },
+            };
+            let at = bones.len() as u32;
+            bones.push(k);
+            for &(v, w) in &b.weights {
+                if (v as usize) < n && w.is_finite() && w > 0.0 {
+                    held[v as usize].push((at, w));
+                }
+            }
+        }
+        let mut starts = Vec::with_capacity(n + 1);
+        let mut weights = Vec::new();
+        for list in held {
+            starts.push(weights.len() as u32);
+            let total: f32 = list.iter().map(|h| h.1).sum();
+            if total >= 1e-4 {
+                weights.extend(list.into_iter().map(|(b, w)| (b, w / total)));
+            }
+        }
+        starts.push(weights.len() as u32);
+        Some(SkinPlan { bones, starts, weights })
+    }
+}
+
+/// The skin plans of a vehicle type's meshes, made as each is first needed.
+#[derive(Debug, Clone, Default)]
+pub struct SkinPlans {
+    of: usize,
+    plans: Vec<Option<SkinPlan>>,
+}
+
+impl SkinPlans {
+    /// Mesh `i`'s plan in `ty` (made again for another type).
+    pub fn get(&mut self, ty: &Arc<VehicleType>, i: usize) -> Option<&SkinPlan> {
+        let of = Arc::as_ptr(ty) as usize;
+        if self.of != of || self.plans.len() != ty.meshes.len() {
+            *self = SkinPlans { of, plans: vec![None; ty.meshes.len()] };
+        }
+        let slot = self.plans.get_mut(i)?;
+        if slot.is_none() {
+            *slot = SkinPlan::new(ty, i);
+        }
+        slot.as_ref()
+    }
 }

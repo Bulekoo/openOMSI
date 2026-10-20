@@ -23,7 +23,7 @@
 //! their width is in metres near the camera and in pixels far away, so zooming rebuilds
 //! nothing.
 
-use glam::{DVec2, DVec3, Mat4, Vec2, Vec3};
+use glam::{DVec2, DVec3, Mat3, Mat4, Vec2, Vec3};
 use hashbrown::HashMap;
 use omsi_render::{Renderer, Scene, TextureId};
 use omsi_sim::traffic::{LaneKind, Network};
@@ -162,6 +162,9 @@ pub struct NavStop {
     pub name: String,
     /// Planned arrival (s of the day).
     pub arrival: f64,
+    /// Closed today (a diversion, roadworks: `duty.set_closed_stops`), with the way round it
+    /// ("" when not said): struck through, and the bus does not call there.
+    pub closed: Option<String>,
 }
 
 /// Another player of the session as the maps show them (the session's, see `lan`).
@@ -229,14 +232,15 @@ struct Words {
     no_duty: &'static str,
     last_stop: &'static str,
     on_time: &'static str,
+    closed: &'static str,
 }
 
 fn words(lang: &str) -> Words {
     match lang.to_ascii_uppercase().as_str() {
-        "DEU" | "DE" | "GER" => Words { kmh: "km/h", days: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"], off_route: "Abseits der Route", rerouting: "Route wird neu berechnet", recalculated: "Route neu berechnet", jam: "Stau", slow: "Zähfließend", no_duty: "Freie Fahrt", last_stop: "Endhaltestelle", on_time: "pünktlich" },
-        "FRA" | "FR" => Words { kmh: "km/h", days: ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"], off_route: "Hors itinéraire", rerouting: "Recalcul de l'itinéraire", recalculated: "Itinéraire recalculé", jam: "Bouchon", slow: "Ralentissement", no_duty: "Conduite libre", last_stop: "Terminus", on_time: "à l'heure" },
-        "RUS" | "RU" => Words { kmh: "км/ч", days: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"], off_route: "Вне маршрута", rerouting: "Перестроение маршрута", recalculated: "Маршрут перестроен", jam: "Пробка", slow: "Затруднено", no_duty: "Свободная езда", last_stop: "Конечная", on_time: "по графику" },
-        _ => Words { kmh: "km/h", days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], off_route: "Off route", rerouting: "Recalculating route", recalculated: "Route recalculated", jam: "Traffic jam", slow: "Slow traffic", no_duty: "Free drive", last_stop: "Final stop", on_time: "on time" },
+        "DEU" | "DE" | "GER" => Words { kmh: "km/h", days: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"], off_route: "Abseits der Route", rerouting: "Route wird neu berechnet", recalculated: "Route neu berechnet", jam: "Stau", slow: "Zähfließend", no_duty: "Freie Fahrt", last_stop: "Endhaltestelle", on_time: "pünktlich", closed: "Gesperrt" },
+        "FRA" | "FR" => Words { kmh: "km/h", days: ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"], off_route: "Hors itinéraire", rerouting: "Recalcul de l'itinéraire", recalculated: "Itinéraire recalculé", jam: "Bouchon", slow: "Ralentissement", no_duty: "Conduite libre", last_stop: "Terminus", on_time: "à l'heure", closed: "Fermé" },
+        "RUS" | "RU" => Words { kmh: "км/ч", days: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"], off_route: "Вне маршрута", rerouting: "Перестроение маршрута", recalculated: "Маршрут перестроен", jam: "Пробка", slow: "Затруднено", no_duty: "Свободная езда", last_stop: "Конечная", on_time: "по графику", closed: "Закрыта" },
+        _ => Words { kmh: "km/h", days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], off_route: "Off route", rerouting: "Recalculating route", recalculated: "Route recalculated", jam: "Traffic jam", slow: "Slow traffic", no_duty: "Free drive", last_stop: "Final stop", on_time: "on time", closed: "Closed" },
     }
 }
 
@@ -363,7 +367,7 @@ pub struct Navigator {
     cam_heading: f64,
     time: f32,
     /// Distance along the route to the next stop (m), refreshed now and then.
-    next_dist: Option<f64>,
+    next_dist: Option<(i64, f64)>,
     dist_t: f32,
     /// The next turn on the route: direction (-1 left, 1 right, 2 back), how sharp
     /// (degrees), how far (m) and the street it turns into.
@@ -380,6 +384,9 @@ pub struct Navigator {
     /// The terrain view of the city map: contour lines and their heights, where the map's package carries them (a button
     /// on the map; not kept between runs).
     pub show_contours: bool,
+    /// How the city map is turned: 0 as the map is drawn, 1 real north up (where the package says which way it lies), 2 the
+    /// heading of the bus up. A click on the compass changes it.
+    pub orient: u8,
     /// The package the worker of the contour marks was started for (its surface version + 1; 0 = none yet).
     marks_started: u64,
     /// The light look of the maps (the `nav_light` setting).
@@ -453,7 +460,7 @@ pub fn duty_parts(duty: Option<&omsi_sim::timetable_run::PlayerDuty>) -> (Option
         .iter()
         .skip(d.next_stop)
         .filter(|s| s.stops)
-        .map(|s| NavStop { object_id: s.object_id, position: s.position.unwrap_or(DVec3::ZERO), name: s.name.clone(), arrival: s.arr })
+        .map(|s| NavStop { object_id: s.object_id, position: s.position.unwrap_or(DVec3::ZERO), name: s.name.clone(), arrival: s.arr, closed: s.closed.clone() })
         .collect();
     (Some(line.to_string()), Some(trip.terminus.clone()), stops, Some((format!("{}/{}", d.trip_index, trip.name), trip.name.clone())))
 }
@@ -570,6 +577,7 @@ impl Navigator {
             surface_version: 0,
             show_surface: true,
             show_contours: false,
+            orient: 0,
             marks_started: 0,
             light: false,
             map_data: None,
@@ -700,6 +708,19 @@ impl Navigator {
     /// The whole map's network, once read.
     pub fn map_net(&self) -> Option<&Network> {
         self.global.as_deref()
+    }
+
+    /// The route-following distance to its stop, refreshed during navigator frames.
+    pub fn next_stop_distance(&self) -> Option<f64> {
+        self.next_dist.map(|(_, distance)| distance)
+    }
+
+    pub fn next_stop_distance_for(&self, object_id: i64) -> Option<f64> {
+        self.next_dist.filter(|(id, _)| *id == object_id).map(|(_, distance)| distance)
+    }
+
+    fn invalidate_next_stop_distance(&mut self) {
+        self.next_dist = None;
     }
 
     /// The map's lanes, for a session without a traffic system (added as tiles stream in).
@@ -1147,6 +1168,7 @@ impl Navigator {
         self.board = None;
         // (with the navigator off the route is still followed for OMSI 2's arrows)
         if !self.enabled && !self.city.open && !self.arrows && self.shown < 0.01 {
+            self.invalidate_next_stop_distance();
             return;
         }
         let target = if self.enabled { 1.0 } else { 0.0 };
@@ -1218,8 +1240,8 @@ impl Navigator {
             let global = self.global.clone();
             let net = global.as_deref().or(f.traffic.map(|t| &t.net));
             self.next_dist = match (f.stops.first(), net) {
-                (Some(s), Some(n)) if !self.route.lanes.is_empty() => self.route_distance(n, s.position).or_else(|| Some((s.position - f.bus).truncate().length())),
-                (Some(s), _) => Some((s.position - f.bus).truncate().length()),
+                (Some(s), Some(n)) if !self.route.lanes.is_empty() => self.route_distance(n, s.position).or_else(|| Some((s.position - f.bus).truncate().length())).map(|d| (s.object_id, d)),
+                (Some(s), _) => Some((s.object_id, (s.position - f.bus).truncate().length())),
                 _ => None,
             };
             self.next_turn = net.and_then(|n| self.turn_ahead(n));
@@ -1348,6 +1370,7 @@ pub use omsi_mapdraw::roads::{self, *};
 mod line_times;
 mod lines_panel;
 mod lines_sheet;
+mod orient;
 mod place;
 mod relief;
 mod surface;
@@ -1363,5 +1386,4 @@ pub use city_map::*;
 use lines_panel::*;
 #[cfg(test)]
 mod tests;
-
 

@@ -33,6 +33,18 @@ pub trait Platform: Send + Sync {
         None
     }
     fn before_update(&self) {}
+    /// Writes the support package in this process, returning its actual path. `out` suggests
+    /// a filename; a platform may choose a user-accessible folder. There is no game program to
+    /// start for it (Android: the game is a library of the app). None: not here, the game
+    /// program writes it.
+    fn support_package(&self, _out: &Path) -> Option<Result<std::path::PathBuf, String>> {
+        None
+    }
+    /// What ended the last game run, when it crashed and no launcher was there to see it
+    /// (Android: the app itself went down with the game): what happened and the log's end.
+    fn previous_run_crash(&self) -> Option<(String, String)> {
+        None
+    }
     fn quit(&self) {}
 }
 
@@ -59,7 +71,11 @@ fn bootstrap(p: &dyn Platform) -> Answer {
     let choice: Value = std::fs::read_to_string(core::data_dir().join("launcher-duty.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(json!({}));
     let favourites: Vec<String> = std::fs::read_to_string(core::data_dir().join("favourite-buses.txt")).map(|t| t.lines().map(str::trim).filter(|l| !l.is_empty()).map(|l| l.replace('\\', "/").to_lowercase()).collect()).unwrap_or_default();
     let languages: Vec<Value> = core::LANGUAGES.iter().map(|(code, name, iso, _)| json!({ "code": code, "name": name, "iso": iso })).collect();
+    // (a crash the last run left behind with nobody to tell: shown at the start, as the
+    // game's own launcher did)
+    let crash = p.previous_run_crash().map(|(what, tail)| crash_json(&what, &tail));
     Ok(json!({
+        "crash": crash,
         "version": omsi_platform::VERSION,
         "platform": std::env::consts::OS,
         "config": config,
@@ -176,8 +192,8 @@ fn lines(map: String, date: String) -> Answer {
     to_json(core::list_lines(&map, &date).map_err(err)?)
 }
 
-fn ibis(bus: String, hof: String, line: String) -> Answer {
-    to_json(core::ibis_info(&bus, &hof, &line).map_err(err)?)
+fn ibis(bus: String, hof: String, line: String, terminus: Option<String>, stops: Option<Vec<String>>) -> Answer {
+    to_json(core::ibis_info(&bus, &hof, &line, &terminus.unwrap_or_default(), &stops.unwrap_or_default()).map_err(err)?)
 }
 
 /// The depot file the duty would use (see `core::default_hof`).
@@ -354,6 +370,10 @@ fn add_hofs(files: Vec<String>) -> Answer {
     Ok(json!(core::add_shared_hofs(&files).map_err(err)?))
 }
 
+fn share_map_hofs(map: String) -> Answer {
+    Ok(json!(core::share_map_hofs(&map).map_err(err)?))
+}
+
 fn mod_set_enabled(id: String, on: bool) -> Answer {
     Ok(json!(core::mod_set_enabled(&id, on).map_err(err)?))
 }
@@ -393,8 +413,13 @@ pub fn game_ended(game: &core::instances::Instance) -> Option<(&'static str, Val
         return Some(("game-disconnected", json!({ "why": why })));
     }
     let (what, tail) = core::crash::crash_of(log)?;
+    Some(("game-crashed", crash_json(&what, &tail)))
+}
+
+/// A crash as the page's crash dialog takes it.
+fn crash_json(what: &str, tail: &str) -> Value {
     let silent = what.contains("closed without a word");
-    Some(("game-crashed", json!({
+    json!({
         "what": what,
         "tail": tail,
         "gap": core::crash::CRASH_TAIL_GAP,
@@ -403,7 +428,7 @@ pub fn game_ended(game: &core::instances::Instance) -> Option<(&'static str, Val
         "vulkan": silent && core::crash::died_compiling_on_vulkan(&tail),
         "version": omsi_platform::VERSION,
         "os": std::env::consts::OS,
-    })))
+    })
 }
 
 fn game_log(pid: u32, lines: Option<usize>) -> Answer {
@@ -693,9 +718,12 @@ fn controllers(p: &dyn Platform, op: &str, mut req: Value, wait: u64) -> Answer 
 
 /// The support package (logs, settings, the machine), written by the game program into
 /// the data folder; answers where it went.
-fn support_package() -> Answer {
-    let game = core::game_binary().ok_or("the game program was not found")?;
+fn support_package(p: &dyn Platform) -> Answer {
     let out = core::data_dir().join(format!("support-{}.zip", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)));
+    if let Some(done) = p.support_package(&out) {
+        return Ok(json!(done?.to_string_lossy()));
+    }
+    let game = core::game_binary().ok_or("the game program was not found")?;
     let status = std::process::Command::new(game).arg("--export-diagnostics").arg(&out).status().map_err(err)?;
     if !status.success() || !out.exists() {
         return Err("the game could not write the support package".into());
@@ -779,7 +807,7 @@ pub fn call(cmd: &str, args: &Value, p: &dyn Platform) -> Answer {
         "custom_weather" => custom_weather(arg::<String>(args, "weather")?),
         "custom_weather_text" => custom_weather_text(arg::<Value>(args, "custom")?),
         "lines" => lines(arg::<String>(args, "map")?, arg::<String>(args, "date")?),
-        "ibis" => ibis(arg::<String>(args, "bus")?, arg::<String>(args, "hof")?, arg::<String>(args, "line")?),
+        "ibis" => ibis(arg::<String>(args, "bus")?, arg::<String>(args, "hof")?, arg::<String>(args, "line")?, arg::<Option<String>>(args, "terminus")?, arg::<Option<Vec<String>>>(args, "stops")?),
         "default_hof" => default_hof(arg::<Value>(args, "map")?, arg::<Value>(args, "bus")?, arg::<String>(args, "date")?, arg::<Option<String>>(args, "line")?),
         "saved_situations" => saved_situations(arg::<String>(args, "map")?),
         "delete_situation" => delete_situation(arg::<String>(args, "map")?, arg::<String>(args, "file")?),
@@ -819,6 +847,7 @@ pub fn call(cmd: &str, args: &Value, p: &dyn Platform) -> Answer {
         "radio_stations_save" => radio_stations_save(arg::<Vec<Value>>(args, "list")?),
         "mods_status" => mods_status(),
         "add_hofs" => add_hofs(arg::<Vec<String>>(args, "files")?),
+        "share_map_hofs" => share_map_hofs(arg::<String>(args, "map")?),
         "mod_set_enabled" => mod_set_enabled(arg::<String>(args, "id")?, arg::<bool>(args, "on")?),
         "mod_remove" => mod_remove(arg::<String>(args, "id")?),
         "mod_inspect" => mod_inspect(arg::<String>(args, "path")?),
@@ -862,7 +891,7 @@ pub fn call(cmd: &str, args: &Value, p: &dyn Platform) -> Answer {
         "controllers_ffb_test" => controllers(p, "ffb_test", json!({ "name": arg::<String>(args, "name")?, "axis": arg::<usize>(args, "axis")?, "strength": arg::<Option<f32>>(args, "strength")?, "token": arg::<Option<u64>>(args, "token")? }), 20),
         "controllers_release" => controllers(p, "release", json!({}), 5),
         "controllers_ffb_stop" => controllers(p, "ffb_stop", json!({ "token": arg::<Option<u64>>(args, "token")? }), 5),
-        "support_package" => support_package(),
+        "support_package" => support_package(p),
         "versions" => versions::list(),
         "version_install" => versions::install(arg::<String>(args, "version")?),
         "version_status" => versions::status(),
@@ -1006,4 +1035,29 @@ fn content_check(path: String, deep: bool) -> Answer {
         format!("the game gave no answer ({})", last.lines().last().unwrap_or("").trim())
     })?;
     serde_json::from_str(line).map_err(err)
+}
+
+#[cfg(test)]
+mod support_package_tests {
+    use super::*;
+
+    struct PhoneFolder;
+    impl Platform for PhoneFolder {
+        fn emit(&self, _: &str, _: Value) {}
+        fn launched(&self) {}
+        fn renderer(&self, _: Value, _: Duration) -> Result<(Value, Vec<u8>), String> { unreachable!() }
+        fn support_package(&self, suggested: &Path) -> Option<Result<std::path::PathBuf, String>> {
+            Some(Ok(Path::new("/storage/emulated/0/openOMSI").join(suggested.file_name().unwrap())))
+        }
+    }
+
+    #[test]
+    fn returns_the_platforms_actual_export_path() {
+        let actual = support_package(&PhoneFolder).unwrap();
+        let path = Path::new(actual.as_str().unwrap());
+        assert_eq!(path.parent(), Some(Path::new("/storage/emulated/0/openOMSI")));
+        let filename = path.file_name().unwrap().to_str().unwrap();
+        assert!(filename.starts_with("support-"), "{filename}");
+        assert!(filename.ends_with(".zip"), "{filename}");
+    }
 }

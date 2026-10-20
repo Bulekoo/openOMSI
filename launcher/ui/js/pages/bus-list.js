@@ -19,7 +19,10 @@ export const isFavourite = (file) => S.favourites.includes(favKey(file));
 function takeBus(file) {
   const c = S.choice;
   if (file === c.bus) return;
-  choose({ bus: file, paint: '', number: '', hof_manual: false });
+  // (a hand-picked depot file stays when the new bus has one of that name, as the game's own launcher kept it)
+  const v = (S.vehicles || []).find((x) => x.file === file);
+  const keep = c.hof_manual && v?.hofs?.some((h) => h.toLowerCase() === (c.hof || '').toLowerCase());
+  choose({ bus: file, paint: '', number: '', ...(keep ? {} : { hof_manual: false }) });
 }
 
 const press = (fn) => ({
@@ -66,7 +69,7 @@ function FamilyRows({ f, chosen, open, toggle, all }) {
       </div>
       <${Icon} name=${shown ? 'down' : 'right'} size=${18} />
     </div>
-    ${shown && f.versions.map((x) => html`<${BusRow} key=${x.v.file} v=${x.v} label=${x.label} indent=${2} chosen=${x.v.file === chosen} />`)}`;
+    ${shown && f.versions.map((x) => html`<${BusRow} key=${x.v.file} v=${x.v} label=${x.label} sub=${x.v.paints.length ? t('{n} paints', { n: x.v.paints.length + 1 }) : null} indent=${2} chosen=${x.v.file === chosen} />`)}`;
 }
 
 export function BusList() {

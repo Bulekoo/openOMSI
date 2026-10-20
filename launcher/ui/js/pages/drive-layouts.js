@@ -11,7 +11,7 @@ import { BusPicker } from './bus-picker.js';
 import { DayStep } from './drive-day.js';
 import { DutyStep, Roadbook } from './drive-duty.js';
 import { StartBar, BusStage } from './drive-classic.js';
-import { hms, tripAt, TimeInput, DateInput, localNow } from './drive.js';
+import { hms, tripAt, TimeInput, DateInput, localNow, seasonOf, weatherFits } from './drive.js';
 
 export function LayoutDrive({ layout }) {
   const s = useStore();
@@ -52,7 +52,8 @@ function Book() {
 
 function weatherOptions(s) {
   const c = s.choice;
-  const out = [['', t('Natural weather')], ['cycle', t('Weather cycle')], ['tomorrow', 'Tomorrow.io'], ...(s.weather || []).map((x) => [x.file, x.name])];
+  // (the presets that fit the season, as on the Day & weather tiles; the chosen one is added below)
+  const out = [['', t('Natural weather')], ['cycle', t('Weather cycle')], ['tomorrow', 'Tomorrow.io'], ...(s.weather || []).filter((x) => weatherFits(x, seasonOf(c))).map((x) => [x.file, x.name])];
   if (c.weather && !out.some(([f]) => f === c.weather)) out.push([c.weather, weatherName(c.weather, s.weather)]);
   return out;
 }
