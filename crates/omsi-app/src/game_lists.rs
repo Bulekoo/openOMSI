@@ -980,11 +980,24 @@ pub(crate) fn run_move(app: &mut App, kind: &ListKind, action: &str, mv: Move) -
             Some(kind.clone())
         }
         ListKind::Vehicle(_) => {
-            if matches!(mv, Move::Next) {
-                app.page_action(verb);
-                return None;
+            match verb {
+                "custom_number_edit" => {
+                    if app.menus.menu_edit_number { app.apply_number_edit(); } else { app.start_number_edit(); }
+                    Some(kind.clone())
+                }
+                "custom_ident_edit" => {
+                    if app.menus.menu_edit_ident { app.apply_ident_edit(); } else { app.start_ident_edit(); }
+                    Some(kind.clone())
+                }
+                _ => {
+                    if matches!(mv, Move::Next) {
+                        app.page_action(verb);
+                        None
+                    } else {
+                        Some(kind.clone())
+                    }
+                },
             }
-            Some(kind.clone())
         }
         ListKind::Controls => {
             if !matches!(mv, Move::Next) { return Some(kind.clone()); }

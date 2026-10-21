@@ -63524,3 +63524,11 @@ _version: 2
   tl: "Hindi para sa mapang ito"
   sv: "Inte för den här kartan"
   sr: "Ne za ovu mapu"
+"Custom fleet number":
+  ru: "Свой бортовой номер"
+"Custom plate":
+  ru: "Свой номерной знак"
+"Enter custom fleet number (not from the list)":
+  ru: "Ввести свой бортовой номер (не из списка)"
+"Enter custom plate (leave free for automatic)":
+  ru: "Ввести свой номерной знак (оставьте пустым для автоматического)"

@@ -66,6 +66,93 @@ impl App {
         self.refresh_list();
     }
 
+    pub(crate) fn number_edit_text(&mut self,text:&str){
+        if !self.menus.menu_edit_number{return}
+        if let Some(d)=self.menus.menu_edit.as_mut(){
+            for c in text.chars() {
+                d.push(c);
+            }
+        }
+        self.refresh_list();
+    }
+
+    fn number_edit_key(&mut self,code:KeyCode){
+        match code{
+            KeyCode::Escape=>{self.menus.menu_edit=None;self.menus.menu_edit_icao=false;if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}},
+            KeyCode::Backspace|KeyCode::Delete=>{if let Some(d)=self.menus.menu_edit.as_mut(){d.pop();}},
+            KeyCode::Enter|KeyCode::NumpadEnter=>{self.apply_number_edit();return;},
+            _=>{}
+        }
+        self.refresh_list();
+    }
+
+    pub(crate) fn start_number_edit(&mut self){
+        self.menus.menu_edit=Some(String::new()); self.menus.menu_edit_number=true; self.menus.menu_edit_ident=false;
+        if let Some(w)=self.window.as_ref(){w.set_ime_allowed(true);}
+    }
+
+    pub(crate) fn apply_number_edit(&mut self){
+        let number=self.menus.menu_edit.take().unwrap_or_default().trim().to_string();
+        self.menus.menu_edit_number=false;
+        if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
+        if let Some(p) = self.player.as_mut() {
+            let v = &mut p.vehicle;
+            if let Some(i) = v.ty.program.str_var("number") {
+                v.state.str_vars[i as usize] = number.to_string();
+            }
+            // Change the license plate if applicable
+            if let Some(i) = v.ty.program.str_var("ident") {
+                let ident = v.ty.def.chosen_plate_of_number(&number);
+                v.state.str_vars[i as usize] = ident;
+            }
+            self.service_msg = Some((format!("Fleet number {number}"), 3.0));
+        }
+        self.refresh_list();
+    }
+
+    fn ident_edit_key(&mut self,code:KeyCode){
+        match code{
+            KeyCode::Escape=>{self.menus.menu_edit=None;self.menus.menu_edit_icao=false;if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}},
+            KeyCode::Backspace|KeyCode::Delete=>{if let Some(d)=self.menus.menu_edit.as_mut(){d.pop();}},
+            KeyCode::Enter|KeyCode::NumpadEnter=>{self.apply_ident_edit();return;},
+            _=>{}
+        }
+        self.refresh_list();
+    }
+
+     pub(crate) fn ident_edit_text(&mut self,text:&str){
+        if !self.menus.menu_edit_ident{return}
+        if let Some(d)=self.menus.menu_edit.as_mut(){
+            for c in text.chars() {
+                d.push(c);
+            }
+        }
+        self.refresh_list();
+    }
+
+    pub(crate) fn start_ident_edit(&mut self){
+        self.menus.menu_edit=Some(String::new()); self.menus.menu_edit_ident=true; self.menus.menu_edit_number=false;
+        if let Some(w)=self.window.as_ref(){w.set_ime_allowed(true);}
+    }
+
+     pub(crate) fn apply_ident_edit(&mut self){
+        let mut ident=self.menus.menu_edit.take().unwrap_or_default().trim().to_string();
+        self.menus.menu_edit_ident=false;
+        if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
+        if let Some(p) = self.player.as_mut() {
+            let v = &mut p.vehicle;
+            // If the plate is left empty, revert to automatic plate generation
+            if ident.is_empty() {
+                ident = v.ty.def.chosen_plate_of_number(&v.number());
+            }
+            if let Some(i) = v.ty.program.str_var("ident") {
+                v.state.str_vars[i as usize] = ident.to_string();
+            }
+            self.service_msg = Some((format!("Plate {ident}"), 3.0));
+        }
+        self.refresh_list();
+    }
+
     fn time_edit_key(&mut self, code: KeyCode) {
         let digit = match code {
             KeyCode::Digit0 | KeyCode::Numpad0 => Some('0'),
@@ -341,6 +428,10 @@ impl App {
                 self.search_edit_key(code);
             } else if self.menus.menu_edit_icao {
                 self.icao_edit_key(code);
+            } else if self.menus.menu_edit_number {
+                self.number_edit_key(code);
+            } else if self.menus.menu_edit_ident {
+                self.ident_edit_key(code);
             } else if matches!(self.menus.list_kind, Some(crate::game_lists::ListKind::RouteNumbers)) {
                 self.route_edit_key(code);
             } else {

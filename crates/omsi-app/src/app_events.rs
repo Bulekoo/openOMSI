@@ -186,6 +186,12 @@ impl ApplicationHandler for App {
                 if event.state == ElementState::Pressed && self.menus.menu_edit_icao {
                     if let Some(text)=event.text.as_deref(){ self.icao_edit_text(text); }
                 }
+                if event.state == ElementState::Pressed && self.menus.menu_edit_number {
+                    if let Some(text)=event.text.as_deref(){ self.number_edit_text(text); }
+                }
+                if event.state == ElementState::Pressed && self.menus.menu_edit_ident {
+                    if let Some(text)=event.text.as_deref(){ self.ident_edit_text(text); }
+                }
                 // Route numbers are free display text in OMSI. Take the text produced by
                 // the keyboard layout (rather than only the physical key) so '-', shifted
                 // symbols and non-US layouts reach the destination display unchanged.
