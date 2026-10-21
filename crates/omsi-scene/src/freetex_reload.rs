@@ -232,7 +232,7 @@ fn run(
         };
         for watch in command.into_iter().chain(commands.try_iter()).take(64) {
             if let Some(old) = watched.get(&watch.path) {
-                if old.watch.id == watch.id && old.held() {
+                if old.watch.id == watch.id && Weak::ptr_eq(&old.watch.shared, &watch.shared) {
                     continue;
                 }
             } else {
