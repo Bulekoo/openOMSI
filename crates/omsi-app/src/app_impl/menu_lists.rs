@@ -78,7 +78,7 @@ impl App {
 
     fn number_edit_key(&mut self,code:KeyCode){
         match code{
-            KeyCode::Escape=>{self.menus.menu_edit=None;self.menus.menu_edit_icao=false;if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}},
+            KeyCode::Escape=>{self.menus.menu_edit=None;self.menus.menu_edit_number=false;if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}},
             KeyCode::Backspace|KeyCode::Delete=>{if let Some(d)=self.menus.menu_edit.as_mut(){d.pop();}},
             KeyCode::Enter|KeyCode::NumpadEnter=>{self.apply_number_edit();return;},
             _=>{}
@@ -95,24 +95,18 @@ impl App {
         let number=self.menus.menu_edit.take().unwrap_or_default().trim().to_string();
         self.menus.menu_edit_number=false;
         if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
-        if let Some(p) = self.player.as_mut() {
-            let v = &mut p.vehicle;
-            if let Some(i) = v.ty.program.str_var("number") {
-                v.state.str_vars[i as usize] = number.to_string();
+        if let Some(p) = self.player.as_mut()  {
+            if !number.is_empty() {
+                crate::game_lists::set_identity_to_player_vehicle(p, &number,None);
+                self.service_msg = Some((format!("Fleet number {number}"), 3.0));
             }
-            // Change the license plate if applicable
-            if let Some(i) = v.ty.program.str_var("ident") {
-                let ident = v.ty.def.chosen_plate_of_number(&number);
-                v.state.str_vars[i as usize] = ident;
-            }
-            self.service_msg = Some((format!("Fleet number {number}"), 3.0));
         }
         self.refresh_list();
     }
 
     fn ident_edit_key(&mut self,code:KeyCode){
         match code{
-            KeyCode::Escape=>{self.menus.menu_edit=None;self.menus.menu_edit_icao=false;if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}},
+            KeyCode::Escape=>{self.menus.menu_edit=None;self.menus.menu_edit_ident=false;if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}},
             KeyCode::Backspace|KeyCode::Delete=>{if let Some(d)=self.menus.menu_edit.as_mut(){d.pop();}},
             KeyCode::Enter|KeyCode::NumpadEnter=>{self.apply_ident_edit();return;},
             _=>{}
@@ -136,18 +130,11 @@ impl App {
     }
 
      pub(crate) fn apply_ident_edit(&mut self){
-        let mut ident=self.menus.menu_edit.take().unwrap_or_default().trim().to_string();
+        let ident=self.menus.menu_edit.take().unwrap_or_default().trim().to_string();
         self.menus.menu_edit_ident=false;
         if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
         if let Some(p) = self.player.as_mut() {
-            let v = &mut p.vehicle;
-            // If the plate is left empty, revert to automatic plate generation
-            if ident.is_empty() {
-                ident = v.ty.def.chosen_plate_of_number(&v.number());
-            }
-            if let Some(i) = v.ty.program.str_var("ident") {
-                v.state.str_vars[i as usize] = ident.to_string();
-            }
+            crate::game_lists::set_identity_to_player_vehicle(p, "", Some(&ident));
             self.service_msg = Some((format!("Plate {ident}"), 3.0));
         }
         self.refresh_list();
@@ -324,6 +311,10 @@ impl App {
         self.menus.dropdown = None;
         if self.menus.menu_edit_icao { if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);} }
         self.menus.menu_edit_icao=false;
+        if self.menus.menu_edit_number { if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);} }
+        self.menus.menu_edit_number=false;
+        if self.menus.menu_edit_ident { if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);} }
+        self.menus.menu_edit_ident=false;
         self.menus.menu_edit_search = false;
         self.menus.menu_search.clear();
         self.menus.menu_edit = None;
