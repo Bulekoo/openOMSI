@@ -230,6 +230,10 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   without them, from its pantograph meshes and the variable they turn on (the Tatra T6B5's is
   `door_0`, which is then no longer a door: no door key, no boarding, no "door open while
   driving" penalty). Shift+P raises and lowers it.
+- **Bogie frames of mods** (the Tatra T6B5's `_trail.bus`: no `[boogies]`, one axle, one coupling
+  named) hang by their origin on the coupling of the car they belong to, as the mod is made for
+  OMSI 2, and stand on the track by their own wheelbase: they stood two to three metres out
+  of place, both under the middle of the car.
 - Cars of a train no longer jump back and forth by a few centimetres in bends: a part just
   behind the vehicle was placed from the last 10 cm sample of the track behind it, a part just
   ahead from the track itself.
