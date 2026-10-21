@@ -213,8 +213,31 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   go; the roads are drawn in a few strokes instead of one per road. Around the map's tiles
   the land has the map's own green, no more grey that looked as if it were still loading.
 
+**Trams, metros and trains** ([docs/RAIL.md](docs/RAIL.md))
+
+- Rail vehicles have a class (tram, metro, train), from `[rail_class]` in their file or from
+  what it declares (a `[contact_shoe]` is a metro, a long or heavy car a train), and rail lanes
+  a track kind (street or railway, third rail, tunnel, speed), from a map's new
+  `openomsi-rail.cfg`, from the names of its spline profiles (`tram_*`, `metro_*`, `rail_*`)
+  or from where the track lies. A road vehicle is never taken for a rail one.
+- A rail vehicle moves by the forces of railway engineering instead of the road tyres of a bus
+  and a made-up pull: running, air and curve resistance, the grade under it, wheel-rail
+  adhesion (less on wet rails, leaves, snow and ice), drive and brakes limited by it - the
+  driven wheels spin, the braked ones slide - and a tram's magnetic track brake. A vehicle
+  scripted for the AI only is driven by the pedals with the typical performance of its class.
+- The speed limit of a rail lane is brought down to what its curve allows (a tram loop, the
+  diverging branch of a turnout).
+
+**Road vehicles' physics**
+
+- Air drag and side force come from the vehicle's size, the air's density and the wind: a
+  crosswind leans and pushes a bus, a headwind slows it.
+- Grip and rolling resistance depend on what each tyre rolls on, wet or dry (cobbles, dirt,
+  grass, gravel, snow), and rolling resistance rises with speed and load.
+
 ### Fixes
 
+- Road damage shakes a vehicle again: cobbles, gravel, dirt, grass, snow and the joints of a concrete-slab road lift each tyre by what ISO 8608 gives such a road, where only the map's geometry did before ([#3069](https://github.com/openOMSI-org/openOMSI/issues/3069)).
 - Review of the round: `hwban 3 session é` (a multi-byte last character of a duration) no longer
   stops a dedicated server; the hardware bans are given to every session a game hosts, not only
   the first of a run; the host passes voice frames only to players that have voice chat on

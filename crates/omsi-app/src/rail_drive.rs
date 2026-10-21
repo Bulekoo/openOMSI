@@ -350,7 +350,7 @@ impl RailDrive {
         omsi_sim::vehicle::RailEnv {
             grade: grade.clamp(-0.2, 0.2),
             radius: if k > 1e-4 { 1.0 / k } else { f32::INFINITY },
-            in_tunnel: ["tunnel", "tunel", "subway", "ubahn", "u-bhf", "u_bhf", "metro"].iter().any(|t| name.contains(t)),
+            in_tunnel: lane.track.is_some_and(|t| t.tunnel) || ["tunnel", "tunel", "subway", "ubahn", "u-bhf", "u_bhf", "metro"].iter().any(|t| name.contains(t)),
         }
     }
 

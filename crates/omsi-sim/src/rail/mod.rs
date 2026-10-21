@@ -10,6 +10,8 @@
 
 pub mod class;
 pub mod dynamics;
+pub mod track;
 
 pub use class::{RailClass, TrackClass, TrackFacts};
 pub use dynamics::{step, Conditions, Consist, Forces, Outcome};
+pub use track::{classify, RailMapConfig, TrackInfo, TrackRule};
