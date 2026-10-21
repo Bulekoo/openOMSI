@@ -7,6 +7,7 @@ impl App {
     /// The cursor's aim into the cab.
     pub(super) fn frame_player_hover(&mut self) {
         let __th = Instant::now();
+        self.trolley_mouse_feed();
         // (the cursor's aim into the cab: again when the cursor or the view
         // turned, else every few frames for switches that moved under it - a ray
         // through every cockpit mesh every frame was a tenth of the frame)
@@ -66,6 +67,15 @@ pub(super) fn player_step(cx: PlayerStepCx, dt: f32) {
         }
     }
     if !*cx.clock.paused && ground_here {
+        // the hands on a trolleybus's ropes
+        if p.vehicle.trolley.is_some() {
+            let keys = &cx.input.keys;
+            let eye = cx.view.camera.as_ref().map(|c| (c.position, c.forward()));
+            let hint = crate::trolley_hands::apply(&mut p.vehicle, &crate::trolley_hands::Hands { keys: &|k| keys.contains(&k), view: cx.view.view.as_str(), eye });
+            if let (Some(h), None) = (hint, cx.ui.service_msg.as_ref()) {
+                *cx.ui.service_msg = Some((h.into(), 2.5));
+            }
+        }
         // (the developer tools' held variables: before the scripts and after them)
         crate::devtools::apply_holds(cx.ui.devtools.as_deref(), &mut p.vehicle);
         p.tick(
@@ -75,6 +85,11 @@ pub(super) fn player_step(cx: PlayerStepCx, dt: f32) {
             !matches!(cx.view.view.as_str(), "free" | "foot"),
         );
         crate::devtools::apply_holds(cx.ui.devtools.as_deref(), &mut p.vehicle);
+        if let Some(g) = p.vehicle.trolley.as_deref_mut() {
+            if let Some(n) = g.rig.take_notes().pop() {
+                *cx.ui.service_msg = Some((n, 3.0));
+            }
+        }
         crate::plugins::plugin_impacts(&p.vehicle, &mut **cx.integrations);
         steps::deliver_player_impacts(p, cx.traffic.traffic.as_mut());
         // After scripts: zero-movement `_drag` for a held switch. Running this
@@ -205,6 +220,9 @@ pub(super) fn player_to_scene(cx: PlayerToSceneCx, dt: f32) {
         return;
     };
     let inside = cx.view.cam.in_cab;
+    if let Some(tv) = p.trolley_view.as_mut() {
+        tv.update(r, scene, dt, &mut p.vehicle);
+    }
     let glass = p.sync_transforms(r, scene, inside, cx.world.world.as_ref().map_or(2, |w| w.settings.rain_quality()));
     cx.perf.profile.add(crate::profile_keys::ProfKey::PlayerGlass, glass);
     crate::scene::sync_vehicle_damage(r, scene, &mut p.vehicle, &mut p.render);
@@ -267,6 +285,7 @@ pub(super) fn audio(cx: AudioCx, dt: f32) {
         match cx.player.player.as_mut() {
             Some(p) => {
                 let inside = cx.view.cam.in_cab;
+                p.trolley_sound.update(a, &mut p.vehicle, &[], *cx.clock.paused);
                 cx.sound.radio.set_map(&cx.common.args.root, &cx.common.args.map);
                 cx.sound.radio.fx = cx.common.settings.radio_fx;
                 if let Some(m) = cx.sound.radio.update(a, &p.vehicle, inside) {

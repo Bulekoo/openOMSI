@@ -78,8 +78,12 @@ fn rain_turn(q: vec2<f32>, a: f32) -> vec2<f32> {
 fn rain_glass(world: vec3<f32>, uv: vec2<f32>, n: vec3<f32>, water: f32, t: f32, outside_in: bool, pane: vec3<f32>) -> RainGlass {
     // Match the collector map's larger visible caps (#3019). Scale the cell spacing
     // too, so larger drops replace fine specks rather than multiplying their cover.
-    let drop_scale = 2.0;
     let wet = clamp(water, 0.0, 1.0);
+    // The drops are bigger the harder it has rained on the pane (a drizzle leaves beads, a
+    // downpour full drops), and on an upright side pane, which the rain meets edge on and
+    // the airstream sweeps, smaller than on the sloping windscreen (#3076).
+    let drop_scale = mix(1.2, 2.0, smoothstep(0.1, 0.8, wet)) * mix(0.7, 1.0, smoothstep(0.0, 0.4, abs(n.z)));
+    let heavy = smoothstep(0.55, 1.0, wet);
     let wiped_film = clamp(-water * 25.0, 0.0, 1.0);
     var g: RainGlass;
     g.n = n;
@@ -217,12 +221,12 @@ fn rain_glass(world: vec3<f32>, uv: vec2<f32>, n: vec3<f32>, water: f32, t: f32,
         if (tracked) { break; } // these panes use persistent, merging drops
         let seg = seg0 - f32(k);
         let h1 = rain_hash(vec2<f32>(lane * 1.7 + 3.0, seg * 2.3 + 11.0));
-        if (h1.x >= wet * (0.7 + 0.08 * blow)) {
+        if (h1.x >= wet * (0.7 + 0.08 * blow + 0.2 * heavy)) {
             continue;
         }
         let h2 = rain_hash(vec2<f32>(lane * 1.7 + 8.1, seg * 2.3 + 5.1));
         let sit = 0.3 + 0.8 * h2.y;
-        let speed = (0.07 + 0.16 * h1.y * h1.y) * (1.0 + 0.7 * blow);
+        let speed = (0.07 + 0.16 * h1.y * h1.y) * (1.0 + 0.7 * blow) * (1.0 + 0.4 * heavy);
         let run_len = 0.9 + 0.3 * h2.y;
         let period = sit + run_len / speed + 0.4;
         let cycle = t / period + h2.x;
@@ -242,7 +246,8 @@ fn rain_glass(world: vec3<f32>, uv: vec2<f32>, n: vec3<f32>, water: f32, t: f32,
         let y0 = (seg + 0.02 + 0.08 * h3.x) * seg_h;
         let x0 = (lane + 0.4 + 0.2 * h3.y) * lane_w;
         let drift = (h2.y - 0.5) * 0.025;
-        let rh = drop_scale * (0.001 + 0.0012 * h1.y * h1.y) * mix(0.3, 1.0, smoothstep(0.0, sit, tau));
+        // (a downpour's runners are heavier: wider heads, wider cleared tracks)
+        let rh = drop_scale * (0.001 + 0.0012 * h1.y * h1.y) * (1.0 + 0.9 * heavy) * mix(0.3, 1.0, smoothstep(0.0, sit, tau));
         let bend = 0.0015 * sin(travel * (30.0 + 25.0 * h3.y) + h2.x * 6.283185);
         var head_d = vec2<f32>(qr.x - (x0 + drift * travel + bend), qr.y - (y0 + travel));
         head_d.y *= select(0.65, 1.0, head_d.y > 0.0);

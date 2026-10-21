@@ -275,7 +275,14 @@ fn gathered_air_light(at: vec2<f32>, len: f32) -> vec3<f32> {
         let dy = abs(f32(o.y) - f.y);
         let bil = max(1.0 - dx * 0.5, 0.0) * max(1.0 - dy * 0.5, 0.0);
         let dd = abs(s.a - len);
-        let w = (bil + 1e-3) * exp(-dd / (0.05 * len + 0.5));
+        // (a Gaussian of the distance difference, not an exponential: a road's rows differ by
+        // a few per cent of its length from one half-size row to the next, and an exponential
+        // weighted every row differently - the offsets of the staggered steps, which cancel
+        // over the tent exactly when its weights are even, then came out as a stripe along
+        // every other row of a bright beam. A step in depth, a pole against what is behind it,
+        // still keeps the taps of the far side out.)
+        let tol = (dd / (0.05 * len + 0.5)) * 1.2;
+        let w = (bil + 1e-3) * exp(-tol * tol);
         sum = sum + s.rgb * w;
         wsum = wsum + w;
         if (dd < best_d) {

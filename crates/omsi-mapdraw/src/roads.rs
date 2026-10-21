@@ -300,6 +300,13 @@ pub fn lane_from_right(net: &Network, lane: usize, bus: DVec3) -> usize {
 /// is (`jam`: congestion per lane), with arrows along it in a colour that stands out.
 #[allow(clippy::too_many_arguments)]
 pub fn build_route(p: &mut Painter, net: &Network, lanes: &[usize], anchor: DVec2, s0: f32, jam: &HashMap<usize, f32>, style: &RouteStyle, bus_lane: usize, pal: &style::Palette) {
+    build_route_to(p, net, lanes, anchor, s0, jam, style, bus_lane, pal, None);
+}
+
+/// Draw a route optionally ending partway through its final lane. Existing callers keep
+/// drawing the whole route with `build_route`; a free destination supplies its endpoint.
+#[allow(clippy::too_many_arguments)]
+pub fn build_route_to(p: &mut Painter, net: &Network, lanes: &[usize], anchor: DVec2, s0: f32, jam: &HashMap<usize, f32>, style: &RouteStyle, bus_lane: usize, pal: &style::Palette, end_s: Option<f32>) {
     let rel = |q: DVec3| Vec3::new((q.x - anchor.x) as f32, (q.y - anchor.y) as f32, 0.0);
     // runs of one colour: the lanes' points joined up, the first lane cut where the bus is
     let mut runs: Vec<(Vec<Vec3>, f32, usize)> = Vec::new();
@@ -358,7 +365,7 @@ pub fn build_route(p: &mut Painter, net: &Network, lanes: &[usize], anchor: DVec
     for (k, &l) in lanes.iter().enumerate() {
         let Some(lane) = net.lanes.get(l) else { break };
         let route_l = l;
-        let l = shown(k, l);
+        let l = if end_s.is_some() && k + 1 == lanes.len() { l } else { shown(k, l) };
         let lane = net.lanes.get(l).unwrap_or(lane);
         if let Some((c, r)) = style.near {
             if (c - lane.start().truncate()).length() > r {
@@ -366,15 +373,18 @@ pub fn build_route(p: &mut Painter, net: &Network, lanes: &[usize], anchor: DVec
             }
         }
         let from = if k == 0 { s0 } else { 0.0 };
+        let to = if k + 1 == lanes.len() { end_s.unwrap_or(lane.length()).clamp(0.0, lane.length()) } else { lane.length() };
+        if to <= from { continue; }
         let mut pts: Vec<Vec3> = Vec::new();
         if k == 0 {
             pts.push(rel(lane.at(s0).0));
         }
         for (q, d) in lane.points.iter().zip(&lane.dist) {
-            if *d > from + 0.05 || k > 0 {
+            if (*d > from + 0.05 || k > 0) && *d <= to {
                 pts.push(rel(*q));
             }
         }
+        if end_s.is_some() && k + 1 == lanes.len() { pts.push(rel(lane.at(to).0)); }
         // a change of lane (the lane shown beside the last one): a smooth curve over to the
         // new lane rather than a step sideways at the junction of the two
         let mut skip_arrows = 0.0f32;
@@ -432,14 +442,14 @@ pub fn build_route(p: &mut Painter, net: &Network, lanes: &[usize], anchor: DVec
                 let step = len / n;
                 for i in 0..n as usize {
                     let at = step * (i as f32 + 0.5);
-                    if at > from + 4.0 && at > skip_arrows && total + at - from < reach {
+                    if at > from + 4.0 && at <= to && at > skip_arrows && total + at - from < reach {
                         let (q, h) = lane.at(at);
                         arrows.push((q, h, lv, w));
                     }
                 }
             }
         }
-        total += lane.length() - from;
+        total += to - from;
         if total > style.max_len {
             break;
         }

@@ -634,6 +634,7 @@ impl Renderer {
             shadows: ShadowRes {
                 shadow_far_cache: std::cell::Cell::new((Mat4::IDENTITY, 0, DVec3::ZERO, Vec3::ZERO)),
                 shadow_near_cache: std::cell::Cell::new((Mat4::IDENTITY, 0, DVec3::ZERO, Vec3::ZERO)),
+                shadow_close_cache: std::cell::Cell::new((Mat4::IDENTITY, DVec3::ZERO, Vec3::ZERO)),
                 xr_shadow_cache: std::cell::Cell::new(None),
                 shadow_clear_pipeline: shadows.clear_pipeline,
                 lamp_tiles: Default::default(),

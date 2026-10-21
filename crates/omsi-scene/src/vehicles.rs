@@ -539,7 +539,7 @@ impl World {
                 gpu.take_mesh_slot(renderer, scene, id)
             }
             None => {
-                let data = vt.mesh_data(i);
+                let data = crate::pane_uv::gpu_mesh(vt, i);
                 let empty = MeshData {
                     ranges: vt.meshes[i].data.ranges.clone(),
                     ..Default::default()

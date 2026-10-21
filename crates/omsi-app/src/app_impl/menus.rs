@@ -178,6 +178,7 @@ impl App {
                 self.copy_server_code();
             }
             "admin" => self.open_list(crate::game_lists::ListKind::Admin),
+            "players" => self.open_list(crate::game_lists::ListKind::PlayerList),
             "duty" => self.open_list(crate::game_lists::ListKind::Lines),
             "map" => {
                 self.close_game_menu();
@@ -435,6 +436,11 @@ impl crate::App {
                 v.insert(w + 1, ("copycode", "Copy server code".into(), None));
                 at = at.max(w + 2);
             }
+        }
+        // everybody in a multiplayer session may see who is there
+        if self.net.lan.is_some() {
+            let before_quit = v.iter().position(|x| x.0 == "quit").unwrap_or(v.len()).max(at);
+            v.insert(before_quit, ("players", "Player list...".into(), None));
         }
         if host || self.net.is_admin {
             let before_quit = v.iter().position(|x| x.0 == "quit").unwrap_or(v.len()).max(at);

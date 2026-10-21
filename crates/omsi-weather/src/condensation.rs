@@ -62,6 +62,12 @@ pub struct CabinInputs {
     /// Which vehicle (its type's address) and where it is.
     pub vehicle: usize,
     pub position: glam::DVec3,
+    /// A bus whose scripts keep their own cabin air (`Cabinair_Temp`, `Cabinair_absHum`; its
+    /// heating, fans, vent windows and doors are theirs): the temperature (degC), the
+    /// humidity (g/m3) and the air its front heater blows while the fan runs (degC). The
+    /// glass then answers to the air the driver sees on the bus's own gauges instead of a
+    /// second, guessed cabin.
+    pub scripted: Option<(f32, f32, Option<f32>)>,
 }
 
 /// Saturation vapour density (g/m³) at `t` °C (Magnus over water, Alduchov and Eskridge).
@@ -98,6 +104,8 @@ const DEFROST_REACH: f32 = 0.85;
 const BODY_HEAT: f32 = 100.0;
 const BREATH: f32 = 45.0;
 const WET_COAT: f32 = 30.0;
+/// The fresh air brought in for each person aboard (m3/h).
+const FRESH_AIR: f32 = 15.0;
 /// The film of fine droplets whose optical depth is 1: some 3 g/m² turns glass milky.
 pub const MILKY: f32 = 3.0;
 
@@ -116,14 +124,18 @@ impl CabinAir {
     }
 
     /// The air the heater core blows out (°C).
-    fn heater_outlet(&self) -> f32 {
-        self.temp + HEATER_EFFECTIVENESS * (self.coolant - self.temp).max(0.0)
+    fn heater_outlet(&self, i: &CabinInputs) -> f32 {
+        match i.scripted {
+            Some((_, _, Some(jet))) => jet.max(self.temp),
+            Some(_) => self.temp,
+            None => self.temp + HEATER_EFFECTIVENESS * (self.coolant - self.temp).max(0.0),
+        }
     }
 
     /// The water the defroster's jet takes off the windscreen (g/m²s; below 0 it condenses
     /// there too).
     fn defroster_drying(&self, i: &CabinInputs) -> f32 {
-        let t = Self::glass_temp(H_DEFROST, self.heater_outlet(), i.outside, i.speed + 1.0);
+        let t = Self::glass_temp(H_DEFROST, self.heater_outlet(i), i.outside, i.speed + 1.0);
         H_DEFROST / AIR_RHO_CP * (saturation(t) - self.vapour)
     }
 
@@ -151,8 +163,16 @@ impl CabinAir {
         let volume = i.volume.max(10.0);
         let out_vapour = saturation(i.dew_point);
         // air changes an hour: the fans, the airstream through the vents, the doors
-        let ach = 3.0 + 0.35 * i.speed.max(0.0) + 120.0 * i.doors_open as f32;
+        // (the fresh air a city bus is built to bring in is some 15 m3/h a person, on top of
+        // the leaks)
+        let ach = 3.0 + FRESH_AIR * i.people as f32 / volume + 0.35 * i.speed.max(0.0) + 120.0 * i.doors_open as f32;
         let leave = ach / 3600.0;
+        if let Some((t, hum, _)) = i.scripted {
+            // the bus keeps its own air: take it as it is (what the air holds above its
+            // saturation condenses on every cold surface anyway)
+            self.temp = t;
+            self.vapour = hum.min(saturation(t));
+        }
         // the coolant warms with the engine running and cools when it stops
         let (aim, tau) = if i.engine { (COOLANT_HOT, COOLANT_WARMUP) } else { (i.outside, COOLANT_COOLDOWN) };
         self.coolant += (aim - self.coolant) * (1.0 - (-dt / tau).exp());
@@ -170,13 +190,17 @@ impl CabinAir {
         let gain = heat + BODY_HEAT * i.people as f32;
         // (exact over the step for the losses, which can be quick with the doors open)
         let settle = i.outside + gain / loss;
-        self.temp += (settle - self.temp) * (1.0 - (-dt * loss / capacity).exp());
+        if i.scripted.is_none() {
+            self.temp += (settle - self.temp) * (1.0 - (-dt * loss / capacity).exp());
+        }
         // the vapour: the people's, and what leaves with the air
         let source = i.people as f32 * (BREATH + if i.precip { WET_COAT } else { 0.0 }) / 3600.0;
-        self.vapour += source / volume * dt;
-        self.vapour += (out_vapour - self.vapour) * (1.0 - (-dt * leave).exp());
-        // (no more than the air holds: the rest condenses on every cold surface)
-        self.vapour = self.vapour.min(saturation(self.temp));
+        if i.scripted.is_none() {
+            self.vapour += source / volume * dt;
+            self.vapour += (out_vapour - self.vapour) * (1.0 - (-dt * leave).exp());
+            // (no more than the air holds: the rest condenses on every cold surface)
+            self.vapour = self.vapour.min(saturation(self.temp));
+        }
         // the panes: windscreen, sides, rear (the airstream meets the windscreen head on,
         // runs along the sides and leaves the rear window in the bus's wake)
         let stream = [1.0, 0.8, 0.35];
@@ -243,6 +267,7 @@ pub fn inputs_for(v: &omsi_sim::VehicleInstance, w: &omsi_content::weather::Weat
         skin: 2.0 * (x * y + y * z + z * x),
         vehicle: std::sync::Arc::as_ptr(&v.ty) as usize,
         position: v.position,
+        scripted: v.scripted_cabin_air(),
     }
 }
 
@@ -259,7 +284,7 @@ mod tests {
     }
 
     fn inputs() -> CabinInputs {
-        CabinInputs { outside: 7.0, dew_point: 6.0, speed: 10.0, engine: true, people: 31, doors_open: 0, precip: true, volume: 70.0, skin: 150.0, vehicle: 1, position: glam::DVec3::ZERO }
+        CabinInputs { outside: 7.0, dew_point: 6.0, speed: 10.0, engine: true, people: 31, doors_open: 0, precip: true, volume: 70.0, skin: 150.0, vehicle: 1, position: glam::DVec3::ZERO, scripted: None }
     }
 
     fn milky(c: &CabinAir, k: usize) -> f32 {
@@ -301,6 +326,43 @@ mod tests {
     fn the_defroster_clears_the_windscreen() {
         let c = run(inputs(), 15.0);
         assert!(c.defrost > 0.5 && c.defrosted_glass_clear(&inputs()), "{c:?}");
+    }
+
+    /// 17 degC in the cabin, 7 outside, the air as damp as the street's plus a few
+    /// passengers' breath (the bus's own gauges): the glass stays above the dew point, so
+    /// a light mist on it goes within some minutes (slower the colder the airstream
+    /// makes the glass), and a clear pane stays clear.
+    #[test]
+    fn at_17_inside_and_7_outside_the_glass_clears() {
+        let street = saturation(6.0);
+        for speed in [0.0, 5.0, 12.0] {
+            let i = CabinInputs { speed, scripted: Some((17.0, street + 0.3, None)), people: 8, ..inputs() };
+            let mut c = CabinAir::new();
+            c.step(1.0, &i);
+            c.film = [4.0; 3];
+            for _ in 0..(25 * 60) {
+                c.step(1.0, &i);
+            }
+            println!("v{speed} film {:?}", c.film);
+            assert!(c.film.iter().all(|f| *f < 1.0), "v{speed}: {c:?}");
+        }
+    }
+
+    /// The same cabin with the bus's heating up (21 degC): it clears sooner than at 17.
+    #[test]
+    fn a_warmer_cabin_clears_sooner() {
+        let street = saturation(6.0);
+        let after = |t: f32| {
+            let i = CabinInputs { speed: 8.0, scripted: Some((t, street + 1.2, None)), ..inputs() };
+            let mut c = CabinAir::new();
+            c.step(1.0, &i);
+            c.film = [10.0; 3];
+            for _ in 0..(10 * 60) {
+                c.step(1.0, &i);
+            }
+            c.film[1]
+        };
+        assert!(after(21.0) < after(17.0) - 1.0, "{} {}", after(21.0), after(17.0));
     }
 
     #[test]

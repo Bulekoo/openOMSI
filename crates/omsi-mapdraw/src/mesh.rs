@@ -66,19 +66,19 @@ impl MapData {
     pub fn new(layers: std::sync::Arc<Layers>) -> MapData {
         let mut cells: HashMap<(i32, i32), Cell> = HashMap::new();
         let new_cell = || Cell { land: vec![Vec::new(); layers::LAND_CLASSES], paved: vec![Vec::new(); layers::PAVE_CLASSES], paint: vec![Vec::new(); layers::PAINT_CLASSES], ..Default::default() };
-        for (class, tris) in layers.land.iter().enumerate() {
+        for (class, tris) in (0..layers::LAND_CLASSES).map(|c| (c, layers.land_of(c))) {
             for (i, t) in tris.chunks_exact(3).enumerate() {
                 let c = cell_of((t[0] + t[1] + t[2]) / 3.0);
                 cells.entry(c).or_insert_with(new_cell).land[class].push(i as u32);
             }
         }
-        for (class, tris) in layers.paved.iter().enumerate() {
+        for (class, tris) in (0..layers::PAVE_CLASSES).map(|c| (c, layers.paved_of(c))) {
             for (i, t) in tris.chunks_exact(3).enumerate() {
                 let c = cell_of((t[0] + t[1] + t[2]) / 3.0);
                 cells.entry(c).or_insert_with(new_cell).paved[class].push(i as u32);
             }
         }
-        for (class, tris) in layers.paint.iter().enumerate() {
+        for (class, tris) in (0..layers::PAINT_CLASSES).map(|c| (c, layers.paint_of(c))) {
             for (i, t) in tris.chunks_exact(3).enumerate() {
                 let c = cell_of((t[0] + t[1] + t[2]) / 3.0);
                 cells.entry(c).or_insert_with(new_cell).paint[class].push(i as u32);
@@ -114,7 +114,7 @@ impl MapData {
             .collect();
         let mut paved_cells = hashbrown::HashSet::new();
         for class in [layers::PAVE_ROAD, layers::PAVE_AREA] {
-            for t in layers.paved[class].chunks_exact(3) {
+            for t in layers.paved_of(class).chunks_exact(3) {
                 let lo = t[0].min(t[1]).min(t[2]);
                 let hi = t[0].max(t[1]).max(t[2]);
                 let a = (t[1] - t[0]).perp_dot(t[2] - t[0]);
@@ -201,7 +201,7 @@ impl MapData {
         ];
         for (class, col) in land_order {
             for cell in &cells {
-                for t in cell.land[class].iter().map(|&i| tri(&self.layers.land[class], i)) {
+                for t in cell.land[class].iter().map(|&i| tri(self.layers.land_of(class), i)) {
                     p.world_poly(&[v(t[0]), v(t[1]), v(t[2])], col);
                 }
             }
@@ -228,7 +228,7 @@ impl MapData {
         for (classes, fill) in [(&[layers::PAVE_GREEN][..], pal.grass), (&[layers::PAVE_AREA][..], pal.area), (&[layers::PAVE_FOOT, layers::PAVE_ROAD][..], pal.foot), (&[layers::PAVE_INNER][..], pal.road)] {
             for cell in &cells {
                 for &class in classes {
-                    for t in cell.paved[class].iter().map(|&i| tri(&self.layers.paved[class], i)) {
+                    for t in cell.paved[class].iter().map(|&i| tri(self.layers.paved_of(class), i)) {
                         p.world_poly(&[v(t[0]), v(t[1]), v(t[2])], fill);
                     }
                 }
@@ -239,7 +239,7 @@ impl MapData {
         if look.surfaces {
             for (class, col) in [(layers::PAINT_WHITE, pal.lane_paint), (layers::PAINT_AMBER, pal.lane_amber)] {
                 for cell in &cells {
-                    for t in cell.paint[class].iter().map(|&i| tri(&self.layers.paint[class], i)) {
+                    for t in cell.paint[class].iter().map(|&i| tri(self.layers.paint_of(class), i)) {
                         p.world_poly(&[v(t[0]), v(t[1]), v(t[2])], col);
                     }
                 }

@@ -9,6 +9,7 @@ members = [
     "crates/omsi-map",
     "crates/omsi-mapdraw",
     "crates/omsi-navigator",
+    "crates/omsi-trolley",
     "crates/omsi-vehicle",
     "crates/omsi-timetable",
     "crates/omsi-content",
@@ -18,6 +19,7 @@ members = [
     "crates/omsi-sim",
     "crates/omsi-htmlengine",
     "crates/omsi-audio",
+    "crates/omsi-voice",
     "crates/omsi-net",
     "crates/omsi-plugin",
     "crates/omsi-plugin/demo",
@@ -27,6 +29,7 @@ members = [
     "crates/omsi-launcher-model",
     "crates/omsi-admin",
     "crates/omsi-lan",
+    "crates/omsi-serverlist",
     "crates/omsi-platform",
     "crates/omsi-guard",
     "crates/omsi-input",
@@ -75,6 +78,7 @@ wgpu-hal = "29"
 naga = "29"
 winit = "0.30"
 bytemuck = { version = "1", features = ["derive"] }
+memmap2 = "0.9"
 pollster = "1.0"
 # (every picture format a mod or a photo may come in; DDS and TGA have readers of our own)
 image = { version = "0.25", default-features = false, features = ["png", "bmp", "tga", "dds", "jpeg", "webp", "gif", "tiff", "hdr", "exr", "pnm", "qoi", "ico", "ff"] }

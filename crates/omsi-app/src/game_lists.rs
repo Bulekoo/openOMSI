@@ -19,6 +19,12 @@ pub(crate) enum ListKind {
     AdminPlayer(omsi_admin::Target),
     AdminConfirm(String, omsi_admin::Target),
     AdminClassic,
+    /// The players of a multiplayer session (`player_list`): all of them, one of them, what is
+    /// done about one (`kick` or `ban`), and the banned machines.
+    PlayerList,
+    PlayerPage(omsi_admin::Target),
+    PlayerDo(String, omsi_admin::Target),
+    BanList,
     /// The options of the game, on this page of the settings window.
     Options(usize),
     /// What can be done with the vehicle, on this page.
@@ -493,6 +499,7 @@ pub(crate) fn items(app: &App, kind: &ListKind) -> Vec<(String, String)> {
         ListKind::Admin if crate::admin_panel::remote(app) => out = crate::admin_panel::items(app, kind),
         ListKind::Admin | ListKind::AdminClassic => return crate::admin::items(app),
         ListKind::AdminPlayers | ListKind::AdminPlayer(_) | ListKind::AdminConfirm(..) => out = crate::admin_panel::items(app, kind),
+        ListKind::PlayerList | ListKind::PlayerPage(_) | ListKind::PlayerDo(..) | ListKind::BanList => return crate::player_list::items(app, kind),
         ListKind::Options(_) | ListKind::Vehicle(_) | ListKind::World(_) => {
             let Some((mut pages, tab)) = pages_of(app, kind) else { return out };
             if pages.is_empty() {
@@ -859,6 +866,7 @@ pub(crate) fn menu_extras(
         ListKind::PlaceMaker | ListKind::PlaceType(_) | ListKind::PlaceLivery(_) | ListKind::PlaceHof(..) => (MenuKind::List, head("Place a vehicle..."), None),
         ListKind::Admin | ListKind::AdminPlayer(_) | ListKind::AdminConfirm(..) | ListKind::AdminClassic => (MenuKind::List, Some((tr("Administration"), String::new())), None),
         ListKind::AdminPlayers => (MenuKind::List, Some((tr("Players"), String::new())), None),
+        ListKind::PlayerList | ListKind::PlayerPage(_) | ListKind::PlayerDo(..) | ListKind::BanList => (MenuKind::List, Some((tr("Player list"), String::new())), None),
     }
 }
 
@@ -878,6 +886,9 @@ pub(crate) fn run_move(app: &mut App, kind: &ListKind, action: &str, mv: Move) -
         app.menus.menu_edit_search = true;
         return Some(kind.clone());
     }
+    if action == "back" && crate::player_list::is_page(Some(kind)) {
+        return crate::player_list::back(kind);
+    }
     if action == "back" {
         return match kind {
             ListKind::Tours(..) => Some(ListKind::Lines),
@@ -893,6 +904,7 @@ pub(crate) fn run_move(app: &mut App, kind: &ListKind, action: &str, mv: Move) -
     let (verb, arg) = action.split_once(' ').unwrap_or((action, ""));
     match kind {
         ListKind::ControllerDevices(_) | ListKind::Controller(..) | ListKind::ControllerAxis(..) | ListKind::ControllerButtons(_) | ListKind::ControllerButtonSettings(..) | ListKind::ControllerButton(..) | ListKind::ControllerCapture(_) => unreachable!("controller lists handled above"),
+        ListKind::PlayerList | ListKind::PlayerPage(_) | ListKind::PlayerDo(..) | ListKind::BanList => crate::player_list::run(app, kind, action),
         ListKind::Admin | ListKind::AdminPlayers | ListKind::AdminPlayer(_) | ListKind::AdminConfirm(..) if crate::admin_panel::remote(app) => crate::admin_panel::run(app, kind, action),
         ListKind::Admin | ListKind::AdminClassic => {
             crate::admin::run(app, action);

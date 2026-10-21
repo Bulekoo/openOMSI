@@ -28,6 +28,7 @@ fn walker() -> OnFoot {
         door_request: None,
         door_request_send: 0.0,
         footing: None,
+        bus_turn: None,
     }
 }
 
@@ -120,4 +121,39 @@ fn kneeling_lowers_the_eyes_and_slows_the_walk() {
     // (seated: nothing to kneel on)
     f.seat = Some((BusId::Player, 3));
     assert!(!f.toggle_kneel() && !f.kneel);
+}
+
+#[test]
+fn the_walker_gets_up_to_pace_and_stops_over_steps_not_at_once() {
+    let mut v = DVec2::ZERO;
+    let want = DVec2::new(0.0, 1.4);
+    // not at pace after a tenth of a second, at pace within half a second
+    v = approach_velocity(v, want, 0.1, true);
+    assert!(v.y > 0.2 && v.y < 0.5, "{v:?}");
+    for _ in 0..40 {
+        v = approach_velocity(v, want, 0.01, true);
+    }
+    assert!((v - want).length() < 1e-9);
+    // stopping from a run takes more than a frame and less than a second
+    let mut v = DVec2::new(0.0, 3.8);
+    v = approach_velocity(v, DVec2::ZERO, 0.016, true);
+    assert!(v.y > 3.5);
+    for _ in 0..60 {
+        v = approach_velocity(v, DVec2::ZERO, 1.0 / 60.0, true);
+    }
+    assert_eq!(v, DVec2::ZERO);
+}
+
+#[test]
+fn a_turn_is_a_curve_with_no_speed_lost_to_a_snap() {
+    // from walking north to walking east: the speed dips but never jumps
+    let mut v = DVec2::new(0.0, 1.4);
+    let want = DVec2::new(1.4, 0.0);
+    let mut last = v;
+    for _ in 0..200 {
+        v = approach_velocity(v, want, 1.0 / 120.0, true);
+        assert!((v - last).length() <= 6.5 / 120.0 + 1e-9);
+        last = v;
+    }
+    assert!((v - want).length() < 1e-9);
 }

@@ -8,13 +8,14 @@ use omsi_net::LanSession;
 use std::collections::HashMap;
 
 mod action;
+pub mod ban;
 mod exec;
 pub mod panel;
-mod reply;
+pub mod reply;
 pub mod world;
 pub use action::{act_on_session, Action, Admin, Done, WeatherAction, Whom};
 pub use exec::{action_of, exec, hub, install_hub, perm_of, players, publish, report, run_job, split_guard, Exec, WorldJob};
-pub use reply::{esc, parse_player, player_line, unesc};
+pub use reply::{esc, parse_ban, parse_player, player_line, unesc};
 
 /// What of the game a dedicated server's administration goes by.
 pub struct ServerRules<'a> {
@@ -294,8 +295,12 @@ pub const LOCAL_ADMIN: u32 = u32::MAX;
 pub fn server_command(lan: &mut LanSession, from: u32, text: &str, adm: &mut ServerAdmin, positions: &dyn Fn(u32) -> Option<(glam::DVec3, f64)>, rules: &ServerRules, hub: Option<&Hub>) {
     let (verb, arg) = text.split_once(' ').unwrap_or((text, ""));
     match verb {
-        // a joining game asks which voice server the session talks on (`voice`)
-        "voice?" => lan.command(from, &crate::voice::VoiceServer::command(crate::voice::hosted().as_ref())),
+        // a joining game asks what the session allows of voice chat (`omsi_net::voice_net`)
+        "voice?" => {
+            let policy = lan.voice_policy().command();
+            lan.set_voice_listener(from);
+            lan.command(from, &policy)
+        }
         "auth?" => {
             if !adm.enabled() {
                 lan.command(from, "admin-no");
@@ -350,7 +355,7 @@ pub fn server_command(lan: &mut LanSession, from: u32, text: &str, adm: &mut Ser
                 lan.command(from, "admin-result 0 applied you no longer administer this server");
             }
         }
-        "admin" | "admin-list" | "admin-state" => {
+        "admin" | "admin-list" | "admin-state" | "admin-bans" => {
             let Some(role) = adm.admins.get(&from).copied() else {
                 // (the machine's own tool is always let in by the gateway; a player is told)
                 if from != LOCAL_ADMIN {
@@ -361,6 +366,7 @@ pub fn server_command(lan: &mut LanSession, from: u32, text: &str, adm: &mut Ser
             match verb {
                 "admin-list" => reply::players_list(lan, from, &players(lan, adm), arg),
                 "admin-state" => reply::state(lan, from, hub, role),
+                "admin-bans" => reply::bans_list(lan, from, &ban::views()),
                 _ => exec::from_game(lan, from, role, arg, adm, positions, rules, hub),
             }
         }

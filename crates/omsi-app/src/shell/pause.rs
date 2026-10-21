@@ -23,6 +23,8 @@ const PAGE: Color = BG;
 /// ... and on the home page, where nothing but the sidebar is drawn: the paused game stays
 /// in view, dimmed.
 const HOME_VEIL: Color = Color([BG.0[0], BG.0[1], BG.0[2], 0.72]);
+/// Narrower than this (points) an open page has the screen to itself.
+const NARROW: f32 = 560.0;
 /// A list's row.
 const LIST_ROW: f32 = 40.0;
 
@@ -104,7 +106,10 @@ pub(crate) fn draw(sh: &mut Shell, v: &PauseView) {
     let size = sh.ui.size;
     // the launcher's window: its sidebar and a page beside it - the home page with the
     // session's summary, or the list or settings window opened from the sidebar
-    let page = Rect::new(RAIL_W, 0.0, (size.x - RAIL_W).max(0.0), size.y);
+    // (on a narrow screen - a phone held upright - an open page takes the whole width, the
+    // way back at its top: beside the rail it was a strip with the switches and no names)
+    let narrow = v.list.is_some() && size.x < NARROW;
+    let page = if narrow { Rect::new(0.0, 0.0, size.x, size.y) } else { Rect::new(RAIL_W, 0.0, (size.x - RAIL_W).max(0.0), size.y) };
     sh.ui.solid(page);
     match v.list.as_ref() {
         Some(list) => {
@@ -114,7 +119,9 @@ pub(crate) fn draw(sh: &mut Shell, v: &PauseView) {
         // (the home page: the game, dimmed - the sidebar holds every action)
         None => sh.ui.p().rect(page, HOME_VEIL),
     }
-    rail(sh, v);
+    if !narrow {
+        rail(sh, v);
+    }
 }
 
 
@@ -219,16 +226,19 @@ fn rail(sh: &mut Shell, v: &PauseView) {
 }
 
 /// The launcher's tabs: the titles in a row, the chosen one in the text colour over an amber
-/// line, the others muted. Returns the one clicked.
-fn tabs(ui: &mut Ui, at: Vec2, titles: &[String], chosen: usize, max_w: f32) -> Option<usize> {
+/// line, the others muted. Returns the one clicked, and how many rows they took (a narrow
+/// screen has them on a second row: the last ones were cut off and could not be reached).
+fn tabs(ui: &mut Ui, at: Vec2, titles: &[String], chosen: usize, max_w: f32) -> (Option<usize>, usize) {
     let mut x = at.x;
+    let mut row = 0;
     let mut out = None;
     for (i, t) in titles.iter().enumerate() {
         let w = ui.width(&omsi_ui::tr(t), 14.0, Weight::Medium) + 4.0;
-        if x + w > at.x + max_w {
-            break;
+        if x + w > at.x + max_w && x > at.x {
+            x = at.x;
+            row += 1;
         }
-        let r = Rect::new(x, at.y, w, 38.0);
+        let r = Rect::new(x, at.y + row as f32 * 38.0, w, 38.0);
         let (h, _, clicked) = ui.interact(id_of(&format!("pause-tab-{i}")), r);
         let on = i == chosen;
         ui.text_in(t, r, 14.0, Weight::Medium, if on || h { INK } else { INK_MUTED }, Align::Center);
@@ -240,12 +250,12 @@ fn tabs(ui: &mut Ui, at: Vec2, titles: &[String], chosen: usize, max_w: f32) -> 
         }
         x += w + 22.0;
     }
-    out
+    (out, row + 1)
 }
 
 /// An open list or settings window as a launcher page right of the rail.
 fn list_page(sh: &mut Shell, v: &PauseView, list: &ListView, page: Rect) {
-    let margin = 32.0;
+    let margin = if page.w < NARROW { 14.0 } else { 32.0 };
     let w = (page.w - margin * 2.0).min(1400.0);
     let area = Rect::new(page.x + margin + ((page.w - margin * 2.0) - w).max(0.0) * 0.5, 28.0, w, page.h - 28.0 - 24.0);
     // the title, with the way back before it
@@ -268,10 +278,11 @@ fn list_page(sh: &mut Shell, v: &PauseView, list: &ListView, page: Rect) {
     let mut body = Rect::new(area.x, area.y + 70.0, area.w, (area.h - 70.0).max(40.0));
     // the pages of a settings window: the launcher's tabs
     if let Some((titles, at)) = list.tabs.as_ref().filter(|(t, _)| t.len() > 1) {
-        if let Some(tab) = tabs(&mut sh.ui, Vec2::new(body.x, body.y - 6.0), titles, *at, body.w) {
+        let (picked, rows) = tabs(&mut sh.ui, Vec2::new(body.x, body.y - 6.0), titles, *at, body.w);
+        if let Some(tab) = picked {
             sh.actions.push(Action::Side(tab));
         }
-        let below = body.y - 6.0 + 38.0 + 20.0;
+        let below = body.y - 6.0 + 38.0 * rows as f32 + 20.0;
         body = Rect::new(body.x, below, body.w, (body.bottom() - below).max(40.0));
     }
     // an open drop-down takes the mouse where it lies (the rows under it do not answer)

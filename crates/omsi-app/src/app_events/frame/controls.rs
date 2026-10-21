@@ -284,6 +284,10 @@ impl App {
                     self.input.pad_voice_radio = *down;
                     return false;
                 }
+                if n == "voice_nearby" {
+                    self.input.pad_voice_nearby = *down;
+                    return false;
+                }
                 if gear_step(&n).is_some() {
                     if *down {
                         game.push(n);

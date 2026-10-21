@@ -304,6 +304,24 @@ A map can have live weather from Tomorrow.io: add an `openomsi_weather.cfg` besi
 `global.cfg`. See [weather areas](WEATHER_REGIONS.md) for the format, the player's setup
 and the [community config editor](https://openomsi.mxnticek.eu/weather/).
 
+## Trolleybuses: poles, drive and a wire
+
+OMSI 2 has no overhead wire of its own; its trolleybus add-ons ship a plugin DLL that reads the
+bus's place out of Omsi.exe and cannot run here. openOMSI simulates the wire itself, and a
+trolleybus add-on needs two things to use it:
+
+* in the vehicle's `.bus`, a `[trolley_pole]` for each pole (the hinge on the roof, the boom's
+  length, spring force, mass, retriever and motor) and a drive: `[trolley_rheostat]` or
+  `[trolley_async]`. A vehicle that keeps its own scripted drive just adds the poles: its driving
+  torque then works on a wire and stops without one. A model with poles of its own says
+  `visible 0` and rotates them by the game's `Trolley_Pole<k>_Elev` and `_Azim` variables;
+* for a map, a `trolley.txt` beside its `global.cfg` (or in a mod's `maps/<name>/` folder for a
+  map that has none): the wire's spans with their sag, the sections and where they are dead,
+  the insulators and the switches.
+
+Every key and variable is in [TROLLEYBUS.md](TROLLEYBUS.md); the map's masts and hangers stay
+the map's own objects.
+
 ## What stays as in OMSI 2
 
 The following behave as in OMSI 2 so that existing content works unchanged:

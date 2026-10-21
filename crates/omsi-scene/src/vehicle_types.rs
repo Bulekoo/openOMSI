@@ -605,7 +605,7 @@ impl VehiclePrefetch {
             {
                 continue;
             }
-            if let Some(d) = vt.mesh_data(i) {
+            if let Some(d) = crate::pane_uv::gpu_mesh(vt, i) {
                 todo.push((key, d));
             }
         }
@@ -639,7 +639,7 @@ pub(super) fn vehicle_texture_names(
     let mut out: Vec<(String, Vec<PathBuf>)> = Vec::new();
     let mut push = |name: String, d: &Vec<PathBuf>| {
         let name = name.trim().to_string();
-        if !name.is_empty() && !name.starts_with("\\S:") && mirror_index(&name).is_none() {
+        if !name.is_empty() && !name.starts_with("\\S:") && !name.starts_with('!') && mirror_index(&name).is_none() {
             out.push((name, d.clone()));
         }
     };

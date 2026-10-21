@@ -461,6 +461,10 @@ pub(crate) struct ShadowRes {
     /// The same for the near cascade, drawn every other frame (see `render_inner`), with the
     /// window frames counted instead of its age (the frame's `ShadowPhase`).
     pub(crate) shadow_near_cache: std::cell::Cell<(Mat4, u32, DVec3, Vec3)>,
+    /// The close cascade as the window last drew it: its light matrix, the render origin and
+    /// the sun it was drawn for. The mirrors look the window's three cascades up from where
+    /// they are, without a shadow pass of their own.
+    pub(crate) shadow_close_cache: std::cell::Cell<(Mat4, DVec3, Vec3)>,
     /// Shadow atlas matrices from the first OpenXR eye, reused by the second eye.
     pub(crate) xr_shadow_cache: std::cell::Cell<Option<(DVec3, Vec3, Mat4, Mat4, Mat4)>>,
     /// Depth-only pipeline that fills its viewport with the far depth: clears the close

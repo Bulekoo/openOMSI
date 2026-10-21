@@ -160,7 +160,11 @@ impl TrafficLightController {
             let Some((k, d)) = best else {
                 if left > 0.0 {
                     clear_rewind(self, left);
-                    self.passed.clear();
+                    // (a sliver of a frame left over does not make the clock leave the
+                    // points it stands on)
+                    if left > 1e-6 {
+                        self.passed.clear();
+                    }
                 }
                 self.time = (self.time + left).rem_euclid(cycle);
                 return;
@@ -206,7 +210,17 @@ impl TrafficLightController {
                     let no_progress = ((target - p.time as f64).rem_euclid(cycle)).abs() < 1e-6;
                     self.rewound = (!p.if_request && to > 1e-6 && to < p.time - 1e-6).then_some(k);
                     self.time = target;
+                    // The clock lands on the point it jumped to: the points that lie exactly
+                    // there are behind it, as the ones it was jumped over are. Taken again at
+                    // the landing, win-4's "nobody asks at the bus light: back to 2 s" fired
+                    // on arriving at 22 s by the other bus's jump and sent the clock round
+                    // 2 -> 22 -> 2 for good: the second bus light never got its green (#3092).
                     self.passed.clear();
+                    for (j, q) in self.stops.iter().enumerate() {
+                        if ((q.time as f64 - target).rem_euclid(cycle) < 1e-6 || (target - q.time as f64).rem_euclid(cycle) < 1e-6) && j != k {
+                            self.passed.push(j);
+                        }
+                    }
                     // A jump at the cycle boundary can target zero (for example TCSP17's
                     // `[traffic_light_jump] 4 84 1 0`). At cycle position zero that is a
                     // no-op: without remembering this event, it fires again at distance

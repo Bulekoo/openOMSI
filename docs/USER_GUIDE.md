@@ -259,6 +259,15 @@ and whether the bus came late (over 3 minutes), left early (over 2 minutes, as t
 file counts them) or missed a stop. It is written again at every stop, so a crash loses
 nothing - what virtual bus companies ask their drivers for.
 
+### Trolleybuses
+
+A map with an overhead wire (`trolley.txt`) and a bus with poles (`[trolley_pole]`) make a trolleybus
+that moves only on current. Put the poles on the wire from outside the bus: get out (Ctrl+Shift+G, the
+`get_up` setting) or use the outside camera (F3), go to the back of the bus, hold **R** and look at the
+wire (the pole nearest to you rises and follows your look), let go of R when the boom is under the wire.
+**T** pulls the nearest pole down; Shift with R or T takes both poles. Poles with a motor go up and down
+from the cab with R and T. Details, the formats and the checks: [TROLLEYBUS.md](TROLLEYBUS.md).
+
 ## The launcher
 
 The launcher is a program of its own beside the game, `openomsi-launcher-app` (a Tauri window,
@@ -316,10 +325,10 @@ The menu on the left groups the pages: **Play** (Drive, Multiplayer, Running gam
   **Discord Rich Presence** (Settings → General, on by default) shows the launcher or your
   map, bus, line and multiplayer status in Discord; Discord must be running on the same
   computer.
-  **Voice chat through GreenTeaSpeak** (on by default): in multiplayer, the other players
-  are heard from where they are, when GreenTeaSpeak 2 runs with the openOMSI plugin and the
-  server names a voice server (see [SERVER.md](SERVER.md) and
-  `tools/greenteaspeak-plugin/README.md`).
+  **Voice chat** (Settings → Sound, off by default): in multiplayer, hold *Voice: nearby*
+  (V) to be heard by the players close to you, or *Voice: radio* (B) to be heard by the whole
+  session; the keys are in Controls. Switching it on makes the system ask for the
+  microphone. See [VOICE.md](VOICE.md).
 * **Controls** - `Inputs/keyboard.cfg`: click a key, press the new one; clashes are red. The
   keys and the game controllers are kept in `~/.openomsi/Inputs` (on Windows
   `C:\Users\<you>\.openomsi\Inputs`), so an update or a new program folder keeps them; keys

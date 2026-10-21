@@ -628,6 +628,11 @@ fn call_activity_int(name: &str, arg: i32) -> Option<()> {
     Some(())
 }
 
+/// Ask for the microphone (voice chat) if it is not allowed yet.
+pub(crate) fn request_microphone() {
+    let _ = with_activity(|env, activity| env.call_method(activity, "requestMicrophone", "()V", &[]).map(|_| ()));
+}
+
 pub(crate) fn vibrate(ms: u32) {
     static OFF: AtomicBool = AtomicBool::new(false);
     if OFF.load(Ordering::Relaxed) {

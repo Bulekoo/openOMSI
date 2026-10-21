@@ -36,6 +36,8 @@ nothing is drawn. `server.cfg` is written with a comment for every key on the fi
 | `accept_uploads`, `uploads_keep_days` | players' buses (below) |
 | `share_maps` | a player who joins without the server's map gets it from the server (the map and everything it uses, gigabytes for a big map); off (the written default), players install it themselves and are told which one is missing |
 | `voice_*` | voice chat (below) |
+| `public_server`, `public_list_url` | list the server in the public server list ([below](#public-server-list)); the list service's address (empty: openOMSI's own) |
+| `owner_bans`, `require_hardware_id` | machine bans ([below](#machine-bans)): the file of the owner's list shared by all your sessions (empty: `~/.openomsi/bans-owner.json`), and turning away players whose game sends no machine identifier |
 
 `server-icon.png` beside `server.cfg` (64x64, a PNG under 256 KB) is the icon the players'
 list shows.
@@ -136,29 +138,25 @@ passengers' trips go on, and the players' games only mirror the server's people,
 appears twice. `GET /status` shows the density applied and the people waiting, walking and
 aboard. On a server with `passengers = 0` the command is refused (the log says so).
 
-With `voice_channel` set, the players **talk** to each other through
-[GreenTeaSpeak](https://greenteaspeak.de) as SaltyChat lets FiveM players do: a player is
-heard from where they stand or sit, up to `voice_range` metres (20 by default), and through
-the bodywork - quieter - when one of the two is in a bus and the other is not. Each player
-runs GreenTeaSpeak 2 with the openOMSI plugin (`tools/greenteaspeak-plugin`, its README says
-how to install it) and is connected to the voice server whose unique id is
-`voice_server_uid` (the id in GreenTeaSpeak's server info panel; it is needed: without it
-there is no voice chat, so that a server cannot move its players about on whatever voice
-server they happen to be on). A
-joining game asks the server for these settings (the command `voice?`), the plugin moves
-the player into the channel `voice_channel` (its id or its name, with
-`voice_channel_password`) and renames them `<name> #<player id>` - the name every other
-game of the session gives them there - and the game tells it ten times a second where the
-camera is and where everybody else is. A player who is speaking has "speaking" under their
-name tag. With `voice_radio` on (the default), a driver is put on a map-wide **bus radio**
-automatically: hold the bindable *Multiplayer: bus radio* key (Controls; X by default) to
-transmit to every other driver on the map while proximity voice still reaches people next
-to the bus; their name tag shows "radio". A player hosting by code names the voice server in
-`~/.openomsi/voice.cfg` with the same keys. A player switches it off in the launcher under
-Settings → General → *Voice chat through GreenTeaSpeak (multiplayer)*. `voice_channel_password` is sent to every player who joins
-(their game needs it to enter the channel): it keeps strangers on the voice server out of
-the channel, not the server's own players. The settings together must fit a chat command
-(160 characters after encoding), or the server says so in its log and has no voice chat.
+The players can **talk** to each other (see [VOICE.md](VOICE.md)): holding a talk key sends
+the player's voice, as small Opus frames, to the server, which passes it on to the players it
+concerns without decoding it - on the *nearby* channel to those within `voice_range` metres
+of the speaker (75 by default; the listeners make it quieter with the distance), on the
+*radio* channel to everybody. The server needs no audio device and stores nothing.
+
+| key | default | |
+|---|---|---|
+| `voice` | 1 | Voice chat at all. A player must also switch it on in their own settings (off by default), so a server that does not want the traffic says 0. |
+| `voice_radio` | 1 | The session-wide radio channel; 0 leaves the nearby channel only. |
+| `voice_range` | 75 | How far the nearby channel carries (5 to 1000 m). |
+
+Each player is limited to 60 frames a second (a talking player sends 50), a frame to 400
+bytes; a player over it is dropped, as with every other kind of traffic. An administrator or
+moderator silences a player's voice with `vmute <id>` (and `vunmute <id>`), from the player's
+page in the game's Administration menu or the Player list; the silence ends when the player
+leaves. A `server.cfg` from before (with `voice_server_uid`, `voice_channel`,
+`voice_channel_password`) loads as it did: those keys are ignored and the log says so, while
+`voice_range` and `voice_radio` mean the above (a range under 5 m is raised to 5).
 
 The same gateway and tunnel open for a player hosting by **code** (Connect by Code): its
 address goes to the rendezvous topic, and a joining game that gets no answer from the
@@ -276,7 +274,7 @@ loop has not come to it. A player's game that asked is told `admin-result <recor
 connection is the session's own number for that join, which the admins' list gives). A player
 who left, or left and came back - the same number, a new connection - or somebody else who has
 the number now is not the one picked: the operation is refused and nobody else is touched. The
-older menus' `kick 3` still works and names the number alone. The players' list for an admin
+older menus' `kick 3` still works and names the number alone. `hwban 3#17 session|all [12h|3d] reason` bans the player's machine and `unban <id>` lifts a ban ([Machine bans](#machine-bans)). The players' list for an admin
 (`admin-list [search]` → an `admin-p <id> <conn> <state> <role> <aboard> <online s> <vehicle>
 <name>` line each, then `admin-end <found> <total>`) needs no `share_positions`: it gives no
 position and no address. A search finds every name that holds the text, whatever the case
@@ -289,8 +287,8 @@ and the locks (`rt=1`: real time, `metar=`: the METAR station).
 and may join again. `ban` keeps them out for the rest of this server run, by their game's random
 nonce and the address they came from. That is not an identity: a player name is whatever the
 game says, an address changes (and many players can share one), and the session knows nothing
-that outlives a run and could not be made up. So there is no permanent ban - it would be a ban
-of a name or of an address, neither of which says who somebody is.
+that outlives a run and could not be made up. So `ban` is for the run only; the lasting ban is the
+[machine ban](#machine-bans), which holds a machine's identifier instead of a name or an address.
 
 **Bringing players, going to them.** `bring`, `bringall` and `goto` stay in the game's menu for
 an admin who drives on the server: the player's game puts its bus beside the admin's (with its
@@ -312,6 +310,7 @@ that changes something is `POST` with `Content-Type: application/json`.
 | `GET /api/admin/players` | `?q=<search>` | `200 {"players", "total", "age_ms"}` |
 | `POST /api/admin/ops` | an operation, below | `202 {"op"}` queued; `400` not one (with the reason); `403` not for this role; `503` too many waiting |
 | `GET /api/admin/ops/<id>` | | `200 {"op"}`; `404` not kept any more (the audit log has it) |
+| `GET /api/admin/bans` | | `200 {"bans": [{"id", "name", "reason", "by", "at", "until", "scope"}], "age_ms"}` - no identifiers |
 | `GET /api/admin/events` | `?audit_after=<seq>` | `200 {"ops": the last 50 records, "audit": the audit entries after seq}` |
 
 `session` is `{"role": "admin"|"moderator", "permissions": ["view", "moderate", "world"], "actor":
@@ -332,6 +331,8 @@ The operations (`POST /api/admin/ops`), with what they need:
 |---|---|
 | `{"op": "kick", "target": {"id": 3, "conn": 17}, "reason": "…"}` (reason optional, 120 characters) | moderator |
 | `{"op": "ban", "target": {…}, "reason": "…"}` - for this server run | moderator |
+| `{"op": "hwban", "target": {…}, "reason": "…", "scope": "session"\|"all", "hours": 24}` (`scope` default `session`, `hours` 1 .. 8784, none: for good) - the machine, see below | moderator for `session`, admin for `all` |
+| `{"op": "unban", "id": "0badf00d"}` | admin |
 | `{"op": "say", "text": "…"}` / `{"op": "tell", "target": {…}, "text": "…"}` (160 characters) | moderator |
 | `{"op": "clock", "seconds": 30600}` (0 .. 86400) / `{"op": "shift", "seconds": -3600}` / `{"op": "speed", "factor": 2}` (1 .. 30) | admin |
 | `{"op": "weather", "next": true}` / `{"op": "weather", "file": "Weather/#CAVOK.owt"}` | admin |
@@ -420,6 +421,76 @@ commands go the same way as the others and are in the audit log, with what becam
 `local tool (POST /admin)`, `web#2 (address)` -, the role, the action, the player, the result),
 put aside as `admin-audit.log.1` past 1 MB, so it never takes more than about 2 MB. No password
 or token is ever written to it; names, reasons and chat lines are kept as cleaned text.
+
+## Machine bans
+
+A ban by name or address does not say who somebody is, so the lasting ban is by **machine**.
+The game sends a *hardware identifier* when it joins: 128 bits of SHA-256 over a fixed text and
+the machine's own id (Windows `MachineGuid`, Linux `/etc/machine-id`, macOS `IOPlatformUUID`;
+on a system with none, a random number kept in `~/.openomsi/hardware-id`). The id itself never
+leaves the machine and cannot be got back from the hash; no disk or board serial number is read.
+The host pins the identifier to the connection at its first hello (a later hello of the same
+connection cannot change it), shows it to nobody (the panels list bans by name, reason and
+time only), and turns a joining machine away if a ban holds it:
+`you are banned from this session: <reason>`.
+
+* **Who bans.** The host of a game started by code, and a server's admins and moderators, from
+  the game menu's *Player list* -> a player -> *Ban this machine...* (with a reason, for a day,
+  a week or for good), or the web panel, or `POST /api/admin/ops`. A moderator bans for the
+  session and cannot ban an admin; the owner's list and lifting a ban are the admin's. The ban
+  sends the player away at once and is in the audit log. A host cannot ban its own machine.
+* **Scope, and what "my sessions" means.** *This session*: the list of the session -
+  `bans.json` beside `server.cfg` for a dedicated server (kept across restarts); for a game
+  hosting by code only while that game runs. *All my sessions*: the owner's list,
+  `~/.openomsi/bans-owner.json` of the account the host runs as, read by every game and
+  server started from that account on that machine, running ones within a second of the
+  change. To share one list between servers (or machines), point `owner_bans` at a file in a
+  synced folder. A ban may end (`hours`), else it holds until lifted. Lifting one (game menu:
+  *Player list* -> *Banned machines*; web panel; `unban`) takes it out of whichever list it is
+  in, for the other sessions too.
+* **Files.** JSON, written whole to a temporary file and moved over the old one; a file that
+  cannot be read gives no bans (the log says so, and a `.bak` copy is kept) and is never
+  silently emptied.
+* **Limits, honestly.** The identifier is a claim of the game, not a proof of the machine: a
+  changed game can send any value, and a reinstalled system, a new machine id, a virtual
+  machine or another computer is another machine. A game before this feature, and a player who
+  switched it off (`OMSI_NO_HARDWARE_ID=1`), send none: such a player cannot be banned by
+  machine - `require_hardware_id = 1` turns them away, and a ban by `ban` still holds the run.
+  The same identifier goes to every server a player joins, so two hosts could compare who
+  joined them; the player can switch it off at the price of servers that require it.
+* **Wire.** The `HELLO` has one more, last field (`|<hardware id>`); the protocol number stays,
+  a host before the field ignores it and a game before it sends none.
+
+## Public server list
+
+`public_server = 1` lists the server in the list that the launcher (*Multiplayer -> Servers ->
+Public servers*) shows. The server registers with the list service (`public_list_url`, default
+openOMSI's own, a Cloudflare Worker in `services/serverlist`), is listed once the service has
+read the server's `GET /status` and found the challenge it gave there (so the web port or the
+tunnel must be reachable from the internet; a tunnel is the sure way), says it is alive every
+minute, and is forgotten three minutes after its last word. Listed: name, message of the day,
+map, players, maximum, version and where to join. Nothing about the players is sent. `name`,
+`motd` and `server-icon.png` are checked before the first word (a name or message that is
+flagged - profanity and the usual ways round a filter, addresses, hidden characters - refuses
+the listing, and the log says which key to change; a flagged icon too) and every launcher
+checks each listing again before showing it: a flagged text is covered, a custom icon is shown
+only if the viewer's own image check cleared it. The service filters too (no addresses or
+invitations, limits per source), but no client takes its word.
+
+**About OpenLB.** The feature was planned with the OpenLB library (ImgCleaner / TxtCleaner),
+and it cannot be used here: its licence is the MIT text with one line added - the software "may
+not be used for anything but its original purpose" - which is a limit on use that the AGPL
+this project is under does not allow in a part of it (and crates.io files it as
+"non-standard"); its models (a 99 MB text model and 10 to 47 MB image models) come with no
+licence and with training data that "cannot be released"; and it needs a native ONNX runtime
+library (`ort`, pinned to a release candidate, loaded dynamically) shipped for every platform,
+which the dedicated server, Android and iOS builds would each have to carry. So the moderation
+is behind a small trait (`omsi-serverlist`, `Moderator`): text is checked by
+[`rustrict`](https://crates.io/crates/rustrict) (MIT, already the chat's filter) and our rules,
+and **icons are not cleared at all yet**: no image classifier is bundled, so every custom icon
+is "unchecked" and the public list shows the default one. An open-licence classifier (a small
+Apache-2.0 or MIT model run by `tract`, downloaded to the content folder with a checksum, not
+committed) plugs in with `set_image_classifier` and nothing else changes.
 
 ## License
 

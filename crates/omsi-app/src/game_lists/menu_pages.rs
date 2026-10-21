@@ -151,6 +151,8 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         pick("mirror_size", "Mirrors", later),
         pick("mirror_refresh", "Bus mirror refresh", "How often the mirrors are drawn: every frame, the street moves through them as smoothly as through the windscreen"),
         pick("mirror_quality", "Mirror quality", "In Enhanced and Enhanced+: the mirrors shaded as the picture is, with its light and its sky, instead of the plain light").filter(|_| shown("mirror_quality")),
+        switch_row(app, "mirror_shadows", "Shadows in the mirrors", "The mirrors show the sun's shadows (they look up the picture's shadow maps; no pass of their own)"),
+        switch_row(app, "mirror_particles", "Smoke and spray in the mirrors", "The mirrors show exhaust and the spray of the wheels, as OMSI 2 does without its \"No PS in reflections\""),
         switch_row(app, "mirror_hud_every_frame", "Mirror panels every frame", "The mirror panels in the cab (Ctrl+M) are drawn every frame, as in ETS2, instead of taking turns with the other mirrors"),
         pick("video_memory", "Video memory", later),
         switch_row(app, "texture_compression", "Compress textures on loading", later),
@@ -166,6 +168,11 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         slider_row(app, "vol_scenery", "Surroundings", "How loud the sounds of the scenery are", &pct),
         switch_row(app, "doppler", "Doppler effect", "Approaching sounds higher, receding ones lower"),
         pick("pax_voices", "Passenger voices", "What passengers say"),
+        switch_row(app, "voice_enabled", "Voice chat in multiplayer", "Hold the nearby (V) or radio (B) key to talk. The microphone is used only while a key is held; nothing is recorded"),
+        switch_row(app, "voice_all_off", "Everybody else's voice chat off", "Single players are muted in the player list"),
+        switch_row(app, "voice_talker_list", "Show who is talking", "A line for each player you hear"),
+        slider_row(app, "voice_volume", "Voices: volume", "How loud the other players' voices are", &pct),
+        slider_row(app, "voice_mic_gain", "Microphone gain", "How much your microphone is amplified", &pct),
     ]
         .into_iter()
         .chain(crate::radio::option_rows(app, &pct))

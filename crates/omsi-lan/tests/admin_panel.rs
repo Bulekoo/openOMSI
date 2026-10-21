@@ -107,7 +107,7 @@ fn the_remote_menu_sends_away_the_player_picked() {
 fn a_silent_server_is_shown_as_such() {
     let mut panel = Panel::default();
     let t0 = Instant::now();
-    assert_eq!(panel.due(t0).len(), 2);
+    assert_eq!(panel.due(t0).len(), 3);
     assert!(!panel.silent(t0 + Duration::from_secs(1)));
     let lines = panel.main_lines(t0 + Duration::from_secs(7), &tr);
     assert!(lines[0].0.starts_with("The server does not answer"), "{lines:?}");

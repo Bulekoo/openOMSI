@@ -2,7 +2,9 @@
 //! timetable buses, the people on the pavements and at the stops, and the traffic lights -
 //! for the whole session, around every player (`Traffic::lan_centers`,
 //! `Humans::lan_centers`, the tile streamer). A client simulates none of that: it draws
-//! what the host sends (`omsi_net::world`), a little in the past so that it can glide
+//! what the host sends - the cars from the traffic table (`omsi_net::traffic_table`, which
+//! the traffic writes after each step: `Traffic::write_table`), the people and the lights
+//! from the world frames (`omsi_net::world`) - a little in the past so that it can glide
 //! between two frames, and simulates only its own bus and the people who board it.
 //!
 //! Who a waiting passenger belongs to is decided by the host alone: a client whose bus
@@ -10,12 +12,14 @@
 //! hands over those still waiting (they leave its world) and turns down the others, who
 //! have meanwhile walked up to another bus. Nobody is ever on two buses.
 //!
-//! What goes over the network per client, around where its bus is: cars within
-//! `CAR_RADIUS` (ten times a second while they move, once a second while they stand),
-//! people within `PERSON_RADIUS` (the same), the light programs within `LIGHT_RADIUS`
-//! (once a second), and once per thing a description (`DESC`: its vehicle or human file).
-//! `OMSI_DEBUG_LAN` logs the counts and the bytes a second, `OMSI_LAN_TRACE=<file.csv>`
-//! every pose sent (host) and drawn (client) for comparing them.
+//! What goes over the network per client, around where its bus is: the cars of the table
+//! within its range, as changes of what the client acknowledged, nearer ones more often and
+//! within a byte budget (`TRAFFIC_BYTES_PER_SECOND`); people within `PERSON_RADIUS` (ten
+//! times a second while they move, once a second while they stand), the light programs
+//! within `LIGHT_RADIUS` (once a second), and once per person a description (`DESC`: its
+//! human file). `OMSI_DEBUG_LAN` logs the counts and the bytes a second,
+//! `OMSI_LAN_TRACE=<file.csv>` every car pose of the table (host) and drawn (client) for
+//! comparing them.
 
 use crate::humans::{Humans, MirrorPose};
 use crate::scene::World;
@@ -25,9 +29,10 @@ use crate::view_sync::SimView;
 use omsi_lan::config::LanConfig;
 use glam::{DVec2, DVec3, Vec3};
 use hashbrown::{HashMap, HashSet};
+use omsi_net::traffic_table::{ClientTable, TrafficId};
 use omsi_net::world::{
-    self as nw, Activity as NetActivity, CarState, Desc, EntityRef, LightState, PersonPlace,
-    PersonState, WorldFrame,
+    self as nw, Activity as NetActivity, Desc, EntityRef, LightState, PersonPlace, PersonState,
+    WorldFrame,
 };
 use omsi_net::{LanSession, Role};
 use omsi_render::{Renderer, Scene};
@@ -38,8 +43,11 @@ use std::path::PathBuf;
 use std::sync::{mpsc, Arc};
 use std::time::Instant;
 
-/// How far around a client its cars, people and light programs are sent (m).
+/// How far around a client its cars (the table's range, `ClientSync::radius_in`), people
+/// and light programs are sent (m).
 pub const CAR_RADIUS: f64 = 650.0;
+/// The bytes a second the cars of the table take at most to each client.
+pub const TRAFFIC_BYTES_PER_SECOND: f64 = 40_000.0;
 pub const PERSON_RADIUS: f64 = 260.0;
 pub const LIGHT_RADIUS: f64 = 450.0;
 /// How far in the past a client draws the host's world (ms): two frames of moving things
@@ -47,8 +55,27 @@ pub const LIGHT_RADIUS: f64 = 450.0;
 const INTERP_DELAY: f64 = 160.0;
 /// A description asked for is asked again after this long (s).
 const WANT_AGAIN: f32 = 0.8;
+const MOVING_EVERY_S: f32 = nw::MOVING_EVERY;
 
 type Key = (bool, u32);
+
+/// How a car's script context goes to one client: at first often (a car is not made before
+/// its context is whole), later now and then (the timetable's delay and the system values
+/// move on).
+#[derive(Default)]
+struct ContextSent {
+    page: usize,
+    sent: u32,
+    age: f32,
+}
+
+impl ContextSent {
+    fn due(&mut self, dt: f32, bus: bool) -> bool {
+        self.age += dt;
+        let every = if self.sent < 4 { 0.15 } else if bus { 1.0 } else { 4.0 };
+        self.age >= every
+    }
+}
 
 /// What the host has sent one client.
 #[derive(Default)]
@@ -59,12 +86,14 @@ struct View {
     sent: HashMap<Key, ([i64; 4], f32)>,
     /// Per thing: the hash of the description sent.
     described: HashMap<Key, u64>,
-    context_pages: HashMap<u32, usize>,
+    /// Per car (its table id): the page of its script context sent last, how many pages have
+    /// gone, and the seconds since.
+    context_pages: HashMap<u32, ContextSent>,
     /// Things that went out of sight, named for a second more.
     gone: Vec<(Key, f32)>,
     bytes: u64,
-    /// What was in the last frame (for the log: counts and a checksum of the ids).
-    last_counts: (usize, usize, usize),
+    /// What was in the last frame (for the log: people, light programs).
+    last_counts: (usize, usize),
     ids_hash: u64,
 }
 
@@ -75,17 +104,20 @@ struct View {
 
 
 pub(crate) use omsi_lan::mirror::PlayClock;
-use omsi_lan::mirror::{fnv, lerp_angle, local_file, net_activity, quant, relative_file, sim_activity, Track};
+use omsi_lan::mirror::{fnv, lerp_angle, local_file, net_activity, quant, sim_activity, Track};
 
 /// A client's copy of the host's world.
 #[derive(Default)]
 struct Mirror {
     on: bool,
-    cars: HashMap<u32, Track<CarState>>,
     people: HashMap<u32, Track<PersonState>>,
     descs: HashMap<Key, Desc>,
     context_receiver: omsi_net::ai_context::Receiver,
     contexts: HashMap<u32, omsi_net::ai_context::Context>,
+    /// When a car's context (by table id) last came.
+    context_heard: HashMap<u32, Instant>,
+    /// Cars of the table not drawn yet: waiting for their context, for their type, or left out.
+    waiting: (usize, usize, usize),
     /// Descriptions asked for and when.
     wanted: HashMap<Key, Instant>,
     /// Vehicle types by file: loaded, being loaded, or not to be had.
@@ -153,6 +185,8 @@ pub struct LanWorld {
     trace_opened: bool,
     /// Host: the parking spaces whose cars have driven off, as the world has them now.
     departed: Vec<i64>,
+    /// Host: bytes of the traffic table sent so far.
+    traffic_bytes: u64,
 }
 
 
@@ -194,7 +228,7 @@ impl LanWorld {
             Role::Host => {
                 let mut humans = humans;
                 self.departed = world.map(|w| w.departed_keys()).unwrap_or_default();
-                self.host(lan, dt, args, traffic, humans.as_deref_mut(), me);
+                self.host(lan, dt, traffic, humans.as_deref_mut(), me);
                 if let (Some(w), Some(r), Some(sc), Some(h)) = (world, renderer, scene, humans) {
                     self.people_from_clients(lan, w, r, sc, h, &mut view.people);
                 }
@@ -330,9 +364,8 @@ impl LanWorld {
         let _ = h.take_claims();
         let epoch = *self.epoch.get_or_insert_with(Instant::now);
         for (id, d) in lan.take_descs_up() {
-            if let Desc::Person { id: pid, file } = d {
-                self.ups.entry(id).or_default().files.insert(pid, file);
-            }
+            let Desc::Person { id: pid, file } = d;
+            self.ups.entry(id).or_default().files.insert(pid, file);
         }
         for (id, at, f) in lan.take_world_up() {
             let up = self.ups.entry(id).or_default();
@@ -421,7 +454,6 @@ impl LanWorld {
         &mut self,
         lan: &mut LanSession,
         dt: f32,
-        args: &LanConfig,
         mut traffic: Option<&mut Traffic>,
         mut humans: Option<&mut Humans>,
         me: Option<DVec3>,
@@ -478,7 +510,7 @@ impl LanWorld {
         let h_ref = humans.as_deref();
         for (id, refs) in wants {
             for r in refs {
-                if let Some(d) = describe(args, t_ref, h_ref, r) {
+                if let Some(d) = describe(h_ref, r) {
                     lan.send_desc(id, &d);
                 }
             }
@@ -499,18 +531,26 @@ impl LanWorld {
             view.acc = (view.acc - nw::MOVING_EVERY).clamp(0.0, nw::MOVING_EVERY);
             let mut g = Gather::default();
             if let Some(t) = t_ref {
-                gather_cars(view, t, at, args, &mut g);
+                // (the cars themselves go by the table, below; what their scripts need of the
+                // host's timetable goes by the car's id there)
+                let mut cars = std::collections::HashSet::new();
                 for c in &t.cars {
-                    if (c.vehicle.position - at).truncate().length() > CAR_RADIUS || c.id > nw::MAX_ID as u64 { continue; }
-                    let page = view.context_pages.entry(c.id as u32).or_default();
-                    if let Some(packet) = ai_context(&c.vehicle.host).packet(omsi_net::PROTOCOL as u8, c.id as u32, lan.stamp_ms(), *page) {
+                    if (c.vehicle.position - at).truncate().length() > CAR_RADIUS { continue; }
+                    let Some(tid) = t.table.id_of(c.id) else { continue };
+                    cars.insert(tid.raw());
+                    let sent = view.context_pages.entry(tid.raw()).or_default();
+                    if !sent.due(MOVING_EVERY_S, c.is_bus()) { continue; }
+                    if let Some(packet) = ai_context(&c.vehicle.host).packet(omsi_net::PROTOCOL as u8, tid.raw(), lan.stamp_ms(), sent.page) {
                         lan.send_ai_context(id, &packet);
-                        *page = page.wrapping_add(1);
+                        sent.page = sent.page.wrapping_add(1);
+                        sent.sent += 1;
+                        sent.age = 0.0;
                     }
                 }
+                view.context_pages.retain(|k, _| cars.contains(k));
             }
             if let Some(h) = h_ref {
-                gather_people(view, h, at, &mut g);
+                gather_people(view, h, t_ref.map(|t| &t.table), at, &mut g);
             }
             let Gather { mut frame, mut seen, mut descs, mut ids_hash } = g;
             // the riders of our own bus, and the other players' people and riders: everybody
@@ -599,7 +639,6 @@ impl LanWorld {
             let gone: Vec<Key> = view.sent.keys().filter(|k| !seen.contains(*k)).copied().collect();
             for k in gone {
                 view.sent.remove(&k);
-                if !k.0 { view.context_pages.remove(&k.1); }
                 view.gone.push((k, 1.0));
             }
             for g in view.gone.iter_mut() {
@@ -607,19 +646,16 @@ impl LanWorld {
             }
             view.gone.retain(|g| g.1 > 0.0 && !seen.contains(&g.0));
             frame.gone = view.gone.iter().map(|(k, _)| *k).collect();
-            view.last_counts = (
-                seen.iter().filter(|k| !k.0).count(),
-                seen.iter().filter(|k| k.0).count(),
-                frame.lights.len(),
-            );
+            view.last_counts = (seen.iter().filter(|k| k.0).count(), frame.lights.len());
             view.ids_hash = ids_hash;
             for d in &descs {
                 lan.send_desc(id, d);
             }
             if let Some(f) = self.trace.as_mut() {
                 let ms = lan.stamp_ms();
-                for c in &frame.cars {
-                    let _ = writeln!(f, "host,{ms},{id},c,{},{:.3},{:.3},{:.3},{:.2}", c.id, c.x, c.y, c.z, c.heading);
+                for s in t_ref.iter().flat_map(|t| t.table.iter()).filter(|s| s.row.distance_to([at.x, at.y, at.z]) <= CAR_RADIUS) {
+                    let [x, y, z] = s.row.position();
+                    let _ = writeln!(f, "host,{ms},{id},c,{},{x:.3},{y:.3},{z:.3},{:.2}", s.id.raw(), s.row.heading_deg());
                 }
                 for p in &frame.people {
                     if let PersonPlace::Foot { x, y, z, heading, .. } = p.place {
@@ -630,6 +666,12 @@ impl LanWorld {
             let n = lan.send_world(id, &frame);
             view.bytes += n as u64;
         }
+        // the cars: the table, to each player around where it is
+        if let Some(t) = t_ref {
+            let viewers: Vec<(u32, [f64; 3])> = players_at.iter().map(|(id, p)| (*id, [p.x, p.y, p.z])).collect();
+            let n = lan.traffic_publish(&t.table, &viewers, dt, TRAFFIC_BYTES_PER_SECOND);
+            self.traffic_bytes += n as u64;
+        }
         self.log_t -= dt;
         if self.log_t <= 0.0 && omsi_cfg::flags::OMSI_DEBUG_LAN.is_set() {
             self.log_t = 4.0;
@@ -639,15 +681,27 @@ impl LanWorld {
             }
             for (id, v) in &self.views {
                 log::info!(
-                    "LAN world → player {id}: {} cars, {} people, {} light programs in range; ids {:016X}; {:.1} KB/s ({} KB in all)",
+                    "LAN world → player {id}: {} people, {} light programs in range; ids {:016X}; {:.1} KB/s ({} KB in all)",
                     v.last_counts.0,
                     v.last_counts.1,
-                    v.last_counts.2,
                     v.ids_hash,
                     0.0f32.max(v.bytes as f32 / 1024.0 / lan_seconds(lan)),
                     v.bytes / 1024
                 );
             }
+            let st = lan.traffic_stats();
+            log::info!(
+                "LAN traffic table: {} cars in the table, {} told to the players; {} datagrams, {:.1} KB/s ({} KB in all), rows {} whole / {} changes, {} deferred by the budget, {} answers",
+                t_ref.map(|t| t.table.len()).unwrap_or(0),
+                st.tracked,
+                st.datagrams,
+                self.traffic_bytes as f32 / 1024.0 / lan_seconds(lan),
+                self.traffic_bytes / 1024,
+                st.full_rows,
+                st.delta_rows,
+                st.deferred,
+                st.acks_heard
+            );
         }
         if let Some(f) = self.trace.as_mut() {
             let _ = f.flush();
@@ -682,18 +736,22 @@ impl LanWorld {
         let render_ms = m.play.step(now, now + m.offset.unwrap_or(0.0) - INTERP_DELAY, 500.0);
         m.ask_descriptions(lan);
         m.take_loaded_types();
-        // cars: forgotten, gone, new
-        let forget = std::time::Duration::from_secs_f32(nw::FORGET_AFTER);
-        m.cars.retain(|_, t| t.heard.elapsed() < forget);
-        let context_ids: Vec<u32> = m.cars.keys().copied().collect();
+        // cars: the host's table (the events are the table's own bookkeeping: the cars gone,
+        // new and changed are told by comparing it with what is drawn)
+        let _ = lan.traffic_client_mut().take_events();
+        let table = lan.traffic_client();
+        // (a car's context may come before its row: kept a few seconds without one)
+        m.context_heard.retain(|id, t| t.elapsed().as_secs_f32() < 5.0 || TrafficId::from_raw(*id).is_some_and(|i| table.get(i).is_some()));
+        let context_ids: Vec<u32> = m.context_heard.keys().copied().collect();
         m.context_receiver.retain(&context_ids);
-        m.contexts.retain(|id, _| m.cars.contains_key(id));
+        m.contexts.retain(|id, _| m.context_heard.contains_key(id));
         if let Some(t) = traffic.as_deref_mut() {
-            m.add_and_remove_cars(t, view, args, world, renderer, scene);
-            let shown = m.place_cars(t, dt, render_ms);
-            m.show_destinations(t, shown, args, world);
+            m.add_and_remove_cars(table, t, view, args, world, renderer, scene);
+            let shown = m.place_cars(table, t, dt, render_ms);
+            m.show_destinations(table, t, shown, args, world);
         }
         // people
+        let forget = std::time::Duration::from_secs_f32(nw::FORGET_AFTER);
         m.people.retain(|_, t| t.heard.elapsed() < forget);
         if let Some(h) = humans.as_deref_mut() {
             m.update_people(lan, h, view, world, renderer, scene, render_ms);
@@ -720,18 +778,21 @@ impl LanWorld {
         if self.log_t <= 0.0 && omsi_cfg::flags::OMSI_DEBUG_LAN.is_set() {
             self.log_t = 4.0;
             let m = &mut self.mirror;
-            let ids_hash = m
-                .cars
-                .keys()
-                .map(|id| fnv(&(*id as u64).to_le_bytes()))
+            let table = lan.traffic_client();
+            let ids_hash = table
+                .ids()
+                .map(|id| fnv(&(id.raw() as u64).to_le_bytes()))
                 .chain(m.people.keys().map(|id| fnv(&(*id as u64 | 1 << 40).to_le_bytes())))
                 .fold(0u64, |a, b| a ^ b);
             let rate = (lan.world_received - m.bytes_at) as f32 / 4.0 / 1024.0;
             m.bytes_at = lan.world_received;
             log::info!(
-                "LAN world from the host: {} cars ({} drawn), {} people ({} drawn), ids {:016X}; {:.1} KB/s; drawn {:.0} ms behind the host; {} passengers handed to us, {} not",
-                m.cars.len(),
+                "LAN world from the host: {} cars ({} drawn; {} waiting for a context, {} for a type, {} left out), {} people ({} drawn), ids {:016X}; {:.1} KB/s; drawn {:.0} ms behind the host; {} passengers handed to us, {} not",
+                table.len(),
                 m.drawn_cars.len(),
+                m.waiting.0,
+                m.waiting.1,
+                m.waiting.2,
                 m.people.len(),
                 m.drawn_people.len(),
                 ids_hash,
@@ -751,7 +812,7 @@ impl Mirror {
     #[allow(clippy::too_many_arguments)]
     fn switch(
         &mut self,
-        lan: &LanSession,
+        lan: &mut LanSession,
         world: &World,
         renderer: &Renderer,
         scene: &mut Scene,
@@ -770,13 +831,18 @@ impl Mirror {
             if let Some(h) = humans.as_deref_mut() {
                 h.set_mirror(want_on);
             }
-            m.cars.clear();
+            // (the table is cleared when the session is over only: the host's first datagrams may
+            // already be in it when the session turns on)
+            if !want_on {
+                lan.traffic_client_mut().clear();
+            }
             m.people.clear();
             m.drawn_cars.clear();
             m.drawn_people.clear();
             m.shown.clear();
             m.odometer.clear();
             m.contexts.clear();
+            m.context_heard.clear();
             m.context_receiver = Default::default();
             log::info!(
                 "LAN: {}",
@@ -803,7 +869,6 @@ impl Mirror {
         let m = self;
         for d in lan.take_descs() {
             let key = match &d {
-                Desc::Car { id, .. } => (false, *id),
                 Desc::Person { id, .. } => (true, *id),
             };
             m.wanted.remove(&key);
@@ -812,6 +877,7 @@ impl Mirror {
         let mut contexts_new = HashSet::new();
         for packet in lan.take_ai_contexts() {
             if let Some((id, context)) = m.context_receiver.receive(&packet, omsi_net::PROTOCOL as u8) {
+                m.context_heard.insert(id, Instant::now());
                 if m.contexts.get(&id) != Some(&context) {
                     contexts_new.insert(id);
                     m.contexts.insert(id, context);
@@ -839,15 +905,6 @@ impl Mirror {
                 _ => off,
             });
             let ms = f.host_ms as f64;
-            for c in f.cars {
-                m.cars
-                    .entry(c.id)
-                    .or_insert_with(|| Track {
-                        samples: Vec::new(),
-                        heard: Instant::now(),
-                    })
-                    .push(ms, c);
-            }
             for p in f.people {
                 m.people
                     .entry(p.id)
@@ -871,8 +928,6 @@ impl Mirror {
             for (person, id) in f.gone {
                 if person {
                     m.people.remove(&id);
-                } else {
-                    m.cars.remove(&id);
                 }
             }
         }
@@ -882,10 +937,7 @@ impl Mirror {
     fn ask_descriptions(&mut self, lan: &mut LanSession) {
         let m = self;
         let mut want: Vec<EntityRef> = Vec::new();
-        for (person, ids) in [
-            (false, m.cars.keys().copied().collect::<Vec<_>>()),
-            (true, m.people.keys().copied().collect::<Vec<_>>()),
-        ] {
+        for (person, ids) in [(true, m.people.keys().copied().collect::<Vec<_>>())] {
             for id in ids {
                 let key = (person, id);
                 if m.descs.contains_key(&key) {
@@ -898,11 +950,7 @@ impl Mirror {
                     .unwrap_or(true);
                 // (the host sends a description with the first frame: ask only when that
                 // was lost)
-                let first_heard = if person {
-                    m.people.get(&id).map(|t| t.samples.len())
-                } else {
-                    m.cars.get(&id).map(|t| t.samples.len())
-                };
+                let first_heard = m.people.get(&id).map(|t| t.samples.len());
                 if again && first_heard.unwrap_or(0) > 2 {
                     m.wanted.insert(key, Instant::now());
                     want.push(EntityRef { person, id });
@@ -936,13 +984,13 @@ impl Mirror {
     /// The host's cars that are gone taken away, the new ones made (their types loaded in
     /// the background first).
     #[allow(clippy::too_many_arguments)]
-    fn add_and_remove_cars(&mut self, t: &mut Traffic, view: &mut SimView, args: &LanConfig, world: &World, renderer: &Renderer, scene: &mut Scene) {
+    fn add_and_remove_cars(&mut self, table: &ClientTable, t: &mut Traffic, view: &mut SimView, args: &LanConfig, world: &World, renderer: &Renderer, scene: &mut Scene) {
         let m = self;
         let gone: Vec<u32> = m
             .drawn_cars
             .iter()
             .copied()
-            .filter(|id| !m.cars.contains_key(id))
+            .filter(|raw| !TrafficId::from_raw(*raw).is_some_and(|id| table.get(id).is_some()))
             .collect();
         for id in gone {
             t.remove_car(id as u64);
@@ -951,33 +999,34 @@ impl Mirror {
             m.shown.remove(&id);
             m.odometer.remove(&id);
         }
-        let new: Vec<u32> = m
-            .cars
-            .keys()
-            .copied()
-            .filter(|id| !m.drawn_cars.contains(id))
-            .collect();
-        for id in new {
-            let Some(Desc::Car {
-                file,
-                scheme,
-                paint,
-                ..
-            }) = m.descs.get(&(false, id)).cloned()
-            else {
+        let new: Vec<TrafficId> = table.ids().filter(|id| !m.drawn_cars.contains(&id.raw())).collect();
+        m.waiting = (0, 0, 0);
+        for tid in new {
+            let id = tid.raw();
+            let Some(row) = table.get(tid) else { continue };
+            let Some(look) = table.look(row) else {
+                m.waiting.2 += 1;
                 continue;
             };
+            let (file, scheme, paint) = (look.file.clone(), look.scheme, look.paint.clone());
             // Never run init with an incomplete host timetable.
-            let Some(context) = m.contexts.get(&id).cloned() else { continue };
+            let Some(context) = m.contexts.get(&id).cloned() else {
+                m.waiting.0 += 1;
+                continue;
+            };
             let Some(path) = local_file(&args.root, &file) else {
                 if m.types.insert(PathBuf::from(&file), None).is_none() {
                     log::warn!("LAN: the host's vehicle {file} is not installed here; it is left out");
                 }
+                m.waiting.2 += 1;
                 continue;
             };
             let ty = match m.types.get(&path) {
                 Some(Some(ty)) => ty.clone(),
-                Some(None) => continue,
+                Some(None) => {
+                    m.waiting.2 += 1;
+                    continue;
+                }
                 None => match t.loaded_type(&path) {
                     Some(ty) => {
                         m.types.insert(path.clone(), Some(ty.clone()));
@@ -992,11 +1041,13 @@ impl Mirror {
                                 let _ = tx.send((path, ty));
                             });
                         }
+                        m.waiting.1 += 1;
                         continue;
                     }
                 },
             };
-            let Some(first) = m.cars[&id].samples.last().map(|s| s.v) else {
+            let Some(first) = table.newest(tid) else {
+                m.waiting.2 += 1;
                 continue;
             };
             // the repaint by its name: the index counts the host's repaints, and this game
@@ -1013,68 +1064,46 @@ impl Mirror {
                 scheme,
                 &context,
                 m.hofs.entry(ty.def.path.clone()).or_insert_with(|| crate::find_hof_named(args.hof.as_deref(), world, &ty)).clone(),
-                DVec3::new(first.x, first.y, first.z),
-                first.heading as f64,
+                DVec3::new(first.pos[0], first.pos[1], first.pos[2]),
+                first.heading,
             );
             crate::view_sync::apply_traffic(t, &mut view.traffic, world, renderer, scene);
             m.drawn_cars.insert(id);
         }
     }
 
-    /// Where each car is now (between the host's frames at `render_ms`), and what its
+    /// Where each car is now (between the host's poses at `render_ms`), and what its
     /// scripts make of it. The cars placed, with their ids.
-    fn place_cars(&mut self, t: &mut Traffic, dt: f32, render_ms: f64) -> Vec<(usize, u32)> {
+    fn place_cars(&mut self, table: &ClientTable, t: &mut Traffic, dt: f32, render_ms: f64) -> Vec<(usize, u32)> {
         let m = self;
         // where each is now, and what its scripts make of it
         let index: HashMap<u64, usize> =
             t.cars.iter().enumerate().map(|(i, c)| (c.id, i)).collect();
-        let mut work: Vec<(usize, CarState, f64)> = Vec::new();
-        for (id, track) in &m.cars {
-            let Some(&i) = index.get(&(*id as u64)) else {
+        let mut work: Vec<(usize, u32, omsi_net::traffic_table::Pose)> = Vec::new();
+        for tid in table.ids() {
+            let Some(&i) = index.get(&(tid.raw() as u64)) else {
                 continue;
             };
-            let Some((a, b, k)) = track.around(render_ms) else {
+            let Some(pose) = table.sample(tid, render_ms) else {
                 continue;
             };
-            let mut c = *b;
-            // (something that has stopped is not guessed on: it stands where it stopped)
-            let k = if b.speed.abs() < 0.1 { k.min(1.0) } else { k };
-            let kk = k.min(1.0);
-            // (a jump of more than 30 m is a teleport, not a drive: no gliding)
-            let far = (DVec2::new(b.x - a.x, b.y - a.y)).length() > 30.0;
-            if !far {
-                c.x = a.x + (b.x - a.x) * k;
-                c.y = a.y + (b.y - a.y) * k;
-                c.z = a.z + (b.z - a.z) * kk;
-                c.heading = lerp_angle(a.heading as f64, b.heading as f64, k) as f32;
-                c.pitch = a.pitch + (b.pitch - a.pitch) * kk as f32;
-                c.bank = a.bank + (b.bank - a.bank) * kk as f32;
-                c.speed = a.speed + (b.speed - a.speed) * kk as f32;
-                c.steer = a.steer + (b.steer - a.steer) * kk as f32;
-            }
-            // the flags as the later frame had them once we are past its middle
-            if k < 0.5 {
-                c.blinker = a.blinker;
-                c.brake = a.brake;
-                c.at_station = a.at_station;
-            }
-            work.push((i, c, far as u8 as f64));
+            work.push((i, tid.raw(), pose));
         }
         let mut shown: Vec<(usize, u32)> = Vec::new();
-        for (i, c, _) in &work {
+        for (i, id, c) in &work {
             let car = &mut t.cars[*i];
             let before = car.vehicle.position;
-            let now_p = DVec3::new(c.x, c.y, c.z);
+            let now_p = DVec3::new(c.pos[0], c.pos[1], c.pos[2]);
             let moved = (now_p - before).truncate().length() as f32;
-            let odo = m.odometer.entry(c.id).or_insert(0.0);
+            let odo = m.odometer.entry(*id).or_insert(0.0);
             if moved < 30.0 {
-                *odo += moved * c.speed.signum();
+                *odo += moved * (c.speed as f32).signum();
             }
             car.vehicle.position = now_p;
-            car.vehicle.heading = c.heading as f64;
-            car.vehicle.pitch = c.pitch;
-            car.vehicle.bank = c.bank;
-            car.state.speed = c.speed;
+            car.vehicle.heading = c.heading;
+            car.vehicle.pitch = c.pitch as f32;
+            car.vehicle.bank = c.bank as f32;
+            car.state.speed = c.speed as f32;
             car.state.blinker = c.blinker as i32;
             car.state.braking = c.brake;
             if let Some(b) = car.bus.as_mut() {
@@ -1084,8 +1113,8 @@ impl Mirror {
                     crate::bus_service::Phase::Running
                 };
             }
-            car.body.steer = c.steer;
-            shown.push((*i, c.id));
+            car.body.steer = c.steer as f32;
+            shown.push((*i, *id));
         }
         // the scripts (lamps, indicators, doors, wheels) run in parallel, as the
         // traffic's own do
@@ -1098,13 +1127,13 @@ impl Mirror {
                 work.iter().map(|(i, _, _)| (*i, t.cars[*i].at_station_side())).collect();
             let frames: HashMap<usize, AiFrame> = work
                 .iter()
-                .map(|(i, c, _)| {
+                .map(|(i, id, c)| {
                     (
                         *i,
                         AiFrame {
-                            speed: c.speed,
-                            odometer: odometer.get(&c.id).copied().unwrap_or(0.0),
-                            steer_deg: c.steer,
+                            speed: c.speed as f32,
+                            odometer: odometer.get(id).copied().unwrap_or(0.0),
+                            steer_deg: c.steer as f32,
                             blinker: c.blinker as i32,
                             brake: c.brake,
                             lights: c.lights,
@@ -1129,15 +1158,13 @@ impl Mirror {
     }
 
     /// The timetable buses' displays.
-    fn show_destinations(&mut self, t: &mut Traffic, shown: Vec<(usize, u32)>, args: &LanConfig, world: &World) {
+    fn show_destinations(&mut self, table: &ClientTable, t: &mut Traffic, shown: Vec<(usize, u32)>, args: &LanConfig, world: &World) {
         let m = self;
         for (i, id) in shown {
-            let Some(Desc::Car {
-                line, destination, ..
-            }) = m.descs.get(&(false, id))
-            else {
+            let Some(row) = TrafficId::from_raw(id).and_then(|tid| table.get(tid)) else {
                 continue;
             };
+            let (line, destination) = (&row.meta.line, &row.meta.destination);
             if line.is_empty() || !destination.starts_with('#') || destination == "#-1" {
                 continue;
             }
@@ -1244,62 +1271,11 @@ struct Gather {
     ids_hash: u64,
 }
 
-/// The host's cars within `CAR_RADIUS` of a client at `at`: those moved (or standing too
-/// long unsent) go into the frame, new or changed descriptions are sent along.
-fn gather_cars(view: &mut View, t: &Traffic, at: DVec3, args: &LanConfig, g: &mut Gather) {
-    for c in &t.cars {
-        let p = c.vehicle.position;
-        if (p - at).truncate().length() > CAR_RADIUS || c.id > nw::MAX_ID as u64 {
-            continue;
-        }
-        let key = (false, c.id as u32);
-        g.seen.insert(key);
-        g.ids_hash ^= fnv(&c.id.to_le_bytes());
-        let d = describe_car(args, c);
-        let h = fnv(d.encode().as_bytes());
-        if view.described.get(&key) != Some(&h) {
-            view.described.insert(key, h);
-            g.descs.push(d);
-        }
-        let q = quant(p.x, p.y, p.z, c.vehicle.heading);
-        let speed = c.state.speed;
-        let due = match view.sent.get(&key) {
-            None => true,
-            Some((last, age)) => {
-                *last != q || speed.abs() > 0.05 || *age >= nw::STANDING_EVERY
-            }
-        };
-        if !due {
-            continue;
-        }
-        view.sent.insert(key, (q, 0.0));
-        g.frame.cars.push(CarState {
-            id: c.id as u32,
-            x: p.x,
-            y: p.y,
-            z: p.z,
-            heading: c.vehicle.heading as f32,
-            pitch: c.vehicle.pitch as f32,
-            bank: c.vehicle.bank as f32,
-            speed,
-            steer: c.body.steer,
-            blinker: c.state.blinker.clamp(0, 3) as u8,
-            brake: c.state.braking,
-            lights: t.night,
-            at_station: if c.at_station() {
-                1
-            } else if !c.vehicle.station_released() {
-                -1
-            } else {
-                0
-            },
-        });
-    }
-
-}
-
-/// The host's people within `PERSON_RADIUS` of a client at `at`, the same way.
-fn gather_people(view: &mut View, h: &Humans, at: DVec3, g: &mut Gather) {
+/// The host's people within `PERSON_RADIUS` of a client at `at`: those moved (or standing too
+/// long unsent) go into the frame, new descriptions are sent along. A rider of a timetable bus
+/// names the bus by its id in the traffic table (`table`); one whose bus has no row is left
+/// out until it has.
+fn gather_people(view: &mut View, h: &Humans, table: Option<&omsi_net::traffic_table::TrafficTable>, at: DVec3, g: &mut Gather) {
     for p in h.lan_people(at, PERSON_RADIUS) {
         if p.id > nw::MAX_ID {
             continue;
@@ -1317,7 +1293,10 @@ fn gather_people(view: &mut View, h: &Humans, at: DVec3, g: &mut Gather) {
         let (place, q) = match p.aboard {
             Some((bus, l, lh, seat)) => (
                 PersonPlace::Aboard {
-                    bus: bus.min(nw::MAX_ID as u64) as u32,
+                    bus: match table.and_then(|t| t.id_of(bus)) {
+                        Some(id) => id.raw(),
+                        None => continue,
+                    },
                     x: l.x,
                     y: l.y,
                     z: l.z,
@@ -1451,47 +1430,24 @@ fn person_pose(a: &PersonState, b: &PersonState, k: f64) -> MirrorPose {
     }
 }
 
-fn describe_car(args: &LanConfig, c: &crate::traffic::AiCar) -> Desc {
-    let (line, destination) = if c.is_bus() {
-        car_display(&c.vehicle)
-    } else {
-        (String::new(), String::new())
-    };
-    Desc::Car {
-        id: c.id as u32,
-        file: relative_file(&c.vehicle.ty.def.path, &args.root),
-        // (the paint scheme it is drawn with: a host's cars are all its own, never a LAN
-        // mirror's, whose `scheme` is unset)
-        scheme: c.scheme.map(|s| s.min(255) as u8),
-        line,
-        destination,
-        paint: c.scheme.and_then(|s| c.vehicle.ty.paint_schemes.get(s)).map(|p| p.name.clone()).unwrap_or_default(),
+/// What a person asked for is (the cars are told with their rows: `traffic_table`).
+fn describe(humans: Option<&Humans>, r: EntityRef) -> Option<Desc> {
+    if !r.person {
+        return None;
     }
-}
-
-fn describe(
-    args: &LanConfig,
-    traffic: Option<&Traffic>,
-    humans: Option<&Humans>,
-    r: EntityRef,
-) -> Option<Desc> {
-    if r.person {
-        let p = humans?.lan_people_by_id(r.id)?;
-        Some(Desc::Person {
-            id: r.id,
-            file: Humans::type_file(&p),
-        })
-    } else {
-        let c = traffic?.cars.iter().find(|c| c.id == r.id as u64)?;
-        Some(describe_car(args, c))
-    }
+    let p = humans?.lan_people_by_id(r.id)?;
+    Some(Desc::Person {
+        id: r.id,
+        file: Humans::type_file(&p),
+    })
 }
 
 #[cfg(test)]
 mod tests;
 
 mod display;
-use display::{car_display, show_car_destination};
+pub(crate) use display::car_display;
+use display::show_car_destination;
 
 mod context;
 pub(crate) use context::apply_ai_context;

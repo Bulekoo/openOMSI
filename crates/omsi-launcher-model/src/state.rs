@@ -939,12 +939,9 @@ impl State {
                     if let Some(v) = self.vehicles.first() {
                         self.choice.bus = v.file.clone();
                         self.choice.paint.clear();
-                        self.choice.number.clear();
+                        self.choice.number = self.random_bus_number();
                         self.choice.hof = self.default_hof();
                     }
-                }
-                if !self.bus().is_some_and(|v| v.numbers.iter().any(|(number, _)| *number == self.choice.number)) {
-                    self.choice.number = self.random_bus_number();
                 }
                 self.pick_map();
                 // (the first reading asked for the lines with the maps already)

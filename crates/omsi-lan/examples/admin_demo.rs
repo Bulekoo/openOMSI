@@ -28,12 +28,20 @@ fn main() {
     let info = omsi_net::ws::ServerInfo { name: "admin demo".into(), map: world.map.clone(), local_admin_password: "admin secret".into(), ..Default::default() };
     let _gw = omsi_net::ws::WsGateway::start(SocketAddr::from(([127, 0, 0, 1], web)), SocketAddr::from(([127, 0, 0, 1], udp)), info).expect("the web port is free");
     omsi_lan::gateway::open_admin_api(hub.clone(), omsi_admin::WebCfg::default());
+    // the machine bans: this demo's lists in a folder of its own (printed below)
+    let dir = std::env::temp_dir().join(format!("omsi-admin-demo-{udp}"));
+    omsi_lan::bans::install(omsi_lan::bans::BanStore::open(Some(dir.join("bans.json")), Some(dir.join("bans-owner.json"))));
+    println!("bans: {}", dir.display());
     let mut adm = ServerAdmin::default();
     adm.password = "admin secret".into();
     adm.moderator_password = "mod secret".into();
     adm.passengers_on = true;
     // the players of the demo (names alike on purpose)
     let mut bots: Vec<LanSession> = ["Pichau", "pichau_fan", "Joao", "<b>Bold</b>"].iter().map(|n| LanSession::join(&format!("127.0.0.1:{udp}"), n, world.clone(), Duration::from_millis(10)).expect("a bot")).collect();
+    // (every bot is a machine of its own: `demo-bot-<n>`)
+    for (n, b) in bots.iter_mut().enumerate() {
+        b.hardware_id = Some(omsi_lan::bans::derive_hardware_id(&format!("demo-bot-{n}")));
+    }
     println!("panel: http://127.0.0.1:{web}/admin/  (admin secret / mod secret)");
     let rules = ServerRules { real_time: false, traffic_max: 120, notice_ok: &|_| true, metar: false };
     let (mut clock, mut speed, mut weather, mut traffic) = (9.0 * 3600.0, 1.0, String::from("Weather/#CAVOK.owt"), 30usize);
@@ -53,6 +61,7 @@ fn main() {
             let _ = b.take_commands();
         }
         lan.tick(0.05, &Pose::default());
+        omsi_lan::bans::sync_host(&mut lan);
         adm.prune(&lan);
         for (from, text) in lan.take_commands() {
             server_command(&mut lan, from, &text, &mut adm, &|_| None, &rules, Some(&hub));

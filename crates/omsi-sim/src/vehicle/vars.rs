@@ -50,6 +50,13 @@ impl VehicleInstance {
         self.ty.program.has_script_var(name)
     }
 
+    /// Whether any of the vehicle's scripts assigns variable `name`: a variable that is only
+    /// declared (a shared varlist) keeps its starting zero and means nothing.
+    pub fn script_stores(&self, name: &str) -> bool {
+        let p = &self.ty.program;
+        p.var(name).is_some_and(|id| p.stores(id))
+    }
+
     /// The door release to fire now: the bus's own, the C2's switch turned over, else `bus_dooraft`.
     pub fn door_release_trigger(&self) -> Option<&'static str> {
         let p = &self.ty.program;

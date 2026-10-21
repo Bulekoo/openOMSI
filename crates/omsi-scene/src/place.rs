@@ -916,12 +916,22 @@ fn object_lights(state: &mut TileState, ot: &ObjectType, pos: DVec3, xf: Mat4, l
         // colour is the brightness, so the intensity stays at one: an Esso sign
         // declared as 0.1 red is a glow by its pumps, not a red wash over the
         // whole street.
+        // (A building's window glow is declared with a core of 60 or 120 m: filled at full colour that
+        // far round, the snow and the ground of the whole street glowed with it, evenly, from windows
+        // that light a few metres of their facade. The core is held to 15 m - a street lamp's is
+        // 12 - and the light falls off with the square of the distance beyond it. The baked light
+        // maps of the vanilla picture keep the authored radius.)
+        // (And a building's light is not a street lamp's: a lit room lights the ground outside a
+        // fifth as much - a courtyard ringed by lit windows came out as bright as the street under
+        // a lamp, as every window added a lamp's full colour.)
+        let glow = if lamp.is_none() && ml.radius > 6.0 { 0.2 } else { 1.0 };
+        let core = ml.radius.max(0.5).min(15.0);
         state.lights.push(omsi_render::PointLight {
             position: p,
-            radius: ml.radius.max(0.5) * 6.0,
-            color: ml.color,
+            radius: core * 6.0,
+            color: [ml.color[0] * glow, ml.color[1] * glow, ml.color[2] * glow],
             intensity: 1.0,
-            core: ml.radius.max(0.5),
+            core,
             housed: true,
             shadow_owner: embedded.get(k).copied().unwrap_or(false).then_some(key),
             ..Default::default()

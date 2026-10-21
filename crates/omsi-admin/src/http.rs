@@ -348,6 +348,7 @@ fn get(hub: &Hub, req: &Request, s: &SessionInfo, path: &str) -> Response {
     match path {
         "/api/admin/session" => json_answer("200 OK", json!({ "session": s })),
         "/api/admin/state" => json_answer("200 OK", json!({ "session": s, "server": snap.server, "age_ms": age_ms(snap.at) })),
+        "/api/admin/bans" => json_answer("200 OK", json!({ "bans": snap.bans, "age_ms": age_ms(snap.at) })),
         "/api/admin/players" => {
             let q = req.param("q").unwrap_or_default();
             let found: Vec<&crate::players::Player> = crate::players::search(&snap.players, &q);

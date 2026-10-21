@@ -28,6 +28,11 @@ pub struct CityMap {
     /// How far the mouse has moved (pixels) since it was pressed on the map: a press let go
     /// without moving is a click.
     travel: f32,
+    pub(super) pin_scale: f32,
+    pub(super) entry_hits: Vec<(Rect, usize)>,
+    pub(super) waypoint_hits: Vec<(Rect, usize)>,
+    pub(super) waypoint_remove: Vec<(Rect, usize)>,
+    pub(super) pointer: Option<Vec2>,
     target: Option<(TextureId, u32, u32)>,
     /// The ground (buffer 7) and houses (buffer 10): what they were built for and their sizes.
     ground: Option<CityGround>,
@@ -318,6 +323,13 @@ impl Navigator {
         Self::unproject(&cam, w, h, x - self.city.rect[0], y - self.city.rect[1]).map(|d| self.city.center + d)
     }
 
+    /// A ground point in the city map's local screen coordinates.
+    pub(super) fn city_screen_at(&self, at: DVec2) -> Option<Vec2> {
+        let (w, h) = self.city_size();
+        let cam = Self::city_cam(self.city.mpp, self.city.tilt, self.city.phi, w, h);
+        project(cam.vp, [0.0, 0.0, w, h], (at - self.city.center).as_vec2().extend(0.0))
+    }
+
     /// A mouse press while the map is open: on it, a drag or a button; outside, nothing (the map
     /// closes with its cross or Escape only).
     pub fn map_press(&mut self, x: f32, y: f32) {
@@ -326,6 +338,17 @@ impl Navigator {
         }
         let local = Vec2::new(x - self.city.rect[0], y - self.city.rect[1]);
         let hit = self.city.buttons.iter().find(|(r, _)| r.contains(local)).map(|b| b.1);
+        if hit.is_none() && !self.city.lines.has_point(local) {
+            if let Some(index) = self.city.waypoint_remove.iter().rev().find(|(r, _)| r.contains(local)).map(|(_, i)| *i) {
+                self.remove_destination(index);
+                self.city.drag = None;
+                return;
+            }
+            if self.city.waypoint_hits.iter().any(|(r, _)| r.contains(local)) {
+                self.city.drag = None;
+                return;
+            }
+        }
         // the lines panel: its rows and tabs, or its background (never a drag of the map)
         if hit.is_none() && self.city.lines.has_point(local) {
             if let Some(h) = self.city.lines.hit(local) {
@@ -337,6 +360,8 @@ impl Navigator {
             Some(5) => self.city.lines.toggle(),
             Some(6) => self.show_contours = !self.show_contours,
             Some(7) => self.orient = (self.orient + 1) % 3,
+            Some(8) => self.cancel_destination(),
+            Some(9) => {},
             Some(0) => self.city.follow = true,
             Some(1) => self.city.mpp = (self.city.mpp / 1.6).max(MIN_MPP),
             Some(2) => self.city.mpp = (self.city.mpp * 1.6).min(self.max_mpp()),
@@ -373,6 +398,7 @@ impl Navigator {
 
     /// The cursor moved with the button held: the ground under it stays under it.
     pub fn map_move(&mut self, x: f32, y: f32) {
+        self.city.pointer = Some(Vec2::new(x - self.city.rect[0], y - self.city.rect[1]));
         if let Some((px, py)) = self.city.drag {
             let (dx, dy) = (x - px, y - py);
             self.city.travel += dx.abs() + dy.abs();
@@ -507,7 +533,8 @@ impl Navigator {
             }
             let style = RouteStyle { extra_m: 0.0, min_px: 6.0, arrows: Some((every, f32::MAX)), max_len: f32::MAX, near: None };
             let bus_lane = r.lanes.get(done).map(|&l| lane_from_right(n, l, f.bus)).unwrap_or(0);
-            build_route(&mut p, n, &r.lanes[done..], anchor, r.s, &self.route_jam, &style, bus_lane, pal);
+            mapmesh::roads::build_route_to(&mut p, n, &r.lanes[done..], anchor, r.s, &self.route_jam, &style, bus_lane, pal, self.destination.as_ref().and_then(|d| d.path.as_ref().map(|p| p.end_s)));
+            self.draw_waypoint_routes(&mut p, n, anchor, &style, pal);
         }
         self.city.route = (stamp, anchor, p.len());
         Some(p)
@@ -543,6 +570,7 @@ impl Navigator {
         }
         let phi = self.ease_turn(f.heading, f.dt as f64);
         let s = (h / 760.0).clamp(0.95, 2.0) * f.ui_scale;
+        self.city.pin_scale = s;
         let global = self.global.clone();
         let net = global.as_deref().or(f.traffic.map(|t| &t.net));
         if let Some(n) = net {
@@ -693,6 +721,7 @@ impl Navigator {
         if let Some(bp) = to_screen(f.bus) {
             puck(&mut ui, bp, ((f.heading as f64).to_radians() - phi) as f32, 10.0 * s, pal.route);
         }
+        self.draw_destination_markers(&mut ui, &|q| to_screen(q.extend(0.0)), win, s, true, &pal);
         let icon_verts = self.city_icons(&on_screen, win, s);
         // --- the cards: the trip top left, the buttons top right, the scale bottom left
         let pad = 14.0 * s;
@@ -701,7 +730,7 @@ impl Navigator {
         ui.shadow(head, 14.0 * s, 10.0 * s, Color::rgba(0, 0, 0, 0.14));
         ui.rounded(head, 14.0 * s, pal.card);
         let mut x = head.x + 14.0 * s;
-        if let Some(l) = f.line.as_deref().map(str::trim).filter(|l| !l.is_empty()) {
+        if let Some(l) = f.line.as_deref().map(str::trim).filter(|l| !l.is_empty() && self.destination.is_none()) {
             let px = 13.0 * s;
             let l = self.fonts.fit(l, px, Weight::Bold, 60.0 * s);
             let lw = self.fonts.width(&l, px, Weight::Bold) + 14.0 * s;
@@ -710,16 +739,16 @@ impl Navigator {
             ui.text_in(&mut self.atlas, &self.fonts, &l, px, Weight::Bold, r, Align::Center, Color::WHITE);
             x += lw + 9.0 * s;
         }
-        let title = f.terminus.as_deref().map(str::trim).filter(|t| !t.is_empty()).map(str::to_string).unwrap_or_else(|| wd.no_duty.to_string());
+        let title = self.destination.as_ref().map(|d| format!("1/{} · {}", self.waypoints.len() + 1, d.name)).unwrap_or_else(|| f.terminus.as_deref().map(str::trim).filter(|t| !t.is_empty()).map(str::to_string).unwrap_or_else(|| wd.no_duty.to_string()));
         let title = self.fonts.fit(&title, 15.0 * s, Weight::Bold, head.right() - x - 12.0 * s);
         ui.text_in(&mut self.atlas, &self.fonts, &title, 15.0 * s, Weight::Bold, Rect::new(x, head.y + 8.0 * s, head.right() - x - 12.0 * s, 24.0 * s), Align::Left, pal.card_text);
-        let sub = match f.stops.first() {
+        let sub = if self.destination.is_some() { self.destination_info(net) } else { match f.stops.first() {
             Some(st) => {
                 let d = self.next_dist.map(|(_, d)| omsi_ui::units::Units::now().distance(d)).unwrap_or_default();
                 format!("{}  ·  {}  ·  {:02}:{:02}", st.name.trim(), d, (st.arrival / 3600.0) as i32 % 24, ((st.arrival % 3600.0) / 60.0) as i32)
             }
-            None => self.street_here.clone().unwrap_or_default(),
-        };
+            None => omsi_ui::tr("Click map to navigate").into_owned(),
+        } };
         let sub = self.fonts.fit(&sub, 12.5 * s, Weight::Medium, head.w - 28.0 * s);
         ui.text_in(&mut self.atlas, &self.fonts, &sub, 12.5 * s, Weight::Medium, Rect::new(head.x + 14.0 * s, head.y + 32.0 * s, head.w - 28.0 * s, 20.0 * s), Align::Left, pal.card_dim);
         // buttons: close apart, then a column (2D/3D, zoom in, zoom out, the bus)
@@ -752,6 +781,7 @@ impl Navigator {
         }
         // the Terrain and Lines buttons left of the close button, the lines panel left of the column, the compass
         self.draw_top_controls(&mut ui, (w, h, s), (pad, bs, bx, close), &on_line, &on_screen);
+        self.draw_destination_controls(&mut ui, head, s, &pal);
         if self.show_surface && self.place.has_location() {
             self.place.draw_chips(&mut ui, &mut self.atlas, &self.fonts, head, w, pad, s);
         }

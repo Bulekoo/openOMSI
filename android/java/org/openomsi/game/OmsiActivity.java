@@ -141,6 +141,20 @@ public class OmsiActivity extends NativeActivity {
         }
     }
 
+    /** Ask for the microphone (voice chat), when it is not allowed yet: called from the native
+     *  side when voice chat is first switched on. The microphone is used only while a talk
+     *  key is held. */
+    public void requestMicrophone() {
+        if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, 2);
+                }
+            });
+        }
+    }
+
     /** A short buzz (called from the native side for the on-screen buttons). */
     @SuppressWarnings("deprecation")
     public void vibrate(int ms) {

@@ -172,12 +172,6 @@ pub struct RemoteVehicle {
     texture_subscription: Option<(u64, u32, u32)>,
 }
 
-impl crate::voice::RemoteBuses for LanGame {
-    fn remote_bus(&self, id: u32) -> Option<DVec3> {
-        self.remotes.get(&id).map(|r| r.vehicle().position)
-    }
-}
-
 impl RemoteVehicle {
     /// The LAN player's vehicle as it is drawn here.
     pub fn vehicle(&self) -> &omsi_sim::VehicleInstance {
@@ -347,7 +341,7 @@ pub struct LanInput<'a> {
     pub walker: Option<omsi_net::Walker>,
     /// We stand or sit in this player's bus: it is drawn from inside.
     pub inside_of: Option<u32>,
-    /// We are holding the bus radio key (map-wide GreenTeaSpeak voice).
+    /// We are holding the radio key (session-wide voice).
     pub radio_keyed: bool,
     /// Our driver figure's human file (sent as the figure the others draw at our wheel).
     pub figure: Option<PathBuf>,
@@ -409,6 +403,8 @@ use crate::gateway::{ask_server_offers, ws_came_back, ws_join_target};
 /// cannot be started is reported and the game runs on alone. A joining player waits
 /// briefly for the host's welcome, so that its map is loaded with the host's world.
 pub fn start(args: &LanConfig, host: &dyn LanHost) -> Option<LanSession> {
+    // (every hello of this process carries the machine's hardware identifier, see `bans`)
+    crate::bans::announce_local_hardware_id();
     // (every bus offered until the server joined now says otherwise, see `ServerOffers`)
     let offers_session = crate::gateway::new_offers_session();
     let world = world_info(args);
@@ -429,6 +425,10 @@ pub fn start(args: &LanConfig, host: &dyn LanHost) -> Option<LanSession> {
                 Ok(mut s) => {
                     if args.server {
                         s.tell_strangers_the_session();
+                    } else {
+                        // (a game hosting by code: this session's bans last as long as it runs;
+                        // the owner's list is the account's)
+                        crate::bans::install(crate::bans::BanStore::open(None, crate::bans::BanStore::default_owner_path()));
                     }
                     Some(s)
                 }
@@ -2175,6 +2175,7 @@ pub fn tick_send(
     // (only while driving: on foot or as a passenger the radio key does nothing)
     mine.radio_keyed = frame.radio_keyed && frame.walker.is_none() && mine.has_vehicle();
     if lan.role == Role::Host {
+        crate::bans::sync_host(lan);
         // the tours the others drive are theirs, not the timetable's
         let tours: hashbrown::HashSet<(String, String)> = lan
             .peers()

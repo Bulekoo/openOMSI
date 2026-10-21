@@ -14,6 +14,8 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- updates: the APK of a newer GitHub release handed to the system's installer -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- voice chat in multiplayer: asked for when it is first switched on; used while a talk key is held -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- the on-screen buttons' feedback -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- the copy of OMSI 2 and the mods on the shared storage, read by path -->
@@ -25,6 +27,7 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
     <uses-feature android:name="android.hardware.gamepad" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application
         android:label="openOMSI"

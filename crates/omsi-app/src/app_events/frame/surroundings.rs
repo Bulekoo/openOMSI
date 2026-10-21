@@ -87,6 +87,11 @@ pub(super) fn lights(cx: LightsCx, dt: f32, daylight: omsi_sim::Daylight, behind
             cx.player.player.is_some(),
         );
         drop(vehicles);
+        if let Some(p) = cx.player.player.as_ref() {
+            if let Some(tv) = p.trolley_view.as_ref() {
+                tv.push_effects(scene, &p.vehicle);
+            }
+        }
         cx.perf.profile.add(crate::profile_keys::ProfKey::LightsCollect, __tc.elapsed().as_secs_f64());
         // the object editor's pick: a magenta glow over it
         if let Some(id) = cx.menus.menus.editor.as_ref().and_then(|e| e.selected) {

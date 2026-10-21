@@ -15,6 +15,7 @@ pub fn is_game_action(name: &str) -> bool {
                 | "toggel_mouse_ctrl"
                 | "toggel_ctrler"
                 | "voice_radio"
+                | "voice_nearby"
                 | "pax_door_request"
         )
 }

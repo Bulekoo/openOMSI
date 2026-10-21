@@ -9,7 +9,7 @@ enum AppLanguage {
         "ENG": "en", "DEU": "de", "FRA": "fr", "RUS": "ru", "UKR": "uk", "BEL": "be", "KAZ": "kk",
         "POL": "pl", "CZE": "cs", "HUN": "hu", "ESP": "es", "CAT": "ca", "PTB": "pt-BR", "PTP": "pt-PT",
         "ITA": "it", "NLD": "nl", "SWE": "sv", "TUR": "tr", "JPN": "ja", "ZHT": "zh-Hant", "KOR": "ko", "THA": "th",
-        "VIE": "vi", "IND": "id", "MSA": "ms", "TGL": "fil", "CHS": "zh-Hans", "HIN": "hi",
+        "VIE": "vi", "IND": "id", "MSA": "ms", "TGL": "fil", "CHS": "zh-Hans", "HIN": "hi", "SRP": "sr",
     ]
 
     /// `home` is the folder the game keeps `.openomsi` in (the app's data folder on an iPhone).

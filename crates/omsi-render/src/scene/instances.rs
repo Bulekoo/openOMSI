@@ -10,6 +10,7 @@ impl Renderer {
             textures: Vec::new(),
             glass_slot: None,
             materials: Vec::new(),
+            trolley_wire_drawn: Vec::new(),
             instances: Vec::new(),
             render_origin: DVec3::ZERO,
             lights: Vec::new(),

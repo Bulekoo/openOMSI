@@ -45,6 +45,8 @@ pub enum Exec {
 pub fn perm_of(a: &Action) -> Perm {
     match a {
         Action::Time(_) | Action::Speed(_) | Action::Clock(_) | Action::Weather(_) | Action::Traffic(_) | Action::PassengerDensity(_) => Perm::World,
+        // (the owner's list is the owner's, an admin's; a moderator bans for the session)
+        Action::HwBan { scope: crate::bans::Scope::Owner, .. } | Action::Unban(_) => Perm::World,
         // (moving other players' buses - admins' too - is the admin's)
         Action::Bring(_) | Action::BringAll => Perm::World,
         _ => Perm::Moderate,
@@ -56,6 +58,8 @@ pub fn action_of(op: &Op) -> Action {
     match op {
         Op::Kick { target, reason } => Action::Kick { id: target.id, ban: false, why: reason.clone() },
         Op::Ban { target, reason } => Action::Kick { id: target.id, ban: true, why: reason.clone() },
+        Op::HwBan { target, reason, scope, hours } => Action::HwBan { id: target.id, scope: *scope, hours: *hours, why: reason.clone() },
+        Op::Unban(id) => Action::Unban(id.clone()),
         Op::Say(t) => Action::Say(t.clone()),
         Op::Tell { target, text } => Action::Tell { id: target.id, text: text.clone() },
         Op::Clock(s) => Action::Clock(*s),
@@ -72,7 +76,7 @@ pub fn action_of(op: &Op) -> Action {
 /// The player an action is for.
 fn subject(a: &Action) -> Option<u32> {
     match a {
-        Action::Kick { id, .. } | Action::Bring(id) | Action::Goto(id) | Action::Tell { id, .. } | Action::Duty { id, .. } | Action::DutyOff(id) | Action::Unstick(id) => Some(*id),
+        Action::Kick { id, .. } | Action::HwBan { id, .. } | Action::Bring(id) | Action::Goto(id) | Action::Tell { id, .. } | Action::Duty { id, .. } | Action::DutyOff(id) | Action::Unstick(id) | Action::VoiceMute { id, .. } => Some(*id),
         Action::Service { whom: Whom::Player(id), .. } => Some(*id),
         Action::Notify { who, .. } => who.parse().ok(),
         _ => None,
@@ -115,7 +119,7 @@ pub fn players(lan: &LanSession, adm: &ServerAdmin) -> Vec<Player> {
 pub fn publish(hub: &Hub, lan: &LanSession, adm: &ServerAdmin, mut server: omsi_admin::ServerState) {
     let players = players(lan, adm);
     server.players = players.len();
-    hub.publish(Snapshot { server, players, at: Some(std::time::Instant::now()) });
+    hub.publish(Snapshot { server, players, bans: super::ban::views(), at: Some(std::time::Instant::now()) });
 }
 
 /// How the records name a player's game.
@@ -146,7 +150,7 @@ pub fn split_guard(line: &str) -> (String, Option<Target>) {
     let mut words: Vec<&str> = line.split(' ').collect();
     // (where each action that names a player names it)
     let at = match words.first().copied().unwrap_or("") {
-        "kick" | "ban" | "bring" | "goto" | "tell" | "duty" | "duty-off" | "unstick" | "notify" => 1,
+"kick" | "ban" | "hwban" | "bring" | "goto" | "tell" | "duty" | "duty-off" | "unstick" | "notify" | "vmute" | "vunmute" => 1,
         "service" => 2,
         _ => return (line.to_string(), None),
     };
@@ -240,6 +244,22 @@ pub fn exec(lan: &mut LanSession, adm: &ServerAdmin, actor: &Actor, action: &Act
                 Done(Outcome::applied(format!("{name} sent away{}", if *ban { " for the rest of this server run" } else { "" })))
             }
         }
+        Action::HwBan { id, scope, hours, why } => {
+            if actor.role == Role::Moderator && who.as_ref().and_then(|p| p.admin) == Some(Role::Admin) {
+                return Done(Outcome::rejected("a moderator may not ban an admin"));
+            }
+            if from == Some(*id) {
+                return Done(Outcome::rejected("you cannot ban yourself"));
+            }
+            match super::ban::hardware_ban(lan, *id, *scope, *hours, why.as_deref().unwrap_or(""), &actor.label) {
+                Ok(m) => Done(Outcome::applied(m)),
+                Err(e) => Done(Outcome::rejected(e)),
+            }
+        }
+        Action::Unban(id) => match super::ban::unban(lan, id) {
+            Ok(m) => Done(Outcome::applied(m)),
+            Err(e) => Done(Outcome::rejected(e)),
+        },
         Action::Say(_) => {
             session(lan);
             Done(Outcome::applied("said to everybody"))
@@ -268,6 +288,13 @@ pub fn exec(lan: &mut LanSession, adm: &ServerAdmin, actor: &Actor, action: &Act
                 SessionDone::Session | SessionDone::AlsoHere => Done(Outcome::pending(format!("sent to {what}; its answer is in the server's log"))),
                 SessionDone::World => Done(Outcome::rejected("not for a server")),
             }
+        }
+        Action::VoiceMute { muted, .. } => {
+            if *muted && actor.role == Role::Moderator && who.as_ref().and_then(|p| p.admin) == Some(Role::Admin) {
+                return Done(Outcome::rejected("a moderator may not silence an admin"));
+            }
+            session(lan);
+            Done(Outcome::applied(format!("{name}'s voice chat is {}", if *muted { "silenced" } else { "allowed again" })))
         }
         Action::Time(_) | Action::Speed(_) | Action::Clock(_) if rules.real_time => Done(Outcome::rejected("the clock follows this machine's real time (real_time = 1 in server.cfg): it cannot be moved or sped up")),
         Action::Weather(_) if rules.metar => Done(Outcome::rejected("the weather follows the METAR report (metar_sync = 1 in server.cfg): it cannot be changed")),

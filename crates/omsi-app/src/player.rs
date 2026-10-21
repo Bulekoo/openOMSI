@@ -266,6 +266,9 @@ pub(crate) struct Player {
     /// The settings' "Indicators cancel themselves" (`blinker_cancel`): off, the script's
     /// own cancelling after a turn is undone (#451).
     pub(crate) blinker_cancel: bool,
+    /// The overhead wire of the map and the trolleybus's poles drawn (see `omsi_scene::trolley_view`).
+    pub(crate) trolley_view: Option<Box<omsi_scene::trolley_view::TrolleyView>>,
+    pub(crate) trolley_sound: crate::trolley_sound::TrolleySound,
 }
 
 // Putting a bus into service (Shift+U, `--autostart`) is `omsi_sim::startup`: it presses

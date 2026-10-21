@@ -1,4 +1,6 @@
+import GameController
 import SwiftUI
+import UniformTypeIdentifiers
 
 // The launcher's other pages, as the desktop launcher has them (`launcher/ui/js/pages/*.js`).
 
@@ -34,7 +36,6 @@ struct MultiplayerPage: View {
     @State private var tab = "code"
     @State private var address = ""
     @State private var name = ""
-    @State private var code = ""
 
     var body: some View {
         PageScroll("Multiplayer", subtitle: "Drive with friends by a code, or on servers that are always on.") {
@@ -44,31 +45,15 @@ struct MultiplayerPage: View {
         .onAppear { for s in store.snapshot.servers { store.act("server_ask", ["address": s.address, "every": 10]) } }
     }
 
+    @State private var codeMode = ""
+
     private var byCode: some View {
-        TwoColumns {
-            Card("Host a game") {
-                Text("Others join with the session code the game shows (Esc menu → copy the code).").font(.inter(14)).foregroundStyle(Theme.muted)
-                ToggleRow(label: "Host the next drive", help: "The duty you start on the Drive page is opened to others", isOn: store.choice.lan_mode == "host") { on in
-                    store.act("lan", ["mode": on ? "host" : "off"])
-                }
-            }
-        } right: {
-            Card("Connect by Code") {
-                Field("Session code") {
-                    InputField(prompt: "OMSI-XXXX-… or an address", text: $code) { store.act("lan", ["mode": "join", "addr": code]) }
-                }
-                if store.choice.lan_mode == "join", !store.snapshot.join.text.isEmpty {
-                    Notice(text: store.snapshot.join.text, kind: store.snapshot.join.ok ? .info : .danger)
-                }
-                HStack(spacing: 8) {
-                    Button { store.act("lan", ["mode": "join", "addr": code]) } label: { Label("Join", systemImage: "arrow.right.circle.fill") }
-                        .buttonStyle(.primary).disabled(code.isEmpty)
-                    if store.choice.lan_mode != "off" {
-                        Button("Play alone") { store.act("server_leave"); store.act("lan", ["mode": "off"]) }.buttonStyle(.secondary)
-                    }
-                }
-            }
+        let mode = codeMode.isEmpty ? (runningHost(store.snapshot.instances) != nil || store.choice.lan_mode == "host" ? "host" : "join") : codeMode
+        return VStack(alignment: .leading, spacing: 16) {
+            Segmented(items: [("join", "Join friends"), ("host", "Invite friends")], selection: mode) { codeMode = $0 }
+            if mode == "join" { JoinByCode() } else { HostByCode() }
         }
+        .frame(maxWidth: 760, alignment: .leading)
     }
 
     private var servers: some View {
@@ -91,7 +76,11 @@ struct MultiplayerPage: View {
     private var nameField: some View { InputField(prompt: "Name (optional)", text: $name) }
     private var addressField: some View { InputField(prompt: "Address: https://… or host:port", text: $address) }
     private var addButton: some View {
-        Button { store.act("server_add", ["name": name, "address": address]); address = ""; name = "" } label: { Label("Add", systemImage: "plus") }
+        Button {
+            let a = address.trimmingCharacters(in: .whitespaces)
+            if store.snapshot.servers.contains(where: { $0.address == a }) { store.say(String(localized: "That server is in the list already"), error: true); return }
+            store.act("server_add", ["name": name, "address": a]); address = ""; name = ""
+        } label: { Label("Add server", systemImage: "plus") }
             .buttonStyle(.secondary).disabled(address.trimmingCharacters(in: .whitespaces).isEmpty)
     }
 }
@@ -100,27 +89,34 @@ struct ServerCard: View {
     @Environment(LauncherStore.self) private var store
     var server: Server
     var joined: Bool
+    @State private var status: HostStatus?
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            Image(systemName: server.official == true ? "checkmark.seal.fill" : "server.rack").font(.system(size: 18)).foregroundStyle(joined ? Theme.accent : Theme.muted)
-                .frame(width: 36, height: 36).background(Theme.surface2, in: RoundedRectangle(cornerRadius: Theme.radiusSm, style: .continuous))
+            icon
+            .frame(width: 48, height: 48).background(Theme.surface2, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
                     Text(server.info?.name?.isEmpty == false ? server.info!.name! : (server.name.isEmpty ? server.address : server.name)).font(.inter(15, .semibold)).lineLimit(1)
                     if joined { Tag(text: "Joined", kind: .accent) }
-                    if server.info?.password == true { Image(systemName: "lock.fill").font(.system(size: 11)).foregroundStyle(Theme.muted) }
+                    if server.info?.password == true { Tag(text: "Password") }
                 }
                 if let i = server.info {
                     if i.ok {
-                        Text("\(i.players ?? 0)/\(i.max_players ?? 0) players - \(i.map ?? "") - \(i.time ?? "") \(i.weather ?? "")").font(.inter(12.5)).foregroundStyle(Theme.muted).lineLimit(1)
+                        Text([i.map.map { $0.replacingOccurrences(of: "\\", with: "/").replacingOccurrences(of: "/global.cfg", with: "").replacingOccurrences(of: "maps/", with: "") } ?? "", tr("{n} of {max} players", ["n": "\(i.players ?? 0)", "max": "\(i.max_players ?? 0)"]), i.time ?? "", i.weather ?? ""].filter { !$0.isEmpty }.joined(separator: " - ")).font(.inter(12.5)).foregroundStyle(Theme.muted).lineLimit(1)
                         if let m = i.motd, !m.isEmpty { Text(m).font(.inter(13)).foregroundStyle(Theme.text2).lineLimit(2) }
                     } else {
-                        Text(i.error ?? String(localized: "No answer")).font(.inter(12.5)).foregroundStyle(Theme.danger).lineLimit(1)
+                        Text(tr("Can't reach the server: {err}", ["err": i.error ?? String(localized: "No answer")])).font(.inter(12.5)).foregroundStyle(Theme.danger).lineLimit(2)
                     }
                 } else {
-                    Text("Asking…").font(.inter(12.5)).foregroundStyle(Theme.muted)
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.mini).tint(Theme.muted)
+                        Text("Asking the server...").font(.inter(12.5)).foregroundStyle(Theme.muted)
+                    }
                 }
+                SelectField(options: [("auto", autoLabel), ("udp", "UDP"), ("websocket", "WebSocket")], selection: server.protocol ?? "auto", onChange: { store.act("server_protocol", ["address": server.address, "proto": $0]) })
+                    .frame(width: 130).padding(.top, 4)
             }
             Spacer(minLength: 8)
             if joined {
@@ -138,7 +134,42 @@ struct ServerCard: View {
         }
         .padding(.horizontal, 20).padding(.vertical, 18)
         .surface()
+        .task(id: server.address) {
+            let a = server.address
+            status = try? await offMain { try Bridge.api(HostStatus.self, "server_query", ["address": a]) }
+        }
     }
+
+    @ViewBuilder private var icon: some View {
+        if let s = status?.icon, let comma = s.firstIndex(of: ","), let data = Data(base64Encoded: String(s[s.index(after: comma)...])), let picture = picture(data) {
+            picture.resizable().scaledToFill()
+        } else {
+            Image(systemName: server.official == true ? "checkmark.seal.fill" : "globe").font(.system(size: 20)).foregroundStyle(joined ? Theme.accent : Theme.muted)
+        }
+    }
+
+    private func picture(_ data: Data) -> Image? {
+        #if os(iOS)
+        UIImage(data: data).map { Image(uiImage: $0) }
+        #else
+        NSImage(data: data).map { Image(nsImage: $0) }
+        #endif
+    }
+
+    private var autoLabel: String {
+        guard let s = status else { return String(localized: "Auto") }
+        return "\(String(localized: "Auto")) (\(udpByDefault(server.address, reachedAt: s.reached_at) ? "UDP" : "WS"))"
+    }
+}
+
+func udpByDefault(_ address: String, reachedAt: String?) -> Bool {
+    let a = address.trimmingCharacters(in: .whitespaces)
+    let host = a.split(whereSeparator: { "/?#\\".contains($0) }).first.map(String.init)?.split(separator: "@").last.map(String.init)?.replacingOccurrences(of: ":[0-9]*$", with: "", options: .regularExpression) ?? ""
+    let web = a.range(of: "^(https?|wss?)://", options: .regularExpression) != nil || a.lowercased() == "openomsi"
+        || host.range(of: "^[a-z0-9-]+(\\.[a-z0-9-]+)*\\.trycloudflare\\.com$", options: [.regularExpression, .caseInsensitive]) != nil
+    guard !web, let m = a.range(of: "^(?:[^:\\s/]+|\\[[^\\]\\s]+\\]):([0-9]+)$", options: .regularExpression) else { return false }
+    let port = a[m].split(separator: ":").last.flatMap { Int($0) } ?? 99999
+    return port <= 65535 && reachedAt != "http://\(a)"
 }
 
 // --- Profile ---------------------------------------------------------------------------------
@@ -147,6 +178,7 @@ struct ProfilePage: View {
     @Environment(LauncherStore.self) private var store
     @Environment(\.compactLayout) private var compact
     @State private var newName = ""
+    @State private var sex = "M"
     @State private var confirmDelete = false
 
     var body: some View {
@@ -203,6 +235,7 @@ struct ProfilePage: View {
                 }
                 HStack(spacing: 8) {
                     InputField(prompt: "New driver's name", text: $newName) { create() }
+                    Segmented(items: [("M", "Male"), ("F", "Female")], selection: sex) { sex = $0 }
                     Button { create() } label: { Label("Create", systemImage: "plus") }
                         .buttonStyle(.secondary).disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
@@ -212,7 +245,7 @@ struct ProfilePage: View {
 
     private func create() {
         guard !newName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        store.act("profile_create", ["name": newName])
+        store.act("profile_create", ["name": newName, "sex": sex])
         newName = ""
     }
 
@@ -285,9 +318,11 @@ struct ProfilePage: View {
 
 struct ControlsPage: View {
     @Environment(LauncherStore.self) private var store
+    @State private var keyboard = GCKeyboard.coalesced != nil
 
     var body: some View {
         let touch = store.platform == "ios"
+        let keys = !touch || keyboard
         PageScroll("Controls", subtitle: touch ? "Touch, tilt and game controllers." : "Keys, wheels and gamepads.") {
             TwoColumns {
                 if touch {
@@ -297,8 +332,10 @@ struct ControlsPage: View {
                     }
                 }
                 Card("Key bindings") {
-                    Notice(text: String(localized: "The keys of the game are OMSI's Inputs/keyboard.cfg: the openOMSI launcher of Windows and Linux sets them on its Controls page, which reads and writes the same file."))
-                    SettingSelect(label: "Driving keys", key: "drive_keys", options: [("omsi", "Custom controls"), ("simple", "W A S D + arrows"), ("wasd", "W A S D only"), ("arrows", "Arrow keys only")])
+                    if !keys {
+                        Notice(text: String(localized: "The keys of the game are OMSI's Inputs/keyboard.cfg: the openOMSI launcher of Windows and Linux sets them on its Controls page, which reads and writes the same file."))
+                    }
+                    SettingSelect(label: "Driving keys", key: "drive_keys", options: [("omsi", "Custom controls (Controls page)"), ("simple", "W A S D + arrows"), ("wasd", "W A S D only"), ("arrows", "Arrow keys only")])
                 }
             } right: {
                 Card("Game controllers") {
@@ -307,7 +344,12 @@ struct ControlsPage: View {
                     SettingToggle(label: "Force feedback and vibration", key: "ff_enabled", fallback: true)
                 }
             }
+            if keys {
+                KeyEditor()
+            }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .GCKeyboardDidConnect)) { _ in keyboard = true }
+        .onReceive(NotificationCenter.default.publisher(for: .GCKeyboardDidDisconnect)) { _ in keyboard = GCKeyboard.coalesced != nil }
     }
 }
 
@@ -317,6 +359,7 @@ struct GamesPage: View {
     @Environment(LauncherStore.self) private var store
     @State private var log: [String] = []
     @State private var logPid: UInt32?
+    @State private var stopPid: UInt32?
 
     var body: some View {
         PageScroll("Running games", subtitle: "Any number of games can run at once; each writes its own log.", maxWidth: 980) {
@@ -333,23 +376,42 @@ struct GamesPage: View {
                                 Text("\(i.bus.stem) - \(i.map.replacingOccurrences(of: "/global.cfg", with: "").replacingOccurrences(of: "maps/", with: ""))").font(.inter(15, .semibold)).lineLimit(1)
                             }
                             Text("process \(i.pid) - \(i.profile) - \(i.lan)").font(.inter(12.5)).foregroundStyle(Theme.muted)
+                            if let last = i.last_line, !last.isEmpty {
+                                Text(last).font(.inter(12.5)).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.tail).help(last)
+                            }
                         }
                         Spacer()
                         Button {
                             if logPid == i.pid { logPid = nil; return }
+                            log = []
                             logPid = i.pid
-                            log = (try? JSONDecoder().decode([String].self, from: Bridge.call("act", ["do": "log", "pid": i.pid]))) ?? []
-                        } label: { Label(logPid == i.pid ? "Hide log" : "Log", systemImage: "doc.text") }
+                        } label: { Label(logPid == i.pid ? "Hide log" : "Show log", systemImage: "doc.text") }
                             .buttonStyle(.launcher(.plain, small: true))
                         Button { Platform.reveal(i.log) } label: { Image(systemName: "folder") }
                             .buttonStyle(.launcher(.ghost, small: true)).help("Show the log file")
                         if i.running == true {
-                            Button("Stop") { store.act("stop", ["pid": i.pid]) }.buttonStyle(.launcher(.danger, small: true))
+                            Button("Stop") { stopPid = i.pid }.buttonStyle(.launcher(.danger, small: true))
+                                .disabled(i.stopping != nil)
                         }
+                    }
+                    if let code = i.lan_status?["code"]?.string, i.lan_status?["role"]?.string == "host", !code.isEmpty {
+                        SessionCode(code: code)
                     }
                     if logPid == i.pid { LogBlock(text: log.joined(separator: "\n")) }
                 }
             }
+        }
+        .task(id: logPid) {
+            while let pid = logPid, !Task.isCancelled {
+                let lines = try? await offMain { try Bridge.api([String].self, "game_log", ["pid": pid, "lines": 120]) }
+                if logPid == pid, let lines { log = lines }
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+        .confirmationDialog("Stop this game?", isPresented: Binding(get: { stopPid != nil }, set: { if !$0 { stopPid = nil } })) {
+            Button("Stop", role: .destructive) { if let p = stopPid { store.act("stop", ["pid": p]) }; stopPid = nil }
+        } message: {
+            Text("The game ends as if Escape and Quit were chosen; an unsaved session is lost.")
         }
     }
 }
@@ -358,9 +420,15 @@ struct GamesPage: View {
 
 struct ModsPage: View {
     @Environment(LauncherStore.self) private var store
+    @Environment(\.compactLayout) private var compact
     @State private var search = ""
     @State private var kind = "all"
     @State private var mode = "auto"
+    @State private var open: String?
+    @State private var removing: ModEntry?
+    @State private var choosingHofs = false
+    @State private var lastPath = ""
+    @State private var dropOver = false
 
     var body: some View {
         PageScroll("Mods", subtitle: "A bus, a map, scenery, a whole OMSI folder - as a folder or a .zip, .7z or .rar. The original OMSI 2 folder is never written to.") {
@@ -369,6 +437,20 @@ struct ModsPage: View {
                 if let w = store.snapshot.mods?.waiting, !w.isEmpty {
                     Card("Waiting for their bus", hint: "Packs installed before the bus they belong to: they go in once it is there.") {
                         ForEach(w, id: \.self) { Text($0).font(.inter(14)).foregroundStyle(Theme.text2) }
+                    }
+                }
+                if let h = store.snapshot.mods?.hof_warnings, !h.isEmpty {
+                    Notice(text: ([String(localized: "Map HOF issue"), String(localized: "Some map HOF files could not be added. Check launcher.log for details.")] + h.prefix(10).map { "- \($0)" }).joined(separator: "\n"), kind: .warn)
+                }
+                if let a = store.snapshot.mods?.archives, !a.isEmpty {
+                    Card("Archives", hint: "Read in place by the game, without unpacking.") {
+                        ForEach(a.indices, id: \.self) { i in
+                            HStack {
+                                Text(a[i].first?.string ?? "").font(.inter(14)).lineLimit(1).truncationMode(.middle)
+                                Spacer()
+                                Text(formatBytes(UInt64(a[i].last?.double ?? 0))).font(.inter(13).monospacedDigit()).foregroundStyle(Theme.muted)
+                            }
+                        }
                     }
                 }
             } right: {
@@ -382,11 +464,21 @@ struct ModsPage: View {
                             Spacer(minLength: 4)
                             Button { Platform.reveal(m.inbox) } label: { Image(systemName: "folder") }.buttonStyle(.launcher(.plain, small: true)).help("Open")
                         }
+                        if !m.inbox_items.isEmpty {
+                            Text(tr("In it now: {}", ["": m.inbox_items.joined(separator: ", ")])).font(.inter(12.5)).foregroundStyle(Theme.muted)
+                        }
                     }
                 }
             }
         }
         .onAppear { store.act("mods") }
+        .onDrop(of: dropTypes, isTargeted: $dropOver, perform: drop)
+        .fileImporter(isPresented: $choosingHofs, allowedContentTypes: [UTType(filenameExtension: "hof") ?? .data], allowsMultipleSelection: true, onCompletion: addHofs)
+        .confirmationDialog("Delete this mod?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), presenting: removing) { m in
+            Button("Delete", role: .destructive) { store.act("mod_remove", ["id": m.id]) }
+        } message: { m in
+            Text(tr("{name} and its files are deleted from the content folder. Switch it off instead to keep it.", ["name": m.name]))
+        }
     }
 
     private var install: some View {
@@ -395,66 +487,112 @@ struct ModsPage: View {
                 Button { pick(folder: true) } label: { Label("Folder", systemImage: "folder.fill") }.buttonStyle(.launcher(.primary, wide: true))
                 Button { pick(folder: false) } label: { Label("Archive", systemImage: "archivebox.fill") }.buttonStyle(.launcher(.plain, wide: true))
             }
+            Button { choosingHofs = true } label: { Label("Add HOF files to buses", systemImage: "doc.fill") }.buttonStyle(.launcher(.plain, wide: true))
             Field("Archive install mode") {
                 Segmented(items: [("auto", "Auto"), ("extract", "Unpacked"), ("inplace", "Used in place")], selection: mode, full: true) { mode = $0 }
+            }
+            if !lastPath.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(lastPath).font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.text2).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                    if let r = store.snapshot.mod_info {
+                        if let e = r.error {
+                            Text(e).font(.inter(12.5)).foregroundStyle(Theme.danger)
+                        } else if let i = r.info, i.is_archive {
+                            Text(archiveInfo(i)).font(.inter(12.5)).foregroundStyle(i.fits ? Theme.muted : Theme.warn)
+                        }
+                    }
+                }
+            }
+            if !compact {
+                VStack(spacing: 6) {
+                    Image(systemName: "square.and.arrow.down").font(.system(size: 24))
+                    Text("Drop a folder or an archive here").font(.inter(13))
+                }
+                .foregroundStyle(dropOver ? Theme.accent : Theme.muted)
+                .frame(maxWidth: .infinity).padding(.vertical, 18)
+                .overlay(RoundedRectangle(cornerRadius: Theme.radiusSm, style: .continuous).strokeBorder(dropOver ? Theme.accent : Theme.surface3, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])))
+            }
+            if let m = store.snapshot.mods {
+                Text(tr("Free space: {n}", ["n": formatBytes(m.free_bytes)])).font(.inter(12.5)).foregroundStyle(Theme.muted)
             }
         }
     }
 
+    private func archiveInfo(_ i: ModSourceInfo) -> String {
+        let size = tr("{size} archive, {files} files, {unpacked} unpacked", ["size": formatBytes(i.archive_bytes), "files": "\(i.files)", "unpacked": formatBytes(i.unpacked_bytes)])
+        let fit = i.fits ? tr("fits ({free} free)", ["free": formatBytes(i.free_bytes)]) : tr("does not fit: needs {needed}, {free} free", ["needed": formatBytes(i.needed_bytes), "free": formatBytes(i.free_bytes)])
+        let place = i.in_place_ok ? " - \(String(localized: "can be used in place"))" : (i.in_place.isEmpty ? "" : " - \(i.in_place)")
+        return "\(size) - \(fit)\(place)"
+    }
+
     private var jobs: some View {
-        Card("Installs") {
+        let finished = store.snapshot.jobs.contains { !running($0) }
+        return Card("Installs", actions: finished ? AnyView(Button("Clear finished") { _ = try? Bridge.api("mods_clear_finished"); store.act("mods") }.buttonStyle(.launcher(.ghost, small: true))) : nil) {
             if store.snapshot.jobs.isEmpty {
-                Text("Nothing installed since the launcher started. Big archives are checked against the free disk space before anything is unpacked.").font(.inter(13.5)).foregroundStyle(Theme.muted)
+                Text("Nothing installed since the launcher started. Big archives are checked against the free disk space before anything is unpacked; a cancelled or failed install leaves nothing behind.").font(.inter(13.5)).foregroundStyle(Theme.muted)
             }
             ForEach(store.snapshot.jobs) { j in
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack {
+                    HStack(spacing: 8) {
+                        if running(j) { ProgressView().controlSize(.small).tint(Theme.accent) }
                         Text(j.name).font(.inter(14, .medium)).lineLimit(1)
                         Spacer()
-                        Tag(text: j.state, kind: j.state == "failed" ? .danger : (j.state == "done" ? .ok : .accent))
+                        Tag(text: j.state, kind: j.state == "failed" ? .danger : (j.state == "done" ? .ok : (j.state == "cancelled" ? .plain : .accent)))
+                        if running(j) {
+                            Button { cancel(j) } label: { Image(systemName: "xmark") }.buttonStyle(.launcher(.ghost, small: true)).help("Cancel")
+                        }
                     }
-                    if j.finished == nil && j.bytes_total > 0 {
-                        ProgressBar(value: Double(j.bytes_done) / Double(max(1, j.bytes_total)))
+                    if running(j) && (j.bytes_total > 0 || j.files_total > 0) {
+                        ProgressBar(value: j.bytes_total > 0 ? Double(j.bytes_done) / Double(j.bytes_total) : Double(j.files_done) / Double(max(1, j.files_total)))
+                        Text([j.files_total > 0 ? tr("{done} / {total} files", ["done": "\(j.files_done)", "total": "\(j.files_total)"]) : "", j.bytes_total > 0 ? "\(formatBytes(j.bytes_done)) / \(formatBytes(j.bytes_total))" : ""].filter { !$0.isEmpty }.joined(separator: " - "))
+                            .font(.inter(12.5).monospacedDigit()).foregroundStyle(Theme.muted)
                     }
-                    if !j.message.isEmpty { Text(j.message).font(.inter(12.5)).foregroundStyle(Theme.muted).lineLimit(3) }
+                    if !j.message.isEmpty { Text(j.message).font(.inter(12.5)).foregroundStyle(j.state == "failed" ? Theme.danger : Theme.muted).lineLimit(3) }
+                    if !j.warnings.isEmpty { Text(j.warnings.joined(separator: " - ")).font(.inter(12.5)).foregroundStyle(Theme.warn) }
                 }
             }
         }
+    }
+
+    private func running(_ j: InstallJob) -> Bool { !j.state.isEmpty && !["done", "failed", "cancelled"].contains(j.state) }
+
+    private func cancel(_ j: InstallJob) {
+        do { _ = try Bridge.api("mod_cancel", ["id": j.id]) } catch { store.say(error.localizedDescription, error: true) }
+        store.act("mods")
+    }
+
+    private func category(_ m: ModEntry) -> String {
+        let k = (m.kind ?? "other").lowercased()
+        return ["bus", "map", "archive"].contains(k) ? k : "other"
     }
 
     private var installed: some View {
         let mods = store.snapshot.mods?.installed ?? []
-        let shown = mods.filter { m in
-            (search.isEmpty || m.name.localizedCaseInsensitiveContains(search)) && (kind == "all" || (kind == "off" ? !m.enabled : (m.kind ?? "Other").lowercased() == kind))
+        var counts = ["all": mods.count, "bus": 0, "map": 0, "archive": 0, "other": 0, "off": 0]
+        for m in mods {
+            counts[category(m), default: 0] += 1
+            if !m.enabled { counts["off", default: 0] += 1 }
         }
-        return Card("Installed mods", hint: "\(mods.count) mods, \(mods.filter(\.enabled).count) on - \(formatBytes(store.snapshot.mods?.free_bytes ?? 0)) free") {
+        let shownKind = (counts[kind] ?? 0) > 0 ? kind : "all"
+        let shown = mods.filter { m in
+            (search.isEmpty || "\(m.name) \(m.paths.joined(separator: " "))".localizedCaseInsensitiveContains(search))
+                && (shownKind == "all" || (shownKind == "off" ? !m.enabled : category(m) == shownKind))
+        }
+        .sorted { a, b in a.enabled != b.enabled ? a.enabled : a.name.localizedCompare(b.name) == .orderedAscending }
+        let tabs: [(String, String)] = [("all", "All"), ("bus", "Buses"), ("map", "Maps"), ("archive", "Archives"), ("other", "Other"), ("off", "Off")]
+        return Card("Installed mods", hint: "\(tr("{n} mods, {on} on", ["n": "\(mods.count)", "on": "\(mods.count - (counts["off"] ?? 0))"])) - \(tr("Free space: {n}", ["n": formatBytes(store.snapshot.mods?.free_bytes ?? 0)]))") {
             SearchField(prompt: "Search mods...", text: $search)
-            Scroll(.horizontal) {
-                Segmented(items: [("all", "All"), ("bus", "Buses"), ("map", "Maps"), ("archive", "Archives"), ("other", "Other"), ("off", "Off")], selection: kind) { kind = $0 }
+            if !mods.isEmpty {
+                Scroll(.horizontal) {
+                    Segmented(items: tabs.filter { $0.0 == "all" || (counts[$0.0] ?? 0) > 0 }.map { ($0.0, LocalizedStringKey("\(String(localized: String.LocalizationValue($0.1))) \(counts[$0.0] ?? 0)")) }, selection: shownKind) { kind = $0 }
+                }
+                .scrollIndicators(.never)
             }
-            .scrollIndicators(.never)
             if shown.isEmpty {
-                EmptyState(icon: "puzzlepiece.extension.fill", text: search.isEmpty ? "No mods yet. Choose a folder or an archive." : "No mod matches.")
+                EmptyState(icon: "puzzlepiece.extension.fill", text: search.isEmpty && shownKind == "all" ? "No mods yet. Choose a folder or an archive." : "No mod matches.")
             }
             VStack(spacing: 0) {
-                ForEach(shown) { m in
-                    HStack(spacing: 12) {
-                        Image(systemName: icon(m)).font(.system(size: 15)).foregroundStyle(m.enabled ? Theme.text2 : Theme.muted).frame(width: 22)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(m.name).font(.inter(14, .medium)).foregroundStyle(m.enabled ? Theme.text : Theme.muted).lineLimit(1)
-                            Text("\(m.paths.prefix(2).joined(separator: ", "))\(m.paths.count > 2 ? " +\(m.paths.count - 2)" : "") - \(formatBytes(m.bytes ?? 0))").font(.inter(12.5)).foregroundStyle(Theme.muted).lineLimit(1)
-                        }
-                        Spacer()
-                        if store.snapshot.mod_busy == m.id {
-                            ProgressView().controlSize(.small).tint(Theme.accent)
-                        } else {
-                            Toggle("", isOn: Binding(get: { m.enabled }, set: { store.act("mod_toggle", ["id": m.id, "on": $0]) })).labelsHidden().toggleStyle(.launcher)
-                            Button { store.act("mod_remove", ["id": m.id]) } label: { Image(systemName: "trash") }
-                                .buttonStyle(.launcher(.ghost, small: true)).help("Delete this mod")
-                        }
-                    }
-                    .padding(.horizontal, 4).padding(.vertical, 8)
-                }
+                ForEach(shown) { m in row(m) }
             }
             if let dir = store.snapshot.mods?.content_dir {
                 HStack {
@@ -462,6 +600,45 @@ struct ModsPage: View {
                     Spacer()
                     Button { Platform.reveal(dir) } label: { Label("Open", systemImage: "arrow.up.forward.square") }.buttonStyle(.launcher(.ghost, small: true))
                 }
+            }
+        }
+    }
+
+    private func row(_ m: ModEntry) -> some View {
+        let tree = modTree(m.paths)
+        let holds = m.kind == "archive" ? "" : tree.filter { !$0.0.isEmpty }.map { "\($0.0) \($0.1.count)" }.joined(separator: ", ")
+        let kindLabel = ["bus": "Bus", "map": "Map", "archive": "Archive"][category(m)] ?? "Other"
+        let sub = [String(localized: String.LocalizationValue(kindLabel)), holds, formatBytes(m.bytes ?? 0), m.installed.map { Date(timeIntervalSince1970: TimeInterval($0)).formatted(.relative(presentation: .named)) } ?? (m.noted == true ? "" : String(localized: "found in the content folder"))]
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: icon(m)).font(.system(size: 15)).foregroundStyle(m.enabled ? Theme.text2 : Theme.muted).frame(width: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(m.name).font(.inter(14, .medium)).foregroundStyle(m.enabled ? Theme.text : Theme.muted).lineLimit(1)
+                    Text(sub.filter { !$0.isEmpty }.joined(separator: " - ")).font(.inter(12.5)).foregroundStyle(Theme.muted).lineLimit(1)
+                }
+                Spacer()
+                if store.snapshot.mod_busy == m.id {
+                    ProgressView().controlSize(.small).tint(Theme.accent)
+                } else {
+                    Toggle("", isOn: Binding(get: { m.enabled }, set: { store.act("mod_toggle", ["id": m.id, "on": $0]) })).labelsHidden().toggleStyle(.launcher)
+                    Button { removing = m } label: { Image(systemName: "trash") }
+                        .buttonStyle(.launcher(.ghost, small: true)).help("Delete this mod (asks first; switch it off instead to keep it)")
+                }
+            }
+            .padding(.horizontal, 4).padding(.vertical, 8)
+            .contentShape(Rectangle())
+            .onTapGesture { open = open == m.id ? nil : m.id }
+            if open == m.id {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(tree.indices, id: \.self) { i in
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            Text(tree[i].0).font(.inter(12.5, .semibold)).foregroundStyle(Theme.muted).frame(minWidth: 96, alignment: .leading)
+                            Text(tree[i].1.joined(separator: ", ")).font(.inter(12.5)).foregroundStyle(Theme.text2).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .textSelection(.enabled)
+                .padding(.leading, 38).padding(.trailing, 12).padding(.bottom, 12)
             }
         }
     }
@@ -478,12 +655,75 @@ struct ModsPage: View {
     private func pick(folder: Bool) {
         Platform.pick(folder: folder, types: folder ? [] : ["zip", "7z", "rar"]) { url in
             guard let url else { return }
-            Task { @MainActor in
-                let path = Platform.importForInstall(url)
-                store.act("mod_install", ["path": path, "mode": mode])
-            }
+            Task { @MainActor in installFrom(url) }
         }
     }
+
+    private func installFrom(_ url: URL) {
+        let path = Platform.importForInstall(url)
+        lastPath = path
+        store.act("mod_install", ["path": path, "mode": mode])
+    }
+
+    private func addHofs(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result, !urls.isEmpty else { return }
+        let open = urls.filter { $0.startAccessingSecurityScopedResource() }
+        defer { open.forEach { $0.stopAccessingSecurityScopedResource() } }
+        do {
+            let added = try JSONDecoder().decode(Int.self, from: Bridge.api("add_hofs", ["files": urls.map(\.path)]))
+            store.say(added > 0 ? String(localized: "HOF files added for every bus.") : String(localized: "These HOF files were already there."), error: false)
+        } catch {
+            store.say(error.localizedDescription, error: true)
+        }
+        store.act("mods")
+        store.act("reload")
+    }
+
+    private var dropTypes: [UTType] {
+        #if os(macOS)
+        [.fileURL]
+        #else
+        [.data]
+        #endif
+    }
+
+    private func drop(_ providers: [NSItemProvider]) -> Bool {
+        guard let p = providers.first else { return false }
+        #if os(macOS)
+        _ = p.loadObject(ofClass: URL.self) { url, _ in
+            guard let url else { return }
+            Task { @MainActor in installFrom(url) }
+        }
+        #else
+        guard let inbox = store.snapshot.mods?.inbox, !inbox.isEmpty else { return false }
+        _ = p.loadFileRepresentation(forTypeIdentifier: UTType.data.identifier) { url, error in
+            let failure: String?
+            if let url {
+                do {
+                    try FileManager.default.copyItem(at: url, to: URL(fileURLWithPath: inbox).appendingPathComponent(url.lastPathComponent))
+                    failure = nil
+                } catch { failure = error.localizedDescription }
+            } else {
+                failure = error?.localizedDescription
+            }
+            Task { @MainActor in
+                if let failure { store.say(failure, error: true) }
+                store.act("mods")
+            }
+        }
+        #endif
+        return true
+    }
+}
+
+func modTree(_ paths: [String]) -> [(String, [String])] {
+    var out: [(String, [String])] = []
+    for p in paths {
+        let parts = p.split(separator: "/", maxSplits: 1).map(String.init)
+        let (folder, rest) = parts.count == 2 && !parts[0].isEmpty ? (parts[0], parts[1]) : ("", p)
+        if let i = out.firstIndex(where: { $0.0.lowercased() == folder.lowercased() }) { out[i].1.append(rest) } else { out.append((folder, [rest])) }
+    }
+    return out
 }
 
 // --- Tutorials -------------------------------------------------------------------------------
@@ -546,14 +786,20 @@ struct SetupPage: View {
                 Facts(rows: [
                     ("OMSI 2", store.snapshot.config.root.isEmpty ? "-" : store.snapshot.config.root),
                     ("Content folder", store.snapshot.content_dir ?? "-"),
+                    ("Settings and logs", store.snapshot.data_dir.isEmpty ? "-" : store.snapshot.data_dir),
                     ("Driver", store.snapshot.config.profile.isEmpty ? "-" : store.snapshot.config.profile),
                     ("Version", "\(store.version) (\(store.build))"),
                 ])
-                if let c = store.snapshot.content_dir {
-                    HStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    if let c = store.snapshot.content_dir {
                         Button { Platform.reveal(c) } label: { Label("Show", systemImage: "folder") }.buttonStyle(.secondary)
                         Button { store.act("reload") } label: { Label("Read the content again", systemImage: "arrow.clockwise") }.buttonStyle(.secondary)
                     }
+                    #if os(macOS)
+                    if !store.snapshot.data_dir.isEmpty {
+                        Button { NSWorkspace.shared.open(URL(fileURLWithPath: store.snapshot.data_dir)) } label: { Label("Open the settings folder", systemImage: "folder") }.buttonStyle(.secondary)
+                    }
+                    #endif
                 }
             }
         }

@@ -1234,7 +1234,7 @@ pub fn cached(root: &Path, map_dir: &Path, ground_textures: &[omsi_map::global::
     let key = key_of(map_dir, tiles);
     let name = map_dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "map".into());
     let path = layers::cache_path(&name).filter(|_| !omsi_cfg::flags::OMSI_NO_MAP_CACHE.is_set());
-    if let Some(l) = path.as_ref().and_then(|p| std::fs::read(p).ok()).and_then(|b| Layers::from_bytes(&b, key)) {
+    if let Some(l) = path.as_ref().and_then(|p| Layers::open(p, key)) {
         log::info!("map layers: {} houses from the cache", l.buildings.len());
         return l;
     }
@@ -1242,9 +1242,12 @@ pub fn cached(root: &Path, map_dir: &Path, ground_textures: &[omsi_map::global::
     if let Some(p) = path {
         let _ = std::fs::create_dir_all(p.parent().unwrap_or(Path::new(".")));
         let tmp = p.with_extension(format!("{}.tmp", std::process::id()));
-        if std::fs::write(&tmp, l.to_bytes(key)).is_ok() {
-            let _ = std::fs::rename(&tmp, &p);
+        if std::fs::write(&tmp, l.to_bytes(key)).is_ok() && std::fs::rename(&tmp, &p).is_ok() {
+            if let Some(mapped) = Layers::open(&p, key) {
+                return mapped;
+            }
         }
+        let _ = std::fs::remove_file(&tmp);
     }
     l
 }

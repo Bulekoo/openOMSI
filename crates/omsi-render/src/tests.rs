@@ -1455,6 +1455,7 @@ mod instance_layout;
 mod lamp_shadows;
 mod light_grid;
 mod light_maps;
+mod long_road;
 mod more;
 mod night_coverage;
 mod prepass_reach;

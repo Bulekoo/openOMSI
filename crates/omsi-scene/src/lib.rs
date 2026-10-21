@@ -39,6 +39,8 @@ pub mod puddles;
 pub mod rain;
 pub mod route_arrows;
 pub mod threads;
+pub mod trolley_derive;
+pub mod trolley_view;
 pub mod wheel_surface;
 pub mod window_wipers;
 
@@ -59,6 +61,12 @@ mod scripted;
 pub use scripted::DayKind;
 mod vehicle_materials;
 mod vehicle_types;
+mod pane_uv;
+/// Mesh `i` of a vehicle type as the GPU takes it (the glass with its film's coordinates in
+/// metres, see `pane_uv`): for a mesh uploaded again after it was changed.
+pub fn gpu_mesh_of(vt: &omsi_sim::VehicleType, i: usize) -> Option<omsi_geometry::MeshData> {
+    pane_uv::gpu_mesh(vt, i).map(std::borrow::Cow::into_owned)
+}
 mod vehicles;
 mod lanes;
 mod season_looks;

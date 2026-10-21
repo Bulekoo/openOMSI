@@ -85,6 +85,41 @@ pub fn players_list(lan: &mut LanSession, to: u32, all: &[Player], query: &str) 
     lan.command(to, &format!("admin-end {} {}", found.len().min(MAX_LISTED), all.len()));
 }
 
+/// One ban's line: `admin-b <id> <scope> <until s or -> <name> <reason>`; the name escaped, the
+/// reason the rest of the line (a command is at most `MAX_CHAT` characters, so both are cut).
+pub fn ban_line(b: &omsi_admin::BanView) -> String {
+    let name: String = b.name.chars().take(24).collect();
+    let reason: String = b.reason.chars().take(60).collect();
+    format!("admin-b {} {} {} {} {}", b.id, b.scope, b.until.map(|u| u.to_string()).unwrap_or_else(|| "-".into()), esc(&name), reason)
+}
+
+/// An `admin-b` line read back.
+pub fn parse_ban(arg: &str) -> Option<omsi_admin::BanView> {
+    let mut w = arg.splitn(5, ' ');
+    let id = w.next()?.to_string();
+    if id.is_empty() || id.len() > 16 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let scope = w.next().filter(|s| matches!(*s, "session" | "all"))?.to_string();
+    let until = match w.next()? {
+        "-" => None,
+        u => Some(u.parse().ok()?),
+    };
+    let name = unesc(w.next()?);
+    Some(omsi_admin::BanView { id, name, reason: w.next().unwrap_or("").trim().to_string(), by: String::new(), at: 0, until, scope })
+}
+
+/// The bans that hold (the newest first, as many as fit), then `admin-bend <count> <total>`.
+pub fn bans_list(lan: &mut LanSession, to: u32, bans: &[omsi_admin::BanView]) {
+    for b in bans.iter().take(MAX_BANS_LISTED) {
+        lan.command(to, &ban_line(b));
+    }
+    lan.command(to, &format!("admin-bend {} {}", bans.len().min(MAX_BANS_LISTED), bans.len()));
+}
+
+/// The most bans listed in one answer.
+const MAX_BANS_LISTED: usize = 20;
+
 /// The server's state as an admin's game shows it: `admin-s role=… time=… …` (see
 /// `omsi_admin::ServerState`; the words escaped).
 pub fn state(lan: &mut LanSession, to: u32, hub: Option<&Hub>, role: Role) {
@@ -120,6 +155,20 @@ pub fn state(lan: &mut LanSession, to: u32, hub: Option<&Hub>, role: Role) {
 mod tests {
     use super::*;
     use omsi_admin::PlayerState;
+
+    #[test]
+    fn a_ban_line_goes_and_comes_back() {
+        let b = omsi_admin::BanView { id: "0badf00d".into(), name: "Pichau da Silva".into(), reason: "spam in the chat".into(), by: "me".into(), at: 5, until: Some(1_900_000_000), scope: "all".into() };
+        let line = ban_line(&b);
+        assert!(line.len() <= omsi_net::MAX_CHAT);
+        let back = parse_ban(line.strip_prefix("admin-b ").unwrap()).unwrap();
+        assert_eq!((back.id.as_str(), back.name.as_str(), back.reason.as_str(), back.until, back.scope.as_str()), ("0badf00d", "Pichau da Silva", "spam in the chat", Some(1_900_000_000), "all"));
+        let forever = parse_ban("0badf00d session - - ").unwrap();
+        assert_eq!((forever.name.as_str(), forever.reason.as_str(), forever.until), ("", "", None));
+        for bad in ["", "xyz all - a b", "0bad world - a b", "0bad all soon a b"] {
+            assert!(parse_ban(bad).is_none(), "{bad}");
+        }
+    }
 
     #[test]
     fn a_player_line_goes_and_comes_back() {
