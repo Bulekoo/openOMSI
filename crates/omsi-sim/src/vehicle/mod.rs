@@ -245,4 +245,5 @@ pub struct VehicleInstance {
     /// The vehicle's scripts have driven it (else pedals move it, see `rail`).
     rail_scripted: bool,
     rail_out: Option<crate::rail::Outcome>,
+    rail_log: f32,
 }

@@ -252,6 +252,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_CLASSIC_TYRES` | bool | off | use | sim | The tyres hold across as OMSI 2 does (follow the wheels until the grip is passed, then slide) instead of by slip angle (A/B). |
 | `OMSI_CROSSING_DEFORM` | bool | off | use | scene | Apply the crossings' ground deformation again (A/B; Omsi.exe does not). |
 | `OMSI_CUT_PLAIN` | bool | off | use | scene | Road-cut textures uploaded without GPU-made mipmaps. |
+| `OMSI_DEBUG_RAIL` | bool | off | use | sim | Log a rail vehicle's speed, the drive and brake the scripts ask for and the adhesion, twice a second. |
 | `OMSI_FIXED_SCALE` | bool | off | use | app | Keep the render scale fixed (no dynamic resolution). |
 | `OMSI_FORCE_OPAQUE` | bool | off | use | scene | Draw transmap-masked materials opaque. |
 | `OMSI_FULL_GPU` | bool | off | use | render | Keep the requested settings on a small or shared graphics chip, and 8x MSAA with Enhanced+. |

@@ -48,8 +48,8 @@ A map maker tells the game what a track is by, in this order:
    `speed`).
 2. **The name of the spline profile or object**, so that the vanilla editor is enough: a name
    with `tram`, `strassenbahn` or `tramway` is tram track in the street; `metro`, `ubahn`,
-   `u-bahn`, `subway` metro track with a third rail; `rail_`, `gleis`, `train`, `bahn_` or
-   `sbahn` railway. Pick or copy a profile with the right name in the editor, and the game
+   `u-bahn`, `subway` metro track with a third rail; `train`, `sbahn` or `railway` railway.
+   A generic name such as `rail_typ001` or `gleis` says nothing, the surroundings (3) decide. Pick or copy a profile with the right name in the editor, and the game
    knows.
 3. **Where it lies**: beside a street lane it is tram track, a bend tighter than 60 m is too
    (no railway bends so), anything else is railway.

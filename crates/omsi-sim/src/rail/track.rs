@@ -7,9 +7,10 @@
 //! 1. A rule in `<map>/openomsi-rail.cfg` (see `docs/RAIL.md`): by the spline or object
 //!    file the track belongs to, by its tile, id and path, or both.
 //! 2. The name of the spline profile or object: `tram_*`, `strassenbahn_*` and `*_tram`
-//!    are tram track; `metro_*`, `ubahn_*`, `subway_*` metro; `rail_*`, `gleis_*`, `bahn_*`
-//!    and `train_*` railway. A map maker picks the right profile in the editor and the
-//!    game knows.
+//!    are tram track; `metro_*`, `ubahn_*`, `subway_*` metro; `train_*`, `sbahn_*` and
+//!    `*railway*` railway. A generic name (`rail_typ001`, `gleis`) says nothing: the track's
+//!    surroundings decide. A map maker picks the right profile in the editor and the game
+//!    knows.
 //! 3. The track's surroundings: beside a street lane it is tram track; a loop tighter than
 //!    a railway ever bends is, too; the rest is railway (`TrackClass::of`).
 
@@ -38,7 +39,7 @@ fn name_hint(name: &str) -> Option<(Option<RailClass>, TrackClass, bool)> {
         Some((Some(RailClass::Metro), TrackClass::Mainline, true))
     } else if has(&["tram", "strassenbahn", "straßenbahn", "str_bahn", "tramway"]) {
         Some((Some(RailClass::Tram), TrackClass::Street, false))
-    } else if has(&["rail_", "gleis", "train", "bahn_", "_bahn", "railway", "sbahn", "s-bahn"]) {
+    } else if has(&["train", "railway", "sbahn", "s-bahn", "eisenbahn", "fernbahn", "mainline"]) {
         Some((None, TrackClass::Mainline, false))
     } else {
         None
@@ -273,7 +274,7 @@ mod tests {
         let mut net = Network {
             lanes: vec![
                 straight(0.0, LaneKind::Street, "str_2spur_9m.sli"),
-                straight(3.0, LaneKind::Rail, "rail_typ001.sli"),        // 1: railway by name, though beside a street
+                straight(3.0, LaneKind::Rail, "sbahn_typ001.sli"),       // 1: railway by name, though beside a street
                 straight(3.0, LaneKind::Rail, "plain.sli"),              // 2: beside the street: tram
                 straight(500.0, LaneKind::Rail, "plain.sli"),            // 3: alone: railway
                 straight(900.0, LaneKind::Rail, "U-Bahn_tunnel.sli"),    // 4: metro by name

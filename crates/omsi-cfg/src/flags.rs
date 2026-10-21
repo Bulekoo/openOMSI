@@ -230,6 +230,7 @@ flags! {
     OMSI_DEBUG_POPULATION: Bool, Debug, Use, "off", "Log where cars appear and vanish relative to the view.";
     OMSI_DEBUG_PROPS: Bool, Debug, Use, "off", "Log the destination-display (matrix) variables.";
     OMSI_DEBUG_PUDDLES: Num, Debug, Use, "0", "Puddle debug view (a number selects it).";
+    OMSI_DEBUG_RAIL: Bool, Switch, Use, "off", "Log a rail vehicle's speed, the drive and brake the scripts ask for and the adhesion, twice a second.";
     OMSI_DEBUG_RAIN: Bool, Debug, Use, "off", "Log the tyres' spray and puddles.";
     OMSI_DEBUG_RASTER: Text, Debug, Use, "-", "x,y: log the ground raster at that point.";
     OMSI_DEBUG_REPEATERS: Bool, Debug, Use, "off", "Log repeater objects whose spline chain disagrees with the map.";

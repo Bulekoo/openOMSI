@@ -92,6 +92,21 @@ impl VehicleInstance {
             rail::dynamics::pedal_forces(class, consist.mass, c.throttle, c.brake, v0, reverse)
         };
         let out = rail::step(&consist, &cond, &forces, v0, dt);
+        if omsi_cfg::flags::OMSI_DEBUG_RAIL.is_set() {
+            self.rail_log += dt;
+            if self.rail_log >= 0.5 {
+                self.rail_log = 0.0;
+                log::info!(
+                    "rail: {} v {:.1} km/h a {:.2} m/s² | M_Wheel {:.0} Nm -> drive {:.0} N, brake {:.0} N ({}) | mass {:.0} kg, driven {:.2}, {} cars, adhesion {:.2} | spin {} slide {} resist {:.0} N",
+                    self.ty.def.path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default(),
+                    out.speed * 3.6, out.accel, m_wheel, forces.drive, forces.brake,
+                    if self.rail_scripted { "scripts" } else { "pedals" },
+                    consist.mass, consist.driven_share, consist.cars,
+                    rail::dynamics::adhesion(out.speed, cond.wetness, cond.temperature, cond.sanding),
+                    out.spinning, out.sliding, out.resistance
+                );
+            }
+        }
         self.rail_out = Some(out);
         Some(out)
     }

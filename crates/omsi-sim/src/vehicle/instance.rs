@@ -297,6 +297,7 @@ impl VehicleInstance {
             rail_env: None,
             rail_scripted: false,
             rail_out: None,
+            rail_log: 0.0,
         };
         instance.declare_trolley_vars();
         instance
