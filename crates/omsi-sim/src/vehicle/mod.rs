@@ -30,6 +30,7 @@ mod pose;
 mod program_ids;
 mod props;
 mod radio;
+mod rail;
 mod trailer;
 mod trolley;
 mod types;
@@ -44,6 +45,7 @@ pub use car_run::CarRun;
 #[cfg(test)]
 use drive::*;
 pub use pose::*;
+pub use rail::RailEnv;
 pub use props::*;
 pub use trailer::*;
 pub use trolley::TrolleyGear;
@@ -238,4 +240,9 @@ pub struct VehicleInstance {
     program_ids: std::sync::OnceLock<program_ids::ProgramIds>,
     /// A trolleybus's poles and traction (see `trolley`); None for every other vehicle.
     pub trolley: Option<Box<TrolleyGear>>,
+    /// The track a rail vehicle runs on (see `rail`); None for a road vehicle.
+    rail_env: Option<RailEnv>,
+    /// The vehicle's scripts have driven it (else pedals move it, see `rail`).
+    rail_scripted: bool,
+    rail_out: Option<crate::rail::Outcome>,
 }

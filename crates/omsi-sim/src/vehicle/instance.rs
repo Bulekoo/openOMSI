@@ -294,6 +294,9 @@ impl VehicleInstance {
             engine_ids: std::sync::OnceLock::new(),
             program_ids: std::sync::OnceLock::new(),
             trolley,
+            rail_env: None,
+            rail_scripted: false,
+            rail_out: None,
         };
         instance.declare_trolley_vars();
         instance

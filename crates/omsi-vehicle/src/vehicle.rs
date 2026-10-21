@@ -131,6 +131,9 @@ pub struct Vehicle {
     pub control_cable_back: Vec<ControlCable>,
     pub rowdy_factor: Option<(f32, f32)>,
     pub boogies: Option<f32>,
+    /// `[rail_class]` (an openOMSI extension): `tram`, `metro` or `train`, when the file's
+    /// shape does not tell.
+    pub rail_class: Option<String>,
     pub sinus: Option<[f32; 4]>,
     pub rail_body_osc: Option<[f32; 7]>,
     pub contact_shoes: Vec<[f32; 6]>,
@@ -348,6 +351,7 @@ impl Vehicle {
                 "view_ticketselling" => v.view_ticketselling = Some(v.cameras_driver.len().saturating_sub(1)),
                 "set_camera_std" => v.camera_std = r.usize(),
                 "set_camera_outside_center" => v.camera_outside_center = r.f32s::<3>(),
+                "rail_class" => v.rail_class = Some(r.str().to_string()),
                 "mass" => v.mass = r.f32(),
                 "momentofintertia" => v.moment_of_inertia = r.f32s::<3>(),
                 "boundingbox" => {

@@ -396,6 +396,7 @@ impl VehicleInstance {
         rb.air_density = crate::rigid::realism::air_density(self.host.temperature, 0.0);
         rb.wind = self.host.wind;
         rb.coupled = self.coupled_parts();
+        let v0 = rb.forward_speed();
         {
             let ground = self.ground.clone();
             let flat = |_: f64, _: f64, _: f64| crate::rigid::GroundProbe {
@@ -427,6 +428,8 @@ impl VehicleInstance {
             rb.wheel_walls = self.wheel_walls;
             rb.step(dt, m_wheel, brakes, steer, probe);
         }
+        // a rail vehicle's speed is the rails', not the road tyres'
+        self.rail_override(&mut rb, dt, v0, m_wheel, brakes);
         // what the crashes of this step destroyed, and the worst of them
         let mut energy = 0.0f32;
         let mut worst: Option<crate::rigid::Impact> = None;
