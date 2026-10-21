@@ -144,7 +144,23 @@ fn call(cmd: &str, arg: &str) -> anyhow::Result<Value> {
                 omsi_cfg::copied_install::Look::Missing(m) => Ok(json!({ "found": false, "missing": m })),
             }
         }
+        "api" => {
+            let c = a.get("cmd").and_then(|v| v.as_str()).unwrap_or("");
+            omsi_launcher_api::call(c, a.get("args").unwrap_or(&json!({})), &Apple).map_err(anyhow::Error::msg)
+        }
         _ => with_state(|s| state_call(s, cmd, &a)),
+    }
+}
+
+struct Apple;
+
+impl omsi_launcher_api::Platform for Apple {
+    fn renderer(&self, _req: Value, _wait: std::time::Duration) -> Result<(Value, Vec<u8>), String> {
+        Err("the Apple launcher draws its pictures through openomsi_preview_frame".into())
+    }
+    #[cfg(target_os = "ios")]
+    fn previous_run_crash(&self) -> Option<(String, String)> {
+        crate::ios::previous_run_crash()
     }
 }
 
@@ -206,7 +222,8 @@ fn tick(s: &mut State, dt: f32) {
 fn snapshot(s: &mut State) -> Value {
     let preview = {
         let p = PREVIEW_STATE.lock().unwrap_or_else(|e| e.into_inner());
-        json!({ "busy": p.0, "error": p.1 })
+        let v = PREVIEW_VIEWS.lock().unwrap_or_else(|e| e.into_inner());
+        json!({ "busy": p.0, "error": p.1, "view": v.0, "views": v.1 })
     };
     let root_ok = omsi_cfg::missing_original_essentials(std::path::Path::new(&s.config.root)).is_empty();
     let saved: Vec<Value> = s.saved_situations().iter().map(|x| json!({ "file": x.file.to_string_lossy(), "name": x.name, "saved": x.saved })).collect();
@@ -218,7 +235,7 @@ fn snapshot(s: &mut State) -> Value {
                 Ok(i) => json!({ "ok": true, "name": i.name, "motd": i.motd, "map": i.map, "players": i.players, "max_players": i.max_players, "version": i.version, "time": i.time, "weather": i.weather, "password": i.password, "vehicles": i.vehicles.len() }),
                 Err(e) => json!({ "ok": false, "error": e }),
             });
-            json!({ "name": e.name, "address": e.address, "info": info, "official": omsi_net::official::is_alias(&e.address) })
+            json!({ "name": e.name, "address": e.address, "protocol": e.protocol, "info": info, "official": omsi_net::official::is_alias(&e.address) })
         })
         .collect();
     let mod_info = s.mod_info.as_ref().map(|r| match r {
@@ -247,6 +264,7 @@ fn snapshot(s: &mut State) -> Value {
         "root_ok": root_ok,
         "root_problem": if root_ok { String::new() } else { crate::launcher::state::root_problem(&s.config.root) },
         "content_dir": core::content_dir().map(|p| p.to_string_lossy().to_string()),
+        "data_dir": core::data_dir().to_string_lossy(),
         "profiles": s.profiles,
         "profile": s.profile,
         "settings": s.settings,
@@ -266,6 +284,7 @@ fn snapshot(s: &mut State) -> Value {
         "ibis": ibis,
         "cmdline": s.cmdline,
         "fresh": s.fresh.keys().collect::<Vec<_>>(),
+        "host_vehicles": s.host_vehicles(),
         "preview": preview,
     })
 }
@@ -293,7 +312,14 @@ fn act(s: &mut State, a: &Value) -> anyhow::Result<Value> {
     let what = st("do");
     match what.as_str() {
         "select_bus" => s.select_bus(&st("file")),
-        "select_map" => s.select_map(&st("file")),
+        "select_map" => {
+            let file = st("file");
+            if s.choice.map != file {
+                let span = s.maps.iter().find(|m| m.file == file).and_then(|m| m.year_span);
+                s.choice.date = core::fit_date_to_years(&s.choice.date, span);
+            }
+            s.select_map(&file);
+        }
         "paint" => {
             s.choice.paint = st("paint");
             s.touched();
@@ -388,7 +414,7 @@ fn act(s: &mut State, a: &Value) -> anyhow::Result<Value> {
             s.touched();
         }
         "traffic" => {
-            s.choice.traffic = a.get("value").and_then(|v| v.as_f64()).unwrap_or(30.0).clamp(0.0, 100.0) as f32;
+            s.choice.traffic = a.get("value").and_then(|v| v.as_f64()).unwrap_or(30.0).clamp(0.0, 120.0) as f32;
             s.touched();
         }
         "flag" => {
@@ -426,6 +452,9 @@ fn act(s: &mut State, a: &Value) -> anyhow::Result<Value> {
         }
         "settings" => {
             if let Some(o) = a.get("values").and_then(|v| v.as_object()) {
+                if a.get("replace").and_then(|v| v.as_bool()) == Some(true) {
+                    s.settings = json!({});
+                }
                 for (k, v) in o {
                     s.settings[k.as_str()] = v.clone();
                 }
@@ -493,6 +522,12 @@ fn act(s: &mut State, a: &Value) -> anyhow::Result<Value> {
             omsi_cfg::content_changed();
             s.load_content();
         }
+        "lines" => s.load_lines(),
+        "delete_situation" => {
+            let deleted = core::delete_situation(&s.choice.map, std::path::Path::new(&st("file")))?;
+            s.last_sit = None;
+            return Ok(json!(deleted));
+        }
         "server_add" => {
             let address = st("address").trim().to_string();
             if address.is_empty() {
@@ -508,6 +543,14 @@ fn act(s: &mut State, a: &Value) -> anyhow::Result<Value> {
             let address = st("address");
             s.servers.retain(|e| e.address != address);
             s.save_servers();
+        }
+        "server_protocol" => {
+            let address = st("address");
+            let protocol = serde_json::from_value(json!(st("proto"))).unwrap_or_default();
+            if let Some(e) = s.servers.iter_mut().find(|e| e.address == address) {
+                e.protocol = protocol;
+                s.save_servers();
+            }
         }
         "server_ask" => s.ask_server(&st("address"), a.get("every").and_then(|v| v.as_f64()).unwrap_or(10.0) as f32),
         "server_join" => {
@@ -555,6 +598,7 @@ enum PreviewMsg {
     Want(crate::launcher::showroom::Look),
     Orbit(f32, f32),
     Zoom(f32),
+    View(crate::launcher::showroom::PreviewView),
     Frame { w: u32, h: u32, reply: std::sync::mpsc::Sender<Option<(u32, u32, Vec<u8>)>> },
     Release,
 }
@@ -564,6 +608,8 @@ static PREVIEW: Mutex<Option<std::sync::mpsc::Sender<PreviewMsg>>> = Mutex::new(
 /// What the preview is doing, for the Swift side to show: a bus being read, or why there is
 /// no picture (no graphics device, a bus that cannot be read).
 static PREVIEW_STATE: Mutex<(bool, Option<String>)> = Mutex::new((false, None));
+
+static PREVIEW_VIEWS: Mutex<(&'static str, Vec<&'static str>)> = Mutex::new(("outside", Vec::new()));
 
 fn preview_state(busy: bool, error: Option<String>) {
     *PREVIEW_STATE.lock().unwrap_or_else(|e| e.into_inner()) = (busy, error);
@@ -614,6 +660,7 @@ fn preview_thread(rx: std::sync::mpsc::Receiver<PreviewMsg>) {
             }
             PreviewMsg::Orbit(dx, dy) => showroom.orbit(dx, dy),
             PreviewMsg::Zoom(k) => showroom.zoom_by(k),
+            PreviewMsg::View(v) => showroom.set_view(v),
             PreviewMsg::Release => return,
             PreviewMsg::Frame { w, h, reply } => {
                 // (asked again after a pause: a preview that came back on the screen gets the
@@ -641,6 +688,7 @@ fn preview_thread(rx: std::sync::mpsc::Receiver<PreviewMsg>) {
                 last = Instant::now();
                 showroom.update(r, dt);
                 preview_state(showroom.busy, showroom.error.clone());
+                *PREVIEW_VIEWS.lock().unwrap_or_else(|e| e.into_inner()) = (showroom.view.name(), showroom.views());
                 let picture = showroom.preview(r, w, h).filter(|_| showroom.has_picture());
                 if picture.is_none() || showroom.drawn == delivered {
                     let _ = reply.send(None);
@@ -704,4 +752,11 @@ pub extern "C" fn openomsi_preview_orbit(dx: f32, dy: f32) {
 #[no_mangle]
 pub extern "C" fn openomsi_preview_zoom(k: f32) {
     preview_send(PreviewMsg::Zoom(k.clamp(0.5, 2.0)));
+}
+
+#[no_mangle]
+pub extern "C" fn openomsi_preview_view(view: u32) {
+    if let Some(v) = crate::launcher::showroom::PreviewView::ALL.get(view as usize) {
+        preview_send(PreviewMsg::View(*v));
+    }
 }

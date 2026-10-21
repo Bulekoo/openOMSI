@@ -52,6 +52,7 @@ struct DrivePage: View {
 
     private var cards: some View {
         VStack(spacing: 16) {
+            MultiplayerDutyNotice()
             MapCard()
             BusCard()
             DutyCard()
@@ -100,6 +101,7 @@ struct MapCard: View {
                     }
                     Spacer(minLength: 0)
                 }
+                if store.choice.lan_mode != "join" { NotesBox(kind: "map", file: m.file) }
             } else {
                 Notice(text: store.lists.maps.isEmpty ? String(localized: "No map is installed.") : String(localized: "Choose a map."), kind: .warn)
             }
@@ -178,10 +180,12 @@ struct BusCard: View {
         Card("Bus", actions: AnyView(
             Button { store.picker = .bus } label: { Label("Change bus", systemImage: "bus.fill") }
                 .buttonStyle(.launcher(.plain, small: true))
-                .disabled(store.lists.vehicles.isEmpty)
+                .disabled(store.offeredVehicles.isEmpty)
         )) {
             if store.lists.vehicles.isEmpty && store.snapshot.loading_content {
                 LoadingRow(text: "Reading the buses…")
+            } else if store.noServerBus {
+                Notice(text: String(localized: "The server offers none of the vehicles installed here"), kind: .danger)
             } else if let b = store.bus {
                 if store.picker != .bus {
                     BusPreview()
@@ -197,7 +201,7 @@ struct BusCard: View {
                     if b.installed == true { Tag(text: "Mod") }
                 }
                 if let m = b.missing_packs, !m.isEmpty {
-                    Notice(text: String(localized: "Parts of this bus come from packs that are not installed: \(m.joined(separator: ", "))"), kind: .warn)
+                    Notice(text: tr("Parts of this bus come from packs that are not installed: {packs}", ["packs": m.joined(separator: ", ")]), kind: .warn)
                 }
                 VehicleFields(bus: b)
             } else {
@@ -213,6 +217,11 @@ struct VehicleFields: View {
     @Environment(\.compactLayout) private var compact
     var bus: VehicleInfo
     @State private var plate = ""
+    @State private var number = ""
+
+    private func custom(_ n: String, _ numbers: [[String]]) -> String {
+        numbers.contains { $0.first == n } ? "" : n
+    }
 
     var body: some View {
         let c = store.choice
@@ -225,8 +234,17 @@ struct VehicleFields: View {
             }
             if let numbers = bus.numbers, !numbers.isEmpty {
                 Field("Fleet number") {
-                    SelectField(options: numbers.compactMap { n in n.first.map { (value: $0, label: n.count > 1 && !n[1].isEmpty ? "\($0) - \(n[1])" : $0) } },
-                                selection: c.number.isEmpty ? (numbers.first?.first ?? "") : c.number, onChange: { store.act("number", ["number": $0]) })
+                    VStack(spacing: 6) {
+                        SelectField(options: [(value: "", label: "\(String(localized: "Automatic")) (\(numbers.first?.first ?? ""))")] + numbers.compactMap { n in n.first.map { (value: $0, label: n.count > 1 && !n[1].isEmpty ? "\($0) - \(n[1])" : $0) } },
+                                    selection: c.number, onChange: { store.act("number", ["number": $0]) })
+                        InputField(prompt: "Custom", text: $number) { store.act("number", ["number": number.trimmingCharacters(in: .whitespaces)]) }
+                            .onAppear { number = custom(c.number, numbers) }
+                            .onChange(of: c.number) { _, v in number = custom(v, numbers) }
+                            .onChange(of: number) { _, v in
+                                let n = v.trimmingCharacters(in: .whitespaces)
+                                if n != custom(store.choice.number, numbers) { store.act("number", ["number": n]) }
+                            }
+                    }
                 }
             }
             Field("Number plate") {
@@ -254,6 +272,7 @@ struct PaintSelect: View {
                     .buttonStyle(.secondary).help("Previous paint")
                 Button { store.act("paint", ["paint": options[(i + 1) % options.count].value]) } label: { Image(systemName: "chevron.right") }
                     .buttonStyle(.secondary).help("Next paint")
+                Text("\(i + 1) / \(options.count)").font(.inter(12.5).monospacedDigit()).foregroundStyle(Theme.muted).fixedSize()
             }
         }
     }
@@ -271,7 +290,6 @@ func isDepotRun(_ x: TripInfo) -> Bool {
 struct DutyCard: View {
     @Environment(LauncherStore.self) private var store
     @Environment(\.compactLayout) private var compact
-    @State private var showEnded = false
 
     var body: some View {
         let c = store.choice
@@ -298,33 +316,22 @@ struct DutyCard: View {
 
     private var lines: [LineInfo] { store.lines.filter { $0.user_allowed && !$0.tours.isEmpty } }
     private var now: Double { Double(store.choice.time * 60) }
-    private func ended(_ t: TourInfo) -> Bool { t.runs && t.trips.allSatisfy { $0.departure < now - 120 } }
 
     @ViewBuilder
     private var timetable: some View {
-        let c = store.choice
-        let tours = store.line?.tours ?? []
-        let endedCount = tours.filter(ended).count
-        let shown = tours.filter { showEnded || !ended($0) }.sorted { a, b in
-            a.runs != b.runs ? a.runs : (ended(a) != ended(b) ? !ended(a) : false)
-        }
-        let columns = compact ? [GridItem(.flexible())] : [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-            Field("Line") {
-                SelectField(options: lines.map { l in (value: l.name, label: l.termini.isEmpty ? l.name : "\(l.name) - \(l.termini.joined(separator: " - "))") },
-                            selection: c.line ?? "", onChange: { store.act("line", ["line": $0]) })
-            }
-            Field("Tour") {
-                SelectField(options: shown.map { t in
-                    (value: t.number, label: "\(t.number) - \(t.days)\(!t.runs ? " - \(String(localized: "not on this day"))" : ended(t) ? " - \(String(localized: "ended"))" : "")")
-                }, selection: c.tour ?? "", onChange: { store.act("tour", ["tour": $0]) })
+        if compact {
+            LineList(lines: lines)
+            if let l = store.line { TourList(line: l) }
+        } else {
+            HStack(alignment: .top, spacing: 16) {
+                LineList(lines: lines).frame(maxWidth: .infinity)
+                Group { if let l = store.line { TourList(line: l) } else { Color.clear } }.frame(maxWidth: .infinity)
             }
         }
-        if endedCount > 0 {
-            ToggleRow(label: "Show ended tours (\(endedCount))", isOn: showEnded) { showEnded = $0 }
-        }
+        if let t = store.tour { TourBuses(tour: t) }
+        NextDepartures(lines: lines)
         if let t = store.tour, !t.runs {
-            Notice(text: t.next_run.map { String(localized: "This tour does not run on the chosen date; it runs next on \($0).") } ?? String(localized: "This tour does not run within a year of the chosen date."), kind: .warn)
+            Notice(text: t.next_run.map { tr("This tour does not run on the chosen date; it runs next on {date}.", ["date": longDate($0)]) } ?? String(localized: "This tour does not run within a year of the chosen date."), kind: .warn)
         }
         if let t = store.tour {
             VStack(alignment: .leading, spacing: 8) {
@@ -341,9 +348,7 @@ struct DutyCard: View {
         if let trip = store.startTrip, !trip.stops.isEmpty {
             StopsList(trip: trip)
         }
-        if let ibis = store.snapshot.ibis?.info, !ibis.routes.isEmpty {
-            IbisBox(info: ibis)
-        }
+        IbisBox(trip: store.startTrip)
     }
 
     private var startAt: some View {
@@ -451,20 +456,66 @@ struct StopsList: View {
 
 /// What to type into the IBIS for the duty.
 struct IbisBox: View {
-    var info: IbisInfo
+    @Environment(LauncherStore.self) private var store
+    var trip: TripInfo?
+    @State private var reply: (key: String, info: IbisInfo?, error: String?)?
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("IBIS").font(.inter(12.5, .medium)).foregroundStyle(Theme.text2)
-            ForEach(info.routes.prefix(4), id: \.self) { r in
-                HStack {
-                    Text(r.name).font(.inter(13, .semibold)).lineLimit(1)
-                    Spacer()
-                    Text("line \(info.line_code)  route \(r.route)").font(.inter(13).monospacedDigit()).foregroundStyle(Theme.muted)
+        let c = store.choice
+        let hof = c.hof.range(of: #"\.(bus|ovh)"#, options: [.regularExpression, .caseInsensitive]) != nil ? "" : c.hof
+        let stops = trip?.stops.map(\.name) ?? []
+        let key = c.free || c.bus.isEmpty || (c.line ?? "").isEmpty ? "" : "\(c.bus)|\(hof)|\(c.line ?? "")|\(trip?.terminus ?? "")|\(stops.joined(separator: "|"))"
+        Group {
+            if let r = reply, r.key == key, !key.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("IBIS").font(.inter(12.5, .medium)).foregroundStyle(Theme.text2)
+                    if let e = r.error {
+                        Notice(text: e, kind: .warn)
+                    } else if let i = r.info {
+                        content(i, line: c.line ?? "")
+                    }
                 }
+                .padding(.horizontal, 12).padding(.vertical, 10)
+                .fieldBackground()
             }
         }
-        .padding(.horizontal, 12).padding(.vertical, 10)
-        .fieldBackground()
+        .task(id: key) {
+            guard !key.isEmpty else { return }
+            let args: [String: Any] = ["bus": c.bus, "hof": hof, "line": c.line ?? "", "terminus": trip?.terminus ?? "", "stops": stops]
+            let r = await Task.detached(priority: .utility) { () -> (IbisInfo?, String?) in
+                do { return (try Bridge.api(IbisInfo.self, "ibis", args), nil) } catch { return (nil, error.localizedDescription) }
+            }.value
+            reply = (key, r.0, r.1)
+        }
+    }
+
+    @ViewBuilder
+    private func content(_ i: IbisInfo, line: String) -> some View {
+        if i.routes.isEmpty {
+            Text(tr("Depot file {hof} has no entries for this line. Type line {line} and the terminus code by hand, or press Shift+U.", ["hof": i.hof, "line": i.line_code.isEmpty ? line : i.line_code]))
+                .font(.inter(13)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+        } else {
+            let routes = i.routes.sorted { ($0.code == i.trip_route ? 0 : 1) < ($1.code == i.trip_route ? 0 : 1) }.prefix(3)
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
+                GridRow {
+                    Text(verbatim: "")
+                    Text("Line")
+                    Text("Route code")
+                }
+                .font(.inter(12, .semibold)).foregroundStyle(Theme.muted)
+                ForEach(Array(routes.enumerated()), id: \.offset) { _, r in
+                    let codes = r.code.count > 2 ? (String(r.code.dropLast(2)), String(r.code.suffix(2))) : (i.line_code.isEmpty ? line : i.line_code, r.code)
+                    let on = r.code == i.trip_route
+                    GridRow {
+                        Text((r.name.isEmpty ? r.terminus : r.name).trimmingCharacters(in: .whitespaces)).font(.inter(13, on ? .bold : .semibold)).foregroundStyle(on ? Theme.accent : Theme.text).lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        LineBadge(line: codes.0)
+                        LineBadge(line: codes.1)
+                    }
+                }
+            }
+            Text(tr("Depot file {hof} | Shift+U in the game types it for you", ["hof": i.hof])).font(.inter(12)).foregroundStyle(Theme.muted)
+        }
     }
 }
 
@@ -483,7 +534,8 @@ struct TimeCard: View {
     @Environment(LauncherStore.self) private var store
     @State private var time = ""
     @State private var date = ""
-    @State private var airport = ""
+    @State private var editing: String?
+    @State private var picking = false
 
     var body: some View {
         let c = store.choice
@@ -498,10 +550,15 @@ struct TimeCard: View {
                         .onChange(of: c.time) { _, _ in time = store.choice.hhmm }
                 }
                 Field("Date", help: realDate ? String(localized: "Today (Settings)") : nil) {
-                    InputField(prompt: "1989-05-30", text: $date, mono: true) { commitDate() }
-                        .disabled(realDate)
-                        .onAppear { date = c.date }
-                        .onChange(of: c.date) { _, v in date = v }
+                    HStack(spacing: 6) {
+                        InputField(prompt: "1989-05-30", text: $date, mono: true) { commitDate() }
+                            .disabled(realDate)
+                            .onAppear { date = c.date }
+                            .onChange(of: c.date) { _, v in date = v }
+                        Button { picking = true } label: { Image(systemName: "calendar") }
+                            .buttonStyle(.launcher(.ghost)).disabled(realDate).help("Choose a date")
+                            .popover(isPresented: $picking) { DateChooser { picking = false }.launcherSheet(store) }
+                    }
                 }
             }
             HStack(spacing: 6) {
@@ -519,42 +576,55 @@ struct TimeCard: View {
                 Segmented(items: [("early", "Early"), ("mid", "Mid"), ("late", "Late")], selection: c.phase, full: true) { store.act("phase", ["phase": $0]) }
             }
             Field("Weather", help: weatherHelp) {
-                SelectField(options: weatherOptions, selection: weatherValue, onChange: { store.act("weather", ["weather": $0]) })
+                SelectField(options: weatherOptions, selection: weatherValue, onChange: pickWeather)
             }
             if c.weather.hasPrefix("metar:") {
-                Field("Airport (ICAO)") {
-                    InputField(prompt: "Nearest", text: $airport) {
-                        let a = String(airport.uppercased().filter { $0.isLetter }.prefix(4))
-                        store.act("weather", ["weather": "metar:\(a)"])
-                    }
-                    .onAppear { airport = String(c.weather.dropFirst(6)) }
-                }
+                Field("Airport") { AirportField(code: WeatherChoice.metar(c)) }
             }
+            if WeatherChoice.editable(c.weather), !WeatherChoice.isCustom(c.weather) {
+                Button { editing = c.weather } label: { Label("Edit selected weather as custom", systemImage: "slider.horizontal.3") }
+                    .buttonStyle(.launcher(.ghost, small: true))
+            }
+        }
+        .sheet(isPresented: Binding(get: { editing != nil }, set: { if !$0 { editing = nil } })) {
+            WeatherEditor(from: editing ?? "custom:").launcherSheet(store)
         }
     }
 
     private var weatherValue: String {
         let w = store.choice.weather
-        return w.hasPrefix("metar:") ? "metar:" : w
+        return w.hasPrefix("metar:") ? "metar:" : WeatherChoice.isCustom(w) ? "custom:" : w
+    }
+
+    private func pickWeather(_ v: String) {
+        let w = store.choice.weather
+        switch v {
+        case "custom:": editing = WeatherChoice.isCustom(w) ? w : "custom:"
+        case "metar:": store.act("weather", ["weather": "metar:\(WeatherChoice.metar(store.choice))"])
+        default: store.act("weather", ["weather": v])
+        }
     }
 
     private var weatherOptions: [(value: String, label: String)] {
+        let w = store.choice.weather
         var o: [(value: String, label: String)] = [
             ("", String(localized: "Natural weather")),
-            ("metar:", String(localized: "Current weather")),
-            ("cycle", String(localized: "Weather cycle")),
+            ("custom:", String(localized: "Custom weather")),
         ]
+        if w.hasPrefix("metar:") || !WeatherChoice.metar(store.choice).isEmpty { o.append(("metar:", String(localized: "Current weather"))) }
+        o += [("cycle", String(localized: "Weather cycle")), ("tomorrow", "Tomorrow.io")]
         o += store.lists.weathers.filter(fits).map { (value: $0.file, label: $0.name) }
-        let w = store.choice.weather
-        if !w.isEmpty, !w.hasPrefix("metar:"), !o.contains(where: { $0.value == w }) { o.append((value: w, label: store.weatherTitle)) }
+        if !w.isEmpty, !w.hasPrefix("metar:"), !WeatherChoice.isCustom(w), !o.contains(where: { $0.value == w }) { o.append((value: w, label: store.weatherTitle)) }
         return o
     }
 
     private var weatherHelp: String {
         let w = store.choice.weather
         if w.isEmpty { return String(localized: "Develops by itself through the day and the season") }
-        if w.hasPrefix("metar:") { return String(localized: "METAR of the map's airport") }
-        if w == "cycle" { return String(localized: "Changes every 25-60 minutes") }
+        if WeatherChoice.isCustom(w) { return String(localized: "Set visibility, wind, clouds, rain, temperature and road state") }
+        if w.hasPrefix("metar:") { return WeatherChoice.metarText(WeatherChoice.metar(store.choice)) }
+        if w == "cycle" { return String(localized: "Changes every 25-60 minutes, as the month allows") }
+        if w == "tomorrow" { return String(localized: "Current weather") }
         if let x = store.weather {
             return x.description.isEmpty ? "\(Int(x.temp)) °C - \(x.precip.isEmpty ? "dry" : x.precip) - \(x.fog_m >= 10000 ? "clear air" : "\(Int(x.fog_m)) m")" : x.description
         }
@@ -598,7 +668,7 @@ struct ConditionsCard: View {
         let c = store.choice
         Card("On the road") {
             VStack(alignment: .leading, spacing: 6) {
-                SliderField(label: "Cars around", value: c.traffic, range: 0 ... 100, step: 1, format: { $0 < 0.5 ? String(localized: "None") : "\(Int($0))" }) {
+                SliderField(label: "Cars around", value: c.traffic, range: 0 ... 120, step: 1, format: { $0 < 0.5 ? String(localized: "None") : "\(Int($0))" }) {
                     store.act("traffic", ["value": $0])
                 }
                 ToggleRow(label: "Passengers", help: "People wait at the stops and ride along", isOn: c.passengers) { flag("passengers", $0) }
@@ -692,7 +762,8 @@ struct Summary: View {
             r.append(("Line", store.line?.name ?? "-"))
             r.append(("Tour", store.tour?.number ?? "-"))
         }
-        if let t = store.startTrip { r.append(("First trip", "\(hhmm(t.departure)) \(t.from)")) }
+        if let t = store.startTrip { r.append(("First trip", "\(hhmm(t.departure)) - \(hhmm(t.arrival)) \(t.from)\(t.km > 0 ? String(format: " | %.1f km", t.km) : "")")) }
+        if c.entry >= 0, let e = store.map?.entry_points.first(where: { $0.index == c.entry }) { r.append(("Start at", entryName(e))) }
         r.append(("Weather", store.weatherTitle))
         r.append(("Driver", store.snapshot.config.profile.isEmpty ? "-" : store.snapshot.config.profile))
         return r
@@ -706,7 +777,7 @@ struct StartButton: View {
 
     var body: some View {
         let c = store.choice
-        let ready = store.map != nil && store.bus != nil && (c.free || (store.line != nil && store.tour != nil))
+        let ready = store.map != nil && store.bus != nil && (c.free || (store.line != nil && store.tour != nil)) && !store.noServerBus && store.busOffered
         Button { store.start() } label: {
             Label(store.starting ? String(localized: "Starting…") : c.lan_mode == "join" ? String(localized: "Join and drive") : c.free ? String(localized: "Start driving") : String(localized: "Start the duty"),
                   systemImage: "play.fill")
@@ -720,23 +791,29 @@ struct StartButton: View {
 /// The situations saved on this map: the last one, and the save slots.
 struct ContinueCard: View {
     @Environment(LauncherStore.self) private var store
+    @State private var deleting: SavedSituation?
 
     var body: some View {
         let saved = store.snapshot.saved
+        let c = store.choice
         if !saved.isEmpty {
             Card("Continue") {
                 VStack(spacing: 0) {
                     ForEach(Array(saved.prefix(5).enumerated()), id: \.offset) { i, s in
-                        ListItem(title: s.name, subtitle: Date(timeIntervalSince1970: TimeInterval(s.saved)).formatted(date: .abbreviated, time: .shortened), icon: "clock.arrow.circlepath", selected: false) {
-                            if !store.starting { store.continueLast(pick: i) }
-                        } trailing: {
-                            Image(systemName: "play.fill").font(.system(size: 12)).foregroundStyle(Theme.muted)
+                        HStack(spacing: 2) {
+                            ListItem(title: s.name, subtitle: Date(timeIntervalSince1970: TimeInterval(s.saved)).formatted(date: .abbreviated, time: .shortened), icon: "clock.arrow.circlepath", selected: false) {
+                                if !store.starting { store.continueLast(pick: i) }
+                            } trailing: {
+                                Image(systemName: "play.fill").font(.system(size: 12)).foregroundStyle(Theme.muted)
+                            }
+                            if c.lan_mode != "join" { DeleteSaveButton { deleting = s } }
                         }
                     }
                 }
                 .padding(.horizontal, -8)
                 .padding(.vertical, -6)
             }
+            .modifier(SaveDelete(item: $deleting))
         }
     }
 }
@@ -840,15 +917,12 @@ struct BusPicker: View {
     @State private var search = ""
     @State private var maker = ""
     @State private var show = "all"
+    @State private var data = DriveData.shared
 
     var body: some View {
-        let all = store.lists.vehicles
+        let all = store.offeredVehicles
         let makers = Array(Set(all.map(\.manufacturer).filter { !$0.isEmpty })).sorted()
-        let list = all
-            .filter { maker.isEmpty || $0.manufacturer == maker }
-            .filter { show != "mods" || $0.installed == true }
-            .filter { search.isEmpty || "\($0.name) \($0.manufacturer) \($0.type_name) \($0.folder)".localizedCaseInsensitiveContains(search) }
-            .sorted { ($0.manufacturer, $0.name) < ($1.manufacturer, $1.name) }
+        let list = filterBuses(all, search: search, show: show, maker: maker, starred: data.starred)
         PickerFrame(title: "Choose a bus") {
             GeometryReader { geo in
                 if geo.size.width >= 700 {
@@ -877,21 +951,15 @@ struct BusPicker: View {
             SearchField(prompt: "Search buses", text: $search)
             HStack(spacing: 8) {
                 SelectField(options: [(value: "", label: String(localized: "All makers"))] + makers.map { (value: $0, label: $0) }, selection: maker, onChange: { maker = $0 })
-                Segmented(items: [("all", "All"), ("mods", "Mods")], selection: show) { show = $0 }
+                Segmented(items: [("all", "All"), ("fav", "Starred"), ("mods", "Mods")], selection: show) { show = $0 }
             }
-            if list.isEmpty { EmptyState(icon: "bus", title: "No bus found") }
+            if store.noServerBus {
+                Notice(text: String(localized: "The server offers none of the vehicles installed here"), kind: .danger)
+            } else if list.isEmpty {
+                if show == "fav" { EmptyState(icon: "star", title: "No starred bus", text: "Star a bus to find it here.") } else { EmptyState(icon: "bus", title: "No bus found") }
+            }
             Scroll {
-                LazyVStack(spacing: 0) {
-                    ForEach(list) { x in
-                        ListItem(title: x.name, subtitle: [x.manufacturer, x.paints.isEmpty ? "" : String(localized: "\(x.paints.count + 1) paints")].filter { !$0.isEmpty }.joined(separator: " - "),
-                                 selected: x.file == store.choice.bus) {
-                            store.act("select_bus", ["file": x.file])
-                        } trailing: {
-                            if store.snapshot.fresh.contains(x.file) { Tag(text: "New", kind: .accent) }
-                            if let m = x.missing_packs, !m.isEmpty { Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 13)).foregroundStyle(Theme.warn).help("Parts missing") }
-                        }
-                    }
-                }
+                BusTree(list: list, searching: !search.isEmpty) { store.act("select_bus", ["file": $0.file]) }
             }
         }
         .padding(14)
@@ -912,12 +980,13 @@ struct BusPicker: View {
                         if v.installed == true { Tag(text: "Mod") }
                     }
                     if let m = v.missing_packs, !m.isEmpty {
-                        Notice(text: String(localized: "Parts of this bus come from packs that are not installed: \(m.joined(separator: ", "))"), kind: .warn)
+                        Notice(text: tr("Parts of this bus come from packs that are not installed: {packs}", ["packs": m.joined(separator: ", ")]), kind: .warn)
                     }
                     Field("Paint") { PaintSelect(bus: v) }
                     if !v.description.isEmpty {
                         Text(v.description).font(.inter(14)).foregroundStyle(Theme.text2).textSelection(.enabled)
                     }
+                    NotesBox(kind: "bus", file: v.file)
                     Text(v.file).font(.inter(12.5)).foregroundStyle(Theme.muted).textSelection(.enabled)
                 }
                 .padding(.horizontal, 20).padding(.vertical, 18)

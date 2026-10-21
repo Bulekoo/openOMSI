@@ -599,7 +599,7 @@ impl App {
         // frame slept past one and waited for the next, two refreshes for one frame.
         let vsync_paces = presented
             && asked == 0
-            && self.gfx.surface.as_ref().is_some_and(|s| s.config.present_mode == wgpu::PresentMode::AutoVsync);
+            && self.gfx.surface.as_ref().is_some_and(|s| matches!(s.config.present_mode, wgpu::PresentMode::Fifo | wgpu::PresentMode::FifoRelaxed | wgpu::PresentMode::AutoVsync));
         if max_fps > 0 && !vr_active && !vsync_paces {
             let __t = Instant::now();
             pace_until(now, std::time::Duration::from_secs_f64(1.0 / max_fps as f64));

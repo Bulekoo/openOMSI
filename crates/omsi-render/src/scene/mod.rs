@@ -196,6 +196,9 @@ pub struct Scene {
     pub(crate) glass_slot: Option<TextureId>,
     pub materials: Vec<Material>,
     pub instances: Vec<Instance>,
+    /// The trolleybus wire networks whose wires this scene already draws (by address: see
+    /// `omsi_scene::trolley_view`), so that each bus does not add a copy of them.
+    pub trolley_wire_drawn: Vec<usize>,
     /// World position everything is expressed relative to on the GPU (updated per frame).
     pub render_origin: DVec3,
     /// Point lights and coronas for the next frame (set by the app every frame).

@@ -29,8 +29,11 @@ impl App {
             self.service_msg = Some(("Nothing to couple: back up to a trailer's coupling (within 2.5 m, in line)".into(), 4.0));
             return;
         };
-        let q = self.session.placed.remove(k);
+        let mut q = self.session.placed.remove(k);
         let ty = q.vehicle.ty.clone();
+        if let Some(mut tv) = q.trolley_view.take() {
+            tv.release(r, scene);
+        }
         if let (Some(a), Some(mut ss)) = (self.sound.audio.as_ref(), q.sounds) {
             ss.stop_all(a);
         }

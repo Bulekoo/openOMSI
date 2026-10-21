@@ -123,6 +123,7 @@ pub(crate) fn scene_shader_text(gl: bool) -> String {
         shaders::SCENE,
         include_str!("../enhanced_common.wgsl"),
         include_str!("../puddle_common.wgsl"),
+        include_str!("../beam_shadow_none.wgsl"),
         include_str!("../lamp_air.wgsl"),
         shaders::ENHANCED,
     ]
@@ -204,6 +205,7 @@ pub(crate) fn precip_shader_source(own: &str) -> String {
         own,
         include_str!("../enhanced_common.wgsl"),
         FOG_LAMP_LIGHTS,
+        include_str!("../beam_shadow_none.wgsl"),
         include_str!("../lamp_air.wgsl"),
     ]
     .join("\n");
@@ -264,6 +266,7 @@ pub(crate) fn fog_lamps_shader_source() -> String {
         include_str!("../fog_lamps.wgsl"),
         include_str!("../enhanced_common.wgsl"),
         FOG_LAMP_LIGHTS,
+        if omsi_cfg::flags::OMSI_NO_BEAM_SHADOWS.is_set() { include_str!("../beam_shadow_none.wgsl") } else { include_str!("../beam_shadow.wgsl") },
         include_str!("../lamp_air.wgsl"),
     ]
     .join("\n")
@@ -288,6 +291,7 @@ pub(crate) fn corona_shader_source() -> String {
         include_str!("../corona.wgsl"),
         include_str!("../enhanced_common.wgsl"),
         FOG_LAMP_LIGHTS,
+        include_str!("../beam_shadow_none.wgsl"),
         include_str!("../lamp_air.wgsl"),
     ]
     .join("\n");

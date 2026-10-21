@@ -1,6 +1,5 @@
 //! openOMSI's multiplayer on top of the transport (`omsi-net`): what of a session needs no
-//! game world - the host's mods for the players who join (`mods`), the voice chat's link
-//! to the GreenTeaSpeak plugin (`voice`), the WebSocket gateway, tunnel and status page
+//! game world - the host's mods for the players who join (`mods`), the WebSocket gateway, tunnel and status page
 //! (`gateway`), what of a vehicle goes over the network beyond its pose (`sync`), where a
 //! joining bus may stand (`spawn`), a client's tracks of the host's world (`mirror`), a
 //! dedicated server's `server.cfg` and administration (`server_cfg`, `admin`) and the
@@ -11,6 +10,7 @@
 //! are drawn and heard, and the shared world's mirror, stay in the app.
 
 pub mod admin;
+pub mod bans;
 pub mod commands;
 pub mod config;
 pub mod game;
@@ -21,16 +21,16 @@ pub mod mirror;
 pub mod map_pack;
 pub mod mods;
 pub mod passenger;
+pub mod public_list;
 pub mod remote;
 pub mod remote_load;
 pub mod server_cfg;
 pub mod spawn;
 pub mod sync;
-pub mod voice;
 
 use std::path::PathBuf;
 
-/// `~/.openomsi`: the session's status file, the LAN mods' store, the voice chat's files.
+/// `~/.openomsi`: the session's status file, the LAN mods' store.
 pub fn data_dir() -> Option<PathBuf> {
     let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
     Some(PathBuf::from(home).join(".openomsi"))

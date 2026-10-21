@@ -67,7 +67,29 @@ impl Renderer {
         // night along the moon, see `Lighting::casts_moon_shadows`)
         let moon_shadows = enhanced_frame && lighting.casts_moon_shadows();
         let sun = if moon_shadows { lighting.moon_dir.normalize_or_zero() } else { lighting.sun_dir.normalize_or_zero() };
-        let shadows = (f.with_overlays || projection.is_some()) && (lighting.casts_sun_shadows() || moon_shadows);
+        let casts = lighting.casts_sun_shadows() || moon_shadows;
+        // A mirror's picture (a texture, no overlays) has no shadow pass: it looks the window's
+        // cascades up as they were last drawn, with their own matrices. They are the sun's
+        // for this origin, or the mirror has no shadows (the first frames, a moved origin).
+        if !f.with_overlays && projection.is_none() && f.exclude_texture.is_some() && self.options.mirror_shadows && casts {
+            let (near, _, near_origin, near_sun) = self.shadows.shadow_near_cache.get();
+            let (far, _, far_origin, far_sun) = self.shadows.shadow_far_cache.get();
+            let (close, close_origin, close_sun) = self.shadows.shadow_close_cache.get();
+            let same = |o: DVec3, s: Vec3| o == scene.render_origin && s.dot(sun) > 0.99999;
+            let kept = near != Mat4::IDENTITY && far != Mat4::IDENTITY && close != Mat4::IDENTITY && same(near_origin, near_sun) && same(far_origin, far_sun) && same(close_origin, close_sun);
+            return ShadowPlan {
+                precip: None,
+                moon_shadows,
+                shadows: kept,
+                draw_shadows: false,
+                redraw_near: false,
+                redraw_far: false,
+                light_view_proj: near,
+                light_view_proj_far: far,
+                light_view_proj_close: close,
+            };
+        }
+        let shadows = (f.with_overlays || projection.is_some()) && casts;
         let shared_xr_shadows = if second_eye && shadows {
             self.shadows.xr_shadow_cache
                 .get()
@@ -143,6 +165,9 @@ impl Renderer {
             self.shadows.shadow_far_cache.set((far_m, far_age + 1, far_origin, far_sun));
             far_m
         };
+        if shadows && f.with_overlays && projection.is_none() {
+            self.shadows.shadow_close_cache.set((light_view_proj_close, scene.render_origin, sun));
+        }
         if projection.is_some() && !second_eye && shadows {
             self.shadows.xr_shadow_cache.set(Some((
                 scene.render_origin,

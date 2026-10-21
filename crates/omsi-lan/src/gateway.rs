@@ -294,6 +294,10 @@ pub fn offers(offered: &std::collections::HashSet<String>, bus: &str) -> bool {
 }
 
 /// The port of the WebSocket gateway this game opened.
+pub fn web_port() -> Option<u16> {
+    port_of_gateway()
+}
+
 fn port_of_gateway() -> Option<u16> {
     WS_PATH.lock().ok()?.as_ref()?.gateway.as_ref().map(|g| g.addr.port())
 }
@@ -311,6 +315,25 @@ pub fn update_server_info(players: usize, time: &str, weather: &str) {
             }
         }
     }
+}
+
+/// The public server list's challenge, on the status page (`ServerInfo::list_challenge`).
+pub fn set_list_challenge(challenge: &str) {
+    if let Ok(w) = WS_PATH.lock() {
+        if let Some(g) = w.as_ref().and_then(|w| w.gateway.as_ref()) {
+            if let Ok(mut i) = g.info.lock() {
+                i.list_challenge = challenge.to_string();
+            }
+        }
+    }
+}
+
+/// What the status page says now (players, map, name ...): a copy.
+pub fn server_info_now() -> Option<omsi_net::ws::ServerInfo> {
+    let w = WS_PATH.lock().ok()?;
+    let g = w.as_ref()?.gateway.as_ref()?;
+    let i = g.info.lock().ok()?.clone();
+    Some(i)
 }
 
 /// A server run: its shared world now, for `GET /status`.

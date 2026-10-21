@@ -13,11 +13,12 @@
 
 mod admin;
 mod admin_panel;
+mod player_list;
+mod voice_chat;
 use omsi_scene::check;
 use omsi_platform::discord;
 #[cfg(steam)]
 mod steam;
-use omsi_lan::voice;
 pub(crate) use omsi_scene::head_idle;
 use omsi_input::headtrack;
 #[cfg(windows)]
@@ -127,6 +128,10 @@ mod memory;
 mod offscreen;
 pub(crate) use omsi_sim::ground_gap;
 mod on_foot;
+mod trolley_hands;
+mod trolley_mouse;
+pub(crate) mod trolley_net;
+mod trolley_sound;
 mod optimiser;
 use omsi_scene::route_arrows;
 mod server;
@@ -517,6 +522,7 @@ pub(crate) fn make_app(mut args: Args, server_cfg: Option<server::ServerCfg>) ->
     if let (Some(cfg), Some(l)) = (server_cfg.as_ref(), lan.as_ref()) {
         lan::open_public_gateway(l, server::info_of(cfg), cfg.web_port, cfg.tunnel);
         lan::publish_vehicles(args.root.clone(), cfg.vehicles.clone());
+        server::start_public_list(cfg);
         if cfg.tunnel {
             // the address to give the players, as soon as cloudflared says it
             std::thread::spawn(|| {
@@ -536,6 +542,10 @@ pub(crate) fn make_app(mut args: Args, server_cfg: Option<server::ServerCfg>) ->
         if l.role == omsi_net::Role::Host {
             l.clock_speed = if settings.time_sync { 1.0 } else { settings.time_speed.clamp(1.0, 30.0) };
         }
+    }
+    // a server's voice chat: what its server.cfg allows (a game that hosts has its own settings)
+    if let (Some(l), Some(c)) = (lan.as_mut(), server_cfg.as_ref()) {
+        l.set_voice_policy(c.voice);
     }
     let mut lan_game = lan::LanGame::default();
     if args.export_glb.is_none() && args.lan_join.is_some() {
@@ -782,6 +792,7 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             ambience: None,
             soundscape: None,
             voice: None,
+            voice_mutes: crate::voice_chat::load_mutes(),
             foot_in: None,
             voices_waiting: Vec::new(),
         },
@@ -802,6 +813,7 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             pad_look: [false; 4],
             pad_repeat: Vec::new(),
             pad_voice_radio: false,
+            pad_voice_nearby: false,
             arrow_glance: false,
             headtrack: None,
             headtrack_failed: None,
@@ -965,9 +977,6 @@ mod locale_tests {
             "LAN: the host's weather: {}",
             "Sent to the server: {action}",
             "The server does not offer {name}",
-            "Voice: joining the voice channel ...",
-            "Voice: start GreenTeaSpeak with the openOMSI plugin to talk",
-            "Voice: your microphone is muted",
             "Online: {n} other players",
             "Online: nobody else yet",
             "Online: 1 other player",

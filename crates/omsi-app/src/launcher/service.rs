@@ -120,6 +120,20 @@ fn serve(rx: std::sync::mpsc::Receiver<Value>, reply: Reply) {
     let mut quality = Quality::now();
     let mut showroom = Showroom::new();
     let pads = super::pads::Pads::start(super::pads::paths());
+    let encoder = {
+        let (tx, rx) = std::sync::mpsc::channel::<Encode>();
+        let reply = reply.clone();
+        std::thread::Builder::new().name("preview jpeg".into()).spawn(move || {
+            for mut e in rx {
+                let t = Instant::now();
+                let jpeg = encode_jpeg(&e.pic, e.quality).unwrap_or_default();
+                e.ms["jpeg"] = json!(t.elapsed().as_secs_f64() * 1e3);
+                e.head["ms"] = e.ms;
+                reply(&e.id, e.head, &jpeg);
+            }
+        }).ok();
+        tx
+    };
     let mut last = Instant::now();
     while let Ok(req) = rx.recv() {
         let id = req.get("id").cloned().unwrap_or(Value::Null);
@@ -184,15 +198,26 @@ fn serve(rx: std::sync::mpsc::Receiver<Value>, reply: Reply) {
                 showroom.update(r, dt);
                 let before = showroom.drawn;
                 let (w, h) = (f("w", 960.0) as u32, f("h", 540.0) as u32);
+                let t_draw = Instant::now();
                 let _ = showroom.preview(r, w, h);
+                let drew = t_draw.elapsed();
                 let head = json!({ "ok": true, "busy": showroom.busy, "failed": showroom.failed(), "error": showroom.error, "moving": showroom.moving(), "picture": showroom.has_picture(), "view": showroom.view.name(), "views": showroom.views() });
                 let new = showroom.drawn != before || req.get("force").and_then(Value::as_bool).unwrap_or(false);
                 match (new, showroom.picture()) {
                     (true, Some(tex)) => {
                         // (lighter while it turns: the still picture after it is the sharp one)
                         let quality = f("quality", 90.0).clamp(40.0, 95.0) as u8;
-                        let jpeg = read_jpeg(r, tex, quality).unwrap_or_default();
-                        send(&id, head, &jpeg);
+                        // The card's pixels are read here; the JPEG is made on its own thread
+                        // while the next picture is already being drawn (made on this one, the
+                        // two took turns and a phone's frame was their sum).
+                        let t_read = Instant::now();
+                        match read_pixels(r, tex) {
+                            Some(pic) => {
+                                let ms = json!({ "draw": drew.as_secs_f64() * 1e3, "read": t_read.elapsed().as_secs_f64() * 1e3 });
+                                let _ = encoder.send(Encode { id, head, pic, quality, ms });
+                            }
+                            None => send(&id, head, &[]),
+                        }
                     }
                     _ => send(&id, head, &[]),
                 }
@@ -303,8 +328,25 @@ fn open_renderer(options: omsi_render::RenderOptions) -> anyhow::Result<Renderer
     Ok(r)
 }
 
-/// The picture read back from the graphics card, as a JPEG.
-fn read_jpeg(r: &Renderer, tex: &wgpu::Texture, quality: u8) -> anyhow::Result<Vec<u8>> {
+/// A picture read back from the graphics card, ready to be made a JPEG.
+struct Picture {
+    w: u32,
+    h: u32,
+    bgra: bool,
+    pixels: Vec<u8>,
+}
+
+/// A picture on its way to the JPEG thread, with the answer it goes out under.
+struct Encode {
+    id: Value,
+    head: Value,
+    pic: Picture,
+    quality: u8,
+    ms: Value,
+}
+
+/// The picture's pixels read back from the graphics card (rows without the copy's padding).
+fn read_pixels(r: &Renderer, tex: &wgpu::Texture) -> Option<Picture> {
     let (w, h) = (tex.width(), tex.height());
     let row = (w * 4).div_ceil(256) * 256;
     let buf = r.device.create_buffer(&wgpu::BufferDescriptor { label: Some("preview readback"), size: (row * h) as u64, usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ, mapped_at_creation: false });
@@ -317,18 +359,22 @@ fn read_jpeg(r: &Renderer, tex: &wgpu::Texture, quality: u8) -> anyhow::Result<V
     r.queue.submit([enc.finish()]);
     let slice = buf.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| {});
-    omsi_render::wait_gpu(&r.device, None).ok();
+    omsi_render::wait_gpu(&r.device, None).ok()?;
     let data = slice.get_mapped_range();
     let bgra = matches!(tex.format(), wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb);
-    // (the rows as they are, without the copy's padding: the encoder takes the card's own pixels)
     let mut pixels = Vec::with_capacity((w * h * 4) as usize);
     for y in 0..h as usize {
         pixels.extend_from_slice(&data[y * row as usize..y * row as usize + w as usize * 4]);
     }
     drop(data);
     buf.unmap();
+    Some(Picture { w, h, bgra, pixels })
+}
+
+/// The picture as a JPEG.
+fn encode_jpeg(pic: &Picture, quality: u8) -> anyhow::Result<Vec<u8>> {
     let mut jpeg = Vec::new();
-    let kind = if bgra { jpeg_encoder::ColorType::Bgra } else { jpeg_encoder::ColorType::Rgba };
-    jpeg_encoder::Encoder::new(&mut jpeg, quality).encode(&pixels, w as u16, h as u16, kind)?;
+    let kind = if pic.bgra { jpeg_encoder::ColorType::Bgra } else { jpeg_encoder::ColorType::Rgba };
+    jpeg_encoder::Encoder::new(&mut jpeg, quality).encode(&pic.pixels, pic.w as u16, pic.h as u16, kind)?;
     Ok(jpeg)
 }

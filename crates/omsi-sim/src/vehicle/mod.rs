@@ -31,6 +31,7 @@ mod program_ids;
 mod props;
 mod radio;
 mod trailer;
+mod trolley;
 mod types;
 mod update;
 mod vars;
@@ -45,6 +46,7 @@ use drive::*;
 pub use pose::*;
 pub use props::*;
 pub use trailer::*;
+pub use trolley::TrolleyGear;
 pub use types::*;
 use update::*;
 pub use weather::*;
@@ -234,4 +236,6 @@ pub struct VehicleInstance {
     engine_ids: std::sync::OnceLock<engine_vars::EngineVarIds>,
     /// The program's own variables the engine uses every frame (see `program_ids`).
     program_ids: std::sync::OnceLock<program_ids::ProgramIds>,
+    /// A trolleybus's poles and traction (see `trolley`); None for every other vehicle.
+    pub trolley: Option<Box<TrolleyGear>>,
 }

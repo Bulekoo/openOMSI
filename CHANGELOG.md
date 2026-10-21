@@ -8,6 +8,74 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 
 ### New
 
+- **LAN protocol 15**: a game of this version cannot join a session of an older one, nor the
+  other way round (the AI traffic goes as a table, see below). Update the game on both sides.
+- **Shadows in the headlamps' beams** (Enhanced): the light the fog, rain or snow scatters
+  from a headlamp or a street lamp's beam is cut where a pole, a car or a wall stands in
+  the beam, as the sun's shafts are cut by the shadow maps: the beam looks up the lamp's
+  shadow tile along its way (one filtered tap a step, no pass of its own).
+  `OMSI_NO_BEAM_SHADOWS=1` draws the old picture. `OMSI_DEBUG_PAD=1` logs every game
+  controller button event (the ones the assignment menu waits for), for a report that a
+  pad's buttons cannot be assigned.
+
+**On foot**
+
+- Walking is paced like a person's: 1.4 m/s walking and 3.8 m/s running, reached over about a
+  second and stopped over a few steps instead of at once, turns are curves, and the eyes glide
+  over kerbs and steps instead of following every footfall (`OMSI_FOOT_WALK` and `OMSI_FOOT_RUN`
+  set the paces).
+
+**Trolleybuses** ([docs/TROLLEYBUS.md](docs/TROLLEYBUS.md))
+
+- A map can carry a real overhead wire (`trolley.txt` beside its `global.cfg`): two wires of
+  opposite polarity, sections that are live or dead with an insulator between them, frogs
+  (switches) and the feeder's voltage drop. A vehicle's `.bus` can carry real poles
+  (`[trolley_pole]`) and a modelled drive (`[trolley_rheostat]`, `[trolley_async]`). OMSI 2
+  has no wire of its own (its trolleybuses run a plugin), so these formats are openOMSI's.
+- A trolleybus only moves on current: both poles must be on live wire of opposite polarity. The
+  poles are real booms with a spring, a mass and a shoe that holds the wire: the shoe leaves the
+  wire where the wire rises faster than the boom can follow, and the pole comes off when the
+  wire lifts out of the shoe, when the bus stands too far off the wire's line (also at a switch
+  set the wrong way), when a bend is taken too fast, or when the wire ends. On a dead section
+  the bus rolls on and stops.
+- Out of the cab, near the back of the bus (on foot, outside or free camera), hold R to take
+  a pole's rope and aim the boom at the wire, let go to put it on; T pulls a pole down;
+  Shift takes both. Modern poles with a motor go up and down from the cab with the same keys.
+- The rheostat drive solves its series motor against the resistor stack with a stepping
+  controller, resistor heat and dynamic braking; the asynchronous drive is an inverter with
+  regenerative braking into the line where the section takes it, a brake chopper and an optional
+  battery for manoeuvring away from the wire. A vehicle with a scripted drive of its own keeps
+  it, and loses its torque without current.
+- Frogs are set by the current the bus draws at the contact plate before them (power takes
+  the branch, coasting goes straight), or by its indicator.
+- Arcs where current is broken (a shoe leaving the wire, a pole coming off, an insulator or a
+  frog crossed under power): a flash on the wire and the roof, sparks, a crack; the shoes
+  hiss on the wire with the current and the speed; contactors click, shoes and poles thud.
+  New variables for models: `Trolley_Pole<k>_Elev`, `_Azim`, `_State`, `Trolley_Volts`,
+  `Trolley_Amps`, `Trolley_Powered`, `Trolley_Notch`, `Trolley_Arc`, `Trolley_Hiss`.
+- Real OMSI 2 trolleybus content runs as it is ([docs/TROLLEY_MODS.md](docs/TROLLEY_MODS.md)): a
+  map's wire splines (two thin strips high over a spline, as the Bronitsyn map draws its wire) are
+  the wire network, frogs where three of them meet; a trolleybus add-on that only shows folded and
+  raised pole meshes by `cp_SHTANGALEV`/`cp_SHTANGAPRAV` gets real poles from those meshes, keeps
+  its own script's drive (cut without current) and is read as rheostat or pulse-controlled from
+  its description.
+- New environment variables: `OMSI_TROLLEY_DEAD_AT`, `OMSI_TROLLEY_FILE`, `OMSI_TROLLEY_DEAD`, `OMSI_TROLLEY_UP`,
+  `OMSI_TROLLEY_HANDS`, `OMSI_DEBUG_TROLLEY`.
+**Phones and tablets**
+
+- The free camera (F4) on a touch screen: the cab panel's new "Free camera" button flies out
+  of the cab, a stick at the bottom left moves the camera (the further it is pushed, the faster:
+  fine control near the middle), a finger dragged on the picture looks round, two fingers zoom,
+  the buttons at the bottom right rise, sink and halve or double the speed, and "Exit free
+  camera" (always on the screen, also with the controls hidden, and in the cab panel) goes back
+  to the driver's seat.
+- Photo mode for fingers: its own buttons (the shutter, leave, the settings sheet, hide the
+  panel, a stick and rise / sink / fast), a drag turns the camera, a tap focuses there, two
+  fingers zoom the lens. The settings come in a sheet from the bottom of an upright screen or a
+  panel at the right of a wide one, inside the screen's cut-outs, scrolled with a finger.
+- The bus preview of the launcher draws two pictures ahead while it turns, the JPEG is made on
+  its own thread, and a turning bus is drawn smaller on a phone (the picture at rest is sharp),
+  so the preview keeps up with the screen instead of about 20 pictures a second.
 **Navigator and city map**
 
 - The navigator and the city map draw every map in the style of Apple Maps, from the map
@@ -93,6 +161,33 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 - Driving off the road soils the bus: the wheels on earth, grass or gravel throw it up onto
   the body (the dirt overlay), mud in the wet in a few minutes, dust in the dry more slowly.
 
+**Multiplayer: public servers, the player list, machine bans**
+
+- A server can list itself in a **public server list**: `public_server = 1` in `server.cfg`.
+  It registers with a list service (`services/serverlist`, a Cloudflare Worker, which reads the
+  server's own status page for a challenge before listing it, forgets it three minutes after
+  its last word and limits abuse) and says it is alive every minute; Multiplayer -> Servers
+  in the launcher shows the **Public servers** with name, map, players, version and message,
+  and joins or adds one. The name, message and icon are checked by the same moderation on the
+  server before it registers (a name or message that is flagged is refused, with the reason in
+  the log) and in every launcher before it shows them (a flagged text is covered). A custom
+  icon is shown only when the viewer's own image check cleared it; none is bundled yet (the
+  library planned for it cannot be shipped, see docs/SERVER.md), so the public list shows the
+  default icon for now.
+- The game menu has a **Player list** in every multiplayer session: everybody's name, number,
+  what they do and drive, and who is the host, an admin or a moderator. For the host of a game
+  and for the admins and moderators of a server it is also where to send a player away with a
+  reason, ban their **machine** - for this session or (admins) for all their sessions, for a
+  day, a week or for good - and lift bans.
+- **Machine bans**: the game sends a hash of the machine's own id (never the id itself, no
+  serial numbers) when it joins, and a host turns away a banned machine whatever name, address
+  or game it comes back with. The session's list is `bans.json` beside `server.cfg`; "all my
+  sessions" is `~/.openomsi/bans-owner.json`, read by every session that account hosts
+  (`owner_bans` in `server.cfg` to share one list between servers). The web panel has the
+  bans with the button to lift them. A player can switch the identifier off
+  (`OMSI_NO_HARDWARE_ID=1`), a server can turn such players away (`require_hardware_id = 1`).
+  This stops the player who comes back, not one who works at it (docs/SERVER.md says how).
+
 **Launcher**
 
 - The Drive page puts the map, the line and tour, the roadbook, the bus and the start on one
@@ -120,6 +215,110 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 
 ### Fixes
 
+- Review of the round: `hwban 3 session é` (a multi-byte last character of a duration) no longer
+  stops a dedicated server; the hardware bans are given to every session a game hosts, not only
+  the first of a run; the host passes voice frames only to players that have voice chat on
+  (they ask `voice?`), the TACKs of the traffic table are rate limited and a player's open
+  microphone sends nothing while an administrator has silenced them; a `server.cfg` without
+  `voice` has voice chat off (the new file says `voice = 1`); the table of the AI traffic is
+  written only while the game hosts, and a bus's sign in it once a second; the seated people's
+  seat-back shift is worked out when the pose changes; the wire of a trolleybus map is read
+  once per map, drawn once per scene, and a bus's poles and frogs leave the scene with it; a
+  microphone that is gone is not opened again every few milliseconds; the beam shadows look up
+  their map only where a beam shines; a plain bus is a trolleybus only if its "pole" meshes are
+  long and thin; the server list does not let a registration take over another server's
+  address, counts an IPv6 sender by its /64, and compares a status page's name as the listing
+  has it; the glass of a dented body keeps the snow's coordinates; new texts in the options and
+  the player list have translations.
+- **Trolleybus poles stay on the wire over bumps and joints**: a shoe that a bump lifts for
+  a moment no longer comes off (it has to stay out of its groove for 0.15 s, or leave it by
+  more than three groove depths), the groove is deeper and bends are taken faster.
+
+- The windows of Russian and other mod buses whose texture names are not plain ASCII (the
+  ZiU-682G, the Trolza Optima) are see-through again: the `.o3d` keeps a texture's name in
+  the file's own bytes and the `.cfg` as text, so a mod's `[matl_alpha]` for its glass never
+  found the slot and the windows were opaque. Both names are now compared as the bytes
+  Omsi.exe sees.
+- The snow on the windscreen and the cab's windows no longer comes out in swirls and bands,
+  with huge flakes beside tiny ones: the film's coordinates in metres were laid out by a
+  normal worked out at every corner, which turned the plane a little at each vertex of a
+  curved pane. A pane (the film triangles that meet) is unrolled on one plane now.
+- A trolleybus's poles are taken with the mouse: a click on the cab's pole switch, or on a
+  pole from outside the cab, takes it in hand, it follows the cursor (the tip goes to the
+  wire the cursor points at, or where it points when there is none), and the next click lets
+  it go and it springs on to the wire. A pole on the wire can be taken off again the same way.
+  A plain trolleybus shows its own pole mesh turning with the pole (the raised mesh is turned
+  about its hinge by the pole's angles) instead of a drawn boom, and from the driver's seat one
+  click on the switch is enough: the motor takes the pole to the wire nearest its tip.
+
+- Road markings no longer disappear and come back as the bus drives towards them
+  ([#3085](https://github.com/openOMSI-org/openOMSI/issues/3085)). The depth a road is pulled
+  towards the eye (so that it wins over the ground beside it) stopped growing 12 m out, and
+  across the long triangles of a straight road that turned its plane into a bowl: from a low
+  eye the road came in front of the lines on it from 25 m on. A flat surface keeps the same
+  share of the way to the eye all the way now; upright faces (a pole a mod tagged as a road)
+  keep the cap. A new graphics test lays a marking on a road of 200 m triangles and looks
+  at it from 4 to 100 m.
+- The mirrors show the sun's shadows and the smoke and spray again
+  ([#3051](https://github.com/openOMSI-org/openOMSI/issues/3051)): they look up the shadow
+  maps the window last drew instead of drawing their own, and draw the particles the window
+  has. Settings `mirror_shadows` and `mirror_particles` (both off until switched on: they cost a
+  little in every frame, most in snow) turn them on for a slower
+  machine, as OMSI 2's "No PS in reflections" did.
+- Rain on the glass follows the rain: a drizzle leaves small beads, a downpour full drops,
+  and the runners of a downpour are heavier, wider and quicker, with wider cleared tracks;
+  the drops on an upright side window are smaller than on the sloping windscreen
+  ([#3076](https://github.com/openOMSI-org/openOMSI/issues/3076)).
+- A bus that declares air pressure variables it never sets (a shared varlist) no longer
+  says "Air pressure is low" and "keep the engine running"
+  ([#3030](https://github.com/openOMSI-org/openOMSI/issues/3030)): only a script that
+  assigns the spring brake or tank pressures counts as a bus with air brakes.
+- A passenger on foot in a bus (another player's too) looks the way the bus does: the view
+  turns with the bus through a bend and keeps its own look as an offset
+  ([#3093](https://github.com/openOMSI-org/openOMSI/issues/3093)).
+- Winsenburg's Hauptbahnhof 4 crossing (win-4.sco): a bus asking at the second bus light
+  alone gets its green. A point the program had just jumped to counted as a second visit
+  and sent the clock round for good
+  ([#3092](https://github.com/openOMSI-org/openOMSI/issues/3092)).
+- Objects attached to a spline stand where the editor put them on maps with
+  `[worldcoordinates]` (Shanghai and others): the chain distance of a spline was not scaled
+  with the tile like the lengths and the rows' start distances were, so the first object of
+  a row - and the whole row after it - stood off by that difference on tiles away from the
+  map's middle row ([#3080](https://github.com/openOMSI-org/openOMSI/issues/3080)).
+- `OMSI_PRESENT_MODE=fifo|fifo_relaxed|mailbox|immediate|auto` picks the swapchain's present mode
+  for a test, when the surface has it (vsync stays `AutoVsync`, so a game just under the
+  refresh rate does not drop to half of it): Vulkan reports of vsync that tears
+  ([#2838](https://github.com/openOMSI-org/openOMSI/issues/2838)) can try `fifo`.
+
+- Passengers drawn with the high quality avatars no longer sit with their backs through the
+  seat back (robes and long hair on women's avatars): a seated avatar is moved forward on
+  the seat as far as its back needs. Waiting passengers stand with a phone in hand and arms
+  crossed less often.
+- On a phone held upright an open page of the game menu (Options and the rest) takes the whole
+  width: beside the menu it was a strip of switches with no names. Its tabs go on a second row
+  instead of being cut off, and the cab panel's buttons fit a narrow screen (they ran off both
+  sides). The top row of buttons shrinks to fit instead of running into itself in the free
+  camera and on foot, and the cab panel's backdrop covers all its buttons.
+- Photo mode no longer lies under the driving controls (the wheel and pedals were drawn over
+  its panel) and its pages are no longer a 40-pixel strip on a phone held on its side.
+
+- Misted windows follow the bus's own cabin: a bus whose scripts keep their cabin air (`heizung.osc` of
+  the stock buses and their descendants) fogs its glass from that air's temperature and humidity and
+  clears it by the heating, the fans and the vent windows, as its gauges say - they were misting from a
+  second, guessed cabin (always 20 degrees, three air changes an hour) that no control of the bus touched, so
+  at 17 inside and 7 outside the panes of a bus with a few people aboard stayed foggy for good. The
+  windscreen's defroster blows the heater's own air when its fan runs. Buses without such scripts keep
+  the built-in cabin, now with the fresh air a city bus brings in for each person (15 m3/h).
+- Snow on windows is laid out in metres of glass, not in the layer's own texture coordinates: it came out
+  as long streaks on the rear windows of double-deckers and articulated buses (the rear window
+  shared a mask with the side windows and lay edge-on in it) and sparse on the small tilt windows and the
+  doors (their coordinates squeezed the snow picture into a few centimetres). Every window of a bus now
+  holds the same snow, in Vanilla, Vanilla+ and Enhanced.
+- Headlights and lamps in fog and rain: a bright beam no longer carries a pattern of stripes (the soft
+  light the fog scatters is upsampled with a weight that did not tell a road's rows from a step in depth),
+  and the picture of a beam's cone and of a lamp's glare is smoothed between its texels, so a large cone
+  has no stair of small squares along its edge. The classic picture's lamp glare ends softly at its sprite's
+  edge, whatever the bitmap does there.
 - Tyre spray comes only from puddles: the stock cars' and buses' wheel spray no longer sprays
   on every wet road from the first drops, and it stops as the puddles dry out after the rain
   instead of lingering until the road is quite dry. In snow the scripts' own slush is kept.
@@ -255,6 +454,33 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   lookups the Adreno 710 refused ([#2009](https://github.com/openOMSI-org/openOMSI/issues/2009)).
 ### Multiplayer
 
+- **Voice chat, built in** - off until switched on (Settings → Sound → *Voice chat*, or the game
+  menu's Sound page). Hold a talk key to speak: *nearby* (V) is heard by the players within
+  the session's range (75 m by default) from where you stand, quieter with the distance and
+  muffled when one of you is in a bus and the other is not; the *radio* (B) is heard by the
+  whole session, in a small speaker's voice with a click when the key goes down and up.
+  Both keys are in Controls (and bindable on a controller button; on a touch screen the cab
+  panel has two talk buttons). The microphone is opened only while a key is held (or with the
+  open microphone setting), the system asks for it the first time voice chat is switched on,
+  and nothing is recorded or stored. Opus at 24 kbit/s with a jitter buffer and loss
+  concealment; the host only relays the frames (LAN datagram `0xBC`, session-bound, rate
+  limited) and needs no audio device, so dedicated servers carry voice too. The screen shows
+  when you transmit and who talks; every other player can be muted in the game menu's
+  *Player list* (kept by name), or all voices at once; an admin can silence a player for the
+  whole session (`vmute` / `vunmute`, a button on the player's page). New `server.cfg` keys
+  `voice`, `voice_radio` and `voice_range`, see [docs/VOICE.md](docs/VOICE.md) and
+  [docs/SERVER.md](docs/SERVER.md). **Removed:** the GreenTeaSpeak plugin and its settings
+  (`voice_chat`, and `voice_server_uid`, `voice_channel`, `voice_channel_password` in
+  `server.cfg`, which an old file may keep: they are ignored and the log says so).
+- The AI traffic goes over the LAN as a table of vehicles under ids of their own (LAN
+  protocol 15, [docs/TRAFFIC_TABLE.md](docs/TRAFFIC_TABLE.md)): the host's traffic writes it after
+  each step and every player is told the cars within 650 m of it as changes of what it
+  acknowledged, the nearer ones more often, within 40 KB/s. A car that stands costs nothing, a
+  moving one 6-7 bytes ten times a second (the old frames took 17 and told every car in
+  range every time), lost datagrams are told again, and the clients draw the cars between and
+  past the host's poses. A car's id is not reused for 30 s. A game of the older protocol is turned away
+  with the usual message. The script context of the host's cars goes to each client often at
+  first and then now and then, not every tenth of a second for every car in range.
 - **What another machine sends is checked for what it is** — a host's mod file a joining
   player fetches must be what its name says (a picture of a size a texture can have, a sound,
   a mesh the reader takes, a text), or it is left out and reported; a vehicle script that
@@ -1424,7 +1650,7 @@ Bug Fixes & Improvements
   steering held, and takes no input until it is back; a minimised game runs at 30 fps.
 
 ### Merged pull requests
-- Voice chat in sessions through GreenTeaSpeak, players heard where they are [#1102](https://github.com/openOMSI-Project/openOMSI/pull/1102) - with a
+- Voice chat in sessions through an outside voice program (replaced since by the game's own, see Unreleased), players heard where they are [#1102](https://github.com/openOMSI-Project/openOMSI/pull/1102) - with a
   key handshake between the game and the plugin (a web page can no longer drive it), the voice
   server's id required, and the plugin putting the user's name and channel back.
 - Resumed sessions keep the bus displays and the timetable's place, and the IBIS moves on to

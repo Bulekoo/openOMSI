@@ -63,11 +63,12 @@ impl VehicleInstance {
     }
 
     pub(super) fn step_physics(&mut self, dt: f32) {
+        self.step_trolley(dt);
         let c = self.physics.controls;
         self.put(self.v_throttle, c.throttle);
         self.put(self.v_brake, c.brake);
         self.put(self.v_clutch, c.clutch);
-        let m_wheel = self.get(self.v_m_wheel);
+        let m_wheel = self.trolley_torque(self.get(self.v_m_wheel));
         // each wheel: its own brake force, and its share of the vehicle's (the rolling
         // resistance's share is the physics' own)
         let n = (self.v_wheels.len() * 2).max(1) as f32;

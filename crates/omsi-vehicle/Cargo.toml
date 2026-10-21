@@ -7,4 +7,5 @@ description = "Vehicle definitions: .bus/.ovh/.zug, HOF files, passenger cabins,
 
 [dependencies]
 omsi-cfg = { path = "../omsi-cfg" }
+omsi-trolley = { path = "../omsi-trolley" }
 log.workspace = true

@@ -52,10 +52,23 @@
           <button type="button" id="kick" class="danger" data-perm="moderate" data-t="kick">Send away</button>
           <button type="button" id="ban" class="danger" data-perm="moderate" data-t="ban">Send away for this run</button>
         </div>
+        <p class="hint" data-t="hwban-hint">A machine ban keeps out the player's computer, whatever name or address they come back with. It does not stop someone who changes the game or the system's machine id.</p>
+        <label><span data-t="hwban-for">Ban the machine for</span>
+          <select id="hwban-hours"><option value="" data-t="forever">for good</option><option value="24">24 h</option><option value="168">7 days</option><option value="720">30 days</option></select></label>
+        <div class="row">
+          <button type="button" id="hwban-session" class="danger" data-perm="moderate" data-t="hwban-session">Ban the machine: this session</button>
+          <button type="button" id="hwban-all" class="danger" data-perm="world" data-t="hwban-all">Ban the machine: all my sessions</button>
+        </div>
         <label><span data-t="tell">A word for this player only</span>
           <input id="tell-text" maxlength="160" autocomplete="off"></label>
         <button type="button" id="tell" data-perm="moderate" data-t="send">Send</button>
       </div>
+    </section>
+
+    <section class="card" id="bans-card">
+      <h2><span data-t="bans">Banned machines</span> <small id="bans-count"></small></h2>
+      <p class="hint" data-t="bans-hint">Lifting a ban is for an admin. A ban in "all my sessions" is in your account's list (~/.openomsi/bans-owner.json) and holds in every session you host.</p>
+      <ul id="bans" class="list" aria-live="polite"></ul>
     </section>
 
     <section class="card" id="chat-card">

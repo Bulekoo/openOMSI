@@ -1,6 +1,6 @@
-//! The host's world as the clients see it (`WORLD`): the AI traffic, the people on the
-//! pavements and at the stops, the riders of the timetable buses and the traffic lights
-//! around each client, bit-packed.
+//! The host's world as the clients see it (`WORLD`): the people on the pavements and at
+//! the stops, the riders of the timetable buses and the traffic lights around each client,
+//! bit-packed. (The AI vehicles themselves are the traffic table's: `traffic_table`.)
 //!
 //! The host simulates the shared world alone; a client draws what the host sends and
 //! simulates only its own bus (and the passengers that board it, see `CLAIM`). Every
@@ -21,10 +21,6 @@
 //! bytes 8-15  anchor x, y (whole metres, i32 little endian)
 //! bytes 16-17 anchor z (whole metres, i16 little endian)
 //! then, least significant bit first:
-//!   cars 7, each:
-//!     id 24, x 19, y 19 (cm), z 17 (cm), heading 12 (360/4096 deg), pitch 8, bank 8
-//!     (0.1 deg), speed 11 (0.05 m/s, signed), steer 8 (0.5 deg, + right), indicators 2,
-//!     brake 1, lights 1, at the stop 2 (0 no, 1 boarding, 2 leaving)
 //!   people 8, each:
 //!     id 24, where 2 (0 on foot, 1 aboard a timetable bus, 2 aboard a player's bus),
 //!     activity 2 (stand, walk, sit, run)
@@ -33,12 +29,12 @@
 //!     aboard: bus 24 (the car's id, or the player's), x 12, y 13, z 10 (cm in the bus frame), heading 8, seat 8 (255:
 //!       none - walking, at the desk or the door)
 //!   lights 6, each: crossing object 32, cycle position 17 (0.05 s), held 1
-//!   gone 6, each: kind 1 (0 car, 1 person), id 24
+//!   gone 6, each: kind 1 (1 person; 0 is no longer used), id 24
 //!   (first datagram, once a second) parked 1: then complete 1, count 7, each: the map
 //!   id of a parking space whose car has driven off 32
 //! ```
 //!
-//! A car takes 17 bytes, a person 12 (17 while waiting at a stop), a light program 6.
+//! A person takes 12 bytes (17 while waiting at a stop), a light program 6.
 
 use crate::wire::{BitReader, BitWriter};
 
@@ -56,41 +52,17 @@ pub const STANDING_EVERY: f32 = 1.0;
 /// Lights are sent this often (s).
 pub const LIGHTS_EVERY: f32 = 1.0;
 
-const CAR_BITS: usize = 24 + 19 + 19 + 17 + 12 + 8 + 8 + 11 + 8 + 2 + 1 + 1 + 2;
 const PERSON_FOOT_BITS: usize = 24 + 2 + 2 + 19 + 19 + 17 + 8 + 6 + 1;
 const PERSON_WAIT_BITS: usize = 32 + 8;
 const PERSON_ABOARD_BITS: usize = 24 + 2 + 2 + 24 + 12 + 13 + 10 + 8 + 8;
 const LIGHT_BITS: usize = 32 + 17 + 1;
 const GONE_BITS: usize = 25;
-const COUNT_BITS: usize = 7 + 8 + 6 + 6;
+const COUNT_BITS: usize = 8 + 6 + 6;
 
 pub const MAX_ID: u32 = (1 << 24) - 1;
 /// `PersonPlace::Aboard::bus` with this bit set is a player's bus: the rest is the player's
 /// id (a rider of that player, whom the host passes on to the others).
 pub const PLAYER_BUS: u32 = 1 << 31;
-
-/// An AI vehicle (random traffic or a timetable bus) as the host has it.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub struct CarState {
-    pub id: u32,
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
-    /// Degrees clockwise from north.
-    pub heading: f32,
-    pub pitch: f32,
-    pub bank: f32,
-    /// m/s (negative reversing).
-    pub speed: f32,
-    /// Front wheel angle (deg, + right).
-    pub steer: f32,
-    /// 0 off, 1 left, 2 right, 3 hazard.
-    pub blinker: u8,
-    pub brake: bool,
-    pub lights: bool,
-    /// `AI_Scheduled_AtStation` as the host gives it: 0, 1 (boarding), -1 (leaving).
-    pub at_station: i8,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Activity {
@@ -168,10 +140,9 @@ pub struct WorldFrame {
     pub seq: u16,
     /// The host's clock (ms since its session began).
     pub host_ms: u32,
-    pub cars: Vec<CarState>,
     pub people: Vec<PersonState>,
     pub lights: Vec<LightState>,
-    /// Cars (false) and people (true) the host took away.
+    /// People (true) the host took away.
     pub gone: Vec<(bool, u32)>,
     /// The parking spaces whose cars have driven off into the traffic at the host (their
     /// map ids), and whether that is all of them: a client takes the same cars away, and
@@ -181,16 +152,13 @@ pub struct WorldFrame {
 }
 
 fn anchor_of(frame: &WorldFrame) -> (i32, i32, i16) {
-    // the first thing on foot or on the road decides; they all lie within a few km of it
+    // the first person on foot decides; they all lie within a few km of it
     let p = frame
-        .cars
-        .first()
-        .map(|c| (c.x, c.y, c.z))
-        .or_else(|| {
-            frame.people.iter().find_map(|p| match p.place {
-                PersonPlace::Foot { x, y, z, .. } => Some((x, y, z)),
-                _ => None,
-            })
+        .people
+        .iter()
+        .find_map(|p| match p.place {
+            PersonPlace::Foot { x, y, z, .. } => Some((x, y, z)),
+            _ => None,
         })
         .unwrap_or((0.0, 0.0, 0.0));
     let r = |v: f64| {
@@ -204,7 +172,7 @@ fn anchor_of(frame: &WorldFrame) -> (i32, i32, i16) {
 }
 
 /// `frame` as datagrams of at most `MAX_WORLD_DATAGRAM` bytes: the lights and the gone
-/// list go into the first, the cars and people are shared out in order. Things too far from
+/// list go into the first, the people are shared out in order. Things too far from
 /// the first one to fit the anchor's range (2.6 km) are left out.
 pub fn encode(frame: &WorldFrame, protocol: u8) -> Vec<Vec<u8>> {
     let (ax, ay, az) = anchor_of(frame);
@@ -213,7 +181,6 @@ pub fn encode(frame: &WorldFrame, protocol: u8) -> Vec<Vec<u8>> {
         let (dx, dy, dz) = rel(x, y, z);
         dx.abs() < 2600.0 && dy.abs() < 2600.0 && dz.abs() < 650.0
     };
-    let cars: Vec<&CarState> = frame.cars.iter().filter(|c| fits(c.x, c.y, c.z)).collect();
     let people: Vec<&PersonState> = frame
         .people
         .iter()
@@ -224,7 +191,7 @@ pub fn encode(frame: &WorldFrame, protocol: u8) -> Vec<Vec<u8>> {
         .collect();
     let budget = (MAX_WORLD_DATAGRAM - WORLD_HEADER) * 8 - COUNT_BITS;
     let mut out = Vec::new();
-    let (mut ci, mut pi) = (0usize, 0usize);
+    let mut pi = 0usize;
     let mut first = true;
     loop {
         let mut left = budget;
@@ -240,11 +207,6 @@ pub fn encode(frame: &WorldFrame, protocol: u8) -> Vec<Vec<u8>> {
         };
         let parked: Option<(bool, &[u32])> = if first { frame.parked.as_ref().map(|(c, k)| (*c && k.len() <= 127, &k[..k.len().min(127)])) } else { None };
         left = left.saturating_sub(lights.len() * LIGHT_BITS + gone.len() * GONE_BITS + 1 + parked.map(|p| 8 + p.1.len() * 32).unwrap_or(0));
-        let c0 = ci;
-        while ci < cars.len() && ci - c0 < 127 && left >= CAR_BITS {
-            left -= CAR_BITS;
-            ci += 1;
-        }
         let p0 = pi;
         while pi < people.len() && pi - p0 < 255 {
             let bits = match people[pi].place {
@@ -267,33 +229,6 @@ pub fn encode(frame: &WorldFrame, protocol: u8) -> Vec<Vec<u8>> {
         header.extend_from_slice(&ay.to_le_bytes());
         header.extend_from_slice(&az.to_le_bytes());
         let mut w = BitWriter::with_header(&header);
-        w.put((ci - c0) as u64, 7);
-        for c in &cars[c0..ci] {
-            let (dx, dy, dz) = rel(c.x, c.y, c.z);
-            w.put(c.id.min(MAX_ID) as u64, 24);
-            w.put_fixed(dx, 0.01, 19);
-            w.put_fixed(dy, 0.01, 19);
-            w.put_fixed(dz, 0.01, 17);
-            w.put(
-                ((c.heading as f64).rem_euclid(360.0) / 360.0 * 4096.0).round() as u64 % 4096,
-                12,
-            );
-            w.put_fixed(c.pitch as f64, 0.1, 8);
-            w.put_fixed(c.bank as f64, 0.1, 8);
-            w.put_fixed(c.speed as f64, 0.05, 11);
-            w.put_fixed(c.steer as f64, 0.5, 8);
-            w.put(c.blinker.min(3) as u64, 2);
-            w.put(c.brake as u64, 1);
-            w.put(c.lights as u64, 1);
-            w.put(
-                match c.at_station {
-                    1 => 1,
-                    -1 => 2,
-                    _ => 0,
-                },
-                2,
-            );
-        }
         w.put((pi - p0) as u64, 8);
         for p in &people[p0..pi] {
             w.put(p.id.min(MAX_ID) as u64, 24);
@@ -369,7 +304,7 @@ pub fn encode(frame: &WorldFrame, protocol: u8) -> Vec<Vec<u8>> {
         }
         out.push(w.finish());
         first = false;
-        if ci >= cars.len() && pi >= people.len() {
+        if pi >= people.len() {
             break;
         }
     }
@@ -397,41 +332,6 @@ pub fn decode(data: &[u8], protocol: u8) -> Option<WorldFrame> {
         host_ms,
         ..Default::default()
     };
-    let n = r.get(7)?;
-    for _ in 0..n {
-        let id = r.get(24)? as u32;
-        let x = ax + r.get_fixed(0.01, 19)?;
-        let y = ay + r.get_fixed(0.01, 19)?;
-        let z = az + r.get_fixed(0.01, 17)?;
-        let heading = r.get(12)? as f32 * 360.0 / 4096.0;
-        let pitch = r.get_fixed(0.1, 8)? as f32;
-        let bank = r.get_fixed(0.1, 8)? as f32;
-        let speed = r.get_fixed(0.05, 11)? as f32;
-        let steer = r.get_fixed(0.5, 8)? as f32;
-        let blinker = r.get(2)? as u8;
-        let brake = r.get(1)? == 1;
-        let lights = r.get(1)? == 1;
-        let at_station = match r.get(2)? {
-            1 => 1,
-            2 => -1,
-            _ => 0,
-        };
-        f.cars.push(CarState {
-            id,
-            x,
-            y,
-            z,
-            heading,
-            pitch,
-            bank,
-            speed,
-            steer,
-            blinker,
-            brake,
-            lights,
-            at_station,
-        });
-    }
     let n = r.get(8)?;
     for _ in 0..n {
         let id = r.get(24)? as u32;
@@ -535,53 +435,23 @@ impl EntityRef {
     }
 }
 
-/// What a car or a person is, told once per client (and again when it asks, `WANT`):
+/// What a person is, told once per client (and again when it asks, `WANT`):
 ///
 /// ```text
-/// DESC|c|<id>|<vehicle file>|<paint scheme index or ->|<line>|<destination>|<paint scheme name>
 /// DESC|p|<id>|<human file>
 /// ```
 ///
-/// The files are relative to a content root (`Vehicles/…/x.bus`, `Humans/…/x.hum`) and are
-/// checked like a player's vehicle path; line and destination are what a timetable bus
-/// shows (empty for the random traffic). The paint scheme goes by its name as well: its
-/// index counts the repaints installed on the sender, and a game with other repaints in
-/// its content folder took another one by that number (#2018). A sender without the name
-/// leaves it empty and the index is taken.
+/// The file is relative to a content root (`Humans/…/x.hum`) and checked like a player's
+/// vehicle path. (What a car is - its vehicle file, repaint, line and destination - is told
+/// with the car's row, see `traffic_table`; `DESC|c|…` was protocol 14's.)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Desc {
-    Car {
-        id: u32,
-        file: String,
-        scheme: Option<u8>,
-        line: String,
-        destination: String,
-        paint: String,
-    },
-    Person {
-        id: u32,
-        file: String,
-    },
+    Person { id: u32, file: String },
 }
 
 impl Desc {
     pub fn encode(&self) -> String {
         match self {
-            Desc::Car {
-                id,
-                file,
-                scheme,
-                line,
-                destination,
-                paint,
-            } => format!(
-                "DESC|c|{id}|{}|{}|{}|{}|{}",
-                crate::clean_text(file, 260),
-                scheme.map(|s| s.to_string()).unwrap_or_else(|| "-".into()),
-                crate::clean_text(line, 16),
-                crate::clean_text(destination, 64),
-                crate::clean_text(paint, 64)
-            ),
             Desc::Person { id, file } => {
                 format!("DESC|p|{id}|{}", crate::clean_text(file, 260))
             }
@@ -595,14 +465,6 @@ impl Desc {
         }
         let id = parts[2].trim().parse::<u32>().ok().filter(|i| *i <= MAX_ID)?;
         match parts[1] {
-            "c" => Some(Desc::Car {
-                id,
-                file: content_file(parts[3], &["bus", "ovh", "sco"])?,
-                scheme: parts.get(4).and_then(|s| s.trim().parse::<u8>().ok()),
-                line: crate::clean_text(parts.get(5).copied().unwrap_or(""), 16),
-                destination: crate::clean_text(parts.get(6).copied().unwrap_or(""), 64),
-                paint: crate::clean_text(parts.get(7).copied().unwrap_or(""), 64),
-            }),
             "p" => Some(Desc::Person {
                 id,
                 file: content_file(parts[3], &["hum"])?,
@@ -636,30 +498,11 @@ pub fn content_file(p: &str, exts: &[&str]) -> Option<String> {
 mod tests {
     use super::*;
 
-    fn car(id: u32, x: f64) -> CarState {
-        CarState {
-            id,
-            x,
-            y: 4_196_461.37,
-            z: 33.21,
-            heading: 271.3,
-            pitch: -1.2,
-            bank: 0.4,
-            speed: 13.85,
-            steer: -7.5,
-            blinker: 2,
-            brake: true,
-            lights: true,
-            at_station: -1,
-        }
-    }
-
     #[test]
     fn a_frame_round_trips_in_spandau_coordinates() {
         let f = WorldFrame {
             seq: 65535,
             host_ms: 123_456_789,
-            cars: vec![car(7, 892_248.18), car(MAX_ID, 893_100.02)],
             people: vec![
                 PersonState {
                     id: 12,
@@ -715,7 +558,7 @@ mod tests {
                 time: 63.45,
                 held: true,
             }],
-            gone: vec![(false, 3), (true, 99)],
+            gone: vec![(true, 3), (true, 99)],
             parked: Some((true, vec![242685, 7])),
         };
         let d = encode(&f, 4);
@@ -724,14 +567,6 @@ mod tests {
         assert!(d[0].len() <= 132, "{} bytes", d[0].len());
         let g = decode(&d[0], 4).unwrap();
         assert_eq!((g.seq, g.host_ms), (65535, 123_456_789));
-        assert_eq!(g.cars.len(), 2);
-        let (a, b) = (&f.cars[0], &g.cars[0]);
-        assert!((a.x - b.x).abs() < 0.006 && (a.y - b.y).abs() < 0.006 && (a.z - b.z).abs() < 0.006);
-        assert!((a.heading - b.heading).abs() < 0.05);
-        assert!((a.pitch - b.pitch).abs() < 0.051 && (a.bank - b.bank).abs() < 0.051);
-        assert!((a.speed - b.speed).abs() < 0.026 && (a.steer - b.steer).abs() < 0.26);
-        assert_eq!((b.blinker, b.brake, b.lights, b.at_station), (2, true, true, -1));
-        assert_eq!(g.cars[1].id, MAX_ID);
         assert_eq!(g.people.len(), 4);
         match g.people[0].place {
             PersonPlace::Foot { waiting, x, .. } => {
@@ -754,7 +589,7 @@ mod tests {
         }
         assert_eq!(g.lights.len(), 1);
         assert!(g.lights[0].held && (g.lights[0].time - 63.45).abs() < 0.026);
-        assert_eq!(g.gone, vec![(false, 3), (true, 99)]);
+        assert_eq!(g.gone, vec![(true, 3), (true, 99)]);
         assert_eq!(g.parked, Some((true, vec![242685, 7])));
         // anything else is not a frame
         assert!(decode(&d[0], 3).is_none());
@@ -767,7 +602,6 @@ mod tests {
     #[test]
     fn a_busy_street_is_shared_out_over_datagrams() {
         let f = WorldFrame {
-            cars: (0..150).map(|i| car(i, 892_000.0 + i as f64 * 5.0)).collect(),
             people: (0..300)
                 .map(|i| PersonState {
                     id: 1000 + i,
@@ -794,53 +628,31 @@ mod tests {
         let d = encode(&f, 4);
         assert!(d.iter().all(|x| x.len() <= MAX_WORLD_DATAGRAM));
         let frames: Vec<WorldFrame> = d.iter().map(|x| decode(x, 4).unwrap()).collect();
-        assert_eq!(frames.iter().map(|g| g.cars.len()).sum::<usize>(), 150);
         assert_eq!(frames.iter().map(|g| g.people.len()).sum::<usize>(), 300);
         assert_eq!(frames.iter().map(|g| g.lights.len()).sum::<usize>(), 10);
         let bytes: usize = d.iter().map(|x| x.len()).sum();
-        // 17 bytes a car, 12 to 17 a person
-        assert!(bytes < 150 * 17 + 300 * 15 + 200, "{bytes} bytes in {} datagrams", d.len());
+        // 12 to 17 bytes a person
+        assert!(bytes < 300 * 15 + 200, "{bytes} bytes in {} datagrams", d.len());
         // something 5 km away from the rest does not fit the anchor and is left out
+        let person = |x: f64| PersonState {
+            id: 1,
+            activity: Activity::Walk,
+            place: PersonPlace::Foot { x, y: 0.0, z: 0.0, heading: 0.0, speed: 0.0, waiting: None },
+        };
         let far = WorldFrame {
-            cars: vec![car(1, 0.0), car(2, 5000.0)],
+            people: vec![person(0.0), person(5000.0)],
             ..Default::default()
         };
-        assert_eq!(decode(&encode(&far, 4)[0], 4).unwrap().cars.len(), 1);
+        assert_eq!(decode(&encode(&far, 4)[0], 4).unwrap().people.len(), 1);
     }
 
     #[test]
     fn descriptions_and_requests() {
-        let d = Desc::Car {
-            id: 77,
-            file: "Vehicles/MAN_NL_NG/MAN_EN92_main.bus".into(),
-            scheme: Some(3),
-            line: "37".into(),
-            destination: "Hahneberg|x".into(),
-            paint: "BVG 1990".into(),
-        };
-        let text = d.encode();
-        let parts: Vec<&str> = text.split('|').collect();
-        assert_eq!(
-            Desc::decode(&parts).unwrap(),
-            Desc::Car {
-                id: 77,
-                file: "Vehicles/MAN_NL_NG/MAN_EN92_main.bus".into(),
-                scheme: Some(3),
-                line: "37".into(),
-                destination: "Hahneberg x".into(),
-                paint: "BVG 1990".into(),
-            }
-        );
-        // (from a game that sends no name: the index alone)
-        let old: Vec<&str> = "DESC|c|77|Vehicles/x.bus|2|37|#4".split('|').collect();
-        assert!(matches!(Desc::decode(&old), Some(Desc::Car { scheme: Some(2), ref paint, .. }) if paint.is_empty()));
         for bad in [
-            "DESC|c|1|../../x.bus|-||",
-            "DESC|c|1|/etc/passwd.bus|-||",
-            "DESC|c|1|Vehicles/x.exe|-||",
             "DESC|p|1|Humans/x.bus",
             "DESC|p|99999999|Humans/x.hum",
             "DESC|x|1|Humans/x.hum",
+            "DESC|c|1|Vehicles/x.bus|-||",
         ] {
             let parts: Vec<&str> = bad.split('|').collect();
             assert!(Desc::decode(&parts).is_none(), "{bad}");

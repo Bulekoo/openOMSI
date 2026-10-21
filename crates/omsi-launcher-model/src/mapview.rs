@@ -374,8 +374,8 @@ fn layers_view(l: Option<&omsi_map::layers::Layers>, origin: DVec2) -> serde_jso
             .flat_map(|c| c.iter().flat_map(|q| [r1(q.x + shift.x), r1(q.y + shift.y)]).collect::<Vec<_>>())
             .collect()
     };
-    let land: Vec<Vec<f64>> = l.land.iter().map(|t| tris(t)).collect();
-    let paved: Vec<Vec<f64>> = l.paved.iter().take(omsi_map::layers::PAVE_GREEN).map(|t| tris(t)).collect();
+    let land: Vec<Vec<f64>> = (0..omsi_map::layers::LAND_CLASSES).map(|c| tris(l.land_of(c))).collect();
+    let paved: Vec<Vec<f64>> = (0..omsi_map::layers::PAVE_GREEN).map(|c| tris(l.paved_of(c))).collect();
     let houses: Vec<serde_json::Value> = l.buildings.iter().map(|b| json!({ "h": r1(b.height), "p": b.outline.iter().flat_map(|q| [r1(q.x + shift.x), r1(q.y + shift.y)]).collect::<Vec<_>>() })).collect();
     let lines: Vec<serde_json::Value> = l.lines.iter().filter(|x| x.class < omsi_map::layers::LINE_ROAD_EDGE).map(|x| json!({ "c": x.class, "w": r1(x.width), "p": x.points.iter().flat_map(|q| [r1(q.x + shift.x), r1(q.y + shift.y)]).collect::<Vec<_>>() })).collect();
     let tiles: Vec<[f64; 4]> = l.tiles.iter().map(|t| [r1(t[0] + shift.x), r1(t[1] + shift.y), r1(t[2] + shift.x), r1(t[3] + shift.y)]).collect();

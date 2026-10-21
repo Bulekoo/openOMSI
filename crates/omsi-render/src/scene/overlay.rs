@@ -13,7 +13,8 @@ use crate::MeshData;
 const FLATS_PER_SLOT: usize = 32;
 /// How far a surface's tilt may lift its edge off another's plane and it still lie on it.
 const PLANE_GAP: f32 = 2e-4;
-const CENTRE_GAP: f32 = 2e-5;
+// Allow tiny display-layer offsets without merging genuinely separate 0.1 mm surfaces.
+const CENTRE_GAP: f32 = 5e-5;
 /// How far apart two surfaces' boxes may be and still overlap.
 const BOX_GAP: f32 = 1e-3;
 /// The highest step: a surface on a surface on a surface ... is rare beyond that.
@@ -341,6 +342,23 @@ mod tests {
         let at = Vec3::new(0.0, 5.5, 1.2);
         assert_eq!(levels_of(&[tilted(at, 0.3, 45.0), tilted(at, 0.05, 45.0)]), vec![0, 1]);
         assert_eq!(levels_of(&[tilted(at, 0.3, 44.999), tilted(at, 0.05, 45.001)]), vec![0, 1]);
+    }
+
+    #[test]
+    fn slightly_separated_display_layers_keep_their_draw_order() {
+        for gap in [-4e-5, -2.5e-5, 2.5e-5, 4e-5] {
+            let mut mesh = quad(1.0, 0.2, 0, false);
+            let over = quad(1.0 + gap, 0.1, 1, true);
+            mesh.positions.extend(&over.positions);
+            mesh.normals.extend(&over.normals);
+            mesh.uvs.extend(&over.uvs);
+            mesh.indices.extend(over.indices.iter().map(|i| i + 4));
+            mesh.ranges = vec![(0, 6, 0), (6, 6, 1)];
+            let mut run = ObjectRun::default();
+            run.begin(None);
+            let levels = run.levels([0; 3], 0, 0, Mat4::IDENTITY, &mesh_flats(&mesh), 2);
+            assert_eq!(levels, vec![0, 1], "display layer gap {gap}");
+        }
     }
 
     #[test]

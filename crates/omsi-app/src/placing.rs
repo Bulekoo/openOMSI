@@ -204,6 +204,9 @@ impl App {
                 if let Some(mut d) = q.driver.take() {
                     d.hide(r, scene);
                 }
+                if let Some(mut tv) = q.trolley_view.take() {
+                    tv.release(r, scene);
+                }
                 w.release_vehicle(r, scene, q.render);
                 for t in q.trailer_renders {
                     w.release_vehicle(r, scene, t);
@@ -224,6 +227,9 @@ impl App {
         if let (Some(w), Some(r), Some(scene)) = (self.world.clone(), self.renderer.as_ref(), self.scene.as_mut()) {
             if let Some(mut d) = q.driver.take() {
                 d.hide(r, scene);
+            }
+            if let Some(mut tv) = q.trolley_view.take() {
+                tv.release(r, scene);
             }
             w.release_vehicle(r, scene, q.render);
             for t in q.trailer_renders {

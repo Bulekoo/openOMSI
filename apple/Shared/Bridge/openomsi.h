@@ -19,6 +19,7 @@ void openomsi_bridge_free(char *reply);
 int32_t openomsi_preview_frame(uint32_t w, uint32_t h, uint8_t *out, size_t cap, uint32_t *out_w, uint32_t *out_h);
 void openomsi_preview_orbit(float dx, float dy);
 void openomsi_preview_zoom(float k);
+void openomsi_preview_view(uint32_t view);
 
 #if defined(OPENOMSI_IOS)
 /// The app's `main`: runs the game's event loop (UIKit's run loop), never returns.

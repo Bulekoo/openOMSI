@@ -95,6 +95,7 @@ impl VehicleInstance {
                 model_only_vars.push(key);
             }
         }
+
         // `Axle_Springfactor_*` (varlist_roadvehicle.txt): the engine's spring scale, which
         // air-suspension scripts overwrite with their bellows pressure; a steel-sprung bus
         // never writes it and must not ride on springs of zero
@@ -206,7 +207,8 @@ impl VehicleInstance {
                 .collect();
             offs.iter().sum::<f32>() / offs.len().max(1) as f32
         };
-        VehicleInstance {
+        let trolley = TrolleyGear::for_type(&ty.def.trolley, std::ptr::addr_of!(host) as u64);
+        let mut instance = VehicleInstance {
             pending_destination: None,
             a_trans: OmsiFrames::default(),
             particles: ParticleSet::new(ty.model.particle_systems(), std::ptr::addr_of!(host) as u64 ^ 0x9e37_79b9),
@@ -281,7 +283,10 @@ impl VehicleInstance {
             pax_vars: std::sync::OnceLock::new(),
             engine_ids: std::sync::OnceLock::new(),
             program_ids: std::sync::OnceLock::new(),
-        }
+            trolley,
+        };
+        instance.declare_trolley_vars();
+        instance
     }
 
     /// Restore a situation without running scripts against an incomplete host. Nothing is

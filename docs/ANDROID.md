@@ -24,14 +24,15 @@ maps, buses and mods. What differs is how it is controlled:
 | above the wheel | indicator left, hazard lights, indicator right; the horn beside the wheel |
 | top left | the game menu, pause, the camera (driver → outside → passenger), look straight ahead |
 | top right | the controls hidden / shown, the cab panel, the city map, the timetable, a screenshot |
-| cab panel | battery, engine start (hold), start the bus by itself, headlights, high beam, wipers, saloon lights, sell a ticket, the next seat view, the navigator, the information bar, tilt steering |
+| cab panel | battery, engine start (hold), start the bus by itself, headlights, high beam, wipers, saloon lights, sell a ticket, the next seat view, the free camera, the navigator, the information bar, tilt steering |
 
 Everything else is in the cab itself, as in OMSI: a tap works the switch under the finger (the
 IBIS, the ticket printer, the light switches), a finger dragged from a switch turns it (knobs,
 the ignition key, the sun blind), a drag elsewhere looks round, two fingers zoom. The
 navigator stands in the top middle (under the information bar when that is on): a tap opens the
-city map, a finger dragged on it puts it somewhere else, where it stays. On foot and
-with the free camera a stick at the bottom left walks (pushed to the edge: runs); on foot the
+city map, a finger dragged on it puts it somewhere else, where it stays. On foot a stick at the bottom left walks (pushed to the edge: runs); in the free camera (cab
+panel → Free camera) the stick flies, as far as it is pushed, the buttons at the bottom right
+rise, sink and set the speed, a drag looks, two fingers zoom, and "Exit free camera" goes back; on foot the
 button at the bottom right kneels, for a picture from low down, and stands up again. The game
 menu and its lists scroll with the finger and a tap picks a line (a finger put down to scroll
 does not pick the line it lands on); on the city map the fingers are the mouse. The back key
@@ -95,6 +96,13 @@ window, and `OMSI_INPUT` drives them with `touch down|move|up x,y[,finger]` (log
 e.g. `OMSI_TOUCH=1 OMSI_INPUT="t=8 touch down 1500,700; t=10 touch up 1500,700; t=11 shot
 touch.png"` presses the accelerator for two seconds and writes the picture with the controls
 on it. `OMSI_MOBILE=1` gives the game the phone's screen cut-outs.
+A phone-sized picture with no window on the screen: `OMSI_HIDDEN_WINDOW=1 OMSI_BACKGROUND=1
+OMSI_TOUCH=1 openomsi --size 360x800 --exit-after 12` with `OMSI_INPUT="t=7 shot phone.png"` (the
+picture is the window's, the controls on it; 360x800, 412x915, 820x1180 and 800x360 are the
+sizes to look at). The free camera: cab panel (tune button) → Free camera, then the stick and
+the buttons at the bottom; photo mode: `OMSI_INPUT="t=7 photo"` and touch the buttons.
+The bus preview's cost per picture (drawing, read-back, JPEG) is in the answer's `ms` of the
+launcher service's `frame` command: `openomsi --launcher-service`, one JSON request a line.
 
 ## Releases
 

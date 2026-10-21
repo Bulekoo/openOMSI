@@ -244,6 +244,13 @@ jobs:
             launcher/src-tauri -> target
       - name: Build
         run: scripts/build-macos.sh
+      - name: iPhone and iPad game library compiles
+        if: matrix.arch == 'arm64'
+        env:
+          IPHONEOS_DEPLOYMENT_TARGET: '18.0'
+        run: |
+          rustup target add aarch64-apple-ios
+          cargo check --locked -p omsi-app --lib --target aarch64-apple-ios
       - name: Package
         run: |
           mkdir -p out

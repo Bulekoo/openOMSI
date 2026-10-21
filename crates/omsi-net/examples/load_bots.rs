@@ -19,7 +19,7 @@ struct Bot {
     lan: LanSession,
     pose: Pose,
     /// The AI car it drives in place of (none yet: it stands where it started).
-    car: Option<u32>,
+    car: Option<omsi_net::traffic_table::TrafficId>,
 }
 
 fn main() {
@@ -102,20 +102,20 @@ fn main() {
             }
         }
         for (i, b) in bots.iter_mut().enumerate() {
-            for (_, frame) in b.lan.take_world() {
-                if stand {
-                    continue;
-                }
-                let car = match b.car {
-                    Some(id) => frame.cars.iter().find(|c| c.id == id),
-                    // the i-th car it hears of, so that the bots spread
-                    None => frame.cars.get(i % frame.cars.len().max(1)),
-                };
-                if let Some(c) = car {
-                    b.car = Some(c.id);
-                    (b.pose.x, b.pose.y, b.pose.z, b.pose.heading, b.pose.speed_kmh) = (c.x, c.y, c.z, c.heading, c.speed * 3.6);
-                } else if frame.gone.iter().any(|&(person, id)| !person && Some(id) == b.car) {
-                    b.car = None;
+            // (the world frames are the people's: only drained here)
+            let _ = b.lan.take_world();
+            if !stand {
+                let table = b.lan.traffic_client();
+                let mut ids: Vec<_> = table.ids().collect();
+                ids.sort();
+                // the i-th car it hears of, so that the bots spread
+                let id = b.car.filter(|c| table.get(*c).is_some()).or_else(|| ids.get(i % ids.len().max(1)).copied());
+                match id.and_then(|id| table.newest(id).map(|p| (id, p))) {
+                    Some((id, p)) => {
+                        b.car = Some(id);
+                        (b.pose.x, b.pose.y, b.pose.z, b.pose.heading, b.pose.speed_kmh) = (p.pos[0], p.pos[1], p.pos[2], p.heading as f32, (p.speed * 3.6) as f32);
+                    }
+                    None => b.car = None,
                 }
             }
             b.lan.tick(dt as f32, &b.pose);

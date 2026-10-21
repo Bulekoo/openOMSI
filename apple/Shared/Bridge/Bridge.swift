@@ -30,6 +30,14 @@ enum Bridge {
         try JSONDecoder().decode(T.self, from: call(cmd, arg))
     }
 
+    static func api(_ cmd: String, _ args: [String: Any] = [:]) throws -> Data {
+        try call("api", ["cmd": cmd, "args": args])
+    }
+
+    static func api<T: Decodable>(_ type: T.Type, _ cmd: String, _ args: [String: Any] = [:]) throws -> T {
+        try JSONDecoder().decode(T.self, from: api(cmd, args))
+    }
+
     /// An action of the launcher (`act {do: ...}`); its error, if any, as text.
     @discardableResult
     static func act(_ what: String, _ arg: [String: Any] = [:]) -> String? {

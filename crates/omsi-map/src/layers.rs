@@ -99,6 +99,21 @@ pub struct Layers {
     /// Single trees: x, y and the crown's radius.
     pub trees: Vec<[f32; 3]>,
     pub lines: Vec<Line>,
+    mapped: Option<std::sync::Arc<Mapped>>,
+}
+
+#[derive(Debug)]
+struct Mapped {
+    map: memmap2::Mmap,
+    land: Vec<std::ops::Range<usize>>,
+    paved: Vec<std::ops::Range<usize>>,
+    paint: Vec<std::ops::Range<usize>>,
+}
+
+impl Mapped {
+    fn points(&self, ranges: &[std::ops::Range<usize>], class: usize) -> &[Vec2] {
+        ranges.get(class).map_or(&[], |r| bytemuck::cast_slice(&self.map[r.clone()]))
+    }
 }
 
 const MAGIC: &[u8; 4] = b"OMML";
@@ -108,6 +123,40 @@ pub const VERSION: u32 = 18;
 impl Layers {
     pub fn empty(origin: DVec2) -> Layers {
         Layers { origin, land: vec![Vec::new(); LAND_CLASSES], paved: vec![Vec::new(); PAVE_CLASSES], paint: vec![Vec::new(); PAINT_CLASSES], ..Default::default() }
+    }
+
+    pub fn land_of(&self, class: usize) -> &[Vec2] {
+        match &self.mapped {
+            Some(m) => m.points(&m.land, class),
+            None => self.land.get(class).map_or(&[], Vec::as_slice),
+        }
+    }
+
+    pub fn paved_of(&self, class: usize) -> &[Vec2] {
+        match &self.mapped {
+            Some(m) => m.points(&m.paved, class),
+            None => self.paved.get(class).map_or(&[], Vec::as_slice),
+        }
+    }
+
+    pub fn paint_of(&self, class: usize) -> &[Vec2] {
+        match &self.mapped {
+            Some(m) => m.points(&m.paint, class),
+            None => self.paint.get(class).map_or(&[], Vec::as_slice),
+        }
+    }
+
+    pub fn open(path: &std::path::Path, key: u64) -> Option<Layers> {
+        let file = std::fs::File::open(path).ok()?;
+        let map = unsafe { memmap2::Mmap::map(&file) }.ok()?;
+        if cfg!(target_endian = "big") {
+            return Layers::from_bytes(&map, key);
+        }
+        let mut ranges = [Vec::new(), Vec::new(), Vec::new()];
+        let mut out = Layers::read(&map, key, Some(&mut ranges))?;
+        let [land, paved, paint] = ranges;
+        out.mapped = Some(std::sync::Arc::new(Mapped { map, land, paved, paint }));
+        Some(out)
     }
 
     /// The extent of everything (relative), for the zoom limits.
@@ -141,17 +190,11 @@ impl Layers {
         for t in &self.tiles {
             t.iter().for_each(|v| f(&mut w, *v));
         }
-        u32_(&mut w, self.land.len());
-        for l in &self.land {
-            pts(&mut w, l);
-        }
-        u32_(&mut w, self.paved.len());
-        for l in &self.paved {
-            pts(&mut w, l);
-        }
-        u32_(&mut w, self.paint.len());
-        for l in &self.paint {
-            pts(&mut w, l);
+        for (classes, of) in [(LAND_CLASSES, Layers::land_of as fn(&Layers, usize) -> &[Vec2]), (PAVE_CLASSES, Layers::paved_of), (PAINT_CLASSES, Layers::paint_of)] {
+            u32_(&mut w, classes);
+            for class in 0..classes {
+                pts(&mut w, of(self, class));
+            }
         }
         u32_(&mut w, self.buildings.len());
         for b in &self.buildings {
@@ -198,6 +241,10 @@ impl Layers {
     /// The layers in `b` if they were made by this version for `key`; None for anything else
     /// (another version, another key, a short or damaged file).
     pub fn from_bytes(b: &[u8], key: u64) -> Option<Layers> {
+        Layers::read(b, key, None)
+    }
+
+    fn read(b: &[u8], key: u64, mut ranges: Option<&mut [Vec<std::ops::Range<usize>>; 3]>) -> Option<Layers> {
         let mut r = Reader { b, at: 0 };
         if r.take(4)? != MAGIC || r.u32()? != VERSION || r.u64()? != key {
             return None;
@@ -207,18 +254,17 @@ impl Layers {
         for _ in 0..r.count(16)? {
             out.tiles.push([r.f32()?, r.f32()?, r.f32()?, r.f32()?]);
         }
-        for _ in 0..r.count(8)? {
-            out.land.push(r.points()?);
+        for (k, classes) in [LAND_CLASSES, PAVE_CLASSES, PAINT_CLASSES].into_iter().enumerate() {
+            let mut owned = Vec::new();
+            for _ in 0..r.count(8)? {
+                match ranges.as_deref_mut() {
+                    Some(ranges) => ranges[k].push(r.points_at()?),
+                    None => owned.push(r.points()?),
+                }
+            }
+            owned.resize(classes, Vec::new());
+            *[&mut out.land, &mut out.paved, &mut out.paint][k] = owned;
         }
-        out.land.resize(LAND_CLASSES, Vec::new());
-        for _ in 0..r.count(8)? {
-            out.paved.push(r.points()?);
-        }
-        out.paved.resize(PAVE_CLASSES, Vec::new());
-        for _ in 0..r.count(8)? {
-            out.paint.push(r.points()?);
-        }
-        out.paint.resize(PAINT_CLASSES, Vec::new());
         for _ in 0..r.count(17)? {
             let outline = r.points()?;
             let mut roof = Vec::new();
@@ -298,7 +344,19 @@ impl Reader<'_> {
     }
     fn points(&mut self) -> Option<Vec<Vec2>> {
         let n = self.count(8)?;
-        (0..n).map(|_| Some(Vec2::new(self.f32()?, self.f32()?))).collect()
+        let mut v = Vec::with_capacity(n);
+        for _ in 0..n {
+            v.push(Vec2::new(self.f32()?, self.f32()?));
+        }
+        Some(v)
+    }
+    fn points_at(&mut self) -> Option<std::ops::Range<usize>> {
+        let n = self.count(8)?;
+        let start = self.at;
+        for _ in 0..n * 2 {
+            self.f32()?;
+        }
+        (start % 4 == 0).then_some(start..self.at)
     }
 }
 
@@ -496,6 +554,38 @@ mod tests {
         assert_eq!(r.paint[PAINT_AMBER].len(), 3);
         assert!(Layers::from_bytes(&b, 43).is_none());
         assert!(Layers::from_bytes(&b[..b.len() - 3], 42).is_none());
+    }
+
+    #[test]
+    fn mapped_layers_read_the_triangles_from_the_file() {
+        let mut l = Layers::empty(DVec2::new(5.0, 6.0));
+        l.land[LAND_WATER] = vec![Vec2::ZERO, Vec2::X, Vec2::Y];
+        l.paved[PAVE_INNER] = vec![Vec2::new(1.5, 2.5), Vec2::new(3.0, 4.0), Vec2::new(-7.25, 8.0), Vec2::ONE, Vec2::X, Vec2::Y];
+        l.paint[PAINT_WHITE] = vec![Vec2::ONE, Vec2::NEG_ONE, Vec2::X];
+        l.trees.push([1.0, 2.0, 3.0]);
+        let dir = std::env::temp_dir().join(format!("omsi-layers-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("map.bin");
+        let b = l.to_bytes(9);
+        std::fs::write(&path, &b).unwrap();
+        let m = Layers::open(&path, 9).expect("mapped");
+        assert!(m.mapped.is_some() && m.land.iter().chain(&m.paved).chain(&m.paint).all(Vec::is_empty));
+        for class in 0..PAVE_CLASSES {
+            assert_eq!(m.paved_of(class), l.paved_of(class));
+        }
+        assert_eq!(m.land_of(LAND_WATER), &l.land[LAND_WATER][..]);
+        assert_eq!(m.paint_of(PAINT_WHITE), &l.paint[PAINT_WHITE][..]);
+        assert!(m.land_of(LAND_CLASSES).is_empty());
+        assert_eq!(m.trees, l.trees);
+        assert_eq!(m.to_bytes(9), b);
+        assert!(Layers::open(&path, 10).is_none());
+        drop(m);
+        let mut bad = b.clone();
+        let at = b.windows(4).position(|w| w == 1.5f32.to_le_bytes()).unwrap();
+        bad[at..at + 4].copy_from_slice(&f32::NAN.to_le_bytes());
+        std::fs::write(&path, &bad).unwrap();
+        assert!(Layers::open(&path, 9).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

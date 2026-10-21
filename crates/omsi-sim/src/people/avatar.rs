@@ -430,6 +430,11 @@ impl PeopleSim {
         self.last_buses.iter().find(|b| b.id == bus).map(|b| b.pos)
     }
 
+    /// The compass heading of bus `bus` (degrees), as of the last tick.
+    pub fn bus_heading(&self, bus: BusId) -> Option<f64> {
+        self.last_buses.iter().find(|b| b.id == bus).map(|b| b.heading)
+    }
+
     /// Is `bus` among the buses of the last tick?
     pub fn bus_here(&self, bus: BusId) -> bool {
         self.last_buses.iter().any(|b| b.id == bus)

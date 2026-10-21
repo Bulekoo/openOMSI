@@ -109,7 +109,8 @@ impl Navigator {
             if self.route_mesh.0 != self.route.version || self.route_mesh.1 != self.jam_version || self.route_mesh.2 != anchor || self.route_mesh.4 != bus_lane || self.route_mesh.5 != look_key {
                 let mut p = Painter::new();
                 let style = RouteStyle { extra_m: -0.6, min_px: 5.0, arrows: Some((32.0, 900.0)), max_len: 12_000.0, near: Some((anchor, PANEL_REACH)) };
-                build_route(&mut p, rn, &self.route.lanes[self.route.progress.min(self.route.lanes.len())..], anchor, self.route.s, &self.route_jam, &style, bus_lane, &pal);
+                mapmesh::roads::build_route_to(&mut p, rn, &self.route.lanes[self.route.progress.min(self.route.lanes.len())..], anchor, self.route.s, &self.route_jam, &style, bus_lane, &pal, self.destination.as_ref().and_then(|d| d.path.as_ref().map(|p| p.end_s)));
+                self.draw_waypoint_routes(&mut p, rn, anchor, &style, &pal);
                 self.route_mesh = (self.route.version, self.jam_version, anchor, p.len(), bus_lane, look_key);
                 route_verts = Some(p.verts);
             }
@@ -165,6 +166,7 @@ impl Navigator {
         // the far end of the map: a haze into the land's colour
         ui.gradient(Rect::new(map.x, map.y, map.w, map.h * 0.16), pal.land.alpha(0.7), pal.land.alpha(0.0));
         self.draw_map_marks(&mut ui, f, map, vpm, vp, anchor, s, transit, &pal);
+        self.draw_destination_markers(&mut ui, &|q| project(vpm, vp, Vec3::new((q.x - anchor.x) as f32, (q.y - anchor.y) as f32, 0.0)), map, s, false, &pal);
         // the package's places: its icons on the map, the municipality and the street under it
         let icon_verts = self.minimap_icons(vpm, vp, anchor, f.bus.truncate(), map, s);
         let loc_h = self.place_row_height(s);
@@ -334,6 +336,10 @@ impl Navigator {
             ui.text(&mut self.atlas, &self.fonts, &time_text, 14.0 * s, Weight::Bold, Vec2::new(b.right() - 10.0 * s, base), Align::Right, pal.card_text);
             ui.text(&mut self.atlas, &self.fonts, day, 11.0 * s, Weight::Medium, Vec2::new(b.right() - 10.0 * s - self.fonts.width(&time_text, 14.0 * s, Weight::Bold) - 5.0 * s, base), Align::Right, pal.card_dim);
             ui.text(&mut self.atlas, &self.fonts, &temp, 11.0 * s, Weight::Medium, Vec2::new(b.right() - 10.0 * s, b.y + 33.0 * s), Align::Right, pal.card_dim);
+        }
+        if self.destination.is_some() {
+            self.draw_destination_card(ui, net, map, s, pal);
+            return;
         }
         // --- bottom: the next stop
         let bottom_h = 52.0 * s;

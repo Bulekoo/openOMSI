@@ -52,6 +52,16 @@ forbid omsi-script omsi-render
 forbid omsi-geometry omsi-sim
 forbid omsi-geometry omsi-render
 
+# The trolleybus's wire, poles and traction are pure state and physics on the base layer: they
+# know no other crate of the game (and nothing of how they are shown or heard).
+forbid omsi-trolley omsi-sim
+forbid omsi-trolley omsi-render
+forbid omsi-trolley omsi-audio
+forbid omsi-trolley omsi-scene
+forbid omsi-trolley omsi-vehicle
+forbid omsi-trolley omsi-script
+forbid omsi-trolley omsi-ui
+
 # Transport and plugin hosting do not know the game.
 forbid omsi-net omsi-sim
 forbid omsi-net omsi-render

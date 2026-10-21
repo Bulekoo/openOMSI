@@ -64,6 +64,9 @@ pub struct ServerInfo {
     pub local_admin_failures: Vec<Instant>,
     /// A dedicated server's shared world now (`"world"` in `GET /status`); none elsewhere.
     pub world: Option<WorldCounts>,
+    /// The public server list's challenge (`"list_challenge"` in `GET /status`): the list
+    /// service lists the server once it finds it there. Empty: the server is not listed.
+    pub list_challenge: String,
 }
 
 /// What a dedicated server's shared world holds: the AI cars on the roads (`cars`), its
@@ -162,6 +165,15 @@ pub fn players_json(players: &[PlayerInfo]) -> String {
 
 impl ServerInfo {
     pub fn to_json(&self) -> String {
+        let mut json = self.to_json_base();
+        if !self.list_challenge.is_empty() {
+            json.pop();
+            json.push_str(&format!(",\"list_challenge\":{}}}", json_str(&self.list_challenge)));
+        }
+        json
+    }
+
+    fn to_json_base(&self) -> String {
         format!(
             "{{\"name\":{},\"motd\":{},\"map\":{},\"players\":{},\"max_players\":{},\"version\":{},\"icon\":{},\"time\":{},\"weather\":{},\"password\":{},\"protocol\":{},\"vehicles\":{},\"world\":{}}}",
             json_str(&self.name),

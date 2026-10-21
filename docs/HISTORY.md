@@ -944,6 +944,17 @@ Reverse engineered from Omsi.exe and put in place of our own guesses:
   and Galvin). `OMSI_CONDENSATION=<min>,<people>[,engine]` for offscreen checks. Checked:
   Grundorf SD202 D86 driver view in Schmuddelwetter, engine on (sides misted, windscreen
   defrosted) and off (all misted, frame and dashboard sharp); trees in an 18 m/s storm.
+  A bus whose scripts own `Cabinair_Temp` (the stock `heizung.osc` and its descendants) is read
+  as it is: its cabin temperature, humidity and, while the front heater's fan runs, `fanheater_t_target`
+  as the defroster's air - the heating, the fans and the vent windows then clear the glass as the
+  gauges say; the built-in cabin is for buses without them, with 15 m3/h of fresh air a person.
+  `OMSI_CABIN_LOG=1` prints the cabin's air and the films every 20 s of an offscreen `--drive`.
+* **Snow on glass in metres** (`omsi-scene/pane_uv.rs`): the film meshes' texture coordinates (`regen.tga`
+  of every pane) are laid out in metres of the glass when a vehicle's meshes go to the GPU - along the pane
+  horizontally and up it, by the normal of the triangles that meet at each point - and the snow picture is
+  the one the wiped panes of the cab wear (`snow_layer` in 07_patterns_weather.wgsl, baked at full cover
+  into a tile of a metre that joins its own edges). The wiped panes' snow takes the same coordinates: a
+  slot's mask is one plane, in which the rear window of a double-decker lay edge-on.
 * **Enhanced paint**: a `[matl_envmap]` body is a clear coat (f0 0.04, its factor x mask its
   smoothness: 1 and up polished, 0.05..0.2 satin trim, unmasked parts rough); bodies painted
   through a `[matl_transmap]` (most mod buses and cars) reflect too - they were left out

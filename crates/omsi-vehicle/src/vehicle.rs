@@ -134,6 +134,9 @@ pub struct Vehicle {
     pub sinus: Option<[f32; 4]>,
     pub rail_body_osc: Option<[f32; 7]>,
     pub contact_shoes: Vec<[f32; 6]>,
+    /// openOMSI's trolleybus gear: `[trolley_pole]`, `[trolley_rheostat]`, `[trolley_async]`
+    /// and the like (see `omsi_trolley::TrolleyDef`).
+    pub trolley: omsi_trolley::TrolleyDef,
     pub ai_brake_performance: Option<[f32; 5]>,
     pub fixed: bool,
     pub unknown_keywords: Vec<(String, usize)>,
@@ -399,6 +402,10 @@ impl Vehicle {
                 "contact_shoe" => v.contact_shoes.push(r.f32s::<6>()),
                 "ai_brakeperformance" => v.ai_brake_performance = Some(r.f32s::<5>()),
                 "fixed" => v.fixed = true,
+                k2 if omsi_trolley::TrolleyDef::keywords().contains(&k2) => {
+                    let lines = r.rest_of_block();
+                    v.trolley.take_block(k2, &lines);
+                }
                 _ => v.unknown_keywords.push((k, r.block_line())),
             }
         }
@@ -626,6 +633,22 @@ mod tests {
         assert_eq!((b.long, b.max_width, b.min_width, b.wheel_diameter, b.spring, b.max_force, b.damper, b.driven, b.inertia_inv), (-2.577, 2.4, 1.4, 1.023, 280.0, 116.0, 20.0, true, 0.015));
         assert_eq!(v.mass, 10.9);
         assert_eq!(v.cog, Some([0.0, 0.2, 0.8]));
+    }
+
+    /// The trolleybus blocks: their lines are `key value`, and the keywords around them are read as ever.
+    #[test]
+    fn trolley_blocks_are_read_and_do_not_swallow_their_neighbours() {
+        let text = "[mass]\n11\n[trolley_pole]\nside left\npos -0.3 1.0 4.1\nlength 6.7\nmotor 1\n[trolley_pole]\nside right\npos 0.3 1.0 4.1\n[trolley_async]\nmax_force 28000\n[trolley_battery]\nkwh 3\n[boundingbox]\n2.5\n11\n3.7\n0\n0\n2\n";
+        let v = Vehicle::parse(&CfgFile::from_str("x.bus", text));
+        assert_eq!(v.mass, 11.0);
+        assert_eq!(v.trolley.poles.len(), 2);
+        assert_eq!(v.trolley.poles[0].side, -1);
+        assert!(v.trolley.poles[0].motor && !v.trolley.poles[1].motor);
+        assert!(matches!(&v.trolley.drive, Some(omsi_trolley::DriveKind::Async(a)) if a.max_force == 28000.0));
+        assert_eq!(v.trolley.battery.as_ref().map(|b| b.kwh), Some(3.0));
+        assert_eq!(v.bounding_box.map(|b| b[1]), Some(11.0));
+        // an ordinary vehicle has none of it
+        assert!(Vehicle::parse(&CfgFile::from_str("y.bus", "[mass]\n11\n")).trolley.is_empty());
     }
 
     /// `[add_camera_reflexion_static]` is one more reflection camera, numbered with the

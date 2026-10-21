@@ -113,6 +113,11 @@ impl Offscreen<'_> {
             let vehicles = steps::light_vehicles(self.player.as_ref(), self.traffic.as_ref(), &self.remotes_off);
             world_lights(&mut self.renderer, &self.world, &mut self.scene, &self.weather, &daylight, cam.position, &vehicles, &self.settings.vehicle_smoke, self.player.is_some());
         }
+        if let Some(p) = self.player.as_ref() {
+            if let Some(tv) = p.trolley_view.as_ref() {
+                tv.push_effects(&mut self.scene, &p.vehicle);
+            }
+        }
         self.spray.sprites(cam.position, &mut self.scene.smoke);
         let lighting = self.lighting_now(&cam);
         self.world.finish_texture_upgrades(&self.renderer, &mut self.scene);

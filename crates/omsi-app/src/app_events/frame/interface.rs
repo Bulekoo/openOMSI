@@ -140,8 +140,30 @@ impl App {
         }
         self.service_msg = self.service_msg.take().filter(|(_, l)| *l > 0.0);
         if let Some(lan) = self.net.lan.as_ref() {
-            for t in lan::hud_lines(lan).into_iter().chain(self.sound.voice.as_ref().and_then(|v| v.hud_line())) {
+            for t in lan::hud_lines(lan) {
                 say(t.clone(), t, NoticeKind::Info);
+            }
+            if let Some(v) = self.sound.voice.as_ref() {
+                for t in v.notices() {
+                    say(t.clone(), t, NoticeKind::Info);
+                }
+                // our own key: what we are transmitting on, and who is talking to us
+                let tr = |s: &str| omsi_ui::tr(s).into_owned();
+                match v.transmitting() {
+                    Some(omsi_voice::Channel::Radio) => say("voice transmit".into(), tr("Voice: you are talking on the radio"), NoticeKind::Action),
+                    Some(omsi_voice::Channel::Nearby) => say("voice transmit".into(), tr("Voice: you are talking to the players nearby"), NoticeKind::Action),
+                    None => {}
+                }
+                if self.settings.voice_talker_list {
+                    for (id, name, channel) in &v.talking {
+                        let how = match channel {
+                            omsi_voice::Channel::Radio => tr("on the radio"),
+                            omsi_voice::Channel::Nearby => tr("nearby"),
+                        };
+                        let name = if name.is_empty() { format!("#{id}") } else { name.clone() };
+                        say(format!("voice talker {id}"), format!("{name} - {how}"), NoticeKind::Info);
+                    }
+                }
             }
         }
         if let Some(h) = self.session.humans.as_ref() {
@@ -419,8 +441,8 @@ impl App {
             ui.chat.hidden = self.net.remotes.chat.hidden;
             let mut tags = if self.settings.name_tags {
                 let voice = self.sound.voice.as_ref();
-                let speaks = |name: &str, id: u32| voice.is_some_and(|v| v.speaks(name, id));
-                let on_radio = |name: &str, id: u32| voice.is_some_and(|v| v.on_radio(name, id));
+                let speaks = |_name: &str, id: u32| voice.is_some_and(|v| v.speaks(id).is_some());
+                let on_radio = |_name: &str, id: u32| voice.is_some_and(|v| v.speaks(id) == Some(omsi_voice::Channel::Radio));
                 let rig = (self.settings.triple.enabled
                     && !self.settings.vr_requested())
                 .then(|| {

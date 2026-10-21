@@ -21,8 +21,8 @@ pub mod players;
 pub use audit::{Audit, Entry};
 pub use auth::{Auth, AuthCfg, LoginError, Passwords, SessionInfo};
 pub use http::{ProxyHeader, WebCfg, WebMode};
-pub use hub::{Actor, Hub, Job, OpRecord, Origin, Outcome, ServerState, Snapshot, Status};
-pub use op::{clean, passenger_density, weather_file_ok, Op, Target, TrafficOp, WeatherOp, PASSENGER_DENSITY_MAX};
+pub use hub::{Actor, BanView, Hub, Job, OpRecord, Origin, Outcome, ServerState, Snapshot, Status};
+pub use op::{clean, passenger_density, weather_file_ok, BanScope, Op, MAX_BAN_HOURS, Target, TrafficOp, WeatherOp, PASSENGER_DENSITY_MAX};
 pub use perm::{Perm, Role};
 pub use players::{resolve, search, Player, PlayerState, TargetError};
 

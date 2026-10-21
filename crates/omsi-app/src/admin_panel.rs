@@ -15,7 +15,7 @@ pub(crate) fn remote(app: &App) -> bool {
 }
 
 fn admin_kind(k: Option<&ListKind>) -> bool {
-    matches!(k, Some(ListKind::Admin | ListKind::AdminPlayers | ListKind::AdminPlayer(_) | ListKind::AdminConfirm(..)))
+    matches!(k, Some(ListKind::Admin | ListKind::AdminPlayers | ListKind::AdminPlayer(_) | ListKind::AdminConfirm(..))) || crate::player_list::is_page(k)
 }
 
 /// The lines of a page of the server's menu.

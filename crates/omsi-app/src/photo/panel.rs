@@ -586,6 +586,7 @@ fn guides(ui: &mut Ui, f: Rect, kind: usize) {
 pub(crate) fn draw(sh: &mut Shell, ph: &mut Photo, info: &Info) {
     let mut acts: Vec<Request> = Vec::new();
     let size = sh.ui.size;
+    let sh_scale = sh.scale;
     let full = Rect::new(0.0, 0.0, size.x, size.y);
     // the photo itself (while the camera moves the window's live picture is under the panel)
     if let (Some(tex), true) = (sh.picture_tex, ph.render.showing_photo()) {
@@ -606,6 +607,7 @@ pub(crate) fn draw(sh: &mut Shell, ph: &mut Photo, info: &Info) {
             histogram(&mut sh.ui, Rect::new(size.x - 276.0, size.y - 156.0, 256.0, 120.0), h);
         }
     }
+    let touch = crate::platform::touch_controls();
     let ui = &mut sh.ui;
     // what was done, top right: where the photo went - a click shows it in the file browser
     if let Some((text, left)) = ph.note.clone() {
@@ -616,7 +618,7 @@ pub(crate) fn draw(sh: &mut Shell, ph: &mut Photo, info: &Info) {
             w = w.max(ui.width(place, 11.5, Weight::Regular) + 76.0);
         }
         let w = w.min(size.x - 40.0);
-        let r = Rect::new(size.x - w - 20.0, 20.0, w, if place.is_some() { 58.0 } else { 40.0 });
+        let r = Rect::new(size.x - w - 20.0, if touch { 84.0 } else { 20.0 }, w, if place.is_some() { 58.0 } else { 40.0 });
         let (hover, _, clicked) = if path.is_some() { ui.interact(omsi_ui::kit::id_of("ph-saved"), r) } else { (false, false, false) };
         ui.solid(r);
         // (it stays while the mouse is on it)
@@ -642,7 +644,8 @@ pub(crate) fn draw(sh: &mut Shell, ph: &mut Photo, info: &Info) {
     }
     let (n, target) = ph.render.progress();
     let busy = ph.render.capture;
-    if ph.hide_ui {
+    if ph.hide_ui || (touch && !ph.touch_panel) {
+        ph.panel_rect = None;
         if busy {
             ui.progress(Rect::new(size.x * 0.5 - 120.0, size.y - 28.0, 240.0, 4.0), n as f32 / target.max(1) as f32, true);
         }
@@ -650,7 +653,23 @@ pub(crate) fn draw(sh: &mut Shell, ph: &mut Photo, info: &Info) {
         return;
     }
     // the panel
-    let r = Rect::new(20.0, 20.0, PANEL_W.min(size.x - 40.0), size.y - 40.0);
+    let r = if touch {
+        // a finger's panel: at the right of a wide screen, a sheet from the bottom of a tall
+        // one, inside what the system covers (rounded corners, the island)
+        let (il, it, ir, ib) = crate::platform::safe_insets();
+        let k = 1.0 / sh_scale.max(0.25);
+        let avail = Rect::new(il * k + 12.0, it * k + 12.0, size.x - (il + ir) * k - 24.0, size.y - (it + ib) * k - 24.0);
+        if size.x > size.y * 1.1 {
+            let w = PANEL_W.min(avail.w * 0.6);
+            Rect::new(avail.right() - w, avail.y, w, avail.h)
+        } else {
+            let h = (avail.h * 0.64).min(avail.h);
+            Rect::new(avail.x, avail.bottom() - h, avail.w, h)
+        }
+    } else {
+        Rect::new(20.0, 20.0, PANEL_W.min(size.x - 40.0), size.y - 40.0)
+    };
+    ph.panel_rect = touch.then(|| [r.x * sh_scale, r.y * sh_scale, r.w * sh_scale, r.h * sh_scale]);
     ui.panel(r);
     let inner = Rect::new(r.x + 18.0, r.y + 16.0, r.w - 36.0, r.h - 32.0);
     ui.icon("photo_camera", Vec2::new(inner.x + 12.0, inner.y + 14.0), 20.0, ACCENT);
@@ -672,13 +691,25 @@ pub(crate) fn draw(sh: &mut Shell, ph: &mut Photo, info: &Info) {
         ph.tab = tab;
     }
     // the pages scroll above the buttons
-    let foot = 44.0 + 10.0 + 38.0 + 8.0 + 40.0;
+    let foot = if touch { 38.0 + 10.0 } else { 44.0 + 10.0 + 38.0 + 8.0 + 40.0 };
     let body = Rect::new(inner.x, inner.y + 100.0, inner.w, (inner.bottom() - foot - inner.y - 100.0).max(40.0));
     let key = format!("ph-page-{}", ph.tab);
     ui.scroll_area(&key, body, &mut |ui, v| {
         let end = page(ui, ph, info, v.x, v.y, v.w - 8.0, &mut acts);
         end - v.y + 6.0
     });
+    if touch {
+        // (the shutter, the stick and the rest are the fingers' own buttons, see `touch.rs`)
+        let half = (inner.w - 8.0) / 2.0;
+        if ui.button("ph-reset", Rect::new(inner.x, inner.bottom() - 38.0, half, 38.0), &omsi_ui::tr("Reset"), Some("restart_alt"), ButtonKind::Ghost) {
+            acts.push(Request::Reset);
+        }
+        if ui.button("ph-done", Rect::new(inner.x + half + 8.0, inner.bottom() - 38.0, half, 38.0), &omsi_ui::tr("Done"), Some("check"), ButtonKind::Primary) {
+            ph.touch_panel = false;
+        }
+        sh.actions.extend(acts.into_iter().map(Action::Photo));
+        return;
+    }
     // the keys, over the buttons (going down was nowhere to be found)
     let keys = Rect::new(inner.x, inner.bottom() - 44.0 - 46.0 - 40.0, inner.w, 34.0);
     ui.paragraph(&omsi_ui::tr("W A S D: move, Space: up, Ctrl: down, Shift: faster, drag or arrows: look"), Vec2::new(keys.x, keys.y), keys.w, 11.5, Weight::Regular, TEXT_DIM);

@@ -35,6 +35,7 @@ omsi-render = { path = "../omsi-render" }
 omsi-photo = { path = "../omsi-photo" }
 omsi-mt = { path = "../omsi-mt" }
 omsi-sim = { path = "../omsi-sim" }
+omsi-trolley = { path = "../omsi-trolley" }
 omsi-htmlengine = { path = "../omsi-htmlengine" }
 omsi-plugin = { path = "../omsi-plugin" }
 omsi-vehicle = { path = "../omsi-vehicle" }
@@ -42,6 +43,7 @@ omsi-content = { path = "../omsi-content" }
 omsi-timetable = { path = "../omsi-timetable" }
 omsi-script = { path = "../omsi-script" }
 omsi-audio = { path = "../omsi-audio" }
+omsi-voice = { path = "../omsi-voice" }
 wgpu.workspace = true
 winit.workspace = true
 glam.workspace = true

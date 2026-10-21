@@ -128,6 +128,8 @@ const graphics = {
         { type: 'select', key: 'mirror_refresh', label: 'Bus mirror refresh', options: [['off', 'None (frozen picture)'], ['eco', 'Economical'], ['full', 'Full'], ['every', 'Every frame (smoothest)']], heavy: (v, s) => v === 'every' && String(s.mirror_size) !== '0' },
         { type: 'select', key: 'mirror_quality', label: 'Mirror quality', options: [['standard', 'Standard'], ['enhanced', 'As the picture (Enhanced)']], when: enhanced },
         { type: 'toggle', key: 'mirror_hud_every_frame', label: 'Mirror panels every frame' },
+        { type: 'toggle', key: 'mirror_shadows', label: 'Shadows in the mirrors' },
+        { type: 'toggle', key: 'mirror_particles', label: 'Smoke and spray in the mirrors' },
         { type: 'select', key: 'video_memory', label: 'Video memory', options: videoMemory, help: 'Everything the game keeps on the graphics card: textures, models and the picture itself. Automatic is nine tenths of the card.' },
         { type: 'toggle', key: 'texture_compression', label: 'Compress textures on loading' },
         // (off: block formats decoded on loading, for a driver that mishandles them)
@@ -289,7 +291,7 @@ const camera = {
   ],
 };
 
-const vol = (key, label, def) => ({ type: 'slider', key, label, min: 0, max: 1, step: 0.05, def, format: pct, store: r2 });
+const vol = (key, label, def, when, max = 1) => ({ type: 'slider', key, label, min: 0, max, step: 0.05, def, format: pct, store: r2, ...(when ? { when } : {}) });
 
 const sound = {
   id: 'sound',
@@ -309,6 +311,18 @@ const sound = {
         vol('radio_speaker', 'Radio: small speaker', 0),
         vol('radio_hiss', 'Radio: FM hiss', 0),
         vol('radio_dropouts', 'Radio: signal dropouts', 0),
+        // voice chat in multiplayer (off until switched on; the microphone is used with a talk key held)
+        { type: 'section', title: 'Voice chat (multiplayer)' },
+        { type: 'toggle', key: 'voice_enabled', label: 'Voice chat', help: 'Hold a talk key to speak: Nearby (V) is heard by players close to you, Radio (B) by everybody in the session. The keys are in Controls. The system asks for the microphone the first time. Nothing is recorded or stored; the microphone is used only while a talk key is held (or always, in the open mode).' },
+        { type: 'select', key: 'voice_mode', label: 'Microphone', options: [['ptt', 'Push to talk'], ['open', 'Open microphone (nearby)']], when: (s) => !!s.voice_enabled },
+        { type: 'slider', key: 'voice_mic_gain', label: 'Microphone gain', min: 0, max: 4, step: 0.1, def: 1, format: pct, store: r1, when: (s) => !!s.voice_enabled },
+        { type: 'slider', key: 'voice_threshold_db', label: 'Open microphone: speech threshold', min: -80, max: -10, step: 1, def: -45, format: (v) => `${v.toFixed(0)} dB`, store: round, when: (s) => !!s.voice_enabled && s.voice_mode === 'open' },
+        vol('voice_volume', 'Voices: volume', 1, (s) => !!s.voice_enabled, 2),
+        vol('voice_volume_nearby', 'Voices: nearby players', 1, (s) => !!s.voice_enabled, 2),
+        vol('voice_volume_radio', 'Voices: radio', 1, (s) => !!s.voice_enabled, 2),
+        { type: 'slider', key: 'voice_range', label: 'Nearby voice range when you host', min: 10, max: 300, step: 5, def: 75, format: (v) => `${v.toFixed(0)} m`, store: round, when: (s) => !!s.voice_enabled },
+        { type: 'toggle', key: 'voice_talker_list', label: 'Show who is talking', when: (s) => !!s.voice_enabled },
+        { type: 'toggle', key: 'voice_all_off', label: "Everybody else's voice off", help: 'Single players are muted in the pause menu, under Players.', when: (s) => !!s.voice_enabled },
       ],
     },
     {
@@ -385,7 +399,6 @@ const general = {
         { type: 'toggle', key: 'machine_translation', label: 'Translate the remaining texts automatically (offline, downloads 620 MB once)' },
         { type: 'toggle', key: 'launcher_rest', label: 'The launcher rests while a game runs (gives the graphics card to the game)' },
         { type: 'toggle', key: 'discord_status', label: 'Discord Rich Presence', help: 'Shows the launcher or your map, bus, line and multiplayer status in Discord.' },
-        { type: 'toggle', key: 'voice_chat', label: 'Voice chat through GreenTeaSpeak (multiplayer)', help: 'Players near you are heard from where they stand, when GreenTeaSpeak runs with the openOMSI plugin and the server names a voice server.' },
         // (larger for those who find the texts hard to read, smaller for more of the picture)
         { type: 'slider', key: 'ui_scale', label: 'Game interface size', min: 0.5, max: 2, step: 0.05, def: 1, format: pct, store: r2 },
         { type: 'toggle', key: 'ui_scale_window', label: 'Interface grows with the window' },

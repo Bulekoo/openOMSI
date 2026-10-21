@@ -32,6 +32,7 @@ jobs:
           while IFS= read -r f; do
             # (the translations are one file for every language, checked on their own below)
             [ "$f" = "$LOCALES" ] && continue
+            [ "$f" = apple/Resources/Localizable.xcstrings ] && continue
             size=$(stat -c %s "$f" 2>/dev/null || echo 0)
             if [ "$size" -ge "$MAX_BYTES" ]; then
               echo "::error file=$f::$f is $((size / 1024)) KB. Files of a megabyte or more do not go into the repository (see CONTRIBUTING.md): link screenshots and videos in the pull request, and keep test data small."

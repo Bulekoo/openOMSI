@@ -72,8 +72,19 @@ pub struct ServerCfg {
     /// `server.cfg` without the key shares it, as servers did before the key came; the new
     /// file (`DEFAULT_CFG`) says 0.
     pub share_maps: bool,
-    /// The GreenTeaSpeak server and channel the players talk in (`voice`).
-    pub voice: Option<crate::voice::VoiceServer>,
+    /// Voice chat of the players: on or off, the session-wide radio, how far a player is
+    /// heard (`voice`, `voice_radio`, `voice_range`).
+    pub voice: omsi_net::VoicePolicy,
+    /// The server is listed in the public server list (`public_list`): name, icon, map, players.
+    pub public_server: bool,
+    /// The public list's address (`public_list_url`; empty: openOMSI's own).
+    pub public_list_url: String,
+    /// The owner's ban list (`owner_bans`; None: `~/.openomsi/bans-owner.json`).
+    pub owner_bans: Option<std::path::PathBuf>,
+    /// A player whose game sends no hardware identifier is turned away.
+    pub require_hardware_id: bool,
+    /// Where `server.cfg` is (its folder keeps the session's ban list).
+    pub dir: std::path::PathBuf,
 }
 
 pub const DEFAULT_CFG: &str = "\
@@ -177,17 +188,30 @@ uploads_keep_days = 30
 # players' buses. 1 = on, 0 = off
 share_maps = 0
 
-# voice chat: the players hear each other where they stand, through GreenTeaSpeak and its
-# openOMSI plugin (as SaltyChat does for FiveM). voice_server_uid is the voice server's unique
-# id (its info panel; needed: without it there is no voice chat), voice_channel the in-game
-# channel's id or name (empty: no voice chat), voice_range how far a player is heard (m).
-# voice_radio (1/0): drivers get a bindable map-wide bus radio on top of proximity voice.
-# The channel and its password are sent to every player who joins
-voice_server_uid =
-voice_channel =
-voice_channel_password =
-voice_range = 20
+# voice chat: players who switched it on in their settings talk with a key held, nearby (heard
+# within voice_range metres, quieter with the distance) or on the radio (the whole session).
+# The server only passes the audio on; it records and decodes nothing. voice (1/0) switches it
+# all off, voice_radio (1/0) the session-wide channel, voice_range is how far the nearby
+# channel carries (5 to 1000 m). The keys of the earlier voice chat
+# (voice_server_uid, voice_channel, voice_channel_password) do nothing any more
+voice = 1
 voice_radio = 1
+voice_range = 75
+
+# list this server in the public server list that the launcher and the game show (name, icon,
+# map, players, the message of the day). Your name, message and icon are checked first by the
+# same filters the players' games use: what they flag is refused (the log says why) or, for
+# the icon, replaced by the default one. 0 = private (the default), 1 = public
+public_server = 0
+
+# bans by the player's machine (not by name): the session's own list is bans.json beside this
+# file. owner_bans is the list of ALL your sessions - the admin's \"ban in all my sessions\"
+# goes there: empty = ~/.openomsi/bans-owner.json (every game and server you run from this
+# account reads it); give a file to share one list between servers (a synced folder).
+# require_hardware_id = 1 turns away players whose game does not send the machine identifier
+# (older games, or players who switched it off)
+owner_bans =
+require_hardware_id = 0
 ";
 
 impl ServerCfg {
@@ -257,7 +281,12 @@ impl ServerCfg {
             accept_uploads: flag("accept_uploads", true),
             uploads_keep_days: num("uploads_keep_days", 30).clamp(1, 3650) as u64,
             share_maps: flag("share_maps", true),
-            voice: crate::voice::VoiceServer::from_kv(|k| kv.get(k).cloned()),
+            voice: voice_policy(&kv),
+            public_server: flag("public_server", false),
+            public_list_url: kv.get("public_list_url").cloned().unwrap_or_default(),
+            owner_bans: kv.get("owner_bans").filter(|v| !v.is_empty()).map(std::path::PathBuf::from),
+            require_hardware_id: flag("require_hardware_id", false),
+            dir: dir.to_path_buf(),
         }))
     }
 }
@@ -285,6 +314,17 @@ pub fn installed_maps() -> Vec<String> {
         .collect();
     maps.sort_by_key(|m| m.to_lowercase());
     maps
+}
+
+/// The voice chat keys. A file from before the built-in voice chat names an outside voice
+/// server (`voice_channel` and the like): that is gone, and the log says so.
+fn voice_policy(kv: &std::collections::HashMap<String, String>) -> omsi_net::VoicePolicy {
+    let flag = |k: &str, d: bool| kv.get(k).map(|v| matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on")).unwrap_or(d);
+    if ["voice_server_uid", "voice_channel", "voice_channel_password"].iter().any(|k| kv.get(*k).is_some_and(|v| !v.is_empty())) {
+        log::info!("server.cfg: voice_server_uid, voice_channel and voice_channel_password are ignored: voice chat is built in now (voice, voice_radio, voice_range)");
+    }
+    let range = kv.get("voice_range").and_then(|v| v.parse::<f32>().ok()).unwrap_or(omsi_net::voice_net::DEFAULT_RANGE);
+    omsi_net::VoicePolicy { enabled: flag("voice", false), radio: flag("voice_radio", false), range: 0.0 }.with_range(range)
 }
 
 /// `admin_web`: none (a `server.cfg` from before the web panel) or a wrong word is off - an
@@ -519,6 +559,22 @@ mod cfg_tests {
         assert!(load("name = old server\nmap = maps/Grundorf/global.cfg\n").share_maps);
         assert!(!load(DEFAULT_CFG).share_maps);
         assert!(!load("share_maps = 0\n").share_maps);
+    }
+    /// Voice chat is on in a new file and stays off in an old one that does not name it (an
+    /// update opens nothing); the keys of the earlier outside voice server do nothing; a wrong
+    /// range is cut to what the relay takes.
+    #[test]
+    fn voice_keys() {
+        let old = load("voice_server_uid = AbC=\nvoice_channel = 5\nvoice_range = 20\nvoice_radio = 0\n").voice;
+        assert_eq!((old.enabled, old.radio, old.range), (false, false, 20.0));
+        let kept = load("name = old server\n").voice;
+        assert!(!kept.enabled && !kept.radio);
+        let on = load("voice = 1\nvoice_radio = 0\n").voice;
+        assert!(on.enabled && !on.radio);
+        assert_eq!(load(DEFAULT_CFG).voice, omsi_net::VoicePolicy::default());
+        let v = load("voice = 0\nvoice_range = 99999\n").voice;
+        assert!(!v.enabled && v.range == omsi_net::voice_net::MAX_RANGE);
+        assert_eq!(load("voice_range = 1\n").voice.range, omsi_net::voice_net::MIN_RANGE);
     }
 }
 

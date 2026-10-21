@@ -96,6 +96,29 @@ pub(crate) fn run(app: &mut App, action: &str) {
         app.service_msg = Some((format!("Sent to the server: {action}"), 3.0));
         return;
     }
+    // (a machine ban says what became of it on this screen)
+    match Action::parse(action) {
+        Some(Action::HwBan { id, scope, hours, why }) => {
+            let by = "the host";
+            let msg = match app.net.lan.as_mut().map(|l| omsi_lan::admin::ban::hardware_ban(l, id, scope, hours, why.as_deref().unwrap_or(""), by)) {
+                Some(Ok(m)) => m,
+                Some(Err(e)) => e,
+                None => return,
+            };
+            app.service_msg = Some((msg, 5.0));
+            return;
+        }
+        Some(Action::Unban(id)) => {
+            let msg = match app.net.lan.as_mut().map(|l| omsi_lan::admin::ban::unban(l, &id)) {
+                Some(Ok(m)) => m,
+                Some(Err(e)) => e,
+                None => return,
+            };
+            app.service_msg = Some((msg, 4.0));
+            return;
+        }
+        _ => {}
+    }
     host_action(app, action);
 }
 
@@ -349,12 +372,12 @@ pub(crate) fn carry_out(app: &mut App, from: u32, command: Command) {
             app.service_msg = Some(("You administer this server now: Esc menu, Administration".into(), 6.0));
         }
         // (server → us) what its admin's menu shows
-        c @ (Command::AdminResult { .. } | Command::AdminPlayer(_) | Command::AdminListEnd { .. } | Command::AdminState(_)) => crate::admin_panel::take(app, &c),
+        c @ (Command::AdminResult { .. } | Command::AdminPlayer(_) | Command::AdminListEnd { .. } | Command::AdminState(_) | Command::AdminBan(_) | Command::AdminBansEnd { .. }) => crate::admin_panel::take(app, &c),
         Command::AdminNo => app.service_msg = Some(("Wrong admin password".into(), 4.0)),
         // (a game hosting by code sent a notice: the player's game showed it)
         Command::NotifySeen(id) => log::info!("LAN: player {from} saw notice {id}"),
         // (the session's own: `lan_command`)
-        Command::Trigger(_) | Command::VoiceAsked | Command::Voice(_) => {}
+        Command::Trigger(_) | Command::VoiceAsked | Command::Voice(_) | Command::VoiceMuted(_) => {}
     }
 }
 

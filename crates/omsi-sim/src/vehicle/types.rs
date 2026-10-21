@@ -360,7 +360,7 @@ impl VehicleType {
         let dir = def.dir().to_path_buf();
         let model_rel = def.model.clone().context("vehicle has no [model]")?;
         let model_path = omsi_cfg::resolve_path(&dir, &model_rel);
-        let model = Model::load(&model_path)
+        let mut model = Model::load(&model_path)
             .with_context(|| format!("loading {}", model_path.display()))?;
         let model_dir = model_path
             .parent()
@@ -375,7 +375,7 @@ impl VehicleType {
         input.stringvarlists = def.scripts.stringvarlists.clone();
         input.constfiles = def.scripts.constfiles.clone();
         input.scripts = def.scripts.scripts.clone();
-        let program = compile(&input);
+        let mut program = compile(&input);
         for e in &program.errors {
             log::warn!("{e}");
         }
@@ -513,6 +513,22 @@ impl VehicleType {
         // invisible wall metres ahead of its nose and behind its tail, the traffic kept its
         // distance from nothing. The box is cut down to the model (never made bigger).
         let mut def = def;
+        if def.trolley.is_empty() {
+            def.trolley = legacy_trolley(&model, &meshes, &mesh_boxes, &program, bus_file);
+            // the raised pole's own mesh follows the pole: two animations about its hinge
+            if let Some(l) = def.trolley.legacy.as_ref() {
+                for (k, di) in l.mesh_defs.iter().enumerate() {
+                    if let (Some(md), Some(p)) = (model.meshes.get_mut(*di), def.trolley.poles.get(k)) {
+                        md.animations.extend(pole_animations(k + 1, p.base, p.work_angle));
+                        // (the animations look their variables up in the program: declared here,
+                        // written by the gear every step)
+                        for n in [format!("Trolley_Pole{}_Elev", k + 1), format!("Trolley_Pole{}_Azim", k + 1)] {
+                            program.declare_var(&n);
+                        }
+                    }
+                }
+            }
+        }
         if let Some(bb) = def.bounding_box.as_mut() {
             let (mut lo, mut hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
             for m in &meshes {
@@ -833,11 +849,29 @@ pub(super) fn wheel_meshes(
     (wheels, suspension)
 }
 
+/// A texture name as the bytes Omsi.exe sees: the `.o3d` keeps a name in the file's own
+/// bytes (read here one char a byte: a Russian "Правый борт.tga" is "Ïðàâûé áîðò.tga"), the
+/// `.cfg` was read as Windows-1251 text (the Cyrillic itself). Both go back to the one byte a
+/// char - so that a `[matl_alpha]` of a mod's glass finds its slot, and the windows of a
+/// Russian bus are not opaque.
+pub(crate) fn raw_name(name: &str) -> String {
+    name.chars()
+        .map(|c| match c as u32 {
+            0..=0xFF => c,
+            0x410..=0x44F => char::from_u32(c as u32 - 0x410 + 0xC0).unwrap_or(c),
+            0x401 => '\u{A8}',
+            0x451 => '\u{B8}',
+            _ => c,
+        })
+        .collect()
+}
+
 /// Index of the material slot a `[matl]` override refers to (texture name + nth occurrence).
 pub fn override_slot(materials: &[omsi_o3d::Material], o: &MaterialDef) -> Option<usize> {
     let mut nth = 0;
+    let wanted = raw_name(&o.texture);
     for (slot, m) in materials.iter().enumerate() {
-        if m.texture.eq_ignore_ascii_case(&o.texture) {
+        if m.texture.eq_ignore_ascii_case(&o.texture) || raw_name(&m.texture).eq_ignore_ascii_case(&wanted) {
             if nth == o.index.max(0) as usize {
                 return Some(slot);
             }
@@ -891,5 +925,130 @@ mod winding_exporter_tests {
     #[test]
     fn forward_majority_keeps_existing_behaviour() {
         assert!(keep_authored_winding(80, 40, 1, 1));
+    }
+}
+
+/// A trolleybus made for OMSI 2 as it comes (no `[trolley_*]` blocks): its model switches two
+/// meshes by `cp_SHTANGALEV` / `cp_SHTANGAPRAV` (0 folded on the roof, 1 raised), and no script
+/// reads them. The poles' hinges and length are read off the raised meshes (the hinge is the
+/// low end that lies furthest forward, the shoe the high end furthest back). The bus keeps its
+/// own script's drive; whether its control is a rheostat controller or a chopper is read off
+/// the description ("реостатно-контакторная", "тиристорно-импульсная", IGBT, "асинхронный").
+/// The animations that turn a pole's raised mesh (authored at its working angle `work_deg`, hinged
+/// at `base`) to where the pole is: its elevation about the vehicle's x axis through the hinge,
+/// then its azimuth about the vertical one (`Trolley_Pole<k>_Elev`, `_Azim`, in degrees: the rig's
+/// own angles, see `rotate_tip`: the boom trails to -y, up by the elevation, out by the azimuth).
+fn pole_animations(k: usize, base: Vec3, work_deg: f32) -> Vec<omsi_model::Animation> {
+    use omsi_model::{AnimKind, AnimOrigin, Animation};
+    let hinge = AnimOrigin::Trans(base.to_array());
+    vec![
+        Animation { origins: vec![hinge.clone()], kind: Some(AnimKind::Rot), variable: format!("Trolley_Pole{k}_Elev"), factor: 1.0, offset: -work_deg, ..Default::default() },
+        // (origin_rot_y 90 turns the animated axis, the x of its frame, up)
+        Animation { origins: vec![hinge, AnimOrigin::RotY(90.0)], kind: Some(AnimKind::Rot), variable: format!("Trolley_Pole{k}_Azim"), factor: -1.0, offset: 0.0, ..Default::default() },
+    ]
+}
+
+fn legacy_trolley(model: &omsi_model::Model, meshes: &[VehicleMesh], boxes: &[(Vec3, Vec3)], program: &Program, bus_file: &Path) -> omsi_trolley::TrolleyDef {
+    use omsi_trolley::{LegacyDef, PoleDef, TrolleyDef};
+    let mut poles: Vec<PoleDef> = Vec::new();
+    let mut switches: Vec<String> = Vec::new();
+    let mut mesh_defs: Vec<usize> = Vec::new();
+    for (i, m) in meshes.iter().enumerate() {
+        let Some(md) = model.meshes.get(m.def_index) else { continue };
+        let Some((var, value)) = md.visible.as_ref() else { continue };
+        let low = var.to_ascii_lowercase();
+        if !(low.contains("shtang") || low.contains("pole") || low.contains("штанг")) || *value != 1.0 || program.var(var).is_none() {
+            continue;
+        }
+        let Some((lo, hi)) = boxes.get(i).copied().filter(|(l, h)| h.x > l.x && h.y > l.y) else { continue };
+        let side: i8 = if (lo.x + hi.x) * 0.5 < 0.0 { -1 } else { 1 };
+        if poles.iter().any(|p| p.side == side) {
+            continue;
+        }
+        let base = Vec3::new((lo.x + hi.x) * 0.5, hi.y, lo.z);
+        let tip = Vec3::new((lo.x + hi.x) * 0.5, lo.y, hi.z);
+        let boom = tip - base;
+        // (a pole is long and thin: a short or a wide mesh whose visibility variable has "pole" in
+        // its name - an antenna, a flag - is no trolley pole)
+        if boom.length() < 3.0 || hi.x - lo.x > 1.2 {
+            continue;
+        }
+        let length = boom.length().clamp(3.0, 12.0);
+        poles.push(PoleDef {
+            side,
+            base,
+            length,
+            rest_angle: 2.0,
+            work_angle: (boom.z / length).clamp(-1.0, 1.0).asin().to_degrees().clamp(8.0, 45.0),
+            motor: true,
+            retriever: 40.0,
+            ..Default::default()
+        });
+        switches.push(var.clone());
+        mesh_defs.push(m.def_index);
+    }
+    if poles.len() < 2 {
+        return TrolleyDef::default();
+    }
+    // (the left pole first, as the cab's `LEV`/`PRAV` say)
+    let mut order: Vec<usize> = (0..poles.len()).collect();
+    order.sort_by_key(|k| poles[*k].side);
+    let poles2 = order.iter().map(|k| poles[*k].clone()).collect();
+    let switches2 = order.iter().map(|k| switches[*k].clone()).collect();
+    let mesh_defs2 = order.iter().map(|k| mesh_defs[*k]).collect();
+    let text: String = std::fs::read(bus_file).map(|b| omsi_cfg::decode_text(&b)).unwrap_or_default();
+    let low = text.to_lowercase();
+    let chopper = ["тиристор", "igbt", "импульс", "асинхрон", "инвертор", "транзистор", "thyristor", "chopper", "inverter"].iter().any(|k| low.contains(k));
+    log::info!("{}: a plain trolleybus ({} poles from its model, {} control)", bus_file.display(), poles.len(), if chopper { "chopper" } else { "rheostat" });
+    TrolleyDef { poles: poles2, legacy: Some(LegacyDef { switches: switches2, chopper, mesh_defs: mesh_defs2 }), aux_kw: if chopper { 4.0 } else { 3.0 }, ..Default::default() }
+}
+
+#[cfg(test)]
+mod raw_name_tests {
+    use super::raw_name;
+
+    /// A Russian texture name as the cfg has it (Cyrillic) and as the `.o3d` is read (one char a
+    /// byte) is the same name.
+    #[test]
+    fn a_cyrillic_name_and_its_bytes_are_one_name() {
+        for (cfg, o3d) in [
+            ("Правый борт new.tga", "Ïðàâûé áîðò new.tga"),
+            ("Стёкла водительские левые.tga", "Ñò¸êëà âîäèòåëüñêèå ëåâûå.tga"),
+        ] {
+            assert_eq!(raw_name(cfg), o3d, "{cfg}");
+            assert_eq!(raw_name(o3d), o3d);
+        }
+        assert_eq!(raw_name("Fenster_per.tga"), "Fenster_per.tga");
+    }
+}
+
+#[cfg(test)]
+mod pole_animation_tests {
+    use super::pole_animations;
+    use crate::anim::MeshAnimator;
+    use glam::Vec3;
+    use omsi_model::MeshDef;
+
+    /// The animations carry a raised mesh's boom to where the rig's own angles put it:
+    /// `rotate_tip` (the boom trails to -y, up by the elevation, out by the azimuth).
+    #[test]
+    fn a_pole_mesh_follows_the_rigs_angles() {
+        let base = Vec3::new(0.4, -4.5, 3.1);
+        let (work, len) = (25.0f32, 6.0f32);
+        let tip_of = |th: f32, ps: f32| base + Vec3::new(ps.sin() * th.cos(), -ps.cos() * th.cos(), th.sin()) * len;
+        let rest_tip = tip_of(work.to_radians(), 0.0);
+        let mut def = MeshDef::default();
+        def.animations = pole_animations(1, base, work);
+        let names = ["trolley_pole1_elev", "trolley_pole1_azim"];
+        let resolve = |n: &str| names.iter().position(|x| x.eq_ignore_ascii_case(n)).map(|i| i as omsi_script::VarId);
+        for (elev, azim) in [(25.0f32, 0.0f32), (45.0, 0.0), (10.0, 0.0), (35.0, 30.0), (20.0, -40.0)] {
+            let mut a = MeshAnimator::new(&def, glam::Mat4::IDENTITY, resolve);
+            let m = a.update(0.016, &[elev, azim]);
+            let moved = m.transform_point3(rest_tip);
+            let want = tip_of(elev.to_radians(), azim.to_radians());
+            assert!((moved - want).length() < 1e-3, "elev {elev} azim {azim}: {moved:?} vs {want:?}");
+            // the hinge stays where it is
+            assert!((m.transform_point3(base) - base).length() < 1e-4);
+        }
     }
 }

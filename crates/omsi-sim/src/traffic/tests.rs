@@ -1194,3 +1194,62 @@ fn the_kept_bends_give_the_bend_speed_found_anew() {
         }
     }
 }
+
+/// win-4.sco ("Hauptbahnhof 4", #3092): the program as the file has it, lights 0 Main,
+/// 1 Bus, 2 Bus2, 3 Green, 4 Ped, and its thirteen jumps.
+fn win4() -> TrafficLightController {
+    TrafficLightController::from_program(
+        vec![
+            (vec![(3, 2.0), (6, 10.0), (9, 3.0), (0, 7.0), (9, 3.0), (0, 1.0)], None),
+            (vec![(0, 16.0), (6, 6.0), (0, 1.0)], Some(5.0)),
+            (vec![(0, 26.0), (6, 10.0)], Some(40.0)),
+            (vec![(6, 1.0)], Some(6.0)),
+            (vec![(6, 22.0), (0, 1.0)], Some(0.0)),
+        ],
+        Some(37.0),
+        &[],
+        &[
+            [1.0, 12.0, 1.0, 2.0],
+            [2.0, 12.0, 1.0, 2.0],
+            [1.0, 22.0, 1.0, 2.0],
+            [1.0, 22.0, 0.0, 18.0],
+            [2.0, 12.0, 0.0, 22.0],
+            [1.0, 2.0, 0.0, 12.0],
+            [1.0, 7.0, 0.0, 12.0],
+            [2.0, 2.0, 0.0, 22.0],
+            [2.0, 7.0, 0.0, 22.0],
+            [2.0, 12.0, 0.0, 22.0],
+            [2.0, 17.0, 0.0, 22.0],
+            [2.0, 31.0, 0.0, 27.0],
+            [2.0, 35.0, 0.0, 27.0],
+        ],
+    )
+}
+
+#[test]
+fn win4_gives_each_bus_light_its_green_when_it_asks_alone() {
+    // (the second bus light's request jumps to 22 s, where the first one's "nobody asks:
+    // back to 2 s" waits: landing on it is not a second visit, #3092)
+    for asking in [1usize, 2] {
+        let mut c = win4();
+        c.time = 3.0;
+        c.request[asking] = true;
+        let mut green_at = None;
+        for i in 0..400 {
+            c.advance(0.1);
+            if green_at.is_none() && c.state(asking) == 6 {
+                green_at = Some(i as f32 * 0.1);
+            }
+        }
+        let t = green_at.unwrap_or(f32::INFINITY);
+        assert!(t < 40.0, "light {asking} asking alone waited {t} s for its green");
+        assert_ne!(c.state(0), 6, "the main road stays green over a waiting bus (light {asking})");
+    }
+    // with nobody asking the main road rests on its green
+    let mut c = win4();
+    c.time = 3.0;
+    for _ in 0..1800 {
+        c.advance(0.1);
+        assert_eq!(c.state(0), 6, "the main road left its green with nobody asking");
+    }
+}

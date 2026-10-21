@@ -648,6 +648,12 @@ set_camera_outside_center schwerpunkt rollwiderstand rot_pnt_long inv_min_turnra
 newachse (achse_long achse_maxwidth achse_minwidth achse_raddurchmesser achse_feder achse_maxforce
 achse_daempfer achse_antrieb achse_inertia_inv) number registration_automatic registration_list
 registration_free kmcounter_init + model/script/sound/paths/passengercabin.
+openOMSI's own blocks (read the same way, `key value` lines to the next block): `[trolley_pole]`,
+`[trolley_rheostat]`, `[trolley_async]`, `[trolley_battery]`, `[trolley_aux]`, `[trolley_vars]`:
+the poles on the roof and the traction drive of a trolleybus (OMSI 2 has none: its trolleybus
+add-ons run a plugin beside the game). Every key, the variables the game writes for models and
+the map's `trolley.txt` (`[trolley_net]`, `[trolley_section]`, `[trolley_span]`,
+`[trolley_switch]`, `[trolley_insulator]`) are in [TROLLEYBUS.md](TROLLEYBUS.md).
 Built-in vehicle variables are listed in `program/varlist_roadvehicle.txt`; generated per axle:
 `Wheel_Rotation_ Wheel_RotationSpeed_ Axle_Steering_ Axle_Suspension_ Axle_Springfactor_
 Axle_Brakeforce_ Axle_SurfaceID_` × `{n}_{L|R}`, `PAX_Entry{n}_Open/_Req`, `PAX_Exit{n}_…`,

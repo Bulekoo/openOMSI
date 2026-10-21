@@ -926,3 +926,43 @@ fn a_scheme_folder_supplies_only_what_its_cti_names() {
     assert!(body.is_absolute(), "{}", map["body.bmp"]);
     assert_eq!(map["sedista.bmp"], "sedista-diffuse.bmp", "a picture the folder has not got: the bare name, found with the model's textures");
 }
+
+/// A trolleybus on a wire: no current, no movement; with its poles raised, the drive moves it.
+#[test]
+fn a_trolleybus_moves_only_on_current() {
+    use omsi_trolley::{DriveKind, PoleDef, RheostatDef, TrolleyDef, WireNet};
+    let net = Arc::new(WireNet::parse(
+        "[trolley_section]\nid 1\nlive 1\n[trolley_span]\nsection 1\np -400 0 5.5\np 400 0 5.5\n",
+    ));
+    let mut ty = coupling_test_type(None);
+    {
+        let t = Arc::get_mut(&mut ty).unwrap();
+        t.def.axles[1].driven = true;
+        t.def.mass = 11.0;
+        let pole = |side: i8| PoleDef { side, base: Vec3::new(0.3 * side as f32, -0.5, 3.0), length: 6.5, ..Default::default() };
+        t.def.trolley = TrolleyDef { poles: vec![pole(-1), pole(1)], drive: Some(DriveKind::Rheostat(RheostatDef::default())), ..Default::default() };
+    }
+    // heading east, on the wire's line
+    let drive = |net: Option<Arc<WireNet>>, raise: bool| {
+        let mut v = VehicleInstance::new(ty.clone(), VehicleHost::new(Default::default()));
+        v.heading = 90.0;
+        v.position = DVec3::new(0.0, 0.0, 0.0);
+        v.attach_wires(net);
+        v.set_controls(Controls { throttle: 1.0, ..Default::default() });
+        if raise {
+            v.trolley.as_deref_mut().unwrap().auto_raise_for = 5.0;
+        }
+        for _ in 0..(60 * 14) {
+            v.update(1.0 / 60.0);
+        }
+        v
+    };
+    let bare = drive(None, true);
+    assert!(bare.physics.speed.abs() < 0.01, "no wire: {}", bare.physics.speed);
+    let down = drive(Some(net.clone()), false);
+    assert!(down.physics.speed.abs() < 0.01, "poles down: {}", down.physics.speed);
+    let up = drive(Some(net), true);
+    assert!(up.physics.speed > 3.0, "poles up: {} m/s", up.physics.speed);
+    assert!(up.trolley.as_ref().unwrap().rig.circuit);
+    assert!(up.var("Trolley_Powered").is_some());
+}

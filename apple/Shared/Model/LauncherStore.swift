@@ -5,18 +5,20 @@ import SwiftUI
 /// The launcher's pages, in the desktop launcher's order (`launcher/ui/js/app.js`): the
 /// main ones, then after a gap the running games, the tutorials and the setup.
 enum Page: String, CaseIterable, Identifiable {
-    case drive, multiplayer, profile, mods, settings, controls, games, tutorials, setup
+    case drive, depot, multiplayer, profile, mods, timetable, settings, controls, games, tutorials, setup
     var id: String { rawValue }
 
-    static let main: [Page] = [.drive, .multiplayer, .profile, .mods, .settings, .controls]
+    static let main: [Page] = [.drive, .depot, .multiplayer, .profile, .mods, .timetable, .settings, .controls]
     static let more: [Page] = [.games, .tutorials, .setup]
 
     var title: LocalizedStringKey {
         switch self {
         case .drive: "Drive"
+        case .depot: "Depot"
         case .multiplayer: "Multiplayer"
         case .profile: "Profile"
         case .mods: "Mods"
+        case .timetable: "Timetable"
         case .settings: "Settings"
         case .controls: "Controls"
         case .games: "Running games"
@@ -29,9 +31,11 @@ enum Page: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .drive: "bus.fill"
+        case .depot: "door.garage.closed"
         case .multiplayer: "person.2.fill"
         case .profile: "person.fill"
         case .mods: "puzzlepiece.extension.fill"
+        case .timetable: "clock.fill"
         case .settings: "slider.horizontal.3"
         case .controls: "keyboard.fill"
         case .games: "gamecontroller.fill"
@@ -63,6 +67,7 @@ final class LauncherStore {
     var build = ""
     var platform = ""
     var inProcess = false
+    var storeBuild = false
     var page: Page = .drive
     /// The phone launcher's tab (drive, multiplayer, profile, mods, settings, more), the page
     /// opened from More, and the full-screen sheet open over Drive.
@@ -93,6 +98,7 @@ final class LauncherStore {
             build = info["build"] as? String ?? ""
             platform = info["platform"] as? String ?? ""
             inProcess = info["in_process"] as? Bool ?? false
+            storeBuild = info["store"] as? Bool ?? false
             ready = true
         } catch {
             say(error.localizedDescription, error: true)
@@ -155,6 +161,7 @@ final class LauncherStore {
         if linesChanged || (lines.isEmpty && s.counts.lines > 0), let l = try? Bridge.get(LinesReply.self, "lines") {
             lines = l.lines
         }
+        if !busOffered, let v = offeredVehicles.first { Bridge.act("select_bus", ["file": v.file]) }
         if starting && !s.in_game && s.status.error { starting = false }
         refreshOverviewIfNeeded()
     }
@@ -200,6 +207,7 @@ final class LauncherStore {
         let w = choice.weather
         if w.isEmpty { return weather?.name ?? "Natural weather" }
         if w == "cycle" { return String(localized: "Weather cycle") }
+        if w == "tomorrow" { return "Tomorrow.io" }
         if w.hasPrefix("metar:") { return "METAR \(w.dropFirst(6))" }
         if w.hasPrefix("custom:") { return String(localized: "Custom weather") }
         return weather?.name ?? (w as NSString).lastPathComponent.replacingOccurrences(of: ".owt", with: "")

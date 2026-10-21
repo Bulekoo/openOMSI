@@ -106,6 +106,7 @@ impl Offscreen<'_> {
         if let Some(l) = lan_off.as_mut() {
             let positions = |id: u32| remotes_off.remotes.get(&id).map(|r| (r.vehicle().position, r.vehicle().heading));
             srv_admin.prune(l);
+            omsi_lan::bans::sync_host(l);
             // the administration, whatever way it came (see `omsi_lan::admin::exec`): the
             // players' games, a tool on this machine (POST /admin, checked by the gateway: an
             // admin of its own), the web panel's requests
@@ -266,6 +267,7 @@ impl Offscreen<'_> {
             let rail = player.as_ref().and_then(|p| p.rail.as_ref()).map(|r| (r.lane, r.along));
             let capture = self.lan_off.as_ref().is_some_and(|lan| lan.role == omsi_net::Role::Host);
             for c in &mut t.sim.cars { c.vehicle.host.capture_sound_triggers = capture; }
+            t.table_on = capture;
             steps::traffic_tick(t, world, scenery, dt, false, player.as_ref(), remotes_off, &[], rail);
             steps::traffic_boxes(t, player.as_mut(), settings.collision_vehicles);
         }
@@ -345,7 +347,28 @@ impl Offscreen<'_> {
                 player.vehicle.set_speed(v0 / 3.6);
             }
         }
+        if let Some(spec) = omsi_cfg::flags::OMSI_TROLLEY_HANDS.var() {
+            crate::trolley_hands::scripted(&mut player.vehicle, spec, t_s as f64);
+        }
         player.vehicle.update(dt);
+        if let Some(tv) = player.trolley_view.as_mut() {
+            tv.update(&self.renderer, &mut self.scene, dt, &mut player.vehicle);
+        }
+        let (vpos, vkmh) = (player.vehicle.position, player.vehicle.physics.velocity_kmh());
+        if let Some(g) = player.vehicle.trolley.as_deref_mut() {
+            for n in g.rig.take_notes() {
+                log::info!("trolley t={t_s:.2}: {n}");
+            }
+            if let Some(every) = omsi_cfg::flags::OMSI_DEBUG_TROLLEY.parse::<f32>().filter(|e| *e > 0.0) {
+                if i.is_multiple_of(super::steps_in(every as f64)) {
+                    let poles: Vec<String> = g.rig.poles.iter().map(|p| format!("{:?}/{:.1}deg/{:.0}N{}", p.mode, p.theta.to_degrees(), p.force, if p.closed { "" } else { "/open" })).collect();
+                    log::info!(
+                        "trolley t={t_s:.2}: at ({:.1}, {:.1}) {:.1} km/h, {:.0} V {:.0} A, notch {}/{}, force {:.0} N, brake {:.0} N, circuit {}, poles [{}], battery {:.2}",
+                        vpos.x, vpos.y, vkmh, g.rig.volts, g.rig.amps, g.rig.out.notch, g.rig.out.notches, g.rig.out.wheel_force, g.rig.out.mech_brake, g.rig.circuit, poles.join(", "), g.rig.out.battery_soc
+                    );
+                }
+            }
+        }
         steps::deliver_player_impacts(player, self.traffic.as_mut());
         self.drive_diagnostics(i, t_s);
     }
@@ -473,8 +496,11 @@ impl Offscreen<'_> {
                 let alpha = ((want - v.heading + 540.0).rem_euclid(360.0) - 180.0) as f32;
                 let speed = v.physics.velocity_kmh();
                 controls.steering = (alpha / 30.0).clamp(-1.0, 1.0);
-                controls.throttle = ((kmh - speed) / 10.0).clamp(0.0, 1.0);
-                controls.brake = ((speed - kmh - 3.0) / 10.0).clamp(0.0, 1.0);
+                // (with an OMSI_DRIVE_PROFILE the pedals are the profile's: the autopilot only steers)
+                if drive_profile.is_empty() {
+                    controls.throttle = ((kmh - speed) / 10.0).clamp(0.0, 1.0);
+                    controls.brake = ((speed - kmh - 3.0) / 10.0).clamp(0.0, 1.0);
+                }
             }
         }
         controls
@@ -773,7 +799,9 @@ impl Offscreen<'_> {
             let host = lan::AppLanHost { args, world: Some(world) };
             if l.role == omsi_net::Role::Host {
                 if let Some(t) = traffic.as_mut() {
-                    for c in &mut t.sim.cars { remotes_off.publish_vehicle_sounds(l, &mut c.vehicle, c.id, &config); }
+                    for c in &mut t.sim.cars {
+                        if let Some(id) = t.table.id_of(c.id) { remotes_off.publish_vehicle_sounds(l, &mut c.vehicle, id.raw() as u64, &config); }
+                    }
                 }
             }
             let sent = {
@@ -840,6 +868,14 @@ impl Offscreen<'_> {
         } = *self;
         if let Some(p) = player.as_ref() {
             steps::cabin_air_step(cabin_air, dt, p, weather, humans_off.as_ref());
+            if omsi_cfg::flags::OMSI_CABIN_LOG.is_set() {
+                static FRAMES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                let n = FRAMES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if n % ((20.0 / dt.max(1e-3)) as u32).max(1) == 0 {
+                    let t = n as f32 * dt;
+                    log::info!("cabin t={t:.0}s air {:.1} C vapour {:.2} g/m3 film (screen, sides, rear) {:.2} {:.2} {:.2} g/m2 defrost {:.2} scripted {:?}", cabin_air.temp, cabin_air.vapour, cabin_air.film[0], cabin_air.film[1], cabin_air.film[2], cabin_air.defrost, p.vehicle.scripted_cabin_air());
+                }
+            }
         }
         // the tyres' spray, frame by frame as the window throws it (the camera that matters
         // for its detail: the followed car's, else the player's bus): the puddles and the wet

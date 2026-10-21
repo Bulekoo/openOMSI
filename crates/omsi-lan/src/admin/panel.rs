@@ -27,6 +27,9 @@ pub struct Panel {
     pub role: Option<Role>,
     pub players: Vec<Player>,
     incoming: Vec<Player>,
+    /// The hardware bans that hold on the server (the newest, as many as the server sent).
+    pub bans: Vec<omsi_admin::BanView>,
+    incoming_bans: Vec<omsi_admin::BanView>,
     /// The players on the server (the list may be cut).
     pub total: usize,
     state: HashMap<String, String>,
@@ -81,6 +84,16 @@ impl Panel {
                 }
                 false
             }
+            Command::AdminBan(b) => {
+                if self.incoming_bans.len() < 24 {
+                    self.incoming_bans.push(b.clone());
+                }
+                false
+            }
+            Command::AdminBansEnd { .. } => {
+                self.bans = std::mem::take(&mut self.incoming_bans);
+                true
+            }
             Command::AdminListEnd { total, .. } => {
                 self.players = std::mem::take(&mut self.incoming);
                 self.total = *total;
@@ -120,7 +133,8 @@ impl Panel {
         self.asked = Some(now);
         self.answered = false;
         self.incoming.clear();
-        vec!["admin-state", "admin-list"]
+        self.incoming_bans.clear();
+        vec!["admin-state", "admin-list", "admin-bans"]
     }
 
     /// The server has not answered what was asked in time.
@@ -252,6 +266,8 @@ impl Panel {
             (format!("{} (#{}, {} {}) - {}", p.name, p.id, tr("connection"), p.conn, Self::describe(p, tr)), "noop".into()),
             (tr("Send away..."), format!("ask-kick {}", t.tag())),
             (tr("Send away for this server run..."), format!("ask-ban {}", t.tag())),
+            (tr("Silence voice chat"), format!("send vmute {}", t.tag())),
+            (tr("Allow voice chat again"), format!("send vunmute {}", t.tag())),
         ]
     }
 
@@ -294,17 +310,17 @@ mod tests {
     fn the_menu_asks_at_its_pace() {
         let mut p = Panel::default();
         let t0 = Instant::now();
-        assert_eq!(p.due(t0), vec!["admin-state", "admin-list"]);
+        assert_eq!(p.due(t0), vec!["admin-state", "admin-list", "admin-bans"]);
         // no answer yet: no second question, until the time for one has passed
         assert!(p.due(t0 + Duration::from_secs(4)).is_empty());
         assert!(!p.silent(t0 + Duration::from_secs(4)));
         assert!(p.silent(t0 + Duration::from_secs(7)));
-        assert_eq!(p.due(t0 + Duration::from_secs(7)).len(), 2);
+        assert_eq!(p.due(t0 + Duration::from_secs(7)).len(), 3);
         // answered: again three seconds after the question
         feed(&mut p, &["admin-end 0 0"]);
         let t1 = t0 + Duration::from_secs(7);
         assert!(p.due(t1 + Duration::from_secs(1)).is_empty());
-        assert_eq!(p.due(t1 + Duration::from_secs(3)).len(), 2);
+        assert_eq!(p.due(t1 + Duration::from_secs(3)).len(), 3);
     }
 
     #[test]

@@ -486,6 +486,22 @@ fn server_query(address: String) -> Answer {
     }))
 }
 
+/// The public server list, moderated here (a flagged name or message is covered, an icon
+/// shown only if this launcher cleared it): the page shows what this returns and nothing the
+/// service said that was not checked (`omsi-serverlist`).
+fn public_servers() -> Answer {
+    let m = omsi_serverlist::BuiltinModerator;
+    let list = omsi_serverlist::client::fetch(omsi_serverlist::DEFAULT_SERVICE, &m)?;
+    Ok(json!(list
+        .into_iter()
+        .map(|e| json!({
+            "id": e.id, "address": e.address, "name": e.name, "motd": e.motd, "map": e.map,
+            "players": e.players, "max_players": e.max_players, "version": e.version, "covered": e.covered,
+            "icon": e.icon.as_deref().map(|i| format!("data:image/png;base64,{}", base64(i))),
+        }))
+        .collect::<Vec<_>>()))
+}
+
 /// A code host's first responsive status endpoint, including its tunnel.
 fn host_status(code: &str) -> Result<omsi_net::ws::ServerInfo, String> {
     omsi_net::ws::query_session(code)
@@ -868,6 +884,7 @@ pub fn call(cmd: &str, args: &Value, p: &dyn Platform) -> Answer {
         "servers_get" => servers_get(),
         "servers_save" => servers_save(arg::<Value>(args, "list")?),
         "server_query" => server_query(arg::<String>(args, "address")?),
+        "public_servers" => public_servers(),
         "choice_save" => choice_save(arg::<Value>(args, "choice")?),
         "favourites_save" => favourites_save(arg::<Vec<String>>(args, "list")?),
         "depot_get" => depot_get(),

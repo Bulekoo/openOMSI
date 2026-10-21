@@ -32,6 +32,8 @@ pub(super) fn option_now(app: &App, verb: &str, arg: &str) -> Option<f32> {
         "chat_size" => s.chat_size,
         "ui_opacity" => s.ui_opacity,
         "vol_ai" => s.vol_ai,
+        "voice_volume" => s.voice_volume,
+        "voice_mic_gain" => s.voice_mic_gain,
         "vol_scenery" => s.vol_scenery,
         "vol_ambient" => s.vol_ambient,
         "radio_speaker" | "radio_hiss" | "radio_dropouts" => *crate::radio::fx_setting(&mut s.radio_fx.clone(), verb).1,
@@ -180,6 +182,14 @@ pub(super) fn option_set(app: &mut App, verb: &str, arg: &str, v: f32) -> Option
         "ui_opacity" => {
             app.settings.ui_opacity = (v * 100.0).round() / 100.0;
             Some(("ui_opacity", app.settings.ui_opacity.to_string()))
+        }
+        "voice_volume" => {
+            app.settings.voice_volume = ((v * 100.0).round() / 100.0).clamp(0.0, 2.0);
+            Some(("voice_volume", app.settings.voice_volume.to_string()))
+        }
+        "voice_mic_gain" => {
+            app.settings.voice_mic_gain = ((v * 100.0).round() / 100.0).clamp(0.0, 4.0);
+            Some(("voice_mic_gain", app.settings.voice_mic_gain.to_string()))
         }
         "vol_ai" => {
             app.settings.vol_ai = (v * 100.0).round() / 100.0;
@@ -411,6 +421,8 @@ pub(super) fn toggle_now(app: &App, id: &str) -> Option<bool> {
         "clouds" => s.clouds,
         "windy_trees" => s.windy_trees,
         "mirror_hud_every_frame" => s.mirror_hud_every_frame,
+        "mirror_shadows" => s.mirror_shadows,
+        "mirror_particles" => s.mirror_particles,
         "ambient" => s.ambient,
         "fullscreen" => s.fullscreen,
         "vsync" => s.vsync,
@@ -441,6 +453,9 @@ pub(super) fn toggle_now(app: &App, id: &str) -> Option<bool> {
         "notes" => s.notes,
         "chat" => s.chat,
         "name_tags" => s.name_tags,
+        "voice_enabled" => s.voice_enabled,
+        "voice_all_off" => s.voice_all_off,
+        "voice_talker_list" => s.voice_talker_list,
         _ => return None,
     })
 }
@@ -691,6 +706,8 @@ fn toggle_set_graphics_and_controls(app: &mut App, id: &str, on: bool, bit: Stri
             Some(("windy_trees", bit))
         }
         "mirror_hud_every_frame" => { app.settings.mirror_hud_every_frame = on; Some(("mirror_hud_every_frame", bit)) }
+        "mirror_shadows" => { app.settings.mirror_shadows = on; Some(("mirror_shadows", bit)) }
+        "mirror_particles" => { app.settings.mirror_particles = on; Some(("mirror_particles", bit)) }
         "ambient" => { app.settings.ambient = on; Some(("ambient", bit)) }
         "fullscreen" => {
             app.settings.fullscreen = on;
@@ -824,6 +841,18 @@ fn toggle_set_graphics_and_controls(app: &mut App, id: &str, on: bool, bit: Stri
         "name_tags" => {
             app.settings.name_tags = on;
             Some(("name_tags", bit))
+        }
+        "voice_enabled" => {
+            app.settings.voice_enabled = on;
+            Some(("voice_enabled", bit))
+        }
+        "voice_all_off" => {
+            app.settings.voice_all_off = on;
+            Some(("voice_all_off", bit))
+        }
+        "voice_talker_list" => {
+            app.settings.voice_talker_list = on;
+            Some(("voice_talker_list", bit))
         }
         _ => None,
     }

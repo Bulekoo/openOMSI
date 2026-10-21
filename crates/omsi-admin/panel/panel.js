@@ -25,6 +25,11 @@ const T = {
     expired: "The session has ended: log in again.", queued: "queued", applied: "applied", pending: "pending", rejected: "rejected",
     asked: "Asked: {what}", timeout: "No answer from the server in time.", noPerm: "Your role may not do this.",
     lockedRT: "real time", lockedMETAR: "METAR",
+    "hwban-hint": "A machine ban keeps out the player's computer, whatever name or address they come back with. It does not stop someone who changes the game or the system's machine id.",
+    "hwban-for": "Ban the machine for", forever: "for good", "hwban-session": "Ban the machine: this session", "hwban-all": "Ban the machine: all my sessions",
+    bans: "Banned machines", "bans-hint": "Lifting a ban is for an admin. A ban in \"all my sessions\" is in your account's list (~/.openomsi/bans-owner.json) and holds in every session you host.",
+    noBans: "Nobody is banned.", lift: "Lift the ban", scopeSession: "this session", scopeAll: "all sessions", ends: "ends", noName: "unknown name",
+    confirmHwban: "Ban the machine of {name} (number {id}, connection {conn}) in {scope}, {span}?", confirmLift: "Lift the ban of {name}?",
   },
   pt: {
     title: "Administração do servidor", logout: "Sair", login: "Entrar", password: "Senha de admin ou moderador", enter: "Entrar",
@@ -47,6 +52,11 @@ const T = {
     expired: "A sessão terminou: entre de novo.", queued: "na fila", applied: "aplicado", pending: "enviado", rejected: "recusado",
     asked: "Pedido: {what}", timeout: "O servidor não respondeu a tempo.", noPerm: "Seu papel não permite isso.",
     lockedRT: "hora real", lockedMETAR: "METAR",
+    "hwban-hint": "O banimento da máquina barra o computador do jogador, com qualquer nome ou endereço. Não barra quem altera o jogo ou o identificador da máquina do sistema.",
+    "hwban-for": "Banir a máquina por", forever: "para sempre", "hwban-session": "Banir a máquina: esta sessão", "hwban-all": "Banir a máquina: todas as minhas sessões",
+    bans: "Máquinas banidas", "bans-hint": "Só o admin tira um banimento. Um banimento em \"todas as minhas sessões\" fica na lista da sua conta (~/.openomsi/bans-owner.json) e vale em toda sessão que você hospeda.",
+    noBans: "Ninguém banido.", lift: "Tirar o banimento", scopeSession: "esta sessão", scopeAll: "todas as sessões", ends: "termina", noName: "nome desconhecido",
+    confirmHwban: "Banir a máquina de {name} (número {id}, conexão {conn}) em {scope}, {span}?", confirmLift: "Tirar o banimento de {name}?",
   },
 };
 
@@ -58,7 +68,7 @@ const t = (k, vars) => {
   return s;
 };
 
-const S = { token: sessionStorage.getItem("token") || "", session: null, server: null, players: [], selected: null, ops: new Map(), audit: 0, timer: 0, failures: 0 };
+const S = { token: sessionStorage.getItem("token") || "", session: null, server: null, players: [], bans: [], selected: null, ops: new Map(), audit: 0, timer: 0, failures: 0 };
 
 function translate() {
   document.documentElement.lang = lang === "pt" ? "pt-BR" : "en";
@@ -161,10 +171,11 @@ async function refresh() {
   const run = (S.run = (S.run || 0) + 1);
   if (!document.hidden) {
     const q = encodeURIComponent($("search").value.trim());
-    const [st, pl, ev] = await Promise.all([api("GET", "/api/admin/state"), api("GET", "/api/admin/players?q=" + q), api("GET", "/api/admin/events?audit_after=" + S.audit)]);
+    const [st, pl, ev, bn] = await Promise.all([api("GET", "/api/admin/state"), api("GET", "/api/admin/players?q=" + q), api("GET", "/api/admin/events?audit_after=" + S.audit), api("GET", "/api/admin/bans")]);
     if (!S.token) return;
     if (st && st.status === 200) { S.session = st.data.session; S.server = st.data.server; S.age = st.data.age_ms; }
     if (pl && pl.status === 200) { S.players = pl.data.players; S.total = pl.data.total; }
+    if (bn && bn.status === 200) S.bans = bn.data.bans;
     // the player picked, when the search does not show them: still here, on the same connection?
     S.selHere = null;
     if (S.selected && !S.players.some((p) => p.id === S.selected.id)) {
@@ -220,7 +231,36 @@ function render() {
   $("pax").max = s.passenger_density_max;
   if (document.activeElement !== $("clock") && !$("clock").value) $("clock").value = s.time;
   renderPlayers();
+  renderBans();
   renderEvents();
+}
+
+function renderBans() {
+  const ul = $("bans");
+  ul.replaceChildren();
+  $("bans-count").textContent = String(S.bans.length);
+  if (!S.bans.length) {
+    const li = document.createElement("li");
+    li.textContent = t("noBans");
+    ul.append(li);
+  }
+  for (const b of S.bans) {
+    const li = document.createElement("li");
+    const name = document.createElement("div");
+    name.textContent = (b.name || t("noName")) + " [" + (b.scope === "all" ? t("scopeAll") : t("scopeSession")) + "]" + (b.reason ? " — " + b.reason : "");
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = new Date(b.at * 1000).toLocaleString() + (b.by ? " · " + b.by : "") + (b.until ? " · " + t("ends") + " " + new Date(b.until * 1000).toLocaleString() : "");
+    li.append(name, meta);
+    if (may("world")) {
+      const lift = document.createElement("button");
+      lift.type = "button";
+      lift.textContent = t("lift");
+      lift.addEventListener("click", () => confirmThen(t("confirmLift", { name: b.name || t("noName") }), () => op({ op: "unban", id: b.id })));
+      li.append(lift);
+    }
+    ul.append(li);
+  }
 }
 
 function playerLabel(p) {
@@ -271,7 +311,8 @@ function renderPlayers() {
   $("sel-name").textContent = playerLabel(S.selected);
   $("sel-facts").textContent = now ? playerMeta(now) : "";
   $("sel-gone").hidden = here;
-  ["kick", "ban", "tell"].forEach((id) => { $(id).disabled = !may("moderate") || !here; });
+  ["kick", "ban", "tell", "hwban-session"].forEach((id) => { $(id).disabled = !may("moderate") || !here; });
+  $("hwban-all").disabled = !may("world") || !here;
 }
 
 function renderEvents() {
@@ -347,6 +388,18 @@ function wire() {
     const reason = $("reason").value.trim();
     confirmThen(t(kind === "ban" ? "confirmBan" : "confirmKick", vars), () => op({ op: kind, target: tg, reason }));
   };
+  const hwban = (scope) => () => {
+    const tg = target();
+    if (!tg) return;
+    const hours = $("hwban-hours").value;
+    const span = $("hwban-hours").selectedOptions[0].textContent;
+    const vars = { name: S.selected.name || "#" + tg.id, id: tg.id, conn: tg.conn, scope: t(scope === "all" ? "scopeAll" : "scopeSession"), span };
+    const body = { op: "hwban", target: tg, scope, reason: $("reason").value.trim() };
+    if (hours) body.hours = Number(hours);
+    confirmThen(t("confirmHwban", vars), () => op(body));
+  };
+  $("hwban-session").addEventListener("click", hwban("session"));
+  $("hwban-all").addEventListener("click", hwban("all"));
   $("kick").addEventListener("click", ask("kick"));
   $("ban").addEventListener("click", ask("ban"));
   $("tell").addEventListener("click", () => { const tg = target(); const text = $("tell-text").value.trim(); if (tg && text) { op({ op: "tell", target: tg, text }); $("tell-text").value = ""; } });

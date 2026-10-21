@@ -174,6 +174,11 @@ impl Tile {
     /// and angles stay. Nothing changes on a plain map.
     pub fn fit_to_world_grid(&mut self, ty: i32) {
         let (kx, ky) = crate::world_tile_scale(ty);
+        self.scale_onto_grid(kx, ky);
+    }
+
+    /// [`Tile::fit_to_world_grid`] with the scale given.
+    pub fn scale_onto_grid(&mut self, kx: f64, ky: f64) {
         if (kx - 1.0).abs() < 1e-12 && (ky - 1.0).abs() < 1e-12 {
             return;
         }
@@ -187,6 +192,12 @@ impl Tile {
             s.pos[1] *= ky;
             s.length *= k;
             s.radius *= k;
+            // (the chain distance the editor wrote is in the same metres as the lengths: left
+            // as it was, the first object of a row on a scaled tile stood (k - 1) times that
+            // distance off, and the rest of the row with it - #3080)
+            if let Some(o) = s.map_chain_offset.as_mut() {
+                *o *= k;
+            }
         }
         for a in self.spline_attachments.iter_mut() {
             a.offset[2] *= k;
@@ -898,5 +909,18 @@ Object Nr. 3\n[splineAttachement_repeater]\n0\n12\n5\nSceneryobjects\\lamp.sco\n
         assert_eq!(t.spline_attachments.last().unwrap().spline_index, 2);
         assert_eq!(t.objects[0].rules.len(), 1);
         assert_eq!(t.objects[0].rules[0].kind, "speedlimit");
+    }
+
+    #[test]
+    fn a_scaled_tile_scales_the_chain_offset_with_the_lengths_and_the_rows_start() {
+        let mut tile = Tile::default();
+        tile.splines.push(MapSpline { length: 100.0, map_chain_offset: Some(600.0), ..Default::default() });
+        tile.spline_attachments.push(SplineAttachment { offset: [0.0, 0.0, 650.0], interval: 10.0, range: 50.0, ..Default::default() });
+        tile.scale_onto_grid(1.2, 1.2);
+        assert!((tile.splines[0].length - 120.0).abs() < 1e-9);
+        assert!((tile.splines[0].map_chain_offset.unwrap() - 720.0).abs() < 1e-9);
+        // (the row's first object is 50 m into the spline, as before, 60 m after the scale)
+        let start = tile.spline_attachments[0].offset[2] - tile.splines[0].map_chain_offset.unwrap();
+        assert!((start - 60.0).abs() < 1e-9, "{start}");
     }
 }

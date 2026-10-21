@@ -121,7 +121,7 @@ impl Traffic {
         let mut sim = TrafficSim::assemble(root, net, random, lights, controller_of_object, (parked_cars, lane_tiles), density_curve, (unsched_factor, max_scheduled), target);
         // (#1773: off, an early timetable bus waits at every stop, as in OMSI)
         sim.timed_waits_only = crate::settings::Settings::load().ai_wait_timed_stops_only;
-        Ok(Traffic::with_sim(sim))
+        Ok(Traffic::with_sim(sim, root))
     }
 
     /// Take in what the tiles loaded since the last call handed over (`inbox`): their lanes
