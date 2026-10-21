@@ -67,11 +67,10 @@ impl VehicleInstance {
         Some(Forces { drive: m_wheel / radius, brake, track_brake: 0.0 })
     }
 
-    /// After the rigid body's step: the speed along the rails as the rail dynamics make it
-    /// (`v0` the speed before the step). The wheels turn with it - a rail wheel does not
-    /// slip as a road tyre does - and the body keeps to the line.
-    pub(super) fn rail_override(&mut self, rb: &mut crate::rigid::RigidBody, dt: f32, v0: f32, m_wheel: f32, brakes: &[f32]) {
-        let (Some(env), Some(class)) = (self.rail_env, RailClass::of(&self.ty.def)) else { return };
+    /// The speed along the rails after `dt` as the rail dynamics make it (`v0` the speed
+    /// before): `None` for a vehicle that is not on a track.
+    fn rail_solve(&mut self, dt: f32, v0: f32, m_wheel: f32, brakes: &[f32]) -> Option<rail::Outcome> {
+        let (env, class) = (self.rail_env?, RailClass::of(&self.ty.def)?);
         let consist = self.rail_consist(class);
         let cond = Conditions {
             grade: env.grade,
@@ -83,16 +82,24 @@ impl VehicleInstance {
             headwind: 0.0,
             sanding: false,
         };
-        let scripted = self.rail_scripted || self.rail_script_forces(m_wheel, brakes).is_some();
-        self.rail_scripted = scripted;
+        let from_scripts = self.rail_script_forces(m_wheel, brakes);
+        self.rail_scripted |= from_scripts.is_some();
         let c = self.physics.controls;
-        let forces = if scripted {
-            self.rail_script_forces(m_wheel, brakes).unwrap_or_default()
+        let forces = if self.rail_scripted {
+            from_scripts.unwrap_or_default()
         } else {
             let reverse = self.var("rail_reverse").is_some_and(|r| r > 0.5);
             rail::dynamics::pedal_forces(class, consist.mass, c.throttle, c.brake, v0, reverse)
         };
         let out = rail::step(&consist, &cond, &forces, v0, dt);
+        self.rail_out = Some(out);
+        Some(out)
+    }
+
+    /// After the rigid body's step: the rail dynamics' speed. The wheels turn with it - a
+    /// rail wheel does not slip as a road tyre does - and the body keeps to the line.
+    pub(super) fn rail_override(&mut self, rb: &mut crate::rigid::RigidBody, dt: f32, v0: f32, m_wheel: f32, brakes: &[f32]) {
+        let Some(out) = self.rail_solve(dt, v0, m_wheel, brakes) else { return };
         let fwd = rb.orientation.mul_vec3(glam::Vec3::Y);
         rb.velocity = fwd * out.speed;
         rb.omega = glam::Vec3::ZERO;
@@ -104,7 +111,20 @@ impl VehicleInstance {
             w.rotation_deg = (w.rotation_deg + w.spin.to_degrees() * dt).rem_euclid(360.0);
         }
         rb.accel_body = glam::Vec3::new(0.0, out.accel, 9.81);
-        self.rail_out = Some(out);
+    }
+
+    /// The same for the simple model, which a rail vehicle runs on (it is put on its track,
+    /// not on the road): returns the distance covered this step.
+    pub(super) fn rail_override_simple(&mut self, dt: f32, v0: f32, m_wheel: f32, brakes: &[f32]) -> Option<f32> {
+        let out = self.rail_solve(dt, v0, m_wheel, brakes)?;
+        self.physics.speed = out.speed;
+        self.physics.accel = glam::Vec3::new(0.0, out.accel, 0.0);
+        for w in self.physics.wheels.iter_mut().flatten() {
+            let omega = out.speed / w.radius.max(0.05);
+            w.rpm = omega * 60.0 / std::f32::consts::TAU;
+            w.rotation_deg = (w.rotation_deg + omega.to_degrees() * dt).rem_euclid(360.0);
+        }
+        Some(out.speed * dt)
     }
 
     /// What the rail dynamics made of the last step (spinning or sliding wheels, resistance).

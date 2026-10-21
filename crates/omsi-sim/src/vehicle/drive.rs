@@ -93,7 +93,12 @@ impl VehicleInstance {
             self.step_rigid(dt, m_wheel, &brakes, c.steering);
             return;
         }
-        let (ds, dheading) = self.physics.step(dt, m_wheel, &brakes);
+        let v0 = self.physics.speed;
+        let (mut ds, dheading) = self.physics.step(dt, m_wheel, &brakes);
+        // a rail vehicle's speed is the rails', not the road tyres'
+        if let Some(covered) = self.rail_override_simple(dt, v0, m_wheel, &brakes) {
+            ds = covered;
+        }
         // move along the heading
         let prev = (self.position, self.heading);
         let h = self.heading.to_radians();
