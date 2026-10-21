@@ -952,3 +952,134 @@ fn moves_alike_at_any_frame_rate() {
     }
     assert!((rb.origin().y - y).abs() < 0.005, "crept {} m at 240 fps", rb.origin().y - y);
 }
+
+/// A bus at `kmh` over a flat road of `surface` for `secs`: the RMS of the body's vertical
+/// acceleration (m/s²) once it has settled.
+fn vertical_shake(surface: u8, kmh: f32, secs: f32) -> f32 {
+    let mut rb = RigidBody::from_definition(&bus(), &[]);
+    rb.place(DVec3::ZERO, 0.0);
+    let g = road(1e9, 0.0);
+    run(&mut rb, 2.0, 0.0, 0.0, &g);
+    let v = kmh / 3.6;
+    rb.velocity = rb.orientation.mul_vec3(Vec3::Y) * v;
+    for w in rb.wheels.iter_mut() {
+        w.spin = v / w.radius;
+        w.surface = surface;
+        w.surface_now = surface;
+        w.surface_was = surface;
+    }
+    let radius = rb.wheels.iter().find(|w| w.driven).unwrap().radius;
+    let mut samples = Vec::new();
+    for i in 0..(secs * 120.0) as usize {
+        // hold the speed so the roughness is driven over at the same pace throughout
+        let torque = ((v - rb.forward_speed()) * rb.mass * 2.0 + rb.rolling_resistance) * radius;
+        rb.step(1.0 / 120.0, torque, &[0.0; 4], 0.0, &g);
+        if i > 120 {
+            // (the body's acceleration reads 9.81 standing: what shakes is the deviation)
+            samples.push(rb.accel_body.z as f64);
+        }
+    }
+    let mean = samples.iter().sum::<f64>() / samples.len() as f64;
+    (samples.iter().map(|a| (a - mean).powi(2)).sum::<f64>() / samples.len() as f64).sqrt() as f32
+}
+
+/// Cobbles, a gravel road and a slab road shake a bus - the "road damage has no impact"
+/// of #3069 - where asphalt hardly does, and a faster bus is shaken harder.
+#[test]
+fn a_rough_road_shakes_the_bus() {
+    let asphalt = vertical_shake(0, 40.0, 8.0);
+    let slabs = vertical_shake(1, 40.0, 8.0);
+    let cobbles = vertical_shake(2, 40.0, 8.0);
+    let gravel = vertical_shake(5, 40.0, 8.0);
+    eprintln!("vertical shake at 40 km/h (m/s² rms): asphalt {asphalt:.3}, slabs {slabs:.3}, cobbles {cobbles:.3}, gravel {gravel:.3}");
+    assert!(asphalt < 0.15, "asphalt {asphalt}");
+    assert!(slabs > asphalt * 1.5, "slabs {slabs} asphalt {asphalt}");
+    assert!(cobbles > asphalt * 2.5, "cobbles {cobbles} asphalt {asphalt}");
+    assert!(gravel > cobbles, "gravel {gravel} cobbles {cobbles}");
+    // the bus's own springs keep a dirt road within what a passenger bears (ISO 2631: a
+    // bus on a poor road is "a little uncomfortable" to "uncomfortable": 0.5-1.6 m/s²)
+    assert!(gravel < 3.0, "gravel {gravel}");
+    let fast = vertical_shake(2, 60.0, 8.0);
+    assert!(fast > cobbles, "the faster, the harder: {cobbles} at 40 km/h, {fast} at 60 (asphalt {asphalt}, slabs {slabs}, gravel {gravel})");
+}
+
+/// A bus brakes harder on dry asphalt than on grass or in the snow, with the same brakes.
+#[test]
+fn the_surface_decides_how_far_a_braking_bus_goes() {
+    let stop = |surface: u8, wet: f32| {
+        let mut rb = RigidBody::from_definition(&bus(), &[]);
+        rb.place(DVec3::ZERO, 0.0);
+        // the road's grip in the weather, as `road_grip` gives it
+        rb.friction = crate::vehicle::weather::road_grip(wet, 15.0);
+        rb.wetness = wet;
+        let g = road(1e9, 0.0);
+        run(&mut rb, 2.0, 0.0, 0.0, &g);
+        rb.velocity = rb.orientation.mul_vec3(Vec3::Y) * 16.0;
+        for w in rb.wheels.iter_mut() {
+            w.spin = 16.0 / w.radius;
+            w.surface = surface;
+            w.surface_now = surface;
+            w.surface_was = surface;
+        }
+        let y0 = rb.position.y;
+        // a brake the dry road takes, held
+        let brakes = vec![30_000.0; rb.wheels.len()];
+        for _ in 0..(12.0 * 120.0) as usize {
+            rb.step(1.0 / 120.0, 0.0, &brakes, 0.0, &g);
+        }
+        (rb.position.y - y0) as f32
+    };
+    let dry = stop(0, 0.0);
+    let wet = stop(0, 1.0);
+    let cobbles_wet = stop(2, 1.0);
+    let grass = stop(4, 0.0);
+    assert!(dry < wet && wet < cobbles_wet, "dry {dry}, wet {wet}, wet cobbles {cobbles_wet}, grass {grass}");
+    // 16 m/s at 0.85 g would stop in 15 m, on grass (0.5 x 0.85) in 30 m or more
+    assert!(dry > 14.0 && dry < 22.0, "dry {dry}");
+    assert!(grass > dry * 1.5, "grass {grass}");
+}
+
+/// Without drive or brakes a bus coasts to a stop on the flat in a distance that the air
+/// and the tyres decide: the faster, the more the air. A cold, dense air takes more than a
+/// warm, thin one, and a headwind more than a tailwind.
+#[test]
+fn the_air_slows_a_coasting_bus() {
+    let coast = |density: f32, wind: Vec3| {
+        let mut rb = RigidBody::from_definition(&bus(), &[]);
+        rb.place(DVec3::ZERO, 0.0);
+        rb.air_density = density;
+        rb.wind = wind;
+        let g = road(1e9, 0.0);
+        run(&mut rb, 2.0, 0.0, 0.0, &g);
+        rb.velocity = rb.orientation.mul_vec3(Vec3::Y) * 25.0;
+        for w in rb.wheels.iter_mut() {
+            w.spin = 25.0 / w.radius;
+        }
+        run(&mut rb, 10.0, 0.0, 0.0, &g);
+        rb.forward_speed()
+    };
+    let calm = coast(1.2, Vec3::ZERO);
+    assert!(calm < 24.0 && calm > 15.0, "{calm}");
+    assert!(coast(1.3, Vec3::ZERO) < calm, "denser air takes more");
+    assert!(coast(1.2, Vec3::new(0.0, -12.0, 0.0)) < calm, "a headwind takes more");
+    assert!(coast(1.2, Vec3::new(0.0, 12.0, 0.0)) > calm, "a tailwind takes less");
+}
+
+/// A gale across the road pushes a standing bus along the wind and leans it.
+#[test]
+fn a_crosswind_leans_and_pushes_the_bus() {
+    let mut rb = RigidBody::from_definition(&bus(), &[]);
+    rb.place(DVec3::ZERO, 0.0);
+    // blowing towards -x (to the bus's left)
+    rb.wind = Vec3::new(-25.0, 0.0, 0.0);
+    let g = road(1e9, 0.0);
+    run(&mut rb, 3.0, 0.0, 0.0, &g);
+    let (_, _, bank) = rb.heading_pitch_bank();
+    let mut calm = RigidBody::from_definition(&bus(), &[]);
+    calm.place(DVec3::ZERO, 0.0);
+    run(&mut calm, 3.0, 0.0, 0.0, &g);
+    let (_, _, calm_bank) = calm.heading_pitch_bank();
+    // a bus on its tyres does not blow away, but its body leans from the gale
+    assert!((bank - calm_bank).abs() > 0.05, "no lean: {bank} against {calm_bank}");
+    assert!(rb.velocity.length() < 0.5, "a standing bus holds its place: {:?}", rb.velocity);
+}

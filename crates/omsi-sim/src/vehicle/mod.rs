@@ -36,7 +36,7 @@ mod types;
 mod update;
 mod vars;
 mod visuals;
-mod weather;
+pub(crate) mod weather;
 
 pub use contact::*;
 pub use coupling::*;

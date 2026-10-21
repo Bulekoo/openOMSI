@@ -385,7 +385,16 @@ impl VehicleInstance {
         let mut rb = self.rigid.take().unwrap();
         for (i, w) in rb.wheels.iter_mut().enumerate() {
             w.spring_factor = self.spring_factor(i / 2, i % 2);
+            // what each tyre rolls on (the map tells the scripts, and so us, every frame)
+            let side = if w.attach.x < 0.0 { "L" } else { "R" };
+            if let Some(id) = self.var(&format!("Axle_SurfaceID_{}_{side}", rb.wheel_axle.get(i).copied().unwrap_or(0))) {
+                w.surface = id.clamp(0.0, 255.0) as u8;
+            }
         }
+        // and the weather it rolls in: the road's wetness and the air's density and motion
+        rb.wetness = self.host.street_cond;
+        rb.air_density = crate::rigid::realism::air_density(self.host.temperature, 0.0);
+        rb.wind = self.host.wind;
         rb.coupled = self.coupled_parts();
         {
             let ground = self.ground.clone();

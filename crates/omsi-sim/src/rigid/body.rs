@@ -37,7 +37,7 @@ impl RigidBody {
             let tyre_c = TYRE_C * (tyre_k / TYRE_K).sqrt();
             for side in [-1.0f32, 1.0] {
                 let inertia_inv = if a.inertia_inv > 0.0 { a.inertia_inv } else { DEFAULT_INERTIA_INV };
-                wheels.push(RigidWheel { spin: 0.0, slipping: false, locked: false, inertia_inv, attach: Vec3::new(side * inner, a.long, z), lever: side * (outer - inner), radius: r, driven: a.driven, steered: (a.long - front_long).abs() < 0.01, steer: 0.0, tyre_k, tyre_c, spring: k, damper: c, max_force, spring_factor: 1.0, rest_load: 0.0, compression: 0.0, compression_rate: 0.0, touch: None, on_ground: true, rotation_deg: 0.0, rpm: 0.0, load: 0.0, ground_z: 0.0, ground_seen: false, walls: Vec::new(), step_force: 0.0 });
+                wheels.push(RigidWheel { spin: 0.0, slipping: false, locked: false, inertia_inv, attach: Vec3::new(side * inner, a.long, z), lever: side * (outer - inner), radius: r, driven: a.driven, steered: (a.long - front_long).abs() < 0.01, steer: 0.0, tyre_k, tyre_c, spring: k, damper: c, max_force, spring_factor: 1.0, rest_load: 0.0, compression: 0.0, compression_rate: 0.0, touch: None, on_ground: true, rotation_deg: 0.0, rpm: 0.0, load: 0.0, ground_z: 0.0, ground_seen: false, walls: Vec::new(), step_force: 0.0, surface: 0, surface_now: 0, surface_was: 0, surface_mix: 1.0, mu_scale: 1.0, rough: 0.0 });
                 wheel_axle.push(ai);
             }
         }
@@ -52,7 +52,7 @@ impl RigidBody {
         let inv_min_turn_radius = if def.inv_min_turn_radius > 0.0 { def.inv_min_turn_radius } else { max_steer_deg.to_radians().tan() / s };
         let springs: f32 = def.axles.iter().map(|a| 2.0 * if a.spring > 0.0 { a.spring } else { 150.0 }).sum();
         let body_freq = (springs / (mass / 1000.0)).max(0.0).sqrt();
-        RigidBody { mass, inertia, cog, position: DVec3::ZERO, orientation: Quat::IDENTITY, velocity: Vec3::ZERO, omega: Vec3::ZERO, wheels, wheel_axle, steer_deg: 0.0, kappa: 0.0, max_steer_deg, rot_pnt_long: def.rot_pnt_long, inv_min_turn_radius, body_freq, holding: true, rolling_resistance: if def.rolling_resistance > 0.0 { def.rolling_resistance } else { 0.008 * mass * 9.81 }, accel_body: Vec3::ZERO, friction: 0.85, wheel_impacts: Vec::new(), coupled: Vec::new(), spawned_inside: None, wheel_walls: true }
+        RigidBody { mass, inertia, cog, position: DVec3::ZERO, orientation: Quat::IDENTITY, velocity: Vec3::ZERO, omega: Vec3::ZERO, wheels, wheel_axle, steer_deg: 0.0, kappa: 0.0, max_steer_deg, rot_pnt_long: def.rot_pnt_long, inv_min_turn_radius, body_freq, holding: true, rolling_resistance: if def.rolling_resistance > 0.0 { def.rolling_resistance } else { 0.008 * mass * 9.81 }, accel_body: Vec3::ZERO, friction: 0.85, wheel_impacts: Vec::new(), coupled: Vec::new(), spawned_inside: None, wheel_walls: true, aero: realism::Aero::of(def.bounding_box.map(|b| [b[0], b[1], b[2]]), mass), air_density: realism::air_density(20.0, 0.0), wind: Vec3::ZERO, wetness: 0.0, road_s: 0.0 }
     }
 
     /// Place the body at rest with its wheels on the ground plane at `origin.z`: heading
@@ -243,14 +243,29 @@ impl RigidBody {
             let rot = self.orientation;
             let up = rot.mul_vec3(Vec3::Z);
             let mut force = Vec3::new(0.0, 0.0, -9.81 * self.mass);
-            // the air: ½ ρ cw A v² (cw 0.6, the front a bus's or a car's by the mass). Without it
-            // a bus rolling downhill without its brakes ran on to any speed
-            {
-                let v = self.velocity;
-                let area = (self.mass / 2200.0).clamp(2.0, 8.5);
-                force -= v * v.length() * (0.5 * 1.2 * 0.6 * area);
+            // the air: drag and side force from the vehicle's own size, the air's density and
+            // the wind (see `realism::air_force`). Without it a bus rolling downhill without
+            // its brakes ran on to any speed, and no gale ever moved one
+            let inv = rot.inverse();
+            let (air_force, air_torque) = realism::air_force(&self.aero, self.air_density, inv.mul_vec3(self.velocity), inv.mul_vec3(self.wind));
+            force += rot.mul_vec3(air_force);
+            let mut torque = air_torque; // body frame
+            // where on the road's unevenness the body stands (a reversing bus retraces it)
+            let body_fwd_now = rot.mul_vec3(Vec3::Y);
+            let ds = self.velocity.dot(body_fwd_now) as f64 * h as f64;
+            self.road_s += ds;
+            for w in self.wheels.iter_mut() {
+                w.surface_mix = (w.surface_mix + ds.abs() as f32).min(1.0);
+                if w.surface != w.surface_now {
+                    (w.surface_was, w.surface_now, w.surface_mix) = (w.surface_now, w.surface, 0.0);
+                }
+                w.mu_scale = realism::grip_scale(w.surface_now, self.wetness);
+                // the road under each tyre, eased from the old surface's over a metre
+                let side = (w.attach.x > 0.0) as u8;
+                let at = self.road_s + w.attach.y as f64;
+                let now = realism::roughness(w.surface_now, at, side);
+                w.rough = if w.surface_mix < 1.0 { realism::roughness(w.surface_was, at, side) * (1.0 - w.surface_mix) + now * w.surface_mix } else { now };
             }
-            let mut torque = Vec3::ZERO; // body frame
             // Every driven wheel of the train takes its share of `M_Wheel`. A body without
             // driven wheels of its own (a pusher's front section) was pushed by nothing: the
             // count was clamped to one and the torque went to wheels that do not drive.
@@ -406,8 +421,9 @@ impl RigidBody {
                     right,
                     base: f_world + up * n + step,
                     drive: if w.driven { drive_torque / r / driven } else { 0.0 },
-                    brake: brake.get(i).copied().unwrap_or(0.0).max(0.0) + self.rolling_resistance / n_wheels,
+                    brake: brake.get(i).copied().unwrap_or(0.0).max(0.0) + self.rolling_resistance / n_wheels * realism::rolling_scale(w.surface_now, v_long, tyre_f / w.rest_load.max(1.0)),
                     grip,
+                    mu: self.friction * w.mu_scale,
                     v_long,
                     lateral: true,
                     wheel: Some(i),
@@ -429,6 +445,7 @@ impl RigidBody {
                     drive: drive * share,
                     brake: d.brake.max(0.0) * share,
                     grip: d.load,
+                    mu: self.friction,
                     v_long: (self.velocity + omega_world.cross(r_world)).dot(body_fwd),
                     lateral: false,
                     wheel: None,
@@ -447,7 +464,7 @@ impl RigidBody {
                 // a slipping wheel passes on the sliding friction, whichever way the tyre
                 // slides over the road (the wheel's own speed against the ground's)
                 if let Some(w) = c.wheel.map(|i| &self.wheels[i]).filter(|w| w.slipping) {
-                    let mu_n = self.friction * c.grip;
+                    let mu_n = c.mu * c.grip;
                     let slide = w.spin * w.radius - c.v_long;
                     rolling_long[k] = mu_n * sign(slide);
                     outer += c.fwd * rolling_long[k];
@@ -474,12 +491,12 @@ impl RigidBody {
                     Some(si) => c.drive + hold_long[si],
                     None => rolling_long[k],
                 };
-                let max_f = self.friction * c.grip;
+                let max_f = c.mu * c.grip;
                 f_long = f_long.clamp(-max_f, max_f);
                 let f_world = c.base + c.fwd * f_long;
                 long_sum += f_long * c.fwd.dot(body_fwd);
                 if let Some(i) = c.wheel {
-                    self.wheels[i].advance_spin(c, f_long, self.friction, h);
+                    self.wheels[i].advance_spin(c, f_long, c.mu, h);
                 }
                 force += f_world;
                 torque += rot.inverse().mul_vec3(c.r).cross(rot.inverse().mul_vec3(f_world));
@@ -648,7 +665,7 @@ impl RigidBody {
             .collect();
         // holding: the bend's pull against the grip of all tyres (0x7e4dee), and
         // no wheel spinning or locked (0x7e3c3b)
-        let grip_all: f32 = lat.iter().map(|&k| self.friction * contacts[k].grip).sum();
+        let grip_all: f32 = lat.iter().map(|&k| contacts[k].mu * contacts[k].grip).sum();
         let v_fwd = self.velocity.dot(body_fwd);
         let kappa = (self.steer_deg.to_radians().tan() / (self.wheels.iter().map(|w| w.attach.y).fold(f32::MIN, f32::max) - self.rot_pnt_long).abs().max(0.5)).abs();
         let slipping = self.wheels.iter().any(|w| w.slipping && w.on_ground);
@@ -665,7 +682,7 @@ impl RigidBody {
             for (q, &k) in lat.iter().enumerate() {
                 let c = &contacts[k];
                 let v_lat = (v + rot.mul_vec3(w).cross(c.r)).dot(c.right);
-                let cap = self.friction * c.grip * h * reach;
+                let cap = c.mu * c.grip * h * reach;
                 let before = j[q];
                 j[q] = (before - v_lat / arms[q].1).clamp(-cap, cap);
                 let dj = j[q] - before;
@@ -861,7 +878,9 @@ fn omsi_strut(w: &mut RigidWheel, r: f32, hub0: DVec3, position: DVec3, cog: Vec
     // with its wheels drawn sunk a few centimetres into the road.
     let plane0 = position + rot.mul_vec3(Vec3::new(w.attach.x, w.attach.y, 0.0) - cog).as_dvec3();
     let under = probe(plane0.x, plane0.y, top).below.or_else(|| probe(plane0.x, plane0.y, plane0.z + 3.0).below);
-    let t = under.map(|g| (g - plane0.z) as f32);
+    // (the road's own unevenness lifts the ground under the tyre; the ground itself stays
+    // what it is for everything that asks where it lies)
+    let t = under.map(|g| (g - plane0.z) as f32 + w.rough);
     if let Some(g) = under {
         w.ground_z = g;
         w.ground_seen = true;
