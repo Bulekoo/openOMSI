@@ -238,7 +238,7 @@ function TourSheet({ close }) {
     ${shown.map(({ tour: x, ended, at, via }) => {
       const trip = x.trips[at];
       const found = tq && trip && !x.number.toLowerCase().includes(tq);
-      const what = found ? html`${hms(trip.departure)} <${TripEnds} trip=${trip} />${via ? ` (${t('via {stop}', { stop: via })})` : ''}` : `${x.days} - ${x.trips.length} ${t('trips')}${x.trips.length ? ` - ${hms(x.first)}-${hms(x.last)}` : ''}`;
+      const what = found ? html`${hms(trip.departure)} <${TripEnds} trip=${trip} />${via ? ` (${t('via {stop}', { stop: via })})` : ''}` : `${x.days} - ${t('{n} trips', { n: x.trips.length })}${x.trips.length ? ` - ${hms(x.first)}-${hms(x.last)}` : ''}`;
       return pick(x.number === s.choice.tour, () => (chooseTour(x, found ? trip : null), close()), html`<span class="m-pick-text"><b>${t('Tour')} ${x.number}</b><small>${what}${!x.runs ? ` - ${t('not on this day')}` : ended ? ` - ${t('ended')}` : ''}</small></span>`, x.runs && !ended ? '' : ' dim');
     })}
   </div>`;
