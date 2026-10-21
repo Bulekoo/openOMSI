@@ -71,6 +71,32 @@ they move with it; a switch a vehicle runs into from the branch side (trailing) 
 whatever it is set to. The AI trains take the branch their route names. Their signals ask
 for them from 600 m (`RAIL_ASK_DISTANCE`) unless the light's own program says otherwise.
 
+## Pantographs
+
+A rail vehicle with a pantograph moves only with it raised: no current, no drive (the brakes
+still work). The game knows which variable moves the pantograph:
+
+1. the vehicle's own declaration in its `.bus` / `.ovh`:
+
+   ```
+   [pantograph_var]
+   Panto_anim_oben            # 0 down, 1 raised
+   [pantograph_trigger]
+   cp_Panto_toggle            # the mouse-event trigger that raises and lowers it
+   ```
+2. else the meshes whose file names say pantograph (`PANT_1.o3d`, `Pantograf`,
+   `Stromabnehmer`, `Токоприемник`) and the variable their animations turn on. A mod made from
+   a bus's scripts (the Tatra T6B5 of Gladbeck) animates its pantograph with `door_0`, the
+   door the script already knows how to open and close; the game finds that, takes `door_0`
+   out of the doors (no door key, no passengers boarding, no "door open while driving" for the
+   career) and fires the door's own `bus_door_0` / `bus_door_0_close` as the pantograph's
+   switch. The trigger is found from the script: the one that sets the variable, or sets the
+   door leaf of that name.
+
+**Shift+P** raises or lowers the pantograph of the vehicle you drive (a bus script's door
+needs its stop brake on, as the door did). `OMSI_DEBUG_RAIL=1` logs the pantograph's value
+with the drive twice a second.
+
 ## Movement
 
 The track says where a vehicle is; the rail dynamics (`omsi_sim::rail::dynamics`) say how fast

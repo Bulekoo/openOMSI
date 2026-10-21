@@ -513,6 +513,13 @@ impl VehicleType {
         // invisible wall metres ahead of its nose and behind its tail, the traffic kept its
         // distance from nothing. The box is cut down to the model (never made bigger).
         let mut def = def;
+        if def.is_rail() && def.pantograph_var.is_none() {
+            if let Some(var) = detect_pantograph(&model, &meshes, &program) {
+                log::info!("{}: its pantograph is `{var}` (found from its model)", bus_file.display());
+                def.pantograph_trigger = def.pantograph_trigger.take().or_else(|| triggers_storing(&program, &var).into_iter().next());
+                def.pantograph_var = Some(var);
+            }
+        }
         if def.trolley.is_empty() {
             def.trolley = legacy_trolley(&model, &meshes, &mesh_boxes, &program, bus_file, keep_meshes);
             take_model_poles(&mut model, &meshes, &mesh_boxes, &def.trolley);
@@ -927,6 +934,63 @@ mod winding_exporter_tests {
     fn forward_majority_keeps_existing_behaviour() {
         assert!(keep_authored_winding(80, 40, 1, 1));
     }
+}
+
+/// The variable that moves a rail vehicle's pantograph, read off its model: the meshes whose file
+/// names say pantograph (`PANT_1.o3d`, `Pantograf`, `Stromabnehmer`) and the variable their
+/// animations turn on - which is `Panto_anim_oben` in a tram made for it, and `door_0` in
+/// the Tatra T6B5, a bus's scripts with a tram's body, whose pantograph is the "door" the bus
+/// script already knows how to open and close. The most-used variable wins.
+pub(crate) fn detect_pantograph(model: &omsi_model::Model, meshes: &[VehicleMesh], program: &Program) -> Option<String> {
+    let named = |f: &str| {
+        let l = f.to_ascii_lowercase();
+        ["pantograph", "pantograf", "panto", "pant_", "pant.", "\\pant", "/pant", "stromabnehmer", "токоприемник", "пантограф"].iter().any(|k| l.contains(k))
+    };
+    let mut count: Vec<(String, usize)> = Vec::new();
+    for m in meshes {
+        let Some(md) = model.meshes.get(m.def_index) else { continue };
+        if !named(&md.file) {
+            continue;
+        }
+        for a in md.animations.iter().filter(|a| !a.variable.is_empty() && !a.variable.to_ascii_lowercase().starts_with("trolley_") && program.var(&a.variable).is_some()) {
+            match count.iter_mut().find(|(v, _)| v.eq_ignore_ascii_case(&a.variable)) {
+                Some((_, n)) => *n += 1,
+                None => count.push((a.variable.clone(), 1)),
+            }
+        }
+    }
+    count.sort_by_key(|(_, n)| std::cmp::Reverse(*n));
+    count.into_iter().next().map(|(v, _)| v)
+}
+
+/// The mouse-event triggers (and macros they call) of `program` that write variable `var`,
+/// first the ones a cabin switch is likely to be (names with `door`, `panto` or `tuer` first).
+pub(crate) fn triggers_storing(program: &Program, var: &str) -> Vec<String> {
+    fn stores(program: &Program, block: omsi_script::BlockId, id: omsi_script::VarId, seen: &mut hashbrown::HashSet<omsi_script::BlockId>) -> bool {
+        if !seen.insert(block) || seen.len() > 64 {
+            return false;
+        }
+        let Some(b) = program.blocks.get(block as usize) else { return false };
+        b.ops.iter().any(|op| match op {
+            omsi_script::Op::Store(v) => *v == id,
+            omsi_script::Op::Macro(m) => stores(program, *m, id, seen),
+            _ => false,
+        })
+    }
+    let Some(id) = program.var(var) else { return Vec::new() };
+    let mut out: Vec<String> = program.triggers.iter().filter(|(_, b)| stores(program, **b, id, &mut hashbrown::HashSet::new())).map(|(n, _)| n.clone()).collect();
+    if out.is_empty() {
+        // a door script: the trigger sets the leaf's target and the script moves the leaf
+        let leaf = var.to_ascii_lowercase();
+        out = program.triggers.keys().filter(|n| crate::door_keys::trigger_leaves(program, n).iter().any(|l| *l == leaf)).cloned().collect();
+    }
+    out.sort();
+    // (the opening trigger of a pair `x` / `x_close`, the shortest name, first)
+    out.sort_by_key(|n| {
+        let l = n.to_ascii_lowercase();
+        (!(l.contains("panto") || l.contains("door") || l.contains("tuer") || l.contains("pant")), l.ends_with("_close") || l.ends_with("_off") || l.ends_with("_cl"), l.len())
+    });
+    out
 }
 
 /// A trolleybus made for OMSI 2 as it comes (no `[trolley_*]` blocks): its model switches two

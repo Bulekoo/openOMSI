@@ -225,6 +225,14 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   adhesion (less on wet rails, leaves, snow and ice), drive and brakes limited by it - the
   driven wheels spin, the braked ones slide - and a tram's magnetic track brake. A vehicle
   scripted for the AI only is driven by the pedals with the typical performance of its class.
+- **Pantographs.** A rail vehicle with a pantograph moves only with it raised. The game finds
+  it from `[pantograph_var]` / `[pantograph_trigger]` in the vehicle's file or, for a mod
+  without them, from its pantograph meshes and the variable they turn on (the Tatra T6B5's is
+  `door_0`, which is then no longer a door: no door key, no boarding, no "door open while
+  driving" penalty). Shift+P raises and lowers it.
+- Cars of a train no longer jump back and forth by a few centimetres in bends: a part just
+  behind the vehicle was placed from the last 10 cm sample of the track behind it, a part just
+  ahead from the track itself.
 - The speed limit of a rail lane is brought down to what its curve allows (a tram loop, the
   diverging branch of a turnout).
 

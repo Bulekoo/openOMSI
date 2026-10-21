@@ -82,14 +82,24 @@ impl VehicleInstance {
             headwind: 0.0,
             sanding: false,
         };
-        let from_scripts = self.rail_script_forces(m_wheel, brakes);
+        let mut from_scripts = self.rail_script_forces(m_wheel, brakes);
+        // no current, no drive (a brake still works)
+        if !self.rail_powered() {
+            if let Some(f) = from_scripts.as_mut() {
+                f.drive = f.drive.min(0.0);
+            }
+        }
         self.rail_scripted |= from_scripts.is_some();
         let c = self.physics.controls;
         let forces = if self.rail_scripted {
             from_scripts.unwrap_or_default()
         } else {
             let reverse = self.var("rail_reverse").is_some_and(|r| r > 0.5);
-            rail::dynamics::pedal_forces(class, consist.mass, c.throttle, c.brake, v0, reverse)
+            let mut f = rail::dynamics::pedal_forces(class, consist.mass, c.throttle, c.brake, v0, reverse);
+            if !self.rail_powered() {
+                f.drive = 0.0;
+            }
+            f
         };
         let out = rail::step(&consist, &cond, &forces, v0, dt);
         if omsi_cfg::flags::OMSI_DEBUG_RAIL.is_set() {
@@ -97,8 +107,9 @@ impl VehicleInstance {
             if self.rail_log >= 0.5 {
                 self.rail_log = 0.0;
                 log::info!(
-                    "rail: {} v {:.1} km/h a {:.2} m/s² | M_Wheel {:.0} Nm -> drive {:.0} N, brake {:.0} N ({}) | mass {:.0} kg, driven {:.2}, {} cars, adhesion {:.2} | spin {} slide {} resist {:.0} N",
+                    "rail: {} pantograph {:?} v {:.1} km/h a {:.2} m/s² | M_Wheel {:.0} Nm -> drive {:.0} N, brake {:.0} N ({}) | mass {:.0} kg, driven {:.2}, {} cars, adhesion {:.2} | spin {} slide {} resist {:.0} N",
                     self.ty.def.path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default(),
+                    self.pantograph_var().and_then(|v| self.var(v)),
                     out.speed * 3.6, out.accel, m_wheel, forces.drive, forces.brake,
                     if self.rail_scripted { "scripts" } else { "pedals" },
                     consist.mass, consist.driven_share, consist.cars,
@@ -140,6 +151,36 @@ impl VehicleInstance {
             w.rotation_deg = (w.rotation_deg + omega.to_degrees() * dt).rem_euclid(360.0);
         }
         Some(out.speed * dt)
+    }
+
+    /// The variable that moves this vehicle's pantograph (declared, or found in its model).
+    pub fn pantograph_var(&self) -> Option<&str> {
+        self.ty.def.pantograph_var.as_deref()
+    }
+
+    /// Whether the pantograph is raised: `None` for a vehicle without one.
+    pub fn pantograph_raised(&self) -> Option<bool> {
+        let v = self.var(self.pantograph_var()?)?;
+        Some(v > 0.5)
+    }
+
+    /// Raise or lower the pantograph with the cabin's own switch (the trigger the vehicle
+    /// declares or the model's scripts have for it). Returns what it is meant to be now.
+    pub fn toggle_pantograph(&mut self) -> Option<bool> {
+        let trigger = self.ty.def.pantograph_trigger.clone()?;
+        let was = self.pantograph_raised()?;
+        // (a door script has a pair: `x` opens, `x_close` closes)
+        let close = format!("{trigger}_close");
+        let name = if was && self.ty.program.trigger(&close).is_some() { close } else { trigger };
+        self.trigger(&name);
+        // (the leaves of a door script move on a few frames; what the trigger asked for)
+        Some(!was)
+    }
+
+    /// Whether the vehicle's drive has current: a rail vehicle with a pantograph moves only with
+    /// it raised.
+    pub fn rail_powered(&self) -> bool {
+        self.pantograph_raised().unwrap_or(true)
     }
 
     /// What the rail dynamics made of the last step (spinning or sliding wheels, resistance).

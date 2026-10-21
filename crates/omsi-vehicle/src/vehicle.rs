@@ -134,6 +134,12 @@ pub struct Vehicle {
     /// `[rail_class]` (an openOMSI extension): `tram`, `metro` or `train`, when the file's
     /// shape does not tell.
     pub rail_class: Option<String>,
+    /// `[pantograph_var]` / `[pantograph_trigger]` (openOMSI keywords): the script variable that
+    /// says the pantograph is raised (1) or down (0), and the mouse-event trigger that toggles it.
+    /// Without them a rail vehicle's pantograph is found by its mesh (see the game's
+    /// `detect_pantograph`).
+    pub pantograph_var: Option<String>,
+    pub pantograph_trigger: Option<String>,
     pub sinus: Option<[f32; 4]>,
     pub rail_body_osc: Option<[f32; 7]>,
     pub contact_shoes: Vec<[f32; 6]>,
@@ -352,6 +358,8 @@ impl Vehicle {
                 "set_camera_std" => v.camera_std = r.usize(),
                 "set_camera_outside_center" => v.camera_outside_center = r.f32s::<3>(),
                 "rail_class" => v.rail_class = Some(r.str().to_string()),
+                "pantograph_var" => v.pantograph_var = Some(r.str().to_string()),
+                "pantograph_trigger" => v.pantograph_trigger = Some(r.str().to_string()),
                 "mass" => v.mass = r.f32(),
                 "momentofintertia" => v.moment_of_inertia = r.f32s::<3>(),
                 "boundingbox" => {
