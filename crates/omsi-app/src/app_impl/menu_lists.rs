@@ -134,7 +134,7 @@ impl App {
         self.menus.menu_edit_ident=false;
         if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
         if let Some(p) = self.player.as_mut() {
-            crate::game_lists::set_identity_to_player_vehicle(p, "", Some(&ident));
+            crate::game_lists::set_identity_to_player_vehicle(p, "", if ident.is_empty() { None } else { Some(&ident) });
             self.service_msg = Some((format!("Plate {ident}"), 3.0));
         }
         self.refresh_list();
