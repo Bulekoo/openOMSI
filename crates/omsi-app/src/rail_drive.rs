@@ -126,23 +126,36 @@ fn nearest_rail(net: &Network, p: DVec3, heading: f64, reach: f64, within: Optio
 }
 
 /// The trail's point at travelled distance `u` (between its samples; None beyond its ends).
-pub(crate) fn point_at(trail: &std::collections::VecDeque<(f64, DVec3)>, u: f64) -> Option<DVec3> {
-    if trail.is_empty() {
-        return None;
-    }
-    if u <= trail.front().unwrap().0 {
-        return Some(trail.front().unwrap().1);
-    }
-    if u >= trail.back().unwrap().0 {
-        return Some(trail.back().unwrap().1);
-    }
-    let i = trail.iter().position(|(v, _)| *v >= u)?;
-    if i == 0 {
-        return Some(trail[0].1);
-    }
-    let (a, b) = (trail[i - 1], trail[i]);
-    let t = ((u - a.0) / (b.0 - a.0).max(1e-6)).clamp(0.0, 1.0);
-    Some(a.1 + (b.1 - a.1) * t)
+/// `head` is where the vehicle is right now, `(u, position)`: the trail is only sampled every
+/// 10 cm of travel, so its newest sample lags behind the vehicle by up to that much (at a
+/// walking pace most of the time), and a coupled part asked for a place just behind the vehicle
+/// got the stale sample while one asked for a place just ahead got the exact one - the cars
+/// jumped back and forth by a few centimetres as they crossed from one answer to the other.
+pub(crate) fn point_at(trail: &std::collections::VecDeque<(f64, DVec3)>, head: Option<(f64, DVec3)>, u: f64) -> Option<DVec3> {
+    let mut at = |u: f64| -> Option<DVec3> {
+        if trail.is_empty() {
+            return head.map(|h| h.1);
+        }
+        let newest = *trail.back().unwrap();
+        if let Some((hu, hp)) = head.filter(|h| h.0 > newest.0 + 1e-9 && u > newest.0) {
+            let t = ((u - newest.0) / (hu - newest.0)).clamp(0.0, 1.0);
+            return Some(newest.1 + (hp - newest.1) * t);
+        }
+        if u <= trail.front().unwrap().0 {
+            return Some(trail.front().unwrap().1);
+        }
+        if u >= newest.0 {
+            return Some(newest.1);
+        }
+        let i = trail.iter().position(|(v, _)| *v >= u)?;
+        if i == 0 {
+            return Some(trail[0].1);
+        }
+        let (a, b) = (trail[i - 1], trail[i]);
+        let t = ((u - a.0) / (b.0 - a.0).max(1e-6)).clamp(0.0, 1.0);
+        Some(a.1 + (b.1 - a.1) * t)
+    };
+    at(u)
 }
 
 fn angle_diff(a: f64, b: f64) -> f64 {
@@ -282,7 +295,8 @@ impl RailDrive {
             };
             // (a part may run ahead of the vehicle's origin - a bogie frame under its front
             // end - where the trail, which holds on to its newest point, has nothing yet)
-            v.retrail(dt, &|d| if d < 0.0 { probe(d) } else { point_at(trail, u - d).or_else(|| probe(d)) });
+            let head = Some((u, track_pos));
+            v.retrail(dt, &|d| if d < 0.0 { probe(d) } else { point_at(trail, head, u - d).or_else(|| probe(d)) });
         }
     }
 
@@ -446,14 +460,32 @@ mod tests {
         trail.push_back((10.0, DVec3::new(10.0, 0.0, 0.0)));
         trail.push_back((20.0, DVec3::new(20.0, 10.0, 5.0)));
 
-        let p0 = point_at(&trail, 0.0).unwrap();
+        let p0 = point_at(&trail, None, 0.0).unwrap();
         assert!((p0 - DVec3::new(0.0, 0.0, 0.0)).length() < 1e-4);
 
-        let p5 = point_at(&trail, 5.0).unwrap();
+        let p5 = point_at(&trail, None, 5.0).unwrap();
         assert!((p5 - DVec3::new(5.0, 0.0, 0.0)).length() < 1e-4);
 
-        let p15 = point_at(&trail, 15.0).unwrap();
+        let p15 = point_at(&trail, None, 15.0).unwrap();
         assert!((p15 - DVec3::new(15.0, 5.0, 2.5)).length() < 1e-4);
+    }
+
+    /// The trail is sampled every 10 cm; a place just behind the vehicle is the same distance
+    /// from where it is whichever way it is asked: a stale newest sample made it jump.
+    #[test]
+    fn the_newest_place_follows_the_vehicle_not_the_last_sample() {
+        let mut trail = std::collections::VecDeque::new();
+        trail.push_back((0.0, DVec3::new(0.0, 0.0, 0.0)));
+        trail.push_back((10.0, DVec3::new(10.0, 0.0, 0.0)));
+        // 7 cm further on, not yet sampled
+        let head = Some((10.07, DVec3::new(10.07, 0.0, 0.0)));
+        let behind = point_at(&trail, head, 10.07 - 0.02).unwrap();
+        assert!((behind.x - 10.05).abs() < 1e-6, "{behind:?}");
+        assert!((point_at(&trail, head, 10.07).unwrap().x - 10.07).abs() < 1e-6);
+        // the samples older than the newest are unchanged
+        assert!((point_at(&trail, head, 5.0).unwrap().x - 5.0).abs() < 1e-6);
+        // without a head the newest sample is the end
+        assert_eq!(point_at(&trail, None, 10.05).unwrap().x, 10.0);
     }
 
     #[test]
