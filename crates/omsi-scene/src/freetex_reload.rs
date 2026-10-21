@@ -53,6 +53,7 @@ struct Watched {
     candidate: Option<FileStamp>,
     stable_since: Instant,
     published: Option<FileStamp>,
+    initialized: bool,
 }
 
 impl Watched {
@@ -63,6 +64,7 @@ impl Watched {
             candidate: None,
             stable_since: now,
             published: None,
+            initialized: false,
         }
     }
 
@@ -74,12 +76,23 @@ impl Watched {
         })
     }
 
+    fn due(&self, now: Instant) -> bool {
+        now.duration_since(self.checked) >= POLL
+    }
+
     fn poll(&mut self, now: Instant) -> Option<Reload> {
-        if now.duration_since(self.checked) < POLL {
+        if !self.due(now) {
             return None;
         }
         self.checked = now;
         let stamp = FileStamp::read(&self.watch.path);
+        if !self.initialized {
+            self.initialized = true;
+            self.published = stamp;
+            self.candidate = stamp;
+            self.stable_since = now;
+            return None;
+        }
         if stamp != self.candidate {
             self.candidate = stamp;
             self.stable_since = now;
@@ -200,7 +213,17 @@ fn run(
                 .recv()
                 .map_err(|_| mpsc::RecvTimeoutError::Disconnected)
         } else {
-            commands.recv_timeout(Duration::from_millis(25))
+            let now = Instant::now();
+            let delay = if pending.is_some() {
+                POLL
+            } else {
+                watched
+                    .values()
+                    .map(|file| (file.checked + POLL).saturating_duration_since(now))
+                    .min()
+                    .unwrap_or(POLL)
+            };
+            commands.recv_timeout(delay)
         };
         let command = match received {
             Ok(w) => Some(w),
@@ -232,13 +255,18 @@ fn run(
         for _ in 0..order.len().min(32) {
             let path = order.pop_front().unwrap();
             let file = watched.get_mut(&path).unwrap();
+            let now = Instant::now();
+            if !file.due(now) {
+                order.push_back(path);
+                continue;
+            }
             if !file.held() {
                 watched.remove(&path);
                 versions.lock().remove(&path);
                 continue;
             }
             order.push_back(path.clone());
-            if let Some(reload) = file.poll(Instant::now()) {
+            if let Some(reload) = file.poll(now) {
                 versions.lock().insert(path, reload.stamp);
                 match done.try_send(reload) {
                     Ok(()) => {}
@@ -320,14 +348,39 @@ mod tests {
     }
 
     #[test]
+    fn initial_stamp_does_not_decode_or_publish_unchanged_files() {
+        let picture = Picture::new();
+        std::fs::write(&picture.path, b"not an image").unwrap();
+        let now = Instant::now();
+        let mut watched = picture.watched(now);
+        for tick in 0..10 {
+            assert!(watched.poll(now + POLL * tick).is_none());
+        }
+        assert_eq!(watched.published, FileStamp::read(&picture.path));
+    }
+
+    #[test]
+    fn a_missing_initial_file_is_loaded_after_creation() {
+        let picture = Picture::new();
+        let now = Instant::now();
+        let mut watched = picture.watched(now);
+        assert!(watched.poll(now).is_none());
+        picture.write([0, 255, 0], 1);
+        assert!(watched.poll(now + POLL).is_none());
+        assert_eq!(
+            pixel(&watched.poll(now + POLL * 2).unwrap()),
+            [0, 255, 0, 255]
+        );
+    }
+
+    #[test]
     fn rewritten_inactive_page_is_fresh_when_returning_to_its_cached_id() {
         let picture = Picture::new();
         picture.write([255, 0, 0], 1);
         let now = Instant::now();
         let mut watched = picture.watched(now);
         assert!(watched.poll(now).is_none());
-        let first = watched.poll(now + POLL).unwrap();
-        assert_eq!(pixel(&first), [255, 0, 0, 255]);
+        assert!(watched.poll(now + POLL).is_none());
         // A second page is displayed; the old page is still held by the material cache.
         picture
             .shared
@@ -336,7 +389,7 @@ mod tests {
         picture.write([0, 255, 0], 2); // same path and same file length
         assert!(watched.poll(now + POLL * 2).is_none());
         let updated = watched.poll(now + POLL * 3).unwrap();
-        assert_eq!(updated.id, first.id);
+        assert_eq!(updated.id, 7);
         assert_eq!(pixel(&updated), [0, 255, 0, 255]);
         assert!(
             watched.poll(now + POLL * 4).is_none(),
@@ -351,11 +404,12 @@ mod tests {
         let now = Instant::now();
         let mut watched = picture.watched(now);
         watched.poll(now);
-        let old = watched.poll(now + POLL).unwrap();
+        assert!(watched.poll(now + POLL).is_none());
+        let old = watched.published;
         std::fs::write(&picture.path, b"BM").unwrap();
         assert!(watched.poll(now + POLL * 2).is_none());
         assert!(watched.poll(now + POLL * 3).is_none());
-        assert_eq!(watched.published, Some(old.stamp));
+        assert_eq!(watched.published, old);
         picture.write([0, 0, 255], 3);
         assert!(watched.poll(now + POLL * 4).is_none());
         assert_eq!(
@@ -371,7 +425,7 @@ mod tests {
         let now = Instant::now();
         let mut watched = picture.watched(now);
         watched.poll(now);
-        watched.poll(now + POLL).unwrap();
+        assert!(watched.poll(now + POLL).is_none());
         picture.write([0, 255, 0], 2);
         assert!(watched.poll(now + POLL * 2).is_none());
         picture.write([0, 0, 255], 3);
@@ -435,12 +489,16 @@ mod tests {
                 std::thread::sleep(Duration::from_millis(5));
             }
         };
-        let first = next();
-        assert_eq!(pixel(&first), [255, 0, 0, 255]);
+        std::thread::sleep(POLL * 3);
+        assert!(
+            reloads.next().is_none(),
+            "initial pixels must not be loaded twice"
+        );
+        let old = FileStamp::read(&picture.path).unwrap();
         picture.write([0, 255, 0], 2);
         let updated = next();
         assert_eq!(pixel(&updated), [0, 255, 0, 255]);
-        assert!(!reloads.accepts(&picture.path, Some(first.stamp)));
+        assert!(!reloads.accepts(&picture.path, Some(old)));
         assert!(reloads.accepts(&picture.path, Some(updated.stamp)));
         picture.shared.lock().clear();
         let until = Instant::now() + Duration::from_secs(5);
