@@ -1083,3 +1083,73 @@ fn a_crosswind_leans_and_pushes_the_bus() {
     assert!((bank - calm_bank).abs() > 0.05, "no lean: {bank} against {calm_bank}");
     assert!(rb.velocity.length() < 0.5, "a standing bus holds its place: {:?}", rb.velocity);
 }
+
+/// The yaw rate the bus settles to in a steady bend of `steer` at `kmh`, against the
+/// geometry's own (speed times the curvature the steering asks for): 1 is a bus that
+/// follows its wheels.
+fn yaw_ratio(kmh: f32, steer: f32, fps: f32) -> f32 {
+    let mut rb = RigidBody::from_definition(&bus(), &[]);
+    rb.place(DVec3::ZERO, 0.0);
+    let g = road(1e9, 0.0);
+    run(&mut rb, 2.0, 0.0, 0.0, &g);
+    let v = kmh / 3.6;
+    rb.velocity = rb.orientation.mul_vec3(Vec3::Y) * v;
+    for w in rb.wheels.iter_mut() {
+        w.spin = v / w.radius;
+    }
+    let radius = rb.wheels.iter().find(|w| w.driven).unwrap().radius;
+    let dt = 1.0 / fps;
+    let mut yaw = 0.0;
+    let n = (8.0 / dt) as usize;
+    for i in 0..n {
+        let torque = ((v - rb.forward_speed()) * rb.mass * 2.0 + rb.rolling_resistance) * radius;
+        rb.step(dt, torque, &[0.0; 4], steer, &g);
+        if i + (fps as usize) >= n {
+            yaw += rb.omega.z.abs() / fps;
+        }
+    }
+    yaw / (rb.forward_speed() * steer * rb.inv_min_turn_radius).max(1e-6)
+}
+
+/// A slip-angle tyre needs slip to make a side force: a bus follows its wheels at a walking
+/// pace and understeers as it goes faster, and the same at any frame rate.
+#[test]
+fn a_bus_understeers_as_it_speeds_up() {
+    if omsi_cfg::flags::OMSI_CLASSIC_TYRES.is_set() {
+        return;
+    }
+    let slow = yaw_ratio(10.0, 0.15, 60.0);
+    let mid = yaw_ratio(40.0, 0.15, 60.0);
+    let fast = yaw_ratio(70.0, 0.15, 60.0);
+    assert!(slow > 0.97 && slow < 1.03, "walking pace: {slow}");
+    assert!(mid < slow && fast < mid, "{slow} {mid} {fast}");
+    assert!(mid > 0.8 && fast > 0.5, "{mid} {fast}");
+    for fps in [30.0, 120.0] {
+        let r = yaw_ratio(40.0, 0.15, fps);
+        assert!((r - mid).abs() < 0.04, "{fps} fps: {r} against {mid}");
+    }
+}
+
+/// A bus on a road that falls away sideways stays where it is: the tyres hold it across.
+#[test]
+fn the_tyres_hold_a_parked_bus_on_a_cross_slope() {
+    let slope = |grade: f64| move |x: f64, _y: f64, top: f64| {
+        let z = -grade * x;
+        if z <= top { GroundProbe { below: Some(z), above: None } } else { GroundProbe { below: Some(z - 1.0), above: Some(z) } }
+    };
+    for (grade, holds) in [(0.08, true), (0.3, true)] {
+        let mut rb = RigidBody::from_definition(&bus(), &[]);
+        rb.place(DVec3::ZERO, 0.0);
+        let g = slope(grade);
+        let brakes = vec![3000.0; rb.wheels.len()];
+        for _ in 0..(6.0 * 60.0) as usize {
+            rb.step(1.0 / 60.0, 0.0, &brakes, 0.0, &g);
+        }
+        let moved = rb.position.x.abs();
+        if holds {
+            assert!(moved < 0.5, "slid {moved} m on {grade}");
+        } else {
+            assert!(moved > 1.0, "held on {grade}");
+        }
+    }
+}

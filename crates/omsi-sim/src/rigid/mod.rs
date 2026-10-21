@@ -229,6 +229,9 @@ pub struct RigidWheel {
     pub rough: f32,
     /// Horizontal push (N) of a step the tyre climbs or a wall it stands against.
     pub step_force: f32,
+    /// How far the contact patch lags behind the wheel across (m, positive to the right): the
+    /// tyre's lateral deflection, which the slip-angle model turns into a side force.
+    pub lat_defl: f32,
 }
 
 fn sign(x: f32) -> f32 {

@@ -232,6 +232,7 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 
 - Air drag and side force come from the vehicle's size, the air's density and the wind: a
   crosswind leans and pushes a bus, a headwind slows it.
+- **Tyres hold across by slip angle**, as real tyres do, instead of OMSI's rule that the body follows its wheels exactly until the grip is passed: the contact patch lags behind the wheel (a relaxation length) and pulls back by the cornering stiffness, up to the grip shared with the longitudinal force by the friction ellipse. A bus follows its wheels at walking pace, turns in over a third of a second at 50 km/h, understeers as it speeds up (yaw rate 0.99 / 0.93 / 0.44 of the geometry's at 20 / 50 / 80 km/h in a quarter-lock bend), loses its grip across on a locked or spinning wheel and holds parked on a cross slope by the tyres. `OMSI_CLASSIC_TYRES=1` gives OMSI's rule back (A/B; `cargo run --release -p omsi-sim --example handling -- <file.bus>... --kmh 50`).
 - Grip and rolling resistance depend on what each tyre rolls on, wet or dry (cobbles, dirt,
   grass, gravel, snow), and rolling resistance rises with speed and load.
 

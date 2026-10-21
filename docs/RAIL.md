@@ -106,3 +106,7 @@ all of them from the vehicle's own file and the map:
 * The road's unevenness by surface after ISO 8608 (the spectrum of road profiles), so
   cobbles, gravel, grass and the joints of an old concrete-slab road shake the bus; the rear
   axle drives over what the front axle drove over a wheelbase before.
+* The tyres' side forces from the slip angle (a stretched-string model: relaxation length
+  1.6 tyre radii, cornering stiffness 9 per radian of load, friction ellipse with the
+  longitudinal force) instead of OMSI's "follows its wheels" rule; `OMSI_CLASSIC_TYRES=1`
+  restores that for comparison.

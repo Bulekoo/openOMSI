@@ -249,6 +249,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_AI_MODEL_LOCK` | bool | off | use | sim | AI cars steer no further than their model's own steering lock (no 60 degree allowance for tight turns). |
 | `OMSI_AI_WAY_ONLY` | bool | off | use | app | AI vehicles stand on their way with the plain ground sampler, as before (A/B). |
 | `OMSI_BASIC_PIPELINES` | bool | off | once | guard, render | Use the reduced (basic) render pipelines, as after a driver failed to build the full ones. |
+| `OMSI_CLASSIC_TYRES` | bool | off | use | sim | The tyres hold across as OMSI 2 does (follow the wheels until the grip is passed, then slide) instead of by slip angle (A/B). |
 | `OMSI_CROSSING_DEFORM` | bool | off | use | scene | Apply the crossings' ground deformation again (A/B; Omsi.exe does not). |
 | `OMSI_CUT_PLAIN` | bool | off | use | scene | Road-cut textures uploaded without GPU-made mipmaps. |
 | `OMSI_FIXED_SCALE` | bool | off | use | app | Keep the render scale fixed (no dynamic resolution). |

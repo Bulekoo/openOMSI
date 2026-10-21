@@ -176,6 +176,7 @@ flags! {
     OMSI_CHECK_WALLS: Bool, Test, Use, "off", "Check: everybody inside a bus who stands away from its walkways.";
     OMSI_CHECK_WHEELS: Bool, Test, Use, "off", "Map check: probe the ground along every lane's wheel tracks (invisible walls, humps, holes).";
     OMSI_CHURN: Text, Test, Use, "-", "Offscreen: x,y - load the tiles round that point and unload/reload the start area (streaming test).";
+    OMSI_CLASSIC_TYRES: Bool, Switch, Use, "off", "The tyres hold across as OMSI 2 does (follow the wheels until the grip is passed, then slide) instead of by slip angle (A/B).";
     OMSI_CLICK_ALL: Bool, Test, Use, "off", "Check: aim at every clickable item of the cab and report which one would actually be operated.";
     OMSI_CLOUDFLARED: Text, Setup, Use, "-", "Path of the cloudflared binary for the LAN tunnel (searched after the game's folder, before the PATH).";
     OMSI_CLOUDFLARED_OWN: Bool, Test, Use, "off", "LAN tunnel: only the game's own downloaded cloudflared, to test the download.";

@@ -37,7 +37,7 @@ impl RigidBody {
             let tyre_c = TYRE_C * (tyre_k / TYRE_K).sqrt();
             for side in [-1.0f32, 1.0] {
                 let inertia_inv = if a.inertia_inv > 0.0 { a.inertia_inv } else { DEFAULT_INERTIA_INV };
-                wheels.push(RigidWheel { spin: 0.0, slipping: false, locked: false, inertia_inv, attach: Vec3::new(side * inner, a.long, z), lever: side * (outer - inner), radius: r, driven: a.driven, steered: (a.long - front_long).abs() < 0.01, steer: 0.0, tyre_k, tyre_c, spring: k, damper: c, max_force, spring_factor: 1.0, rest_load: 0.0, compression: 0.0, compression_rate: 0.0, touch: None, on_ground: true, rotation_deg: 0.0, rpm: 0.0, load: 0.0, ground_z: 0.0, ground_seen: false, walls: Vec::new(), step_force: 0.0, surface: 0, surface_now: 0, surface_was: 0, surface_mix: 1.0, mu_scale: 1.0, rough: 0.0 });
+                wheels.push(RigidWheel { spin: 0.0, slipping: false, locked: false, inertia_inv, attach: Vec3::new(side * inner, a.long, z), lever: side * (outer - inner), radius: r, driven: a.driven, steered: (a.long - front_long).abs() < 0.01, steer: 0.0, tyre_k, tyre_c, spring: k, damper: c, max_force, spring_factor: 1.0, rest_load: 0.0, compression: 0.0, compression_rate: 0.0, touch: None, on_ground: true, rotation_deg: 0.0, rpm: 0.0, load: 0.0, ground_z: 0.0, ground_seen: false, walls: Vec::new(), step_force: 0.0, lat_defl: 0.0, surface: 0, surface_now: 0, surface_was: 0, surface_mix: 1.0, mu_scale: 1.0, rough: 0.0 });
                 wheel_axle.push(ai);
             }
         }
@@ -486,6 +486,7 @@ impl RigidBody {
             let hold_long = hold(body_fwd, self.mass + towed, &|c| c.brake);
             // (the tyres' pull along the body, for the pitch lever below)
             let mut long_sum = 0.0f32;
+            let mut longs = vec![0.0f32; contacts.len()];
             for (k, c) in contacts.iter().enumerate() {
                 let mut f_long = match standing.iter().position(|&j| j == k) {
                     Some(si) => c.drive + hold_long[si],
@@ -493,6 +494,7 @@ impl RigidBody {
                 };
                 let max_f = c.mu * c.grip;
                 f_long = f_long.clamp(-max_f, max_f);
+                longs[k] = f_long;
                 let f_world = c.base + c.fwd * f_long;
                 long_sum += f_long * c.fwd.dot(body_fwd);
                 if let Some(i) = c.wheel {
@@ -509,7 +511,7 @@ impl RigidBody {
                 let r = self.wheels.iter().map(|w| w.radius).sum::<f32>() / self.wheels.len().max(1) as f32;
                 torque.x += long_sum * r;
             }
-            (force, torque) = self.hold_across(&contacts, force, torque, rot, body_fwd, towed, h);
+            (force, torque) = self.hold_across(&contacts, &longs, force, torque, rot, body_fwd, towed, h);
             // integrate
             let along = force.dot(body_fwd);
             let acc = (force - body_fwd * along) / self.mass + body_fwd * (along / (self.mass + towed));
@@ -630,7 +632,7 @@ impl RigidBody {
     /// The tyres' hold across, solved over the substep with everything else that pushes the
     /// body; returns the force and the torque with it.
     #[allow(clippy::too_many_arguments)]
-    fn hold_across(&mut self, contacts: &[Contact], mut force: Vec3, mut torque: Vec3, rot: Quat, body_fwd: Vec3, towed: f32, h: f32) -> (Vec3, Vec3) {
+    fn hold_across(&mut self, contacts: &[Contact], longs: &[f32], mut force: Vec3, mut torque: Vec3, rot: Quat, body_fwd: Vec3, towed: f32, h: f32) -> (Vec3, Vec3) {
         // Across the tyre: OMSI has no slip angle. Each axle takes away the sideways
         // speed it has - the bus follows its wheels exactly - with no more force than
         // the road's grip times the load on it; only beyond that does it slide
@@ -639,6 +641,9 @@ impl RigidBody {
         // everything else that pushes the body. The old tyre instead gave 12 x load per
         // radian of slip: every bus turned at 70 % of what its steering asked, 0.8 s
         // late, drifting 2-3 degrees and swaying - the same for every `.bus`.
+        if !omsi_cfg::flags::OMSI_CLASSIC_TYRES.is_set() {
+            return self.slip_across(contacts, longs, force, torque, rot, h);
+        }
         let (m, mt) = (self.mass, self.mass + towed);
         let lin = |p: Vec3| (p - body_fwd * p.dot(body_fwd)) / m + body_fwd * (p.dot(body_fwd) / mt);
         let along = force.dot(body_fwd);
@@ -701,6 +706,60 @@ impl RigidBody {
         // the centripetal acceleration)
         if self.holding && gripped && !lat.is_empty() {
             torque.y += m * self.cog.z * v_fwd * self.omega.z;
+        }
+        (force, torque)
+    }
+
+    /// The tyres' side forces from their slip, as a real tyre makes them (a stretched-string
+    /// model after Pacejka's and von Schlippe's): the contact patch is held by the road while
+    /// the wheel moves on, so it lags behind it by `y` metres, and the tyre pulls back with
+    /// `Cα/σ · y` (the cornering stiffness over the relaxation length) - at speed that is the
+    /// force of a slip angle `y/σ` (`Cα` per radian), at a standstill the spring of a tyre
+    /// that holds the vehicle on a slope. The patch lets go beyond what the road gives: the
+    /// grip `μ N` shared with the longitudinal force by the friction ellipse (a locked or
+    /// spinning wheel has none left for the side), the deflection then stays where that
+    /// force is reached and the tyre slides.
+    ///
+    /// This is why a bus understeers as it speeds up, turns in over a second at 90 km/h and
+    /// not at once, lets its tail out when the rear tyres are overloaded, and why a braking
+    /// wheel loses its hold across: none of it follows from OMSI's rule that the body follows
+    /// its wheels exactly until the grip is passed. `OMSI_CLASSIC_TYRES=1` gives that back.
+    fn slip_across(&mut self, contacts: &[Contact], longs: &[f32], mut force: Vec3, mut torque: Vec3, rot: Quat, h: f32) -> (Vec3, Vec3) {
+        let inv = rot.inverse();
+        let omega_world = rot.mul_vec3(self.omega);
+        let n = contacts.len().max(1) as f32;
+        for (k, c) in contacts.iter().enumerate() {
+            let Some(i) = c.wheel.filter(|_| c.lateral && c.grip > 0.0) else { continue };
+            let v_pt = self.velocity + omega_world.cross(c.r);
+            let (v_lat, v_lng) = (v_pt.dot(c.right), v_pt.dot(c.fwd));
+            let w = &mut self.wheels[i];
+            // the tyre's stiffness across: Cα = tyre::CORNERING x load, less than in proportion to the
+            // load (a tyre loaded far beyond what it was built for gives less per newton)
+            let n_tyre = c.grip;
+            let rated = w.max_force.max(1.0);
+            let c_alpha = tyre::CORNERING * n_tyre * (rated / n_tyre.max(0.2 * rated)).powf(0.15).min(1.5);
+            let sigma = tyre::RELAXATION * w.radius.max(0.2);
+            let k_y = c_alpha / sigma;
+            // damping: critical for the vehicle's share at this tyre, at a standstill only
+            // (at speed the lag in the deflection damps it)
+            let c_y = 2.0 * 0.35 * (k_y * self.mass / n).sqrt();
+            // the patch is carried along by the road and dragged by the wheel
+            let rate = v_lat - v_lng.abs() / sigma * w.lat_defl;
+            w.lat_defl += rate * h;
+            let grip = c.mu * n_tyre;
+            // the friction ellipse: what the longitudinal force takes the side cannot
+            let lng = (longs.get(k).copied().unwrap_or(0.0) / grip.max(1.0)).clamp(-1.0, 1.0);
+            let cap = grip * (1.0 - lng * lng).max(0.0).sqrt();
+            let damping = if v_lng.abs() < 3.0 { c_y * rate * (1.0 - v_lng.abs() / 3.0) } else { 0.0 };
+            let mut f = -(k_y * w.lat_defl + damping);
+            if f.abs() > cap {
+                f = f.signum() * cap;
+                // the patch slides: it holds the deflection of the force it can give
+                w.lat_defl = -f / k_y;
+            }
+            let f_world = c.right * f;
+            force += f_world;
+            torque += inv.mul_vec3(c.r).cross(inv.mul_vec3(f_world));
         }
         (force, torque)
     }
