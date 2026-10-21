@@ -192,6 +192,7 @@ struct LineInfo: Decodable, Identifiable, Hashable {
 }
 
 struct TourInfo: Decodable, Identifiable, Hashable {
+    var id: String
     var number: String
     var ai_group: String
     var first: Double
@@ -200,7 +201,6 @@ struct TourInfo: Decodable, Identifiable, Hashable {
     var runs: Bool
     var next_run: String?
     var trips: [TripInfo]
-    var id: String { number }
 }
 
 struct TripInfo: Decodable, Identifiable, Hashable {
