@@ -89147,3 +89147,20 @@ _version: 2
   zh: "开始驾驶时将车内温度设为{temperature}。"
   hi: "ड्राइव शुरू करते समय अंदर का तापमान {temperature} पर सेट करता है। डिपो से प्रस्थान का अनुकरण करने के लिए ड्यूटी की पहली यात्रा में सामान्य तापमान बना रहता है।."
   ka: "მართვის დაწყებისას სალონის ტემპერატურას {temperature}-ზე აყენებს."
+
+
+"Realistic road physics":
+  es: "Física de carretera realista"
+  fr: "Physique routière réaliste"
+  pl: "Realistyczna fizyka jazdy"
+  ru: "Реалистичная физика дорог"
+  de: "Realistische Fahrphysik"
+  nl: "Realistische rijfysica"
+
+"Tyres that slip, grip and roughness by road surface, wind on the bus; off, the buses drive as in OMSI 2":
+  es: "Neumáticos con deriva, agarre y rugosidad según el firme, viento sobre el autobús; desactivado, los autobuses se conducen como en OMSI 2"
+  fr: "Pneus qui dérivent, adhérence et rugosité selon le revêtement, vent sur le bus ; désactivé, les bus roulent comme dans OMSI 2"
+  pl: "Opony z kątem znoszenia, przyczepność i nierówności zależne od nawierzchni, wiatr na autobus; wyłączone: autobusy jeżdżą jak w OMSI 2"
+  ru: "Шины с углом увода, сцепление и неровности по покрытию, ветер на автобус; выключено: автобусы ездят как в OMSI 2"
+  de: "Reifen mit Schräglaufwinkel, Haftung und Unebenheit nach Fahrbahnbelag, Wind auf den Bus; aus: die Busse fahren wie in OMSI 2"
+  nl: "Banden met sliphoek, grip en oneffenheid naar wegdek, wind op de bus; uit: de bussen rijden zoals in OMSI 2"

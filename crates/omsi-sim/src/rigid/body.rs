@@ -52,7 +52,7 @@ impl RigidBody {
         let inv_min_turn_radius = if def.inv_min_turn_radius > 0.0 { def.inv_min_turn_radius } else { max_steer_deg.to_radians().tan() / s };
         let springs: f32 = def.axles.iter().map(|a| 2.0 * if a.spring > 0.0 { a.spring } else { 150.0 }).sum();
         let body_freq = (springs / (mass / 1000.0)).max(0.0).sqrt();
-        RigidBody { mass, inertia, cog, position: DVec3::ZERO, orientation: Quat::IDENTITY, velocity: Vec3::ZERO, omega: Vec3::ZERO, wheels, wheel_axle, steer_deg: 0.0, kappa: 0.0, max_steer_deg, rot_pnt_long: def.rot_pnt_long, inv_min_turn_radius, body_freq, holding: true, rolling_resistance: if def.rolling_resistance > 0.0 { def.rolling_resistance } else { 0.008 * mass * 9.81 }, accel_body: Vec3::ZERO, friction: 0.85, wheel_impacts: Vec::new(), coupled: Vec::new(), spawned_inside: None, wheel_walls: true, aero: realism::Aero::of(def.bounding_box.map(|b| [b[0], b[1], b[2]]), mass), air_density: realism::air_density(20.0, 0.0), wind: Vec3::ZERO, wetness: 0.0, road_s: 0.0 }
+        RigidBody { mass, inertia, cog, position: DVec3::ZERO, orientation: Quat::IDENTITY, velocity: Vec3::ZERO, omega: Vec3::ZERO, wheels, wheel_axle, steer_deg: 0.0, kappa: 0.0, max_steer_deg, rot_pnt_long: def.rot_pnt_long, inv_min_turn_radius, body_freq, holding: true, rolling_resistance: if def.rolling_resistance > 0.0 { def.rolling_resistance } else { 0.008 * mass * 9.81 }, accel_body: Vec3::ZERO, friction: 0.85, wheel_impacts: Vec::new(), coupled: Vec::new(), spawned_inside: None, wheel_walls: true, aero: realism::Aero::of(def.bounding_box.map(|b| [b[0], b[1], b[2]]), mass), air_density: realism::air_density(20.0, 0.0), wind: Vec3::ZERO, wetness: 0.0, road_s: 0.0, realistic: realistic_default() }
     }
 
     /// Place the body at rest with its wheels on the ground plane at `origin.z`: heading
@@ -70,6 +70,7 @@ impl RigidBody {
             w.compression = w.rest_compression().min(BUMP);
             w.compression_rate = 0.0;
             w.touch = None;
+            w.lat_defl = 0.0;
         }
         // standing: the ground holds the body up against gravity
         self.accel_body = Vec3::new(0.0, 0.0, 9.81);
@@ -247,9 +248,19 @@ impl RigidBody {
             // the wind (see `realism::air_force`). Without it a bus rolling downhill without
             // its brakes ran on to any speed, and no gale ever moved one
             let inv = rot.inverse();
-            let (air_force, air_torque) = realism::air_force(&self.aero, self.air_density, inv.mul_vec3(self.velocity), inv.mul_vec3(self.wind));
-            force += rot.mul_vec3(air_force);
-            let mut torque = air_torque; // body frame
+            let mut torque = Vec3::ZERO; // body frame
+            if self.realistic {
+                // (every OMSI 2 bus already has its still-air drag in its brake script - bremse.osc
+                // adds 9.5 m2 x cw 0.8 x 0.6 v2 to every wheel's brake force - so only what the weather
+                // changes is added here: the wind and an air that is not 1.2 kg/m3)
+                let (f, t) = realism::wind_force(&self.aero, self.air_density, inv.mul_vec3(self.velocity), inv.mul_vec3(self.wind));
+                force += rot.mul_vec3(f);
+                torque = t;
+            } else {
+                let v = self.velocity;
+                let area = (self.mass / 2200.0).clamp(2.0, 8.5);
+                force -= v * v.length() * (0.5 * 1.2 * 0.6 * area);
+            }
             // where on the road's unevenness the body stands (a reversing bus retraces it)
             let body_fwd_now = rot.mul_vec3(Vec3::Y);
             let ds = self.velocity.dot(body_fwd_now) as f64 * h as f64;
@@ -258,6 +269,10 @@ impl RigidBody {
                 w.surface_mix = (w.surface_mix + ds.abs() as f32).min(1.0);
                 if w.surface != w.surface_now {
                     (w.surface_was, w.surface_now, w.surface_mix) = (w.surface_now, w.surface, 0.0);
+                }
+                if !self.realistic {
+                    (w.mu_scale, w.rough) = (1.0, 0.0);
+                    continue;
                 }
                 w.mu_scale = realism::grip_scale(w.surface_now, self.wetness);
                 // the road under each tyre, eased from the old surface's over a metre
@@ -421,7 +436,7 @@ impl RigidBody {
                     right,
                     base: f_world + up * n + step,
                     drive: if w.driven { drive_torque / r / driven } else { 0.0 },
-                    brake: brake.get(i).copied().unwrap_or(0.0).max(0.0) + self.rolling_resistance / n_wheels * realism::rolling_scale(w.surface_now, v_long, tyre_f / w.rest_load.max(1.0)),
+                    brake: brake.get(i).copied().unwrap_or(0.0).max(0.0) + self.rolling_resistance / n_wheels * if self.realistic { realism::rolling_scale(w.surface_now, v_long, tyre_f / w.rest_load.max(1.0)) } else { 1.0 },
                     grip,
                     mu: self.friction * w.mu_scale,
                     v_long,
@@ -641,7 +656,7 @@ impl RigidBody {
         // everything else that pushes the body. The old tyre instead gave 12 x load per
         // radian of slip: every bus turned at 70 % of what its steering asked, 0.8 s
         // late, drifting 2-3 degrees and swaying - the same for every `.bus`.
-        if !omsi_cfg::flags::OMSI_CLASSIC_TYRES.is_set() {
+        if self.realistic {
             return self.slip_across(contacts, longs, force, torque, rot, h);
         }
         let (m, mt) = (self.mass, self.mass + towed);
@@ -728,6 +743,12 @@ impl RigidBody {
         let inv = rot.inverse();
         let omega_world = rot.mul_vec3(self.omega);
         let n = contacts.len().max(1) as f32;
+        // a tyre in the air or off the ground has no patch: it starts afresh when it lands
+        for (i, w) in self.wheels.iter_mut().enumerate() {
+            if !contacts.iter().any(|c| c.wheel == Some(i) && c.lateral && c.grip > 0.0) {
+                w.lat_defl = 0.0;
+            }
+        }
         for (k, c) in contacts.iter().enumerate() {
             let Some(i) = c.wheel.filter(|_| c.lateral && c.grip > 0.0) else { continue };
             let v_pt = self.velocity + omega_world.cross(c.r);

@@ -75,6 +75,18 @@ pub fn air_force(aero: &Aero, rho: f32, v_body: Vec3, wind_body: Vec3) -> (Vec3,
     (force, torque)
 }
 
+/// Density (kg/m3) of the air the scripts of the OMSI 2 buses (bremse.osc) take for their drag.
+pub const SCRIPT_DENSITY: f32 = 1.2;
+
+/// What the weather adds to the air drag the vehicle's own scripts already put on its brakes
+/// (those take still air of [`SCRIPT_DENSITY`]): the force and torque of the wind and of a
+/// denser or thinner air than that, and the side force of a crosswind.
+pub fn wind_force(aero: &Aero, rho: f32, v_body: Vec3, wind_body: Vec3) -> (Vec3, Vec3) {
+    let (f, t) = air_force(aero, rho, v_body, wind_body);
+    let (f0, t0) = air_force(aero, SCRIPT_DENSITY, v_body, Vec3::ZERO);
+    (f - f0, t - t0)
+}
+
 /// What a surface is made of, as OMSI 2's `[surface]` ids say (0 asphalt, 1 concrete, 2
 /// cobblestone, 3 dirt, 4 grass, 5 gravel, 6 snow, 7 deep snow).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -277,6 +289,21 @@ mod tests {
         assert!(t.z > 0.0, "the centre of pressure ahead turns the bus into the wind (to the left here)");
         assert!(f.y < 0.0);
         assert_eq!(air_force(&a, 1.2, Vec3::ZERO, Vec3::ZERO).0, Vec3::ZERO);
+    }
+
+    #[test]
+    fn only_the_weather_is_added_to_what_the_scripts_already_do() {
+        let a = Aero::of(Some([2.55, 12.0, 3.0]), 12_000.0);
+        let v = Vec3::new(0.0, 22.2, 0.0);
+        // still air of the scripts' density: nothing on top of their drag
+        let (f, t) = wind_force(&a, SCRIPT_DENSITY, v, Vec3::ZERO);
+        assert!(f.length() < 1e-3 && t.length() < 1e-3, "{f:?}");
+        // a headwind and a thicker air add, a tailwind takes off
+        assert!(wind_force(&a, SCRIPT_DENSITY, v, Vec3::new(0.0, -10.0, 0.0)).0.y < -500.0);
+        assert!(wind_force(&a, SCRIPT_DENSITY, v, Vec3::new(0.0, 10.0, 0.0)).0.y > 500.0);
+        assert!(wind_force(&a, 1.32, v, Vec3::ZERO).0.y < -50.0);
+        // a crosswind pushes
+        assert!(wind_force(&a, SCRIPT_DENSITY, v, Vec3::new(-15.0, 0.0, 0.0)).0.x < -2000.0);
     }
 
     #[test]

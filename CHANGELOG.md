@@ -216,7 +216,7 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 **Trams, metros and trains** ([docs/RAIL.md](docs/RAIL.md))
 
 - Rail vehicles have a class (tram, metro, train), from `[rail_class]` in their file or from
-  what it declares (a `[contact_shoe]` is a metro, a long or heavy car a train), and rail lanes
+  what it declares (a `[contact_shoe]` is a metro, a car over 45 t a train), and rail lanes
   a track kind (street or railway, third rail, tunnel, speed), from a map's new
   `openomsi-rail.cfg`, from the names of its spline profiles (`tram_*`, `metro_*`, `rail_*`)
   or from where the track lies. A road vehicle is never taken for a rail one.
@@ -240,17 +240,25 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 - The speed limit of a rail lane is brought down to what its curve allows (a tram loop, the
   diverging branch of a turnout).
 
-**Road vehicles' physics**
+**Road vehicles' physics** (new setting **Realistic road physics**, off by default; Esc menu, Settings)
 
-- Air drag and side force come from the vehicle's size, the air's density and the wind: a
-  crosswind leans and pushes a bus, a headwind slows it.
-- **Tyres hold across by slip angle**, as real tyres do, instead of OMSI's rule that the body follows its wheels exactly until the grip is passed: the contact patch lags behind the wheel (a relaxation length) and pulls back by the cornering stiffness, up to the grip shared with the longitudinal force by the friction ellipse. A bus follows its wheels at walking pace, turns in over a third of a second at 50 km/h, understeers as it speeds up (yaw rate 0.99 / 0.93 / 0.44 of the geometry's at 20 / 50 / 80 km/h in a quarter-lock bend), loses its grip across on a locked or spinning wheel and holds parked on a cross slope by the tyres. `OMSI_CLASSIC_TYRES=1` gives OMSI's rule back (A/B; `cargo run --release -p omsi-sim --example handling -- <file.bus>... --kmh 50`).
-- Grip and rolling resistance depend on what each tyre rolls on, wet or dry (cobbles, dirt,
-  grass, gravel, snow), and rolling resistance rises with speed and load.
+- With it on the weather's wind leans and pushes a bus and a denser or thinner air changes the
+  drag (the vehicle's scripts already have their still-air drag on the brakes, so only the
+  difference is added); grip and rolling resistance depend on what each tyre rolls on, wet or
+  dry (cobbles, dirt, grass, gravel, snow), rolling resistance also rises with speed and load;
+  and the road is as uneven as ISO 8608 says its surface is, which shakes a bus on cobbles,
+  gravel and the joints of a concrete-slab road (#3069).
+- **Tyres hold across by slip angle**, as real tyres do, instead of OMSI's rule that the body
+  follows its wheels exactly until the grip is passed: the contact patch lags behind the wheel
+  and pulls back by the cornering stiffness, up to the grip shared with the longitudinal force
+  by the friction ellipse. A bus follows its wheels at walking pace, turns in over 0.15-0.2 s at
+  50 km/h, understeers a little at 80 km/h (yaw rate 0.92-0.98 of the geometry's), loses its hold
+  across on a locked or spinning wheel. `cargo run -p omsi-sim --example handling -- <file.bus>...
+  --kmh 50 [--realistic]` compares the two models; `OMSI_REALISTIC_ROAD=1` turns it on for one run.
 
 ### Fixes
 
-- Road damage shakes a vehicle again: cobbles, gravel, dirt, grass, snow and the joints of a concrete-slab road lift each tyre by what ISO 8608 gives such a road, where only the map's geometry did before ([#3069](https://github.com/openOMSI-org/openOMSI/issues/3069)).
+- With the new setting **Realistic road physics** on, road damage shakes a vehicle again: cobbles, gravel, dirt, grass, snow and the joints of a concrete-slab road lift each tyre by what ISO 8608 gives such a road, where only the map's geometry did before ([#3069](https://github.com/openOMSI-org/openOMSI/issues/3069)).
 - Review of the round: `hwban 3 session é` (a multi-byte last character of a duration) no longer
   stops a dedicated server; the hardware bans are given to every session a game hosts, not only
   the first of a run; the host passes voice frames only to players that have voice chat on

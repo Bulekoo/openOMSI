@@ -34,8 +34,8 @@ impl RailClass {
     /// The class of a vehicle, `None` for a road vehicle. A file may say it outright with
     /// `[rail_class]`. Otherwise it is told from what the file declares, the way OMSI 2's
     /// own rail vehicles differ: a `[contact_shoe]` takes its current from a third rail
-    /// (metro); a long or heavy car, or a locomotive, is a railway train; the rest - short
-    /// light cars on bogies - are trams.
+    /// (metro); a heavy car (over 45 t) or a locomotive is a railway train; the rest - light cars
+    /// on bogies, however long - are trams.
     pub fn of(def: &Vehicle) -> Option<RailClass> {
         if !def.is_rail() {
             return None;
@@ -46,12 +46,10 @@ impl RailClass {
         if !def.contact_shoes.is_empty() {
             return Some(RailClass::Metro);
         }
-        let mass_kg = if def.mass < 1000.0 { def.mass * 1000.0 } else { def.mass };
-        let length = def.bounding_box.map(|b| b[1]).unwrap_or(0.0);
-        let heavy = mass_kg > 45_000.0;
-        let long = length > 24.0;
-        let loco = def.axles.iter().filter(|a| a.driven).count() >= 4 && mass_kg > 60_000.0;
-        if heavy || long || loco {
+        // (length says nothing: a modern tram of 40 m is lighter than a 20 m railway coach)
+        let heavy = def.mass_kg() > 45_000.0;
+        let loco = def.axles.iter().filter(|a| a.driven).count() >= 4 && def.mass_kg() > 60_000.0;
+        if heavy || loco {
             Some(RailClass::Train)
         } else {
             Some(RailClass::Tram)
@@ -156,7 +154,8 @@ mod tests {
     fn size_and_shoes_tell_the_kind() {
         assert_eq!(RailClass::of(&rail(18.0, 14.0, 4)), Some(RailClass::Tram), "a KT4D");
         assert_eq!(RailClass::of(&rail(80.0, 20.0, 4)), Some(RailClass::Train), "a locomotive");
-        assert_eq!(RailClass::of(&rail(40.0, 26.0, 2)), Some(RailClass::Train), "a long car");
+        assert_eq!(RailClass::of(&rail(52.0, 26.0, 2)), Some(RailClass::Train), "a heavy coach");
+        assert_eq!(RailClass::of(&rail(40.0, 42.0, 4)), Some(RailClass::Tram), "a long low-floor tram is no train");
         let mut metro = rail(30.0, 16.0, 4);
         metro.contact_shoes.push([0.0; 6]);
         assert_eq!(RailClass::of(&metro), Some(RailClass::Metro), "a third rail");

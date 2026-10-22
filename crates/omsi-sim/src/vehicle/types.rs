@@ -518,6 +518,7 @@ impl VehicleType {
                 log::info!("{}: its pantograph is `{var}` (found from its model)", bus_file.display());
                 def.pantograph_trigger = def.pantograph_trigger.take().or_else(|| triggers_storing(&program, &var).into_iter().next());
                 def.pantograph_var = Some(var);
+                def.pantograph_detected = true;
             }
         }
         if def.trolley.is_empty() {

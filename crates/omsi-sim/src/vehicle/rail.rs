@@ -24,7 +24,7 @@ impl VehicleInstance {
 
     /// The whole consist as the dynamics see it: this vehicle and everything coupled to it.
     pub fn rail_consist(&self, class: RailClass) -> Consist {
-        let mass_of = |d: &omsi_vehicle::Vehicle| if d.mass < 100.0 { d.mass * 1000.0 } else { d.mass }.max(500.0);
+        let mass_of = |d: &omsi_vehicle::Vehicle| d.mass_kg().max(500.0);
         let parts = std::iter::once(&self.ty.def).chain(self.trailers.iter().map(|t| &t.ty.def));
         let (mut mass, mut length, mut wheels, mut driven) = (0.0f32, 0.0f32, 0usize, 0usize);
         // (the weight on driven axles: each car's mass shared over its axles)
@@ -82,24 +82,17 @@ impl VehicleInstance {
             headwind: 0.0,
             sanding: false,
         };
-        let mut from_scripts = self.rail_script_forces(m_wheel, brakes);
-        // no current, no drive (a brake still works)
-        if !self.rail_powered() {
-            if let Some(f) = from_scripts.as_mut() {
-                f.drive = f.drive.min(0.0);
-            }
-        }
+        let from_scripts = self.rail_script_forces(m_wheel, brakes);
+        // no current, no drive in either direction (the brakes still work)
+        let powered = self.rail_powered();
+        let from_scripts = from_scripts.map(|f| without_current(f, powered));
         self.rail_scripted |= from_scripts.is_some();
         let c = self.physics.controls;
         let forces = if self.rail_scripted {
             from_scripts.unwrap_or_default()
         } else {
             let reverse = self.var("rail_reverse").is_some_and(|r| r > 0.5);
-            let mut f = rail::dynamics::pedal_forces(class, consist.mass, c.throttle, c.brake, v0, reverse);
-            if !self.rail_powered() {
-                f.drive = 0.0;
-            }
-            f
+            without_current(rail::dynamics::pedal_forces(class, consist.mass, c.throttle, c.brake, v0, reverse), powered)
         };
         let out = rail::step(&consist, &cond, &forces, v0, dt);
         if omsi_cfg::flags::OMSI_DEBUG_RAIL.is_set() {
@@ -180,11 +173,52 @@ impl VehicleInstance {
     /// Whether the vehicle's drive has current: a rail vehicle with a pantograph moves only with
     /// it raised.
     pub fn rail_powered(&self) -> bool {
-        self.pantograph_raised().unwrap_or(true)
+        !pantograph_binds(&self.ty.def) || self.pantograph_raised().unwrap_or(true)
     }
 
     /// What the rail dynamics made of the last step (spinning or sliding wheels, resistance).
     pub fn rail_outcome(&self) -> Option<rail::Outcome> {
         self.rail_out
+    }
+}
+
+/// Whether the vehicle's pantograph decides if it has current: one the file declares does. One
+/// the game found from the model does when it also found the switch that raises it - else a
+/// pantograph found wrongly (or spawned down with no way to raise it) would keep the vehicle
+/// from ever moving.
+pub(super) fn pantograph_binds(def: &omsi_vehicle::Vehicle) -> bool {
+    def.pantograph_var.is_some() && (!def.pantograph_detected || def.pantograph_trigger.is_some())
+}
+
+/// The forces without current: no drive, forward or backward (a scripted car's negative torque
+/// pulls as much as a positive one); the brakes work as they did.
+pub(super) fn without_current(f: Forces, powered: bool) -> Forces {
+    if powered { f } else { Forces { drive: 0.0, ..f } }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn without_current_a_car_can_neither_drive_forward_nor_backward() {
+        let f = Forces { drive: -5000.0, brake: 3000.0, track_brake: 1000.0 };
+        let off = without_current(f, false);
+        assert_eq!((off.drive, off.brake, off.track_brake), (0.0, 3000.0, 1000.0));
+        let fwd = without_current(Forces { drive: 5000.0, ..f }, false);
+        assert_eq!(fwd.drive, 0.0);
+        assert_eq!(without_current(f, true).drive, -5000.0);
+    }
+
+    #[test]
+    fn a_pantograph_binds_only_when_declared_or_found_with_its_switch() {
+        let mut def = omsi_vehicle::Vehicle::default();
+        assert!(!pantograph_binds(&def), "none");
+        def.pantograph_var = Some("Panto_anim_oben".into());
+        assert!(pantograph_binds(&def), "declared by the file");
+        def.pantograph_detected = true;
+        assert!(!pantograph_binds(&def), "found from the model with no switch: never keeps the car from moving");
+        def.pantograph_trigger = Some("bus_door_0".into());
+        assert!(pantograph_binds(&def), "found with the switch that raises it");
     }
 }

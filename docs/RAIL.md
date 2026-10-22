@@ -15,7 +15,8 @@ which class it is comes from, in this order:
 1. `[rail_class]` in the `.ovh` / `.bus` (an openOMSI keyword, followed by `tram`, `metro` or
    `train`);
 2. a `[contact_shoe]`: a third rail, so a metro;
-3. a car over 45 t or 24 m long, or a heavy vehicle with four driven axles: a train;
+3. a car over 45 t, or a vehicle over 60 t with four driven axles: a train (length says nothing:
+   a 42 m low-floor tram is lighter than a 20 m coach);
 4. otherwise a tram.
 
 The game never takes a bus for a tram or a tram for a bus: a road vehicle has no class, a rail
@@ -73,8 +74,10 @@ for them from 600 m (`RAIL_ASK_DISTANCE`) unless the light's own program says ot
 
 ## Pantographs
 
-A rail vehicle with a pantograph moves only with it raised: no current, no drive (the brakes
-still work). The game knows which variable moves the pantograph:
+A rail vehicle with a pantograph moves only with it raised: no current, no drive in either
+direction (the brakes still work). A pantograph the file declares always counts; one the game
+found from the model counts only when it also found the switch that raises it (else a mistaken
+find could keep a vehicle from ever moving). The game knows which variable moves the pantograph:
 
 1. the vehicle's own declaration in its `.bus` / `.ovh`:
 
@@ -121,11 +124,15 @@ train 9 kW/t, 0.9 and 0.9/1.3 m/s².
 
 ## Road vehicles
 
-The road vehicles' own physics (`omsi_sim::rigid`) are as they were with these additions,
-all of them from the vehicle's own file and the map:
+The road vehicles' own physics (`omsi_sim::rigid`) are OMSI 2's unless the setting **Realistic
+road physics** (Esc menu, Settings; `realistic_road_physics=1` in `settings.cfg`;
+`OMSI_REALISTIC_ROAD=1` for one run) is on, which is off by default. On, all of it from the
+vehicle's own file and the map:
 
-* Drag and side force from the `[boundingbox]` (a car 0.3 and a bus 0.65 of the front's
-  area), the air's density from the temperature and the weather's wind.
+* The weather's wind on the bus (a crosswind leans and pushes it, a headwind slows it) and an
+  air that is not 1.2 kg/m3 - on top of the drag the vehicle's own scripts already put on its
+  brakes (every OMSI 2 bus: `bremse.osc`, 9.5 m2 x cw 0.8 x 0.6 v2 for the whole bus): nothing is
+  counted twice, in still air of the scripts' density the body adds nothing.
 * Each tyre's grip and rolling resistance by what it rolls on (`Axle_SurfaceID_`: asphalt,
   concrete, cobblestone, dirt, grass, gravel, snow, deep snow), wet or dry; rolling resistance
   also rises with speed and the load on the tyre.
@@ -133,6 +140,7 @@ all of them from the vehicle's own file and the map:
   cobbles, gravel, grass and the joints of an old concrete-slab road shake the bus; the rear
   axle drives over what the front axle drove over a wheelbase before.
 * The tyres' side forces from the slip angle (a stretched-string model: relaxation length
-  1.6 tyre radii, cornering stiffness 9 per radian of load, friction ellipse with the
-  longitudinal force) instead of OMSI's "follows its wheels" rule; `OMSI_CLASSIC_TYRES=1`
-  restores that for comparison.
+  0.9 tyre radii, cornering stiffness 14 per radian of load, friction ellipse with the
+  longitudinal force) instead of OMSI's "follows its wheels" rule.
+
+`cargo run -p omsi-sim --example handling -- <file.bus>... --kmh 50 [--realistic]` compares the two.

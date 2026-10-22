@@ -464,4 +464,19 @@ pub struct RigidBody {
     /// Distance driven along the road (m, signed): where on the road's unevenness the
     /// body's origin is. An axle at `y` metres from the origin is at `road_s + y`.
     pub road_s: f64,
+    /// The road model of the "Realistic road physics" setting: slip-angle tyres, grip and
+    /// roughness by surface, wind. Off, the body is OMSI 2's (follows its wheels until the grip
+    /// is passed, one grip, no unevenness, its old air drag).
+    pub realistic: bool,
+}
+
+static REALISTIC: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether new bodies take the realistic road model (the setting; `OMSI_REALISTIC_ROAD=1` too).
+pub fn set_realistic_default(on: bool) {
+    REALISTIC.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn realistic_default() -> bool {
+    REALISTIC.load(std::sync::atomic::Ordering::Relaxed) || omsi_cfg::flags::OMSI_REALISTIC_ROAD.is_set()
 }

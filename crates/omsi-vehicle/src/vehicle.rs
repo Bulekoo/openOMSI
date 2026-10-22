@@ -140,6 +140,8 @@ pub struct Vehicle {
     /// `detect_pantograph`).
     pub pantograph_var: Option<String>,
     pub pantograph_trigger: Option<String>,
+    /// The game found `pantograph_var` from the model; the file did not declare it.
+    pub pantograph_detected: bool,
     pub sinus: Option<[f32; 4]>,
     pub rail_body_osc: Option<[f32; 7]>,
     pub contact_shoes: Vec<[f32; 6]>,
@@ -283,6 +285,11 @@ impl Vehicle {
     /// Rails are what the file says they are: a `[boogies]`, a `[contact_shoe]` or a
     /// `[rail_body_osc]` (`rail_drive::is_rail` reads the same three; a rail car has all of
     /// a bogie, and Omsi.exe's `[type] 2` marks the same vehicles).
+    /// The vehicle's mass in kg: a `[mass]` under 100 is tonnes (as every `.bus` of OMSI 2 has it).
+    pub fn mass_kg(&self) -> f32 {
+        if self.mass < 100.0 { self.mass * 1000.0 } else { self.mass }
+    }
+
     pub fn is_rail(&self) -> bool {
         matches!(self.kind, VehicleKind::Other(2))
             || self.boogies.is_some()
