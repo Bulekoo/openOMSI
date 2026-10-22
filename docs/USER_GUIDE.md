@@ -524,6 +524,19 @@ less of the GPU's time (on an M4 at 1080p about 0.8 ms of a frame). The camera e
 moment, with a camera's middle-tone contrast; street lamps are bright points with a little
 glare in clear air and wide halos in mist and rain.
 
+Every light that lights the street casts a shadow (Enhanced and Enhanced+): the twenty street
+lamps, floodlights and platform lights lighting the view most each have a shadow map that looks
+down from their head, the headlamps of the player's bus and of the nearest cars one that looks
+along the road, and the lamps of the player's own saloon sixteen more, drawn in the bus's own
+frame so that they hold still while the bus drives. A pole, a car, a wall or a handrail
+keeps the light of a lamp off what lies behind it, and the beams the lamps make in fog, rain
+and snow are cut by the same maps. The ground is lit by those lamps and by nothing else - the
+baked lamp pools of the map (the tile light maps, drawn through walls and without shadow)
+belong to Vanilla and Vanilla+. The maps are drawn once and kept while nothing in them
+moves. The mirrors are drawn with the graphics you chose, Enhanced mirrors with Enhanced light,
+sky and shadows. `OMSI_NO_CABIN_SHADOWS=1` leaves the saloon's lamps without shadows for an A/B,
+`OMSI_MIRROR_PLAIN=1` draws Enhanced mirrors with the plain light.
+
 `graphics=enhanced_plus` (Enhanced+ in the launcher, `--enhanced-plus`) is Enhanced with
 hardware ray tracing, where the graphics card traces rays (Apple M3/M4 and newer, RTX and
 RDNA 2 cards and newer through Vulkan and Direct3D 12; elsewhere it draws as Enhanced, and

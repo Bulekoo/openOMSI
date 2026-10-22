@@ -2,13 +2,19 @@
 
 use super::*;
 
-/// What a street lamp's shadow tile draws this frame, summed up (`lamp_item_hash` of each
-/// item added: the same whatever order the worker threads find them in), and which tiles
-/// draw something that moves every frame (foliage bending in the wind).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// What a lamp's shadow tile draws this frame, summed up (`lamp_item_hash` of each item
+/// added: the same whatever order the worker threads find them in), and which tiles draw
+/// something that moves every frame (foliage bending in the wind).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct LampSigs {
     pub sums: [u64; LAMP_SHADOWS],
-    pub volatile: u8,
+    pub volatile: u64,
+}
+
+impl Default for LampSigs {
+    fn default() -> Self {
+        LampSigs { sums: [0; LAMP_SHADOWS], volatile: 0 }
+    }
 }
 
 impl LampSigs {
@@ -24,13 +30,13 @@ impl LampSigs {
     }
 }
 
-/// The street lamps' shadow tiles as kept between frames. The lamps stand still, and so do
+/// The lamps' shadow tiles as kept between frames. The lamps stand still, and so do
 /// most things under them: every tile was cleared and drawn anew every night frame, and the
 /// pass loaded and stored the whole far map with them (84 MB each way at the 4096 setting).
 /// A tile is drawn again when what it draws has changed (an item, its place, a skinned
 /// pose), its lamp's matrix has (another lamp in the tile, the render origin moved), or it
 /// holds foliage bending in the wind; a frame without changed tiles has no lamp pass.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct LampTiles {
     /// This frame's (set by `plan_shadow_casters`).
     pub frame: LampSigs,
@@ -38,19 +44,37 @@ pub(crate) struct LampTiles {
     pub drawn: [Option<u64>; LAMP_SHADOWS],
 }
 
+impl Default for LampTiles {
+    fn default() -> Self {
+        LampTiles { frame: LampSigs::default(), drawn: [None; LAMP_SHADOWS] }
+    }
+}
+
 fn mix(h: u64, x: u64) -> u64 {
     (h.rotate_left(5) ^ x).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95)
 }
 
 /// One draw of a lamp tile, as `LampSigs` sums them: the mesh, its range and pose, the
-/// material (and the slot's alpha, a script's fading part) and the instance's place.
+/// material (and the slot's alpha, a script's fading part) and the instance's place. A saloon
+/// lamp's tile (`frame`: the world's frame in the vehicle's, and the render origin) takes the
+/// place in the vehicle's frame, to a coarser step: the numbers that come out of the vehicle's
+/// own rotation are the same to a few millionths only.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn lamp_item_hash(inst: &Instance, pose: u32, kind: u8, range: u32, material: u32, look: u32, alpha: f32) -> u64 {
+pub(crate) fn lamp_item_hash(inst: &Instance, pose: u32, kind: u8, range: u32, material: u32, look: u32, alpha: f32, frame: Option<(&Mat4, DVec3)>) -> u64 {
     let mut h = mix(0x9e37_79b9_7f4a_7c15, inst.mesh as u64);
     h = mix(h, alpha.to_bits() as u64);
     h = mix(h, (range as u64) << 32 | pose as u64);
     h = mix(h, (material as u64) << 8 | kind as u64);
     h = mix(h, look as u64);
+    if let Some((to_local, ro)) = frame {
+        // (a few centimetres and a degree or so: a texel of a saloon's tile is three)
+        let t = *to_local * Mat4::from_translation((inst.origin - ro).as_vec3()) * inst.transform;
+        for (k, v) in t.to_cols_array().iter().enumerate() {
+            let step = if k >= 12 { 0.05 } else { 0.02 };
+            h = mix(h, (v / step).round() as i64 as u64);
+        }
+        return mix(h, 0x2545_f491_4f6c_dd1d);
+    }
     // (the place to a few millimetres and the turn to a tenth of a degree, a fraction of
     // a tile's texel: a bus standing with its engine running shakes by less, and taken
     // exactly, every tile it stood in was drawn anew every frame)
@@ -149,8 +173,8 @@ impl Renderer {
         }
     }
 
-    // the street lamps' maps: tiles of a quarter of the shadow size under the far map,
-    // each cleared and drawn when what it shows has changed (see `LampTiles`)
+    // the lamps' maps: tiles under the far map (`LampAtlas`), each cleared and drawn when
+    // what it shows has changed (see `LampTiles`)
     pub(crate) fn encode_lamp_shadows(&self, shadow_encoder: &mut wgpu::CommandEncoder, scene: &Scene, f: &FrameCtx, shadow_batches: &[Vec<Batch>; SHADOW_LISTS], timers: &mut PassTimers) {
         let lamp_shadows = &f.lamp_shadows;
         // (the frames that draw the lamps' maps keep the record: a mirror's has none)
@@ -160,12 +184,12 @@ impl Renderer {
         let mut tiles = self.shadows.lamp_tiles.get();
         let mut redraw = [false; LAMP_SHADOWS];
         for (k, d) in tiles.drawn.iter_mut().enumerate() {
-            let Some(l) = lamp_shadows.get(k) else {
+            let Some(l) = lamp_shadows.iter().find(|l| l.slot == k) else {
                 *d = None;
                 continue;
             };
-            let key = lamp_tile_key(&tiles.frame, k, l.view_proj());
-            if *d != Some(key) || tiles.frame.volatile & (1 << k) != 0 || f.env.lamp_shadows_every_frame {
+            let key = lamp_tile_key(&tiles.frame, k, l.key_matrix());
+            if *d != Some(key) || tiles.frame.volatile & (1u64 << k) != 0 || f.env.lamp_shadows_every_frame {
                 if f.env.debug_draws {
                     log::info!("lamp shadow tile {k} drawn: {} (lamp at {:?}, {} batches)", if *d != Some(key) { "changed" } else { "moving foliage" }, l.position, shadow_batches[3 + k].len());
                 }
@@ -190,15 +214,16 @@ impl Renderer {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            let sz = self.options.shadow_size as f32;
-            let tile = sz / LAMP_SHADOWS as f32;
-            for k in (0..lamp_shadows.len()).filter(|k| redraw[*k]) {
-                pass.set_viewport(k as f32 * tile, sz, tile, tile, 0.0, 1.0);
+            let atlas = self.shadows.lamp_atlas;
+            let tile = atlas.tile as f32;
+            for k in (0..LAMP_SHADOWS).filter(|k| redraw[*k]) {
+                let (x, y) = atlas.origin(k);
+                pass.set_viewport(x as f32, y as f32, tile, tile, 0.0, 1.0);
                 pass.set_pipeline(&self.shadows.shadow_clear_pipeline);
                 pass.draw(0..3, 0..1);
                 pass.set_bind_group(0, scene.shadow_bind_group.as_ref().unwrap(), &[]);
                 encode_batches(&mut pass, scene, &shadow_batches[3 + k], |pipe| {
-                    &self.shadows.shadow_pipelines[6 + 2 * k + pipe as usize]
+                    &self.shadows.shadow_pipelines[6 + pipe as usize]
                 });
             }
         }

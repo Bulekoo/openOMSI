@@ -641,6 +641,8 @@ impl Renderer {
                 precip,
                 shadow_view: shadows.view,
                 shadow_view_far: shadows.view_far,
+                lamp_atlas: shadows.lamp_atlas,
+                lamp_matrices: std::cell::RefCell::new(vec![Mat4::ZERO; LAMP_SHADOWS]),
                 shadow_sampler: shadows.sampler,
                 shadow_layout: scene.shadow_layout,
                 shadow_pipelines: shadows.pipelines,

@@ -19,7 +19,7 @@ mod shadow_plan;
 mod submit;
 
 pub(crate) use batch::DrawPlan;
-pub(crate) use headlamp_shadow::{headlamp_shadow, lamp_shadow_code, own_headlamp, VehicleBox};
+pub(crate) use headlamp_shadow::{headlamp_shadow, own_headlamp, VehicleBox, HEADLAMP_SHADOW_REACH};
 pub(crate) use shadow::LampTiles;
 pub(crate) use shadow_plan::ShadowPlan;
 
@@ -32,7 +32,7 @@ pub(crate) struct FrameEnv {
     pub no_enhanced: bool,
     pub no_fxaa: bool,
     pub no_glass_picture: bool,
-    pub mirror_enhanced: bool,
+    pub mirror_plain: bool,
     pub no_puddle_reflections: bool,
     pub no_rt_frame: bool,
     pub no_ao: bool,
@@ -77,7 +77,7 @@ impl FrameEnv {
             no_enhanced: omsi_cfg::flags::OMSI_NO_ENHANCED.is_set(),
             no_fxaa: omsi_cfg::flags::OMSI_NO_FXAA.is_set(),
             no_glass_picture: omsi_cfg::flags::OMSI_NO_GLASS_PICTURE.is_set(),
-            mirror_enhanced: omsi_cfg::flags::OMSI_MIRROR_ENHANCED.is_set(),
+            mirror_plain: omsi_cfg::flags::OMSI_MIRROR_PLAIN.is_set(),
             no_puddle_reflections: omsi_cfg::flags::OMSI_NO_PUDDLE_REFLECTIONS.is_set(),
             no_rt_frame: omsi_cfg::flags::OMSI_NO_RT_FRAME.is_set(),
             no_ao: omsi_cfg::flags::OMSI_NO_AO.is_set(),

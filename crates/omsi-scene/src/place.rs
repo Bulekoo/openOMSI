@@ -917,15 +917,17 @@ fn object_lights(state: &mut TileState, ot: &ObjectType, pos: DVec3, xf: Mat4, l
         // declared as 0.1 red is a glow by its pumps, not a red wash over the
         // whole street.
         // (A building's window glow is declared with a core of 60 or 120 m: filled at full colour that
-        // far round, the snow and the ground of the whole street glowed with it, evenly, from windows
-        // that light a few metres of their facade. The core is held to 15 m - a street lamp's is
-        // 12 - and the light falls off with the square of the distance beyond it. The baked light
-        // maps of the vanilla picture keep the authored radius.)
-        // (And a building's light is not a street lamp's: a lit room lights the ground outside a
-        // fifth as much - a courtyard ringed by lit windows came out as bright as the street under
-        // a lamp, as every window added a lamp's full colour.)
-        let glow = if lamp.is_none() && ml.radius > 6.0 { 0.2 } else { 1.0 };
-        let core = ml.radius.max(0.5).min(15.0);
+        // far round, the ground of the whole street glowed with it, evenly, from windows that light
+        // a few metres of their facade. A core past 25 m - a floodlight mast's is 20, a petrol
+        // station's canopy 10 and 20 - is held to 15 m, a street lamp's being 12, and the light
+        // falls off with the square of the distance beyond it. The baked light maps of the vanilla
+        // picture keep the authored radius.)
+        // (And such a building's light is not a street lamp's: a lit room lights the ground outside
+        // a fifth as much - a courtyard ringed by lit windows came out as bright as the street
+        // under a lamp, as every window added a lamp's full colour.)
+        let hack = ml.radius > 25.0;
+        let glow = if lamp.is_none() && hack { 0.2 } else { 1.0 };
+        let core = ml.radius.max(0.5).min(if hack { 15.0 } else { 25.0 });
         state.lights.push(omsi_render::PointLight {
             position: p,
             radius: core * 6.0,
@@ -1174,6 +1176,25 @@ mod embedded_light_tests {
             assert_eq!(placed.color, source.color);
             assert_eq!(placed.intensity, 1.0);
         }
+    }
+
+    /// A floodlight mast's core (20 m) and a petrol station's canopy are lights as declared; only
+    /// a building's window glow, declared with a core past 25 m, is held to 15 m and a fifth.
+    #[test]
+    fn floodlights_keep_their_strength_and_window_glows_are_held() {
+        let mut fixture = pole_fixture();
+        fixture.sco.crash_mode_pole = None;
+        fixture.sco.map_lights = vec![
+            omsi_scenery::sco::MapLight { pos: [0.0; 3], color: [1.0, 0.776, 0.46], radius: 20.0 },
+            omsi_scenery::sco::MapLight { pos: [8.0, 0.0, 0.0], color: [1.0; 3], radius: 60.0 },
+        ];
+        let mut state = TileState::default();
+        object_lights(&mut state, &fixture, DVec3::ZERO, Mat4::IDENTITY, None, 7);
+        assert_eq!(state.lights.len(), 2);
+        assert_eq!((state.lights[0].core, state.lights[0].radius), (20.0, 120.0));
+        assert_eq!(state.lights[0].color, [1.0, 0.776, 0.46]);
+        assert_eq!((state.lights[1].core, state.lights[1].radius), (15.0, 90.0));
+        assert!((state.lights[1].color[0] - 0.2).abs() < 1e-6);
     }
 }
 

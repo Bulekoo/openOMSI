@@ -71,7 +71,7 @@ impl Renderer {
         // A mirror's picture (a texture, no overlays) has no shadow pass: it looks the window's
         // cascades up as they were last drawn, with their own matrices. They are the sun's
         // for this origin, or the mirror has no shadows (the first frames, a moved origin).
-        if !f.with_overlays && projection.is_none() && f.exclude_texture.is_some() && self.options.mirror_shadows && casts {
+        if !f.with_overlays && projection.is_none() && f.exclude_texture.is_some() && casts {
             let (near, _, near_origin, near_sun) = self.shadows.shadow_near_cache.get();
             let (far, _, far_origin, far_sun) = self.shadows.shadow_far_cache.get();
             let (close, close_origin, close_sun) = self.shadows.shadow_close_cache.get();
@@ -324,18 +324,24 @@ impl Renderer {
                 if lamp_hit {
                     // (each lamp's map takes the casters within its own reach: one list
                     // drawn into every map cost each lamp the others' casters as well)
-                    for (k, light) in lamp_shadows.iter().enumerate() {
+                    for light in lamp_shadows.iter() {
+                        let k = light.slot;
                         if (light.owner.is_some() && light.owner == inst.shadow_owner) || !lamp_reaches(light, c, r) {
+                            continue;
+                        }
+                        // (the parts of the vehicle whose headlamps these are cast nothing: the
+                        // lamps stand in them)
+                        if light.hosts && inst.roof.is_some() && (c - light.position).length() < r + 0.4 {
                             continue;
                         }
                         for &(kind, ri, slot, mat_id, look) in ranges.iter() {
                             let kind = if kind == PIPE_KINDS { PIPE_OPAQUE } else { kind };
                             let (material, look) = depth_only_material(kind, mat_id, look);
-                            out[3 + k].push(DrawItem { pipe: kind, mesh: inst.mesh as u32, range: ri, material, look, entry: inst.base + slot });
+                            out[3 + k].push(DrawItem { pipe: kind, mesh: inst.mesh as u32, range: ri, material, look, entry: (inst.base + slot) | ((k as u32) << LAMP_ENTRY_BITS) });
                             let alpha = inst.slot_alpha.get(slot as usize).copied().unwrap_or(1.0);
-                            sig.add(k, lamp_item_hash(inst, m.pose, kind, ri, material, look, alpha));
+                            sig.add(k, lamp_item_hash(inst, m.pose, kind, ri, material, look, alpha, light.cabin.as_ref().map(|c| (&c.to_local, scene.render_origin))));
                             if windy && scene.materials[mat_id].uniform.sway[0] >= 0.5 {
-                                sig.volatile |= 1 << k;
+                                sig.volatile |= 1u64 << k;
                             }
                         }
                     }

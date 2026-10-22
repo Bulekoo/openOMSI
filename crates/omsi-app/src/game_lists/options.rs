@@ -421,7 +421,6 @@ pub(super) fn toggle_now(app: &App, id: &str) -> Option<bool> {
         "clouds" => s.clouds,
         "windy_trees" => s.windy_trees,
         "mirror_hud_every_frame" => s.mirror_hud_every_frame,
-        "mirror_shadows" => s.mirror_shadows,
         "mirror_particles" => s.mirror_particles,
         "ambient" => s.ambient,
         "fullscreen" => s.fullscreen,
@@ -706,7 +705,6 @@ fn toggle_set_graphics_and_controls(app: &mut App, id: &str, on: bool, bit: Stri
             Some(("windy_trees", bit))
         }
         "mirror_hud_every_frame" => { app.settings.mirror_hud_every_frame = on; Some(("mirror_hud_every_frame", bit)) }
-        "mirror_shadows" => { app.settings.mirror_shadows = on; Some(("mirror_shadows", bit)) }
         "mirror_particles" => { app.settings.mirror_particles = on; Some(("mirror_particles", bit)) }
         "ambient" => { app.settings.ambient = on; Some(("ambient", bit)) }
         "fullscreen" => {

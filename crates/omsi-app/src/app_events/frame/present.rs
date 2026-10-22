@@ -397,7 +397,6 @@ impl App {
         if let (Some(p), Some(w)) = (self.player.as_ref(), self.world.as_ref()) {
             steps::mirror_hud_sync(&mut self.gfx.mirror_hud, w, p, self.settings.mirror_hud);
         }
-        r.options.mirror_enhanced = self.settings.mirror_quality == "enhanced";
         #[cfg(windows)]
         let vr_active = self.xr.vr.is_some();
         #[cfg(not(windows))]

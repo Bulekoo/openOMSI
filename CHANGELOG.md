@@ -10,6 +10,27 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 
 - **LAN protocol 15**: a game of this version cannot join a session of an older one, nor the
   other way round (the AI traffic goes as a table, see below). Update the game on both sides.
+- **Every light casts a shadow** (Enhanced and Enhanced+): the lamps' shadow maps were four, now
+  there are forty-four. Twenty are the world's: the street lamps, floodlights and platform lights
+  lighting the view most keep their map while they stay among the strongest, and a lamp new to
+  the set takes a free one (six a frame at most). Eight look along the road from the headlamps of
+  the player's bus and of the nearest cars, a pair of lamps sharing a map (the car's own parts
+  cast nothing into it). Sixteen are the lamps of the player's saloon: they hang over the seats
+  in the bus's own frame, so that the maps hold still while the bus drives and are drawn again
+  only when a door or a passenger moves, and a handrail, a seat or a stanchion shades the floor,
+  the seats and the panels behind it - also where the model's light maps (`[matl_lightmap]`) lift
+  a surface to its texture's colour, which now stops where the lamps' light does not reach. The
+  lamps name their tile in their record, no more a search through four, and the beams in fog,
+  rain and snow of every lamp with a tile (the point lamps' too, not only the headlamps') are cut
+  by it. The tiles are 512 texels at most under the far shadow map: `OMSI_NO_CABIN_SHADOWS=1`
+  leaves the saloon's lamps without one. A free camera high over the street chooses the
+  lamps by their distance along the ground, as the lamps round it are the ones that light what
+  it sees.
+- **The mirrors are drawn with the graphics you chose:** Enhanced and Enhanced+ mirrors show the
+  Enhanced light, sky and sun shadows (a mirror of 512 pixels costs about 3 ms of the GPU when
+  drawn, at most 30 times a second together), Vanilla and Vanilla+ the plain picture. The
+  `mirror_quality` and `mirror_shadows` settings are gone (the old files still load);
+  `OMSI_MIRROR_PLAIN=1` draws Enhanced mirrors plain for an A/B.
 - **Shadows in the headlamps' beams** (Enhanced): the light the fog, rain or snow scatters
   from a headlamp or a street lamp's beam is cut where a pole, a car or a wall stands in
   the beam, as the sun's shafts are cut by the shadow maps: the beam looks up the lamp's
@@ -215,6 +236,14 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 
 ### Fixes
 
+- Enhanced: no more snow, or any ground, glowing orange from a small light far away. The ground took
+  the map's baked lamp pools on top of the lamps themselves, three times over, through walls and
+  roofs and with a tail sixteen radii long: the snow of a courtyard behind a building lit by the
+  depot's floodlights glowed yellow at night, and so did the ground round a lamp whose pool ended
+  long before. The ground is lit by the lamps alone now, with their shadows (Vanilla and
+  Vanilla+ keep OMSI's baked light maps). The floodlights and the canopies of petrol stations
+  (declared 10 to 20 m) are lights as declared again, no longer taken for a building's window glow
+  (past 25 m) and dimmed to a fifth.
 - Review of the round: `hwban 3 session é` (a multi-byte last character of a duration) no longer
   stops a dedicated server; the hardware bans are given to every session a game hosts, not only
   the first of a run; the host passes voice frames only to players that have voice chat on

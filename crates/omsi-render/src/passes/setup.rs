@@ -100,18 +100,17 @@ impl Renderer {
         };
         let aspect = self.texture_aspect.unwrap_or(width as f32 / height.max(1) as f32);
         let cam_rel = (camera.position - ro).as_vec3();
-        // The mirrors are drawn with the plain shading even in Enhanced: without the depth
-        // prepass (sized for the window) every layer of a mirror's picture ran the enhanced
-        // shader, 12.7 ms of GPU time for one 256-pixel mirror against 5.8 ms for the whole
-        // window; plainly shaded it is 0.6 ms, and a mirror's small picture shows no
-        // difference worth that - unless the player asks for it (`mirror_quality=enhanced`,
-        // `RenderOptions::mirror_enhanced`) or `OMSI_MIRROR_ENHANCED=1`.
+        // The mirrors are drawn as the picture is, by the graphics the player chose: Enhanced
+        // mirrors show the Enhanced light, sky and shadows, plain ones the plain picture.
+        // (They were once drawn with the plain shading in Enhanced, 12.7 ms of GPU time for
+        // one 256-pixel mirror against 5.8 ms for the whole window without the depth
+        // prepass: they have a prepass of their own now, see `depth_wanted`.)
         // The headset's eyes are the real picture as much as the window is (#784: VR showed
         // the plain graphics with Enhanced on); the first eye is the one that moves the
         // exposure, the sky cube and the frame clock on, as the window does without VR.
         let xr_view = projection.is_some();
         let lead_view = (with_overlays || xr_view) && !second_eye;
-        let enhanced_frame = lighting.enhanced && self.hdr_pass.is_some() && !env.no_enhanced && (with_overlays || xr_view || env.mirror_enhanced || self.options.mirror_enhanced);
+        let enhanced_frame = lighting.enhanced && self.hdr_pass.is_some() && !env.no_enhanced && (with_overlays || xr_view || !env.mirror_plain);
         // the mirrors are drawn by the same path as the window (their picture graded with
         // the window's exposure, see the post passes)
         let enhanced = enhanced_frame;
@@ -127,7 +126,7 @@ impl Renderer {
             && !env.no_puddle_reflections;
         let reflection_frame = !enhanced && puddles_wanted && self.reflection_pass.is_some();
         let masked_frame = enhanced || reflection_frame;
-        let (grid, lamp_shadows) = self.prepare_lights(scene, cam_rel, enhanced_frame, lighting.lamp_shadows && with_overlays && projection.is_none() && self.shadows.shadow_pipelines.len() > 6, lighting.inside.as_ref());
+        let (grid, lamp_shadows) = self.prepare_lights(scene, cam_rel, enhanced_frame, lighting.lamp_shadows && with_overlays && projection.is_none() && self.shadows.shadow_pipelines.len() > 6, lighting.inside.as_ref(), lighting.inside_rotation);
         self.prepare_coronas(scene, lighting.night, lighting.inside.as_ref().filter(|v| point_in_vehicle_box(camera.position, v)));
         // (the mirrors draw no smoke, see `encode_main_late`)
         if exclude_texture.is_none() {
@@ -227,6 +226,15 @@ impl Renderer {
         let (camera, lighting, ro, cam_rel, aspect) = (f.camera, f.lighting, f.ro, f.cam_rel, f.aspect);
         let (enhanced, lead_view, rt_frame, ao_on, glass_on, shadows) = (f.enhanced, f.lead_view, f.rt_frame, f.ao_on, f.glass_on, sh.shadows);
         let lamp_shadows = &f.lamp_shadows;
+        // The lamps' matrices: the window's frame draws the tiles and keeps what it drew them
+        // with; a mirror's picture looks the same tiles up, as it looks the sun's cascades up.
+        let lamp_mats: Vec<Mat4> = if f.with_overlays && f.projection.is_none() {
+            let m: Vec<Mat4> = (0..LAMP_SHADOWS).map(|k| lamp_shadows.iter().find(|l| l.slot == k).map_or(Mat4::ZERO, |l| l.view_proj())).collect();
+            self.shadows.lamp_matrices.borrow_mut().clone_from(&m);
+            m
+        } else {
+            self.shadows.lamp_matrices.borrow().clone()
+        };
         let vp_mat = f
             .projection
             .map(|p| p * Mat4::look_to_rh((camera.position - ro).as_vec3(), camera.forward(), camera.up()))
@@ -347,8 +355,8 @@ impl Renderer {
             ],
             light_view_proj_close: sh.light_view_proj_close.to_cols_array_2d(),
             wind: [lighting.glass_wind.x, lighting.glass_wind.y, lighting.glass_wind.z, 1.0],
-            lamp_view_proj: std::array::from_fn(|k| lamp_shadows.get(k).map_or(Mat4::IDENTITY, |l| l.view_proj()).to_cols_array_2d()),
-            lamp_shadow: std::array::from_fn(|k| lamp_shadows.get(k).map_or(-1.0, lamp_shadow_code)),
+            lamp_view_proj: std::array::from_fn(|k| lamp_mats[k].to_cols_array_2d()),
+            lamp_atlas: self.shadows.lamp_atlas.uniform(),
             tree_wind: {
                 // the gusts drift with the wind: summed over the frames (the wind changes
                 // with the weather), in f64 and modulo the shaders' pattern period
@@ -375,6 +383,13 @@ impl Renderer {
                 _ => [0.0; 4],
             },
             cookies: self.lights.cookies.fields(),
+            cabin_lamps: {
+                let mut at = [-1.0f32; 16];
+                for (k, l) in lamp_shadows.iter().filter(|l| l.cabin.is_some()).take(16).enumerate() {
+                    at[k] = l.index as f32;
+                }
+                std::array::from_fn(|r| std::array::from_fn(|c| at[r * 4 + c]))
+            },
         };
         self.queue
             .write_buffer(&self.camera_buf, 0, bytemuck::bytes_of(&cu));
