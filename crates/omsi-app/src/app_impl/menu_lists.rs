@@ -69,7 +69,7 @@ impl App {
     pub(crate) fn number_edit_text(&mut self,text:&str){
         if !self.menus.menu_edit_number{return}
         if let Some(d)=self.menus.menu_edit.as_mut(){
-            for c in text.chars() {
+            for c in text.chars().filter(|c| !c.is_control()) {
                 d.push(c);
             }
         }
@@ -117,7 +117,7 @@ impl App {
      pub(crate) fn ident_edit_text(&mut self,text:&str){
         if !self.menus.menu_edit_ident{return}
         if let Some(d)=self.menus.menu_edit.as_mut(){
-            for c in text.chars() {
+            for c in text.chars().filter(|c| !c.is_control()) {
                 d.push(c);
             }
         }
@@ -135,6 +135,7 @@ impl App {
         if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
         if let Some(p) = self.player.as_mut() {
             crate::game_lists::set_identity_to_player_vehicle(p, "", if ident.is_empty() { None } else { Some(&ident) });
+            let ident = p.vehicle.ident();
             self.service_msg = Some((format!("Plate {ident}"), 3.0));
         }
         self.refresh_list();
@@ -339,6 +340,14 @@ impl App {
         self.menus.menu_top = None;
         self.menus.menu_edit = None;
         self.menus.key_capture = None;
+        if self.menus.menu_edit_number {
+            if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
+            self.menus.menu_edit_number=false; self.menus.menu_edit=None;
+        }
+        if self.menus.menu_edit_ident {
+            if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
+            self.menus.menu_edit_ident=false; self.menus.menu_edit=None;
+        }
         self.open_list(next);
     }
 
