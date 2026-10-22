@@ -815,8 +815,10 @@ mod tests {
             "Bauernhof-Suedseite".into(),
             InfoItemStyle::NextStop,
         );
-        let lines = info_item_rows(&item, 8.0, 0.0, 0.0, false, 1.0, 1, 1, |text, _| {
-            text.chars().count() as f32
+        let lines = crate::with_test_language("ENG", || {
+            info_item_rows(&item, 8.0, 0.0, 0.0, false, 1.0, 1, 1, |text, _| {
+                text.chars().count() as f32
+            })
         });
         assert_eq!(lines.labels.join(" "), "Next stop");
         assert_eq!(lines.values.concat(), item.value);
@@ -861,8 +863,10 @@ mod tests {
             "19 C / 22 C".into(),
             InfoItemStyle::Detail,
         );
-        let lines = info_item_rows(&item, 17.0, 0.0, 0.0, true, 2.0, 1, 1, |text, _| {
-            text.chars().count() as f32
+        let lines = crate::with_test_language("ENG", || {
+            info_item_rows(&item, 17.0, 0.0, 0.0, true, 2.0, 1, 1, |text, _| {
+                text.chars().count() as f32
+            })
         });
         let label_width = lines
             .labels

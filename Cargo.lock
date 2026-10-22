@@ -3792,6 +3792,7 @@ version = "0.1.0"
 dependencies = [
  "ct2rs",
  "log",
+ "omsi-cfg",
  "omsi-ui",
  "parking_lot",
  "serde_json",

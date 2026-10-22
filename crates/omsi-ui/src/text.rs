@@ -105,7 +105,7 @@ pub struct Fonts {
 }
 
 /// The system's fonts for the scripts Inter has not (Chinese, Japanese, Korean, the
-/// Devanagari of Hindi, Arabic, Thai ...): read the first time such a character is drawn,
+/// Devanagari of Hindi, Arabic, Thai, Georgian ...): read the first time such a character is drawn,
 /// from where each system keeps them - nothing is shipped, and nothing is read for a
 /// language Inter covers. Each carries the interface language it is best for: Chinese,
 /// Japanese and Korean share thousands of characters and each font draws them its own
@@ -126,6 +126,7 @@ fn fallback_fonts() -> &'static [(&'static str, FontVec)] {
             ("th", "C:\\Windows\\Fonts\\tahoma.ttf"),
             ("hi", "C:\\Windows\\Fonts\\Nirmala.ttf"),
             ("hi", "C:\\Windows\\Fonts\\NirmalaUI.ttf"),
+            ("ka", "C:\\Windows\\Fonts\\sylfaen.ttf"),
             ("", "C:\\Windows\\Fonts\\segoeui.ttf"),
             // macOS
             ("zh", "/System/Library/Fonts/Hiragino Sans GB.ttc"),
@@ -136,6 +137,7 @@ fn fallback_fonts() -> &'static [(&'static str, FontVec)] {
             ("th", "/System/Library/Fonts/Supplemental/Silom.ttf"),
             ("hi", "/System/Library/Fonts/Kohinoor.ttc"),
             ("hi", "/System/Library/Fonts/Supplemental/Devanagari Sangam MN.ttc"),
+            ("ka", "/System/Library/Fonts/SFGeorgian.ttf"),
             ("", "/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
             ("", "/System/Library/Fonts/GeezaPro.ttc"),
             // Android
@@ -145,6 +147,7 @@ fn fallback_fonts() -> &'static [(&'static str, FontVec)] {
             ("hi", "/system/fonts/NotoSansDevanagari-Regular.otf"),
             ("hi", "/system/fonts/NotoSansDevanagariUI-VF.ttf"),
             ("hi", "/system/fonts/NotoSansDevanagari-VF.ttf"),
+            ("ka", "/system/fonts/NotoSansGeorgian-VF.ttf"),
             ("", "/system/fonts/NotoNaskhArabic-Regular.ttf"),
             ("", "/system/fonts/DroidSansFallback.ttf"),
             // Linux
@@ -155,6 +158,7 @@ fn fallback_fonts() -> &'static [(&'static str, FontVec)] {
             ("th", "/usr/share/fonts/truetype/tlwg/Garuda.ttf"),
             ("hi", "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf"),
             ("hi", "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf"),
+            ("ka", "/usr/share/fonts/truetype/noto/NotoSansGeorgian-Regular.ttf"),
             ("", "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf"),
             ("", "/usr/share/fonts/wenquanyi/wqy-microhei/wqy-microhei.ttc"),
             ("", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),

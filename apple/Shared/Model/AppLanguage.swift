@@ -4,13 +4,8 @@ import Foundation
 /// the system's: the string catalog's language is chosen for the app as it starts (a change
 /// in the settings is heard from the next start; the game's own texts change at once).
 enum AppLanguage {
-    /// The settings' codes → Apple's language identifiers.
-    static let codes: [String: String] = [
-        "ENG": "en", "DEU": "de", "FRA": "fr", "RUS": "ru", "UKR": "uk", "BEL": "be", "KAZ": "kk",
-        "POL": "pl", "CZE": "cs", "HUN": "hu", "ESP": "es", "CAT": "ca", "PTB": "pt-BR", "PTP": "pt-PT",
-        "ITA": "it", "NLD": "nl", "SWE": "sv", "TUR": "tr", "JPN": "ja", "ZHT": "zh-Hant", "KOR": "ko", "THA": "th",
-        "VIE": "vi", "IND": "id", "MSA": "ms", "TGL": "fil", "CHS": "zh-Hans", "HIN": "hi", "SRP": "sr",
-    ]
+    /// The interface tables' codes (the game's language list) → Apple's language identifiers.
+    static let apple: [String: String] = ["pt": "pt-BR", "pt-pt": "pt-PT", "zh": "zh-Hans", "zh-tw": "zh-Hant", "tl": "fil"]
 
     /// `home` is the folder the game keeps `.openomsi` in (the app's data folder on an iPhone).
     static func apply(home: URL) {
@@ -19,7 +14,10 @@ enum AppLanguage {
         let code = text.split(whereSeparator: \.isNewline)
             .first { $0.hasPrefix("language=") }
             .map { String($0.dropFirst("language=".count)).trimmingCharacters(in: .whitespaces) }
-        guard let code, let lang = codes[code.uppercased()] else { return }
-        UserDefaults.standard.set([lang], forKey: "AppleLanguages")
+        guard let code,
+              let list = try? JSONSerialization.jsonObject(with: Bridge.call("languages")) as? [[String: Any]],
+              let iso = list.first(where: { ($0["code"] as? String)?.caseInsensitiveCompare(code) == .orderedSame })?["iso"] as? String
+        else { return }
+        UserDefaults.standard.set([apple[iso] ?? iso], forKey: "AppleLanguages")
     }
 }

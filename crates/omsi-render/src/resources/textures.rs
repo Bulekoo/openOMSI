@@ -20,7 +20,7 @@ pub struct GpuTexture {
     pub(crate) bytes: u64,
     /// Which texture this is (a slot is reused and a texture replaced): part of the
     /// key of a material bind group made this frame (see `Scene::bind_groups`).
-    pub(crate) gen: u64,
+    pub(crate) generation: u64,
 }
 
 pub(crate) static TEXTURE_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -33,7 +33,7 @@ impl GpuTexture {
     /// A slot showing `view` (a picture the renderer draws: the one behind the rain on the
     /// glass), with `texture` a small stand-in the slot's bookkeeping asks about.
     pub(crate) fn showing(texture: wgpu::Texture, view: wgpu::TextureView, size: (u32, u32)) -> GpuTexture {
-        GpuTexture { texture, view, size, bytes: 0, gen: next_gen() }
+        GpuTexture { texture, view, size, bytes: 0, generation: next_gen() }
     }
 
     pub(crate) fn new(texture: wgpu::Texture, size: (u32, u32), bytes: u64) -> GpuTexture {
@@ -43,7 +43,7 @@ impl GpuTexture {
             view,
             size,
             bytes,
-            gen: next_gen(),
+            generation: next_gen(),
         }
     }
 }
@@ -336,7 +336,7 @@ pub(crate) fn upload_texture_format(
             img.height,
             mip_count,
         ),
-        gen: next_gen(),
+        generation: next_gen(),
     }
 }
 
@@ -614,7 +614,7 @@ impl Renderer {
                 img.height,
                 mip_count,
             ),
-            gen: next_gen(),
+            generation: next_gen(),
         }
     }
 
@@ -737,7 +737,7 @@ impl Renderer {
             view,
             size: (width, height),
             bytes,
-            gen: next_gen(),
+            generation: next_gen(),
         });
         scene.textures.len() - 1
     }

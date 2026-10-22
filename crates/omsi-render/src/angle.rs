@@ -30,10 +30,12 @@ pub fn instance(mut descriptor: wgpu::InstanceDescriptor) -> wgpu::Instance {
     #[cfg(windows)]
     {
         let existing = std::env::var("ANGLE_FEATURE_OVERRIDES_DISABLED").unwrap_or_default();
-        std::env::set_var(
-            "ANGLE_FEATURE_OVERRIDES_DISABLED",
-            serial_compiler_overrides(&existing),
-        );
+        unsafe {
+            std::env::set_var(
+                "ANGLE_FEATURE_OVERRIDES_DISABLED",
+                serial_compiler_overrides(&existing),
+            );
+        }
         log::info!("ANGLE: native shader worker jobs disabled; renderer compilation uses a managed {COMPILER_STACK_MB} MB stack");
     }
     descriptor.backends = wgpu::Backends::GL;

@@ -108,6 +108,7 @@ fn input_key(duty: &PlayerDuty) -> u64 {
             stop.dep.to_bits().hash(&mut hasher);
         }
     }
+    duty.trips.get(duty.trip_index + 1).map(|t| t.departure.to_bits()).hash(&mut hasher);
     hasher.finish()
 }
 
@@ -310,8 +311,8 @@ fn tt_labels(language: impl FnOnce() -> String) -> &'static (String, String) {
 
 /// The rows of the paper as Omsi.exe makes them (0x7e72a0): every stop of the trip with
 /// its departure (a station the profile passes is left out), the last one as
-/// "<stop> <TT_Arr>" with its arrival, then one more row "<TT_Dep>" with the last stop's
-/// departure.
+/// "<stop> <TT_Arr>" with its arrival, then one more row "<TT_Dep>" with the next trip's
+/// departure (the last stop's on a duty's last trip).
 fn paper_content(
     duty_line: &str,
     duty_tour: &str,
@@ -345,7 +346,11 @@ fn paper_content(
         } else {
             format!("{}  ", stop.name.trim())
         };
-        let time = format_time(if i == last { stop.arr } else { stop.dep });
+        let time = format_time(match i {
+            i if i == last => stop.arr,
+            i if i > last => trips.get(trip_index + 1).map_or(stop.dep, |t| t.departure),
+            _ => stop.dep,
+        });
         rows.push(PaperRow { name, time });
     }
     (title, rows)
@@ -533,7 +538,7 @@ mod tests {
                 stop(4, "Bauernhof", t(11.0, 59.0), t(12.0, 1.0)),
             ],
         };
-        let (title, rows) = paper_content("76", "1", &[current], 0, ("Arrival ", "Depart. "));
+        let (title, rows) = paper_content("76", "1", &[current.clone()], 0, ("Arrival ", "Depart. "));
         assert_eq!(title, "76 - Bauernhof - 1");
         assert_eq!(
             rows.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(),
@@ -543,6 +548,9 @@ mod tests {
             rows.iter().map(|r| r.time.as_str()).collect::<Vec<_>>(),
             ["11:52", "11:57", "11:59", "12:01"]
         );
+        let next = PlannedTrip { departure: t(12.0, 10.0), ..current.clone() };
+        let (_, rows) = paper_content("76", "1", &[current, next], 0, ("Arrival ", "Depart. "));
+        assert_eq!(rows.last().map(|r| r.time.as_str()), Some("12:10"));
     }
 
     #[test]

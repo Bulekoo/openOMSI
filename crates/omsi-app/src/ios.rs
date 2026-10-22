@@ -37,17 +37,17 @@ pub(crate) fn wake() {
 }
 
 /// The Swift app's `main`: never returns (UIKit's run loop runs the app from here on).
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn openomsi_ios_main() {
     // HOME is the app's container on iOS: its root may not be written, its Library may
     let container = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
-    std::env::set_var("OPENOMSI_CONTAINER", &container);
+    unsafe { std::env::set_var("OPENOMSI_CONTAINER", &container) };
     let home = container.join("Library/Application Support/openOMSI");
     let _ = std::fs::create_dir_all(&home);
-    std::env::set_var("HOME", &home);
+    unsafe { std::env::set_var("HOME", &home) };
     let content = documents();
     let _ = std::fs::create_dir_all(&content);
-    std::env::set_var("OMSI_CONTENT", &content);
+    unsafe { std::env::set_var("OMSI_CONTENT", &content) };
     let crash_files = vec![content.join("crash.log"), home.join("crash.log")];
     std::panic::set_hook(Box::new(move |info| {
         // (one the renderer catches - a graphics interface it cannot open - is no end of
@@ -74,7 +74,7 @@ pub extern "C" fn openomsi_ios_main() {
                 let k = k.trim();
                 if k.starts_with("OMSI_") && !k.contains(char::is_whitespace) {
                     log::info!("env.txt: {k}");
-                    std::env::set_var(k, v.trim());
+                    unsafe { std::env::set_var(k, v.trim()) };
                 }
             }
         }
@@ -102,7 +102,7 @@ pub extern "C" fn openomsi_ios_main() {
 }
 
 /// The Swift app's scene is connected: windows can be shown on it.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn openomsi_ios_scene_ready() {
     SCENE_READY.store(true, Ordering::Relaxed);
     wake();

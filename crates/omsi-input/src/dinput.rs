@@ -285,8 +285,8 @@ unsafe extern "system" fn collect(
     inst: *mut DIDEVICEINSTANCEW,
     out: *mut core::ffi::c_void,
 ) -> windows::core::BOOL {
-    let v = &mut *(out as *mut Vec<(GUID, String)>);
-    let inst = &*inst;
+    let v = unsafe { &mut *(out as *mut Vec<(GUID, String)>) };
+    let inst = unsafe { &*inst };
     if !is_controller_device(inst.dwDevType, inst.wUsagePage, inst.wUsage) {
         return windows::core::BOOL(DIENUM_CONTINUE as i32);
     }
@@ -379,16 +379,18 @@ unsafe extern "system" fn notify_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPAR
     if msg == WM_DEVICECHANGE && matches!(wp.0 as u32, DBT_DEVICEARRIVAL | DBT_DEVICEREMOVECOMPLETE)
     {
         if wp.0 as u32 == DBT_DEVICEREMOVECOMPLETE && lp.0 != 0 {
-            let header = &*(lp.0 as *const DEV_BROADCAST_HDR);
+            let header = unsafe { &*(lp.0 as *const DEV_BROADCAST_HDR) };
             if header.dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE {
                 let interface = lp.0 as *const DEV_BROADCAST_DEVICEINTERFACE_W;
                 let offset = std::mem::offset_of!(DEV_BROADCAST_DEVICEINTERFACE_W, dbcc_name);
                 let size = header.dbch_size as usize;
                 if size > offset {
-                    let chars = std::slice::from_raw_parts(
-                        std::ptr::addr_of!((*interface).dbcc_name).cast::<u16>(),
-                        (size - offset) / 2,
-                    );
+                    let chars = unsafe {
+                        std::slice::from_raw_parts(
+                            std::ptr::addr_of!((*interface).dbcc_name).cast::<u16>(),
+                            (size - offset) / 2,
+                        )
+                    };
                     let end = chars.iter().position(|c| *c == 0).unwrap_or(chars.len());
                     let path = String::from_utf16_lossy(&chars[..end]);
                     HID_REMOVALS.with(|paths| paths.borrow_mut().push(path));
@@ -508,8 +510,8 @@ unsafe extern "system" fn collect_object(
     inst: *mut DIDEVICEOBJECTINSTANCEW,
     out: *mut core::ffi::c_void,
 ) -> windows::core::BOOL {
-    let objects = &mut *(out as *mut Vec<InputObject>);
-    let inst = &*inst;
+    let objects = unsafe { &mut *(out as *mut Vec<InputObject>) };
+    let inst = unsafe { &*inst };
     objects.push(InputObject {
         guid: inst.guidType,
         ty: inst.dwType,

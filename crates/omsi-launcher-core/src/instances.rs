@@ -142,7 +142,7 @@ pub fn process_start(pid: u32) -> Option<u64> {
 #[cfg(windows)]
 pub fn process_start(pid: u32) -> Option<u64> {
     #[link(name = "kernel32")]
-    extern "system" {
+    unsafe extern "system" {
         fn OpenProcess(access: u32, inherit: i32, pid: u32) -> isize;
         fn GetProcessTimes(h: isize, creation: *mut u64, exit: *mut u64, kernel: *mut u64, user: *mut u64) -> i32;
         fn CloseHandle(h: isize) -> i32;

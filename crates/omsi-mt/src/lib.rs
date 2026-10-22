@@ -69,35 +69,7 @@ fn cache_file(lang: &str) -> Option<PathBuf> {
 
 /// NLLB's name of an interface language.
 fn nllb(lang: &str) -> Option<&'static str> {
-    Some(match lang {
-        "ru" => "rus_Cyrl",
-        "de" => "deu_Latn",
-        "fr" => "fra_Latn",
-        "uk" => "ukr_Cyrl",
-        "pl" => "pol_Latn",
-        "cs" => "ces_Latn",
-        "es" => "spa_Latn",
-        "ca" => "cat_Latn",
-        "it" => "ita_Latn",
-        "be" => "bel_Cyrl",
-        "kk" => "kaz_Cyrl",
-        "hu" => "hun_Latn",
-        "pt" | "pt-pt" => "por_Latn",
-        "nl" => "nld_Latn",
-        "sv" => "swe_Latn",
-        "tr" => "tur_Latn",
-        "zh-tw" | "zh-hk" => "zho_Hant",
-        "ko" => "kor_Hang",
-        "th" => "tha_Thai",
-        "vi" => "vie_Latn",
-        "id" => "ind_Latn",
-        "ms" => "zsm_Latn",
-        "tl" => "tgl_Latn",
-        "ja" => "jpn_Jpan",
-        "zh" | "zh-cn" => "zho_Hans",
-        "hi" => "hin_Deva",
-        _ => return None,
-    })
+    omsi_cfg::lang::LANGUAGES.iter().find(|l| l.2 == lang || l.3.contains(&lang)).map(|l| l.4).filter(|n| !n.is_empty())
 }
 
 /// Turn machine translation on or off (the setting).
@@ -356,6 +328,16 @@ fn fetch_model() -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn nllb_names_come_from_the_language_list() {
+        assert_eq!(super::nllb("pt-pt"), Some("por_Latn"));
+        assert_eq!(super::nllb("zh-hk"), Some("zho_Hant"));
+        assert_eq!(super::nllb("zh-cn"), Some("zho_Hans"));
+        assert_eq!(super::nllb("ka"), Some("kat_Geor"));
+        assert_eq!(super::nllb("sr"), None);
+        assert_eq!(super::nllb("en"), None);
+    }
+
     #[test]
     fn what_is_translated() {
         assert!(super::worth("Back to my bus"));

@@ -70,7 +70,7 @@ fn bootstrap(p: &dyn Platform) -> Answer {
     let root = core::root_dir().map(|p| p.to_string_lossy().to_string());
     let choice: Value = std::fs::read_to_string(core::data_dir().join("launcher-duty.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(json!({}));
     let favourites: Vec<String> = std::fs::read_to_string(core::data_dir().join("favourite-buses.txt")).map(|t| t.lines().map(str::trim).filter(|l| !l.is_empty()).map(|l| l.replace('\\', "/").to_lowercase()).collect()).unwrap_or_default();
-    let languages: Vec<Value> = core::LANGUAGES.iter().map(|(code, name, iso, _)| json!({ "code": code, "name": name, "iso": iso })).collect();
+    let languages: Vec<Value> = core::LANGUAGES.iter().map(|(code, name, iso, _, _)| json!({ "code": code, "name": name, "iso": iso })).collect();
     // (a crash the last run left behind with nobody to tell: shown at the start, as the
     // game's own launcher did)
     let crash = p.previous_run_crash().map(|(what, tail)| crash_json(&what, &tail));
@@ -947,14 +947,14 @@ mod setup_tests {
         let not_omsi = home.join("Downloads");
         std::fs::create_dir_all(&not_omsi).unwrap();
         let was = (std::env::var_os("HOME"), std::env::var_os("USERPROFILE"));
-        std::env::set_var("HOME", &home);
-        std::env::set_var("USERPROFILE", &home);
+        unsafe { std::env::set_var("HOME", &home) };
+        unsafe { std::env::set_var("USERPROFILE", &home) };
         let r = config_save(not_omsi.to_string_lossy().to_string(), String::new()).unwrap();
         let written = home.join(".openomsi").join("launcher.json").exists();
         for (k, v) in [("HOME", was.0), ("USERPROFILE", was.1)] {
             match v {
-                Some(v) => std::env::set_var(k, v),
-                None => std::env::remove_var(k),
+                Some(v) => unsafe { std::env::set_var(k, v) },
+                None => unsafe { std::env::remove_var(k) },
             }
         }
         assert_eq!(r["saved"], json!(false));
