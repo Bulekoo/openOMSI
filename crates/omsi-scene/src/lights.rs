@@ -451,6 +451,9 @@ fn push_spot(lights: &mut Vec<PointLight>, at: DVec3, d: Vec3, level: Vec3, vals
 /// lights each at night, a hundred and more on a busy street, each looked at by every pixel
 /// near it - for cars whose beams far off light a few metres of road nobody sees.
 const AI_BEAMS: usize = 12;
+/// How dark it has to be (0 day, 1 night; the weather's gloom counts, see `Daylight::night`)
+/// for the cars to be lent their beams.
+const AI_BEAM_MIN_DARK: f32 = 0.12;
 const AI_BEAM_RANGE: f64 = 200.0;
 
 /// Whether a vehicle has no spot of its own and is lent its headlamps' beams.
@@ -940,7 +943,11 @@ pub fn collect(
     let vehicle_smoke = scene.smoke.len();
     // the headlamps lent to cars without spots of their own: the nearest few alone (see
     // `AI_BEAMS`)
-    let beams = cars_with_beams(vehicles, camera_pos);
+    // (and only while it is dark enough for them to show: by day they light nothing anyone
+    // sees, yet any light at all in the scene makes every pixel look through the lamp grid and
+    // the weather's fog work the lamps' air light out - 13 ms of a 25 ms frame in a grey
+    // winter noon, where the cars have their lights on)
+    let beams = if night < AI_BEAM_MIN_DARK { Vec::new() } else { cars_with_beams(vehicles, camera_pos) };
     for (k, v) in vehicles.iter().enumerate() {
         vehicle_lights(v, &mut scene.coronas, &mut scene.lights, night, &world.cookie_fades, beams.contains(&k));
         // light_vehicles puts the player's bus first (if any). LAN guests and AI
