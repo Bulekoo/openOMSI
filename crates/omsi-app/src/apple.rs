@@ -7,7 +7,7 @@ use std::ffi::{c_char, c_void, CString};
 use std::sync::Arc;
 use winit::window::Window;
 
-extern "C" {
+unsafe extern "C" {
     /// The game's window (its view) goes onto the app's scene, in front of the launcher.
     fn openomsi_swift_attach_window(view: *mut c_void);
     /// The game's window leaves the scene (the launcher is in front again).

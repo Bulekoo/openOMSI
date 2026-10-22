@@ -444,6 +444,33 @@ Complete plugins to start from (each runs in the tests against a stand-in game):
 | [`reduced_tickets.lua`](examples/plugins/reduced_tickets.lua) | every adult asks for the reduced fare instead of the full one (`passenger_ticket`, `people.set_ticket`) |
 | [`weather_controller.lua`](examples/plugins/weather_controller.lua) | the weather files as tabs, sliders for temperature, visibility and rain, snow cover, the clock moved by buttons, and a day cycle of its own |
 
+### Reading game data and the complete selected tour
+
+`omsi.game.query` reads the same game-owned sources as the M.V. getters, without running
+the vehicle script or dispatching its callbacks. Use `omsi.game.queries()` to discover
+names, argument names/types and return types. Getter arguments retain OMSI's zero-based
+indices; other plugin lists use one-based Lua indices. Reads refer to the player's bus
+and its current HOF and timetable. No bus returns `nil, reason`. An optional third
+argument selects a loaded scripted scenery object's map id instead, allowing `GetArrBus*`
+to read a departure board's actual arrivals even without a player vehicle. Find object ids
+with `omsi.map.objects_near(x, y)`; an unloaded or nonscripted object returns `nil, reason`. Mutation/drawing commands
+are deliberately not data getters. `GetFontIndex` is excluded because it can load fonts
+and extend the vehicle's font list.
+
+```lua
+local text = omsi.game.query("GetTerminusString", {0, 0})
+local arrival = omsi.game.query("GetTTBusstopArr", {0})
+local tour = omsi.duty.tour() -- entire source tour, even with just one trip selected
+if tour then
+    for _, trip in ipairs(tour.trips) do
+        for _, stop in ipairs(trip.stops) do
+            -- Seconds from service-day midnight, including 24:xx and passing stops.
+            print(trip.line, trip.terminus, stop.name, stop.arrival, stop.departure)
+        end
+    end
+end
+```
+
 ### Safety and errors
 
 A Lua plugin gets Lua 5.4 with the safe libraries only: `string`, `table`, `math`, `utf8`,
@@ -560,6 +587,13 @@ declared to call the function (a plain `.lua` file has them all).
 | `omsi.vehicle_manufacturer()` | string or nil | The manufacturer part of the vehicle's name, as its `[friendlyname]` has it (`"Solaris III Gen"`). | 0.2.21 |
 | `omsi.vehicle_model()` | string or nil | The model part of the vehicle's name (`"Urbino 10 / 2D"`). | 0.2.21 |
 
+#### Game data getters
+
+| Function | Returns | What it does | Since |
+| --- | --- | --- | --- |
+| `omsi.game.queries()` | list of tables | Read-only game data getters: `{name, args = {{name, type}, ...}, result}`. Names and zero-based indices follow the M.V. getter names, but plugins read the game data directly without executing scripts. `rgba` means four results in the range 0–255. | 0.3.40 |
+| `omsi.game.query(name, [args], [object])` | value(s), or nil and reason | Read a getter listed by `game.queries` from the player's vehicle's HOF, timetable, passengers, tickets, radio, fonts or textures. Arguments are an ordered list (empty by default). No script callback is invoked. `STReadPixel` returns RGBA without changing the bus's drawing colour. Supply a loaded scripted map object's id as `object` to read its data, including `GetArrBus*` on departure boards, without needing a player vehicle. Object ids can be found through `map.objects_near`. Without `object`, reads use the player's vehicle. Unknown names, mutating operations and invalid arguments raise an error; no vehicle returns nil and a reason. | 0.3.40 |
+
 #### Duty and timetable
 
 | Function | Returns | What it does | Since |
@@ -575,12 +609,14 @@ declared to call the function (a plain `.lua` file has them all).
 | `omsi.duty.skip_to(stop)` | boolean | Makes stop `stop` (from 1) of the trip the next one, forwards or back. *Permission: `world_write`.* | 0.2.22 |
 | `omsi.duty.start(line, tour, [trip], [stop])` | true, or false and the reason | Takes a duty, as the game menu's "Line and tour" does: a line and tour of `timetable.lines`, its trip (from 1 in the order they leave; default the first) and the stop to start at (from 1 among those the trip calls at; default the first). The bus stays where it is. *Permission: `world_write`.* | 0.2.22 |
 | `omsi.duty.stops()` | list of tables | The stops of the trip now: `{number, name, id, arrival, departure, stops, closed, passed, x, y, z}` (`stops` false: the bus passes it; `closed`: closed today, `duty.set_closed_stops`; `x, y, z` where the stop's place is known; `id` the map's object id). | 0.2.22 |
+| `omsi.duty.tour()` | table or nil | The complete source tour of the selected duty, even when only one trip was selected. Same structure as `timetable.tour`; times align with the active duty's service day, with `time_offset` seconds applied to all trips and stops. | 0.3.40 |
 | `omsi.duty.trip_stops(trip)` | list of tables or nil | The stops of a trip of the duty (from 1), as `duty.stops` gives them. | 0.2.22 |
 | `omsi.duty.trips()` | list of tables | The trips of the duty: `{number, name, line, terminus, departure, arrival, stops}`. | 0.2.22 |
 | `omsi.timetable.buses()` | list of tables | The timetable buses of the AI on the road: `{id, line, tour, trip, terminus, departure, next_stop_id, at_stop, trip_done, delay, x, y, number}`. | 0.2.22 |
 | `omsi.timetable.lines()` | list of tables | The map's lines: `{name, user_allowed, tours}`, each tour `{number, today, trips}` (`today`: it runs on the game's date). | 0.2.22 |
 | `omsi.timetable.stop_names()` | list of tables | The stops the timetable knows: `{id, name}` (`id` the map's object id). | 0.2.22 |
 | `omsi.timetable.stops(line, tour, [trip])` | list of tables | The stops of a tour's trips (or of its trip `trip`, from 1 in the order they leave) that the bus calls at: `{trip, station, name, departure}`. | 0.2.22 |
+| `omsi.timetable.tour(line, tour)` | table, or nil and reason | Read a full tour without taking it: `{line, number, ai_group, extra, today, time_offset, trips}`. Each trip has `number`, `source_number` (both from 1), `name`, `line`, `terminus`, `track`, `reverse`, `profile_index` (from 0), `profile` (`name`, `factor`), `departure`, `arrival`, and all `stops` (`id`, `name`, `arrival`, `departure`, `stops`, optional `x,y,z`). Times are seconds from service-day midnight and can exceed 86400; passing stops are retained. Unknown trip references are skipped, retaining their source numbers. No AI vehicle is reserved. | 0.3.40 |
 
 #### The map
 
@@ -944,7 +980,7 @@ What the game does with an `.oop`:
 * The code stays in memory; the plugin's pictures, sounds and data files go into
   `plugins/.oop-cache/<name>/`, where its API functions read them.
 * **Permissions.** An `.oop` declares what it may do (`ui`, `storage`, `vehicle_write`,
-  `traffic_write`, `world_write`, `camera`, `audio`, `network_local`, `lan`); a function
+  `traffic_write`, `world_write`, `camera`, `audio`, `network_local`, `lan`, `process`); a function
   that needs another one fails with an error the plugin can catch. Reading the game needs
   none. (A plain `.lua` file has every permission.)
 * **Signatures.** A signed plugin is logged with its author's key fingerprint

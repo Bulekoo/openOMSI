@@ -769,11 +769,12 @@ impl Renderer {
         camera: &Camera,
         lighting: &Lighting,
     ) -> Result<(Vec<u8>, Option<Vec<f32>>)> {
-        self.depth_readback = true;
+        let copies = self.adapter.as_ref().map_or(!gl_backend(), |a| a.get_downlevel_capabilities().flags.contains(wgpu::DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES));
+        self.depth_readback = copies;
         let px = self.render_image(scene, width, height, camera, lighting, None);
         self.depth_readback = false;
         let px = px?;
-        let tex = self.targets.ao.as_ref().filter(|a| a.size == (width, height)).map(|a| a.depth_tex.clone());
+        let tex = self.targets.ao.as_ref().filter(|a| copies && a.size == (width, height)).map(|a| a.depth_tex.clone());
         let depth = match tex {
             Some(t) => {
                 // (a backend that cannot copy depth back: the picture without it)

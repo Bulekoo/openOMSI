@@ -143,8 +143,19 @@ impl App {
             (Some(r), Some(sc)) => format!(", GPU memory: textures {:.0} MB, meshes {:.0} MB", r.texture_bytes(sc) as f64 / 1e6, r.mesh_bytes(sc) as f64 / 1e6),
             _ => String::new(),
         };
+        // Cumulative diagnostics: visible in an ordinary game.log without requiring
+        // profiling flags, and cheap to sample at the existing one-minute status interval.
+        let faults = omsi_render::texture_upload_faults();
+        let texture_faults = if faults.malformed_mips > 0 || faults.failed_creations > 0 {
+            format!(
+                ", GPU texture failures: {} malformed mip uploads, {} failed texture creations",
+                faults.malformed_mips, faults.failed_creations
+            )
+        } else {
+            String::new()
+        };
         log::info!(
-            "status: {fps:.0} fps (worst frame {worst:.0} fps), {}, view {}, game time {:02}:{:02}, {traffic} AI vehicles{}{gpu}",
+            "status: {fps:.0} fps (worst frame {worst:.0} fps), {}, view {}, game time {:02}:{:02}, {traffic} AI vehicles{}{gpu}{texture_faults}",
             bus.or(cam).unwrap_or_default(),
             self.view,
             (time / 3600.0) as i64 % 24,

@@ -22986,6 +22986,7 @@ _version: 2
   tl: "Naka-on ang VR sa monitor"
   sv: "VR-spegel på skrivbordet på"
   ka: "VR გამოსახულება მონიტორზე ჩართულია"
+  sr: "Uključi prikaz VR-a na monitoru"
 "Desktop VR mirror off":
   ca: "Rèplica de RV al monitor desactivada"
   ru: "Показ VR на мониторе выключен"
@@ -23015,6 +23016,7 @@ _version: 2
   tl: "Naka-off ang VR sa monitor"
   sv: "VR-spegel på skrivbordet av"
   ka: "VR გამოსახულება მონიტორზე გამორთულია"
+  sr: "Isključi prikaz VR-a na monitoru"
 "Could not start VR":
   ca: "No s'ha pogut iniciar la RV"
   ru: "Не удалось запустить VR"
@@ -40492,6 +40494,7 @@ _version: 2
   ca: "Trajectes del torn"
   sv: "Omloppets turer"
   ka: "რეისის მგზავრობები"
+  sr: "Vožnje u okviru ture"
 
 "Click a trip to start with it":
   de: "Klicke eine Fahrt an, um mit ihr zu beginnen"
@@ -52764,6 +52767,7 @@ _version: 2
   de: "Kein Umlauf hat noch eine passende Fahrt vor sich."
   pt-pt: "Nenhuma escala tem uma viagem ainda por fazer que corresponda."
   ka: "არცერთ რეისს არ აქვს შესაბამისი მომავალი მგზავრობა."
+  sr: "Nijedna tura nema predstojeću vožnju koja odgovara zadatim kriterijumima."
 
 "No tour left at this time: show the ended tours, or start earlier.":
   es: "No quedan turnos a esta hora: muestra los que ya han terminado o empieza antes."
@@ -67415,7 +67419,6 @@ _version: 2
   tl: "Lupain"
   sr: "Teren"
   ka: "რელიეფი"
-
 "Vehicle smoke":
   be: "Дым ад транспарту"
   ca: "Fum dels vehicles"
@@ -67608,6 +67611,7 @@ _version: 2
   es: "Control de calefacción: temperatura"
   pt-pt: "Regulação da temperatura do aquecimento"
   ka: "გათბობის რეგულატორი: ტემპერატურა"
+  sr: "Podešavanje temperature grejanja"
 
 "Heating control footwell":
   pt: "Controle de aquecimento da área dos pés"
@@ -67617,6 +67621,7 @@ _version: 2
   es: "Control de calefacción: zona de los pies"
   pt-pt: "Regulação do aquecimento da zona dos pés"
   ka: "გათბობის რეგულატორი: ფეხების ზონა"
+  sr: "Grejanje prostora za noge"
 
 "Mirror heating on/off":
   pt: "Aquecimento dos espelhos: ligar/desligar"
@@ -67626,6 +67631,7 @@ _version: 2
   es: "Calefacción de espejos (activar/desactivar)"
   pt-pt: "Aquecimento dos espelhos: ligar/desligar"
   ka: "სარკის გათბობა ჩართ./გამორთ."
+  sr: "Grejanje retrovizora: uključi/isključi"
 
 "Lift down switch on/off":
   pt: "Interruptor de descida do elevador: ligar/desligar"
@@ -67635,6 +67641,7 @@ _version: 2
   es: "Interruptor de bajada de la suspensión (activar/desactivar)"
   pt-pt: "Interruptor de rebaixamento: ligar/desligar"
   ka: "ძარის დაწევის გადამრთველი ჩართ./გამორთ."
+  sr: "Prekidač za spuštanje podizne platforme: uključi/isključi"
 
 "Driver's door":
   pt: "Porta do motorista"
@@ -67644,6 +67651,7 @@ _version: 2
   es: "Puerta del conductor"
   pt-pt: "Porta do condutor"
   ka: "მძღოლის კარი"
+  sr: "Vrata vozača"
 
 "Left driver's door":
   pt: "Porta esquerda do motorista"
@@ -67653,6 +67661,7 @@ _version: 2
   es: "Puerta izquierda del conductor"
   pt-pt: "Porta esquerda do condutor"
   ka: "მძღოლის მარცხენა კარი"
+  sr: "Leva vrata vozača"
 
 "Right driver's door":
   pt: "Porta direita do motorista"
@@ -67662,6 +67671,7 @@ _version: 2
   es: "Puerta derecha del conductor"
   pt-pt: "Porta direita do condutor"
   ka: "მძღოლის მარჯვენა კარი"
+  sr: "Desna vrata vozača"
 
 "Ignition key":
   pt: "Chave de ignição"
@@ -67671,6 +67681,7 @@ _version: 2
   es: "Llave de contacto"
   pt-pt: "Chave de ignição"
   ka: "ანთების გასაღები"
+  sr: "Ključ za pokretanje motora"
 
 "Door lock":
   pt: "Trava da porta"
@@ -67680,6 +67691,7 @@ _version: 2
   es: "Bloqueo de puertas"
   pt-pt: "Bloqueio da porta"
   ka: "კარის საკეტი"
+  sr: "Brava na vratima"
 
 "Parking Brake On/Off":
   pt: "Freio de estacionamento: ligar/desligar"
@@ -67689,6 +67701,7 @@ _version: 2
   es: "Freno de estacionamiento (activar/desactivar)"
   pt-pt: "Travão de estacionamento: ligar/desligar"
   ka: "სადგომი მუხრუჭი ჩართ./გამორთ."
+  sr: "Parkirna kočnica: uključi/isključi"
 
 "Parking Brake Set":
   pt: "Acionar freio de estacionamento"
@@ -67698,6 +67711,7 @@ _version: 2
   es: "Accionar freno de estacionamiento"
   pt-pt: "Acionar travão de estacionamento"
   ka: "სადგომი მუხრუჭის ჩართვა"
+  sr: "Zategni parkirnu kočnicu"
 
 "Parking Brake Release":
   pt: "Liberar freio de estacionamento"
@@ -67707,6 +67721,7 @@ _version: 2
   es: "Soltar freno de estacionamiento"
   pt-pt: "Soltar travão de estacionamento"
   ka: "სადგომი მუხრუჭის მოხსნა"
+  sr: "Otpusti parkirnu kočnicu"
 
 "Electricity On/Off":
   pt: "Alimentação elétrica: ligar/desligar"
@@ -67716,6 +67731,7 @@ _version: 2
   es: "Electricidad (activar/desactivar)"
   pt-pt: "Eletricidade: ligar/desligar"
   ka: "ელექტროენერგია ჩართ./გამორთ."
+  sr: "Električno napajanje: uključi/isključi"
 
 "Front Door, 1st Wing Open/Close":
   pt: "Porta dianteira, primeira folha: abrir/fechar"
@@ -67725,6 +67741,7 @@ _version: 2
   es: "Puerta delantera, 1.ª hoja abrir/cerrar"
   pt-pt: "Porta dianteira, 1.ª folha: abrir/fechar"
   ka: "წინა კარი, 1-ლი ფრთა გაღება/დახურვა"
+  sr: "Prednja vrata, prvo krilo: otvori/zatvori"
 
 "Front Door, 2nd Wing Open/Close":
   pt: "Porta dianteira, segunda folha: abrir/fechar"
@@ -67734,6 +67751,7 @@ _version: 2
   es: "Puerta delantera, 2.ª hoja abrir/cerrar"
   pt-pt: "Porta dianteira, 2.ª folha: abrir/fechar"
   ka: "წინა კარი, მე-2 ფრთა გაღება/დახურვა"
+  sr: "Prednja vrata, drugo krilo: otvori/zatvori"
 
 "Stop Request Button":
   pt: "Botão de solicitação de parada"
@@ -67743,6 +67761,7 @@ _version: 2
   es: "Pulsador de solicitud de parada"
   pt-pt: "Botão de pedido de paragem"
   ka: "გაჩერების მოთხოვნის ღილაკი"
+  sr: "Dugme za najavu zaustavljanja"
 
 "Buggy Request Button":
   pt: "Botão de solicitação para carrinho de bebê"
@@ -67752,6 +67771,7 @@ _version: 2
   es: "Pulsador de solicitud para carrito de bebé"
   pt-pt: "Botão de pedido para carrinho de bebé"
   ka: "ეტლის მოთხოვნის ღილაკი"
+  sr: "Dugme za najavu ulaska sa dečjim kolicima"
 
 "Buggy Switch (Open Rear Door Manually)":
   pt: "Interruptor para carrinho de bebê (abrir porta traseira manualmente)"
@@ -67761,6 +67781,7 @@ _version: 2
   es: "Interruptor del carrito de bebé (abrir la puerta trasera manualmente)"
   pt-pt: "Interruptor de carrinho de bebé (abrir a porta traseira manualmente)"
   ka: "ეტლის გადამრთველი (უკანა კარის ხელით გაღება)"
+  sr: "Prekidač za ručno otvaranje zadnjih vrata za putnike sa dečjim kolicima"
 
 "Cabin Light Lower Deck On/Off":
   pt: "Iluminação do andar inferior: ligar/desligar"
@@ -67770,6 +67791,7 @@ _version: 2
   es: "Luz de cabina piso inferior (activar/desactivar)"
   pt-pt: "Luz do piso inferior: ligar/desligar"
   ka: "ქვედა სართულის სალონის განათება ჩართ./გამორთ."
+  sr: "Svetlo u donjem delu autobusa: uključi/isključi"
 
 "Cabin Light Upper Deck On/Off":
   pt: "Iluminação do andar superior: ligar/desligar"
@@ -67779,6 +67801,7 @@ _version: 2
   es: "Luz de cabina piso superior (activar/desactivar)"
   pt-pt: "Luz do piso superior: ligar/desligar"
   ka: "ზედა სართულის სალონის განათება ჩართ./გამორთ."
+  sr: "Svetlo u gornjem delu autobusa: uključi/isključi"
 
 "Cabin Light Lower Deck, First on the Right On/Off":
   pt: "Primeira luz à direita do andar inferior: ligar/desligar"
@@ -67788,6 +67811,7 @@ _version: 2
   es: "Luz de cabina piso inferior, primera a la derecha (activar/desactivar)"
   pt-pt: "Luz do piso inferior, primeira à direita: ligar/desligar"
   ka: "ქვედა სართულის სალონის განათება, პირველი მარჯვნივ ჩართ./გამორთ."
+  sr: "Prvo svetlo zdesna u donjem delu autobusa: uključi/isključi"
 
 "Driver's Light On/Off":
   pt: "Luz do motorista: ligar/desligar"
@@ -67797,6 +67821,7 @@ _version: 2
   es: "Luz del conductor (activar/desactivar)"
   pt-pt: "Luz do condutor: ligar/desligar"
   ka: "მძღოლის განათება ჩართ./გამორთ."
+  sr: "Osvetljenje za vozača: uključi/isključi"
 
 "Driving Slip Regulation System On/Off":
   pt: "Controle de tração: ligar/desligar"
@@ -67806,6 +67831,7 @@ _version: 2
   es: "Control de tracción (ASR) (activar/desactivar)"
   pt-pt: "Controlo de tração: ligar/desligar"
   ka: "მოცურების საწინააღმდეგო სისტემა ჩართ./გამორთ."
+  sr: "Sistem protiv proklizavanja: uključi/isključi"
 
 "Dimmed Headlights On/Off":
   pt: "Farol baixo: ligar/desligar"
@@ -67815,6 +67841,7 @@ _version: 2
   es: "Luces de cruce (activar/desactivar)"
   pt-pt: "Médios: ligar/desligar"
   ka: "ახლო ფარები ჩართ./გამორთ."
+  sr: "Oborena svetla: uključi/isključi"
 
 "Full Beam On/Off / Flash Light":
   pt: "Farol alto: ligar/desligar / lampejar"
@@ -67824,6 +67851,7 @@ _version: 2
   es: "Luces de carretera (activar/desactivar) / ráfaga"
   pt-pt: "Máximos: ligar/desligar / sinal de luzes"
   ka: "შორი ფარები ჩართ./გამორთ. / ფარებით სიგნალი"
+  sr: "Duga svetla: uključi/isključi / ablenduj"
 
 "Engine On/Off":
   pt: "Motor: ligar/desligar"
@@ -67833,6 +67861,7 @@ _version: 2
   es: "Motor (activar/desactivar)"
   pt-pt: "Motor: ligar/desligar"
   ka: "ძრავა ჩართ./გამორთ."
+  sr: "Motor: pokreni/ugasi"
 
 "Engine Shut Down":
   pt: "Desligar motor"
@@ -67842,6 +67871,7 @@ _version: 2
   es: "Apagar el motor"
   pt-pt: "Desligar o motor"
   ka: "ძრავის გამორთვა"
+  sr: "Ugasi motor"
 
 "Engine Cooling On/Off":
   pt: "Arrefecimento do motor: ligar/desligar"
@@ -67851,6 +67881,7 @@ _version: 2
   es: "Refrigeración del motor (activar/desactivar)"
   pt-pt: "Arrefecimento do motor: ligar/desligar"
   ka: "ძრავის გაგრილება ჩართ./გამორთ."
+  sr: "Hlađenje motora: uključi/isključi"
 
 "Heater Blower On/Off":
   pt: "Ventilador do aquecedor: ligar/desligar"
@@ -67860,6 +67891,7 @@ _version: 2
   es: "Ventilador de la calefacción (activar/desactivar)"
   pt-pt: "Ventilador do aquecimento: ligar/desligar"
   ka: "გამათბობლის ვენტილატორი ჩართ./გამორთ."
+  sr: "Ventilator grejanja: uključi/isključi"
 
 "Microphone Switch (Announcements)":
   pt: "Interruptor do microfone (anúncios)"
@@ -67869,6 +67901,7 @@ _version: 2
   es: "Interruptor del micrófono (avisos)"
   pt-pt: "Interruptor do microfone (anúncios)"
   ka: "მიკროფონის გადამრთველი (განცხადებები)"
+  sr: "Prekidač mikrofona (najave)"
 
 "Parking Light On/Off":
   pt: "Luz de posição: ligar/desligar"
@@ -67878,6 +67911,7 @@ _version: 2
   es: "Luces de posición (activar/desactivar)"
   pt-pt: "Mínimos: ligar/desligar"
   ka: "გაბარიტები ჩართ./გამორთ."
+  sr: "Poziciona svetla: uključi/isključi"
 
 "Park Heating On/Off":
   pt: "Aquecedor auxiliar: ligar/desligar"
@@ -67887,6 +67921,7 @@ _version: 2
   es: "Calefacción auxiliar (activar/desactivar)"
   pt-pt: "Aquecimento auxiliar: ligar/desligar"
   ka: "ავტონომიური გამათბობელი ჩართ./გამორთ."
+  sr: "Grejanje autobusa dok je parkiran: uključi/isključi"
 
 "Rear Fog Light On/Off":
   pt: "Luz de neblina traseira: ligar/desligar"
@@ -67896,6 +67931,7 @@ _version: 2
   es: "Antiniebla trasero (activar/desactivar)"
   pt-pt: "Farol de nevoeiro traseiro: ligar/desligar"
   ka: "უკანა ნისლის ფარი ჩართ./გამორთ."
+  sr: "Zadnje svetlo za maglu: uključi/isključi"
 
 "Retarder Direct Mode On/Off":
   pt: "Modo direto do retardador: ligar/desligar"
@@ -67905,6 +67941,7 @@ _version: 2
   es: "Modo directo del retardador (activar/desactivar)"
   pt-pt: "Modo direto do retardador: ligar/desligar"
   ka: "რეტარდერის პირდაპირი რეჟიმი ჩართ./გამორთ."
+  sr: "Direktni režim retardera: uključi/isključi"
 
 "Retarder On/Off":
   pt: "Retardador: ligar/desligar"
@@ -67914,6 +67951,7 @@ _version: 2
   es: "Retardador (activar/desactivar)"
   pt-pt: "Retardador: ligar/desligar"
   ka: "რეტარდერი ჩართ./გამორთ."
+  sr: "Retarder: uključi/isključi"
 
 "Station Brake & Door Release On/Off":
   pt: "Freio de parada e liberação das portas: ligar/desligar"
@@ -67923,6 +67961,7 @@ _version: 2
   es: "Freno de parada y liberación de puertas (activar/desactivar)"
   pt-pt: "Travão de paragem e libertação das portas: ligar/desligar"
   ka: "გაჩერების მუხრუჭი და კარის განბლოკვა ჩართ./გამორთ."
+  sr: "Stajališna kočnica i otključavanje vrata: uključi/isključi"
 
 "Only Station Brake (20h switch) On/Off":
   pt: "Freio de parada (interruptor 20h): ligar/desligar"
@@ -67932,6 +67971,7 @@ _version: 2
   es: "Solo freno de parada (interruptor 20h) (activar/desactivar)"
   pt-pt: "Só travão de paragem (interruptor 20h): ligar/desligar"
   ka: "მხოლოდ გაჩერების მუხრუჭი (20h გადამრთველი) ჩართ./გამორთ."
+  sr: "Samo kočnica za stajalište (prekidač 20h): uključi/isključi"
 
 "Warning Lights On/Off":
   pt: "Pisca-alerta: ligar/desligar"
@@ -67941,6 +67981,7 @@ _version: 2
   es: "Luces de emergencia (activar/desactivar)"
   pt-pt: "Luzes de emergência: ligar/desligar"
   ka: "საავარიო სიგნალი ჩართ./გამორთ."
+  sr: "Upozoravajuća svetla: uključi/isključi"
 
 "Set Blinker Left":
   pt: "Acionar seta esquerda"
@@ -67950,6 +67991,7 @@ _version: 2
   es: "Intermitente izquierdo"
   pt-pt: "Pisca para a esquerda"
   ka: "მარცხენა მოხვევის მაჩვენებლის ჩართვა"
+  sr: "Uključi levi pokazivač pravca"
 
 "Set Blinker Right":
   pt: "Acionar seta direita"
@@ -67959,6 +68001,7 @@ _version: 2
   es: "Intermitente derecho"
   pt-pt: "Pisca para a direita"
   ka: "მარჯვენა მოხვევის მაჩვენებლის ჩართვა"
+  sr: "Uključi desni pokazivač pravca"
 
 "Set Blinker Off":
   pt: "Desligar setas"
@@ -67968,6 +68011,7 @@ _version: 2
   es: "Apagar intermitente"
   pt-pt: "Desligar pisca"
   ka: "მოხვევის მაჩვენებლის გამორთვა"
+  sr: "Isključi pokazivače pravca"
 
 "Blinker Left via Off":
   pt: "Seta esquerda passando pela posição desligada"
@@ -67977,6 +68021,7 @@ _version: 2
   es: "Intermitente izquierdo pasando por apagado"
   pt-pt: "Pisca esquerdo (via desligado)"
   ka: "მარცხენა მოხვევის მაჩვენებელი გამორთვის გავლით"
+  sr: "Levi pokazivač pravca, preko isključenog položaja"
 
 "Blinker Right via Off":
   pt: "Seta direita passando pela posição desligada"
@@ -67986,6 +68031,7 @@ _version: 2
   es: "Intermitente derecho pasando por apagado"
   pt-pt: "Pisca direito (via desligado)"
   ka: "მარჯვენა მოხვევის მაჩვენებელი გამორთვის გავლით"
+  sr: "Desni pokazivač pravca, preko isključenog položaja"
 
 "Steering Left":
   pt: "Virar à esquerda"
@@ -67995,6 +68041,7 @@ _version: 2
   es: "Girar a la izquierda"
   pt-pt: "Virar à esquerda"
   ka: "საჭე მარცხნივ"
+  sr: "Skretanje ulevo"
 
 "Steering Right":
   pt: "Virar à direita"
@@ -68004,6 +68051,7 @@ _version: 2
   es: "Girar a la derecha"
   pt-pt: "Virar à direita"
   ka: "საჭე მარჯვნივ"
+  sr: "Skretanje udesno"
 
 "Steering Neutral":
   pt: "Centralizar direção"
@@ -68013,6 +68061,7 @@ _version: 2
   es: "Dirección al centro"
   pt-pt: "Direção ao centro"
   ka: "საჭე ნეიტრალურად"
+  sr: "Postavi upravljač u neutralni položaj"
 
 "Throttle Boost/Brake release":
   pt: "Reforço do acelerador / liberar freio"
@@ -68022,6 +68071,7 @@ _version: 2
   es: "Impulso de acelerador / soltar freno"
   pt-pt: "Reforço do acelerador / soltar o travão"
   ka: "აქსელერატორის გაძლიერება/მუხრუჭის მოხსნა"
+  sr: "Pojačaj gas / otpusti kočnicu"
 
 "Give Ticket":
   pt: "Entregar bilhete"
@@ -68031,6 +68081,7 @@ _version: 2
   es: "Dar billete"
   pt-pt: "Entregar bilhete"
   ka: "ბილეთის მიცემა"
+  sr: "Izdaj kartu"
 
 "Give Change":
   pt: "Entregar troco"
@@ -68040,6 +68091,7 @@ _version: 2
   es: "Dar cambio"
   pt-pt: "Entregar troco"
   ka: "ხურდის მიცემა"
+  sr: "Vrati kusur"
 
 "Take the change":
   pt: "Pegar troco"
@@ -68049,6 +68101,7 @@ _version: 2
   es: "Recoger el cambio"
   pt-pt: "Recolher o troco"
   ka: "ხურდის აღება"
+  sr: "Uzmi kusur"
 
 "Wiper On/Off":
   pt: "Limpador do para-brisa: ligar/desligar"
@@ -68058,6 +68111,7 @@ _version: 2
   es: "Limpiaparabrisas (activar/desactivar)"
   pt-pt: "Limpa-para-brisas: ligar/desligar"
   ka: "საწმენდი ჩართ./გამორთ."
+  sr: "Brisači: uključi/isključi"
 
 "Wiper Fast On/Off":
   pt: "Limpador rápido: ligar/desligar"
@@ -68067,6 +68121,7 @@ _version: 2
   es: "Limpiaparabrisas rápido (activar/desactivar)"
   pt-pt: "Limpa-para-brisas rápido: ligar/desligar"
   ka: "საწმენდი სწრაფად ჩართ./გამორთ."
+  sr: "Brzi brisači: uključi/isključi"
 
 "Wiper Intermittent On/Off":
   pt: "Limpador intermitente: ligar/desligar"
@@ -68076,6 +68131,7 @@ _version: 2
   es: "Limpiaparabrisas intermitente (activar/desactivar)"
   pt-pt: "Limpa-para-brisas intermitente: ligar/desligar"
   ka: "საწმენდი წყვეტილად ჩართ./გამორთ."
+  sr: "Brisači sa intervalnim radom: uključi/isključi"
 
 "Wiper: Washer":
   pt: "Limpador: lavador do para-brisa"
@@ -68085,6 +68141,7 @@ _version: 2
   es: "Limpiaparabrisas: lavado"
   pt-pt: "Limpa-para-brisas: esguicho"
   ka: "საწმენდი: მინის რეცხვა"
+  sr: "Brisači: uključi pranje vetrobranskog stakla"
 
 "Cassette Recorder Play":
   pt: "Reproduzir fita"
@@ -68094,6 +68151,7 @@ _version: 2
   es: "Casete: reproducir"
   pt-pt: "Leitor de cassetes: reproduzir"
   ka: "კასეტური მაგნიტოფონი: დაკვრა"
+  sr: "Pusti kasetu"
 
 "Cassette Recorder Stop":
   pt: "Parar fita"
@@ -68103,6 +68161,7 @@ _version: 2
   es: "Casete: parar"
   pt-pt: "Leitor de cassetes: parar"
   ka: "კასეტური მაგნიტოფონი: გაჩერება"
+  sr: "Zaustavi kasetu"
 
 "Release Curtain":
   pt: "Soltar cortina"
@@ -68112,6 +68171,7 @@ _version: 2
   es: "Soltar cortina"
   pt-pt: "Soltar a cortina"
   ka: "მზის ფარდის დაშვება"
+  sr: "Otpusti zavesu"
 
 "Move Rollsign To Next Notch":
   pt: "Avançar letreiro de lona uma posição"
@@ -68121,6 +68181,7 @@ _version: 2
   es: "Mover el rótulo de lona a la siguiente posición"
   pt-pt: "Mover o letreiro de rolo para a posição seguinte"
   ka: "მარშრუტის ტაბლოს გადაწევა შემდეგ პოზიციაზე"
+  sr: "Pomeri odredišnu rolnu za jedno polje unapred"
 
 "Move Rollsign To Previous Notch":
   pt: "Recuar letreiro de lona uma posição"
@@ -68130,6 +68191,7 @@ _version: 2
   es: "Mover el rótulo de lona a la posición anterior"
   pt-pt: "Mover o letreiro de rolo para a posição anterior"
   ka: "მარშრუტის ტაბლოს გადაწევა წინა პოზიციაზე"
+  sr: "Pomeri odredišnu rolnu za jedno polje unazad"
 
 "Wind Rollsign Down":
   pt: "Rolar letreiro de lona para baixo"
@@ -68139,6 +68201,7 @@ _version: 2
   es: "Bajar el rótulo de lona"
   pt-pt: "Enrolar o letreiro de rolo para baixo"
   ka: "მარშრუტის ტაბლოს დახვევა ქვემოთ"
+  sr: "Pomeri odredišnu rolnu nadole"
 
 "Wind Rollsign Up":
   pt: "Rolar letreiro de lona para cima"
@@ -68148,6 +68211,7 @@ _version: 2
   es: "Subir el rótulo de lona"
   pt-pt: "Enrolar o letreiro de rolo para cima"
   ka: "მარშრუტის ტაბლოს დახვევა ზემოთ"
+  sr: "Pomeri odredišnu rolnu nagore"
 
 "Select Terminus Rollsign":
   pt: "Selecionar destino do letreiro de lona"
@@ -68157,6 +68221,7 @@ _version: 2
   es: "Seleccionar rótulo de destino"
   pt-pt: "Selecionar o destino no letreiro de rolo"
   ka: "საბოლოო გაჩერების ტაბლოს არჩევა"
+  sr: "Izaberi krajnje odredište na odredišnoj rolni"
 
 "IBIS: Back":
   pt: "IBIS: voltar"
@@ -68166,6 +68231,7 @@ _version: 2
   es: "IBIS: atrás"
   pt-pt: "IBIS: voltar"
   ka: "IBIS: უკან"
+  sr: "IBIS: nazad"
 
 "IBIS: Delete":
   pt: "IBIS: apagar"
@@ -68175,6 +68241,7 @@ _version: 2
   es: "IBIS: borrar"
   pt-pt: "IBIS: apagar"
   ka: "IBIS: წაშლა"
+  sr: "IBIS: obriši"
 
 "IBIS: Enter":
   pt: "IBIS: confirmar"
@@ -68184,6 +68251,7 @@ _version: 2
   es: "IBIS: confirmar"
   pt-pt: "IBIS: confirmar"
   ka: "IBIS: შეყვანა"
+  sr: "IBIS: potvrdi"
 
 "IBIS: Forward":
   pt: "IBIS: avançar"
@@ -68193,6 +68261,7 @@ _version: 2
   es: "IBIS: avanzar"
   pt-pt: "IBIS: avançar"
   ka: "IBIS: წინ"
+  sr: "IBIS: napred"
 
 "IBIS: Forward (Mute)":
   pt: "IBIS: avançar (sem anúncio)"
@@ -68202,6 +68271,7 @@ _version: 2
   es: "IBIS: avanzar (sin aviso)"
   pt-pt: "IBIS: avançar (sem anúncio)"
   ka: "IBIS: წინ (უხმოდ)"
+  sr: "IBIS: sledeće (bez zvučnog signala)"
 
 "IBIS: Line/Course":
   pt: "IBIS: linha / serviço"
@@ -68211,6 +68281,7 @@ _version: 2
   es: "IBIS: línea / turno"
   pt-pt: "IBIS: linha / serviço"
   ka: "IBIS: ხაზი/კურსი"
+  sr: "IBIS: linija/vožnja"
 
 "IBIS: Route":
   pt: "IBIS: itinerário"
@@ -68220,6 +68291,7 @@ _version: 2
   es: "IBIS: ruta"
   pt-pt: "IBIS: percurso"
   ka: "IBIS: მარშრუტი"
+  sr: "IBIS: trasa"
 
 "IBIS: Terminus":
   pt: "IBIS: destino final"
@@ -68229,6 +68301,7 @@ _version: 2
   es: "IBIS: destino"
   pt-pt: "IBIS: terminal"
   ka: "IBIS: საბოლოო გაჩერება"
+  sr: "IBIS: krajnje odredište"
 
 "Ticket Printer: Cancel":
   pt: "Impressora de bilhetes: cancelar"
@@ -68238,6 +68311,7 @@ _version: 2
   es: "Impresora de billetes: cancelar"
   pt-pt: "Impressora de bilhetes: cancelar"
   ka: "ბილეთის პრინტერი: გაუქმება"
+  sr: "Štampač karata: otkaži"
 
 "Ticket Printer: Enter":
   pt: "Impressora de bilhetes: confirmar"
@@ -68247,6 +68321,7 @@ _version: 2
   es: "Impresora de billetes: confirmar"
   pt-pt: "Impressora de bilhetes: confirmar"
   ka: "ბილეთის პრინტერი: შეყვანა"
+  sr: "Štampač karata: potvrdi"
 
 "Manuel Gearbox: Reverse Gear":
   pt: "Câmbio manual: marcha à ré"
@@ -68256,6 +68331,7 @@ _version: 2
   es: "Caja manual: marcha atrás"
   pt-pt: "Caixa manual: marcha-atrás"
   ka: "მექანიკური კოლოფი: უკანა სვლა"
+  sr: "Ručni menjač: brzina za vožnju unazad"
 
 "Manuel Gearbox: No Gear":
   pt: "Câmbio manual: ponto morto"
@@ -68265,6 +68341,7 @@ _version: 2
   es: "Caja manual: punto muerto"
   pt-pt: "Caixa manual: ponto morto"
   ka: "მექანიკური კოლოფი: ნეიტრალი"
+  sr: "Ručni menjač: neutralni položaj"
 
 "Manuel Gearbox: Next Gear":
   pt: "Câmbio manual: próxima marcha"
@@ -68274,6 +68351,7 @@ _version: 2
   es: "Caja manual: marcha siguiente"
   pt-pt: "Caixa manual: mudança seguinte"
   ka: "მექანიკური კოლოფი: შემდეგი გადაცემა"
+  sr: "Ručni menjač: sledeća brzina"
 
 "Manuel Gearbox: Prev. Gear":
   pt: "Câmbio manual: marcha anterior"
@@ -68283,6 +68361,7 @@ _version: 2
   es: "Caja manual: marcha anterior"
   pt-pt: "Caixa manual: mudança anterior"
   ka: "მექანიკური კოლოფი: წინა გადაცემა"
+  sr: "Ručni menjač: prethodna brzina"
 
 "Switch Steering Visible/Invisible":
   pt: "Mostrar / ocultar volante"
@@ -68292,6 +68371,7 @@ _version: 2
   es: "Mostrar/ocultar el volante"
   pt-pt: "Mostrar / ocultar o volante"
   ka: "საჭის ჩვენება/დამალვა"
+  sr: "Prikaži/sakrij volan"
 
 "Automatic Gearbox: 1":
   pt: "Câmbio automático: 1"
@@ -68301,6 +68381,7 @@ _version: 2
   es: "Caja automática: 1"
   pt-pt: "Caixa automática: 1"
   ka: "ავტომატური კოლოფი: 1"
+  sr: "Automatski menjač: 1"
 
 "Automatic Gearbox: 2":
   pt: "Câmbio automático: 2"
@@ -68310,6 +68391,7 @@ _version: 2
   es: "Caja automática: 2"
   pt-pt: "Caixa automática: 2"
   ka: "ავტომატური კოლოფი: 2"
+  sr: "Automatski menjač: 2"
 
 "Automatic Gearbox: D":
   pt: "Câmbio automático: D"
@@ -68319,6 +68401,7 @@ _version: 2
   es: "Caja automática: D"
   pt-pt: "Caixa automática: D"
   ka: "ავტომატური კოლოფი: D"
+  sr: "Automatski menjač: D"
 
 "Automatic Gearbox: N":
   pt: "Câmbio automático: N"
@@ -68328,6 +68411,7 @@ _version: 2
   es: "Caja automática: N"
   pt-pt: "Caixa automática: N"
   ka: "ავტომატური კოლოფი: N"
+  sr: "Automatski menjač: N"
 
 "Automatic Gearbox: R":
   pt: "Câmbio automático: R"
@@ -68337,6 +68421,7 @@ _version: 2
   es: "Caja automática: R"
   pt-pt: "Caixa automática: R"
   ka: "ავტომატური კოლოფი: R"
+  sr: "Automatski menjač: R"
 
 "Manuel Gearbox: 1st Gear":
   pt: "Câmbio manual: 1ª marcha"
@@ -68346,6 +68431,7 @@ _version: 2
   es: "Caja manual: 1.ª marcha"
   pt-pt: "Caixa manual: 1.ª mudança"
   ka: "მექანიკური კოლოფი: 1-ლი გადაცემა"
+  sr: "Ručni menjač: 1. brzina"
 
 "Manual Gearbox: 1st Gear (only while gamectrler button is pressed)":
   pt: "Câmbio manual: 1ª marcha (enquanto o botão do controle estiver pressionado)"
@@ -68355,6 +68441,7 @@ _version: 2
   es: "Caja manual: 1.ª marcha (solo mientras se pulsa el botón de gamectrler)"
   pt-pt: "Caixa manual: 1.ª mudança (só enquanto o botão do comando estiver premido)"
   ka: "მექანიკური კოლოფი: 1-ლი გადაცემა (მხოლოდ gamectrler ღილაკის დაჭერისას)"
+  sr: "Ručni menjač: 1. brzina (samo dok je dugme na kontroleru pritisnuto)"
 
 "Manuel Gearbox: 2nd Gear":
   pt: "Câmbio manual: 2ª marcha"
@@ -68364,6 +68451,7 @@ _version: 2
   es: "Caja manual: 2.ª marcha"
   pt-pt: "Caixa manual: 2.ª mudança"
   ka: "მექანიკური კოლოფი: მე-2 გადაცემა"
+  sr: "Ručni menjač: 2. brzina"
 
 "Manual Gearbox: 2nd Gear (only while gamectrler button is pressed)":
   pt: "Câmbio manual: 2ª marcha (enquanto o botão do controle estiver pressionado)"
@@ -68373,6 +68461,7 @@ _version: 2
   es: "Caja manual: 2.ª marcha (solo mientras se pulsa el botón de gamectrler)"
   pt-pt: "Caixa manual: 2.ª mudança (só enquanto o botão do comando estiver premido)"
   ka: "მექანიკური კოლოფი: მე-2 გადაცემა (მხოლოდ gamectrler ღილაკის დაჭერისას)"
+  sr: "Ručni menjač: 2. brzina (samo dok je dugme na kontroleru pritisnuto)"
 
 "Manuel Gearbox: 3rd Gear":
   pt: "Câmbio manual: 3ª marcha"
@@ -68382,6 +68471,7 @@ _version: 2
   es: "Caja manual: 3.ª marcha"
   pt-pt: "Caixa manual: 3.ª mudança"
   ka: "მექანიკური კოლოფი: მე-3 გადაცემა"
+  sr: "Ručni menjač: 3. brzina"
 
 "Manual Gearbox: 3rd Gear (only while gamectrler button is pressed)":
   pt: "Câmbio manual: 3ª marcha (enquanto o botão do controle estiver pressionado)"
@@ -68391,6 +68481,7 @@ _version: 2
   es: "Caja manual: 3.ª marcha (solo mientras se pulsa el botón de gamectrler)"
   pt-pt: "Caixa manual: 3.ª mudança (só enquanto o botão do comando estiver premido)"
   ka: "მექანიკური კოლოფი: მე-3 გადაცემა (მხოლოდ gamectrler ღილაკის დაჭერისას)"
+  sr: "Ručni menjač: 3. brzina (samo dok je dugme na kontroleru pritisnuto)"
 
 "Manuel Gearbox: 4th Gear":
   pt: "Câmbio manual: 4ª marcha"
@@ -68400,6 +68491,7 @@ _version: 2
   es: "Caja manual: 4.ª marcha"
   pt-pt: "Caixa manual: 4.ª mudança"
   ka: "მექანიკური კოლოფი: მე-4 გადაცემა"
+  sr: "Ručni menjač: 4. brzina"
 
 "Manual Gearbox: 4th Gear (only while gamectrler button is pressed)":
   pt: "Câmbio manual: 4ª marcha (enquanto o botão do controle estiver pressionado)"
@@ -68409,6 +68501,7 @@ _version: 2
   es: "Caja manual: 4.ª marcha (solo mientras se pulsa el botón de gamectrler)"
   pt-pt: "Caixa manual: 4.ª mudança (só enquanto o botão do comando estiver premido)"
   ka: "მექანიკური კოლოფი: მე-4 გადაცემა (მხოლოდ gamectrler ღილაკის დაჭერისას)"
+  sr: "Ručni menjač: 4. brzina (samo dok je dugme na kontroleru pritisnuto)"
 
 "Manuel Gearbox: 5th Gear":
   pt: "Câmbio manual: 5ª marcha"
@@ -68418,6 +68511,7 @@ _version: 2
   es: "Caja manual: 5.ª marcha"
   pt-pt: "Caixa manual: 5.ª mudança"
   ka: "მექანიკური კოლოფი: მე-5 გადაცემა"
+  sr: "Ručni menjač: 5. brzina"
 
 "Manual Gearbox: 5th Gear (only while gamectrler button is pressed)":
   pt: "Câmbio manual: 5ª marcha (enquanto o botão do controle estiver pressionado)"
@@ -68427,6 +68521,7 @@ _version: 2
   es: "Caja manual: 5.ª marcha (solo mientras se pulsa el botón de gamectrler)"
   pt-pt: "Caixa manual: 5.ª mudança (só enquanto o botão do comando estiver premido)"
   ka: "მექანიკური კოლოფი: მე-5 გადაცემა (მხოლოდ gamectrler ღილაკის დაჭერისას)"
+  sr: "Ručni menjač: 5. brzina (samo dok je dugme na kontroleru pritisnuto)"
 
 "Manuel Gearbox: 6th Gear":
   pt: "Câmbio manual: 6ª marcha"
@@ -68436,6 +68531,7 @@ _version: 2
   es: "Caja manual: 6.ª marcha"
   pt-pt: "Caixa manual: 6.ª mudança"
   ka: "მექანიკური კოლოფი: მე-6 გადაცემა"
+  sr: "Ručni menjač: 6. brzina"
 
 "Manual Gearbox: 6th Gear (only while gamectrler button is pressed)":
   pt: "Câmbio manual: 6ª marcha (enquanto o botão do controle estiver pressionado)"
@@ -68445,6 +68541,7 @@ _version: 2
   es: "Caja manual: 6.ª marcha (solo mientras se pulsa el botón de gamectrler)"
   pt-pt: "Caixa manual: 6.ª mudança (só enquanto o botão do comando estiver premido)"
   ka: "მექანიკური კოლოფი: მე-6 გადაცემა (მხოლოდ gamectrler ღილაკის დაჭერისას)"
+  sr: "Ručni menjač: 6. brzina (samo dok je dugme na kontroleru pritisnuto)"
 
 "Manual Gearbox: Reverse Gear (only while gamectrler button is pressed)":
   pt: "Câmbio manual: marcha à ré (enquanto o botão do controle estiver pressionado)"
@@ -68454,6 +68551,7 @@ _version: 2
   es: "Caja manual: marcha atrás (solo mientras se pulsa el botón de gamectrler)"
   pt-pt: "Caixa manual: marcha-atrás (só enquanto o botão do comando estiver premido)"
   ka: "მექანიკური კოლოფი: უკანა სვლა (მხოლოდ gamectrler ღილაკის დაჭერისას)"
+  sr: "Ručni menjač: hod unazad (samo dok je dugme na kontroleru pritisnuto)"
 
 "IBIS: 0":
   pt: "IBIS: 0"
@@ -68463,6 +68561,7 @@ _version: 2
   es: "IBIS: 0"
   pt-pt: "IBIS: 0"
   ka: "IBIS: 0"
+  sr: "IBIS: 0"
 
 "IBIS: 1":
   pt: "IBIS: 1"
@@ -68472,6 +68571,7 @@ _version: 2
   es: "IBIS: 1"
   pt-pt: "IBIS: 1"
   ka: "IBIS: 1"
+  sr: "IBIS: 1"
 
 "IBIS: 2":
   pt: "IBIS: 2"
@@ -68481,6 +68581,7 @@ _version: 2
   es: "IBIS: 2"
   pt-pt: "IBIS: 2"
   ka: "IBIS: 2"
+  sr: "IBIS: 2"
 
 "IBIS: 3":
   pt: "IBIS: 3"
@@ -68490,6 +68591,7 @@ _version: 2
   es: "IBIS: 3"
   pt-pt: "IBIS: 3"
   ka: "IBIS: 3"
+  sr: "IBIS: 3"
 
 "IBIS: 4":
   pt: "IBIS: 4"
@@ -68499,6 +68601,7 @@ _version: 2
   es: "IBIS: 4"
   pt-pt: "IBIS: 4"
   ka: "IBIS: 4"
+  sr: "IBIS: 4"
 
 "IBIS: 5":
   pt: "IBIS: 5"
@@ -68508,6 +68611,7 @@ _version: 2
   es: "IBIS: 5"
   pt-pt: "IBIS: 5"
   ka: "IBIS: 5"
+  sr: "IBIS: 5"
 
 "IBIS: 6":
   pt: "IBIS: 6"
@@ -68517,6 +68621,7 @@ _version: 2
   es: "IBIS: 6"
   pt-pt: "IBIS: 6"
   ka: "IBIS: 6"
+  sr: "IBIS: 6"
 
 "IBIS: 7":
   pt: "IBIS: 7"
@@ -68526,6 +68631,7 @@ _version: 2
   es: "IBIS: 7"
   pt-pt: "IBIS: 7"
   ka: "IBIS: 7"
+  sr: "IBIS: 7"
 
 "IBIS: 8":
   pt: "IBIS: 8"
@@ -68535,6 +68641,7 @@ _version: 2
   es: "IBIS: 8"
   pt-pt: "IBIS: 8"
   ka: "IBIS: 8"
+  sr: "IBIS: 8"
 
 "IBIS: 9":
   pt: "IBIS: 9"
@@ -68544,6 +68651,7 @@ _version: 2
   es: "IBIS: 9"
   pt-pt: "IBIS: 9"
   ka: "IBIS: 9"
+  sr: "IBIS: 9"
 
 "Ticket Printer: Select Ticket 1":
   pt: "Impressora de bilhetes: selecionar bilhete 1"
@@ -68553,6 +68661,7 @@ _version: 2
   es: "Impresora de billetes: elegir billete 1"
   pt-pt: "Impressora de bilhetes: selecionar bilhete 1"
   ka: "ბილეთის პრინტერი: ბილეთი 1-ის არჩევა"
+  sr: "Štampač karata: izaberi kartu 1"
 
 "Ticket Printer: Select Ticket 2":
   pt: "Impressora de bilhetes: selecionar bilhete 2"
@@ -68562,6 +68671,7 @@ _version: 2
   es: "Impresora de billetes: elegir billete 2"
   pt-pt: "Impressora de bilhetes: selecionar bilhete 2"
   ka: "ბილეთის პრინტერი: ბილეთი 2-ის არჩევა"
+  sr: "Štampač karata: izaberi kartu 2"
 
 "Ticket Printer: Select Ticket 3":
   pt: "Impressora de bilhetes: selecionar bilhete 3"
@@ -68571,6 +68681,7 @@ _version: 2
   es: "Impresora de billetes: elegir billete 3"
   pt-pt: "Impressora de bilhetes: selecionar bilhete 3"
   ka: "ბილეთის პრინტერი: ბილეთი 3-ის არჩევა"
+  sr: "Štampač karata: izaberi kartu 3"
 
 "Ticket Printer: Select Ticket 4":
   pt: "Impressora de bilhetes: selecionar bilhete 4"
@@ -68580,6 +68691,7 @@ _version: 2
   es: "Impresora de billetes: elegir billete 4"
   pt-pt: "Impressora de bilhetes: selecionar bilhete 4"
   ka: "ბილეთის პრინტერი: ბილეთი 4-ის არჩევა"
+  sr: "Štampač karata: izaberi kartu 4"
 
 "Ticket Printer: Select Ticket 5":
   pt: "Impressora de bilhetes: selecionar bilhete 5"
@@ -68589,6 +68701,7 @@ _version: 2
   es: "Impresora de billetes: elegir billete 5"
   pt-pt: "Impressora de bilhetes: selecionar bilhete 5"
   ka: "ბილეთის პრინტერი: ბილეთი 5-ის არჩევა"
+  sr: "Štampač karata: izaberi kartu 5"
 
 "Select Line Rollsign 1":
   pt: "Selecionar linha do letreiro de lona 1"
@@ -68598,6 +68711,7 @@ _version: 2
   es: "Elegir rótulo de línea 1"
   pt-pt: "Selecionar linha no letreiro de rolo 1"
   ka: "ხაზის ტაბლო 1-ის არჩევა"
+  sr: "Izaberi liniju na rolo-displeju 1"
 
 "Select Line Rollsign 2":
   pt: "Selecionar linha do letreiro de lona 2"
@@ -68607,6 +68721,7 @@ _version: 2
   es: "Elegir rótulo de línea 2"
   pt-pt: "Selecionar linha no letreiro de rolo 2"
   ka: "ხაზის ტაბლო 2-ის არჩევა"
+  sr: "Izaberi liniju na rolo-displeju 2"
 
 "Select Line Rollsign 3":
   pt: "Selecionar linha do letreiro de lona 3"
@@ -68616,6 +68731,7 @@ _version: 2
   es: "Elegir rótulo de línea 3"
   pt-pt: "Selecionar linha no letreiro de rolo 3"
   ka: "ხაზის ტაბლო 3-ის არჩევა"
+  sr: "Izaberi liniju na rolo-displeju 3"
 
 "Cashdesk: give 0.05":
   pt: "Mesa de cobrança: entregar 0,05"
@@ -68625,6 +68741,7 @@ _version: 2
   es: "Caja: dar 0.05"
   pt-pt: "Caixa: entregar 0,05"
   ka: "სალარო: მიცემა 0.05"
+  sr: "Blagajna: daj 0,05"
 
 "Cashdesk: give 0.10":
   pt: "Mesa de cobrança: entregar 0,10"
@@ -68634,6 +68751,7 @@ _version: 2
   es: "Caja: dar 0.10"
   pt-pt: "Caixa: entregar 0,10"
   ka: "სალარო: მიცემა 0.10"
+  sr: "Blagajna: daj 0,10"
 
 "Cashdesk: give 0.15":
   pt: "Mesa de cobrança: entregar 0,15"
@@ -68643,6 +68761,7 @@ _version: 2
   es: "Caja: dar 0.15"
   pt-pt: "Caixa: entregar 0,15"
   ka: "სალარო: მიცემა 0.15"
+  sr: "Blagajna: daj 0,15"
 
 "Cashdesk: give 0.30":
   pt: "Mesa de cobrança: entregar 0,30"
@@ -68652,6 +68771,7 @@ _version: 2
   es: "Caja: dar 0.30"
   pt-pt: "Caixa: entregar 0,30"
   ka: "სალარო: მიცემა 0.30"
+  sr: "Blagajna: daj 0,30"
 
 "Cashdesk: give 0.50":
   pt: "Mesa de cobrança: entregar 0,50"
@@ -68661,6 +68781,7 @@ _version: 2
   es: "Caja: dar 0.50"
   pt-pt: "Caixa: entregar 0,50"
   ka: "სალარო: მიცემა 0.50"
+  sr: "Blagajna: daj 0,50"
 
 "Cashdesk: give 1.00":
   pt: "Mesa de cobrança: entregar 1,00"
@@ -68670,6 +68791,7 @@ _version: 2
   es: "Caja: dar 1.00"
   pt-pt: "Caixa: entregar 1,00"
   ka: "სალარო: მიცემა 1.00"
+  sr: "Blagajna: daj 1,00"
 
 "Cashdesk: give 1.50":
   pt: "Mesa de cobrança: entregar 1,50"
@@ -68679,6 +68801,7 @@ _version: 2
   es: "Caja: dar 1.50"
   pt-pt: "Caixa: entregar 1,50"
   ka: "სალარო: მიცემა 1.50"
+  sr: "Blagajna: daj 1,50"
 
 "Cashdesk: give 2.00":
   pt: "Mesa de cobrança: entregar 2,00"
@@ -68688,6 +68811,7 @@ _version: 2
   es: "Caja: dar 2.00"
   pt-pt: "Caixa: entregar 2,00"
   ka: "სალარო: მიცემა 2.00"
+  sr: "Blagajna: daj 2,00"
 
 "Cashdesk: give 4.00":
   pt: "Mesa de cobrança: entregar 4,00"
@@ -68697,6 +68821,7 @@ _version: 2
   es: "Caja: dar 4.00"
   pt-pt: "Caixa: entregar 4,00"
   ka: "სალარო: მიცემა 4.00"
+  sr: "Blagajna: daj 4,00"
 
 "Cashdesk: give 5.00":
   pt: "Mesa de cobrança: entregar 5,00"
@@ -68706,6 +68831,7 @@ _version: 2
   es: "Caja: dar 5.00"
   pt-pt: "Caixa: entregar 5,00"
   ka: "სალარო: მიცემა 5.00"
+  sr: "Blagajna: daj 5,00"
 
 "Cashdesk: give 8.00":
   pt: "Mesa de cobrança: entregar 8,00"
@@ -68715,6 +68841,7 @@ _version: 2
   es: "Caja: dar 8.00"
   pt-pt: "Caixa: entregar 8,00"
   ka: "სალარო: მიცემა 8.00"
+  sr: "Blagajna: daj 8,00"
 
 "Cashdesk: give 15.00":
   pt: "Mesa de cobrança: entregar 15,00"
@@ -68724,6 +68851,7 @@ _version: 2
   es: "Caja: dar 15.00"
   pt-pt: "Caixa: entregar 15,00"
   ka: "სალარო: მიცემა 15.00"
+  sr: "Blagajna: daj 15,00"
 
 "SD83: Rollsign Line Start":
   pt: "SD83: iniciar letreiro de linha"
@@ -68733,6 +68861,7 @@ _version: 2
   es: "SD83: rótulo de línea: inicio"
   pt-pt: "SD83: iniciar letreiro de linha"
   ka: "SD83: ხაზის ტაბლო, დაწყება"
+  sr: "SD83: pokreni rolo-displej linije"
 
 "SD83: Rollsign Line Select 100s +":
   pt: "SD83: aumentar centenas do letreiro de linha"
@@ -68742,6 +68871,7 @@ _version: 2
   es: "SD83: rótulo de línea: centenas +"
   pt-pt: "SD83: letreiro de linha, centenas +"
   ka: "SD83: ხაზის ტაბლო, ასეულების არჩევა +"
+  sr: "SD83: povećaj stotine na rolo-displeju linije"
 
 "SD83: Rollsign Line Select 100s -":
   pt: "SD83: diminuir centenas do letreiro de linha"
@@ -68751,6 +68881,7 @@ _version: 2
   es: "SD83: rótulo de línea: centenas -"
   pt-pt: "SD83: letreiro de linha, centenas -"
   ka: "SD83: ხაზის ტაბლო, ასეულების არჩევა -"
+  sr: "SD83: smanji stotine na rolo-displeju linije"
 
 "SD83: Rollsign Line Select 10s +":
   pt: "SD83: aumentar dezenas do letreiro de linha"
@@ -68760,6 +68891,7 @@ _version: 2
   es: "SD83: rótulo de línea: decenas +"
   pt-pt: "SD83: letreiro de linha, dezenas +"
   ka: "SD83: ხაზის ტაბლო, ათეულების არჩევა +"
+  sr: "SD83: povećaj desetice na rolo-displeju linije"
 
 "SD83: Rollsign Line Select 10s -":
   pt: "SD83: diminuir dezenas do letreiro de linha"
@@ -68769,6 +68901,7 @@ _version: 2
   es: "SD83: rótulo de línea: decenas -"
   pt-pt: "SD83: letreiro de linha, dezenas -"
   ka: "SD83: ხაზის ტაბლო, ათეულების არჩევა -"
+  sr: "SD83: smanji desetice na rolo-displeju linije"
 
 "SD83: Rollsign Line Select 1s +":
   pt: "SD83: aumentar unidades do letreiro de linha"
@@ -68778,6 +68911,7 @@ _version: 2
   es: "SD83: rótulo de línea: unidades +"
   pt-pt: "SD83: letreiro de linha, unidades +"
   ka: "SD83: ხაზის ტაბლო, ერთეულების არჩევა +"
+  sr: "SD83: povećaj jedinice na rolo-displeju linije"
 
 "SD83: Rollsign Line Select 1s -":
   pt: "SD83: diminuir unidades do letreiro de linha"
@@ -68787,6 +68921,7 @@ _version: 2
   es: "SD83: rótulo de línea: unidades -"
   pt-pt: "SD83: letreiro de linha, unidades -"
   ka: "SD83: ხაზის ტაბლო, ერთეულების არჩევა -"
+  sr: "SD83: smanji jedinice na rolo-displeju linije"
 
 "SD83: Rollsign Terminus Start":
   pt: "SD83: iniciar letreiro de destino final"
@@ -68796,6 +68931,7 @@ _version: 2
   es: "SD83: rótulo de destino: inicio"
   pt-pt: "SD83: iniciar letreiro de destino"
   ka: "SD83: საბოლოო გაჩერების ტაბლო, დაწყება"
+  sr: "SD83: pokreni odredišnu rolnu"
 
 "SD83: Rollsign Terminus Select 100s +":
   pt: "SD83: aumentar centenas do letreiro de destino final"
@@ -68805,6 +68941,7 @@ _version: 2
   es: "SD83: rótulo de destino: centenas +"
   pt-pt: "SD83: letreiro de destino, centenas +"
   ka: "SD83: საბოლოო გაჩერების ტაბლო, ასეულების არჩევა +"
+  sr: "SD83: povećaj stotine na odredišnoj rolni"
 
 "SD83: Rollsign Terminus Select 100s -":
   pt: "SD83: diminuir centenas do letreiro de destino final"
@@ -68814,6 +68951,7 @@ _version: 2
   es: "SD83: rótulo de destino: centenas -"
   pt-pt: "SD83: letreiro de destino, centenas -"
   ka: "SD83: საბოლოო გაჩერების ტაბლო, ასეულების არჩევა -"
+  sr: "SD83: smanji stotine na odredišnoj rolni"
 
 "SD83: Rollsign Terminus Select 10s +":
   pt: "SD83: aumentar dezenas do letreiro de destino final"
@@ -68823,6 +68961,7 @@ _version: 2
   es: "SD83: rótulo de destino: decenas +"
   pt-pt: "SD83: letreiro de destino, dezenas +"
   ka: "SD83: საბოლოო გაჩერების ტაბლო, ათეულების არჩევა +"
+  sr: "SD83: povećaj desetice na odredišnoj rolni"
 
 "SD83: Rollsign Terminus Select 10s -":
   pt: "SD83: diminuir dezenas do letreiro de destino final"
@@ -68832,6 +68971,7 @@ _version: 2
   es: "SD83: rótulo de destino: decenas -"
   pt-pt: "SD83: letreiro de destino, dezenas -"
   ka: "SD83: საბოლოო გაჩერების ტაბლო, ათეულების არჩევა -"
+  sr: "SD83: smanji desetice na odredišnoj rolni"
 
 "SD83: Rollsign Terminus Select 1s +":
   pt: "SD83: aumentar unidades do letreiro de destino final"
@@ -68841,6 +68981,7 @@ _version: 2
   es: "SD83: rótulo de destino: unidades +"
   pt-pt: "SD83: letreiro de destino, unidades +"
   ka: "SD83: საბოლოო გაჩერების ტაბლო, ერთეულების არჩევა +"
+  sr: "SD83: povećaj jedinice na odredišnoj rolni"
 
 "SD83: Rollsign Terminus Select 1s -":
   pt: "SD83: diminuir unidades do letreiro de destino final"
@@ -68850,6 +68991,7 @@ _version: 2
   es: "SD83: rótulo de destino: unidades -"
   pt-pt: "SD83: letreiro de destino, unidades -"
   ka: "SD83: საბოლოო გაჩერების ტაბლო, ერთეულების არჩევა -"
+  sr: "SD83: smanji jedinice na odredišnoj rolni"
 
 " (outside)":
   pt: " (externo)"
@@ -68859,6 +69001,7 @@ _version: 2
   es: " (exterior)"
   pt-pt: " (exterior)"
   ka: " (გარედან)"
+  sr: " (spolja)"
 "Mirror panels on the screen":
   de: "Spiegelpanels auf dem Bildschirm"
   fr: "Rétroviseurs à l'écran"
@@ -69219,6 +69362,366 @@ _version: 2
   sv: "Inte för den här kartan"
   sr: "Ne za ovu mapu"
   ka: "ამ რუკისთვის არა"
+"MileZero integration":
+  ru: "Интеграция MileZero"
+  de: "MileZero-Integration"
+  fr: "Intégration MileZero"
+  es: "Integración de MileZero"
+  be: "Інтэграцыя MileZero"
+  ca: "Integració de MileZero"
+  cs: "Integrace MileZero"
+  hi: "MileZero इंटीग्रेशन"
+  hu: "MileZero-integráció"
+  id: "Integrasi MileZero"
+  it: "Integrazione MileZero"
+  ja: "MileZero連携"
+  kk: "MileZero интеграциясы"
+  ko: "MileZero 연동"
+  ms: "Integrasi MileZero"
+  nl: "MileZero-integratie"
+  pl: "Integracja MileZero"
+  pt: "Integração com o MileZero"
+  pt-pt: "Integração com o MileZero"
+  sr: "Integracija MileZero"
+  sv: "MileZero-integration"
+  th: "การเชื่อมต่อ MileZero"
+  tl: "Integrasyon ng MileZero"
+  tr: "MileZero entegrasyonu"
+  uk: "Інтеграція MileZero"
+  vi: "Tích hợp MileZero"
+  zh: "MileZero 集成"
+  zh-tw: "MileZero 整合"
+  ka: "MileZero-ის ინტეგრაცია"
+"The MileZero radio over the navigator: what plays, a play button (paused until you press it), song requests; the stream quality follows your connection":
+  ru: "Радио MileZero над навигатором: что играет, кнопка воспроизведения (пока не нажата, пауза), заказ песен; качество потока подстраивается под соединение"
+  de: "Das MileZero-Radio über dem Navigator: was läuft, eine Wiedergabetaste (pausiert, bis Sie sie drücken), Musikwünsche; die Streamqualität folgt Ihrer Verbindung"
+  fr: "La radio MileZero au-dessus du navigateur : ce qui passe, un bouton de lecture (en pause tant que vous n'appuyez pas), demandes de morceaux ; la qualité du flux suit votre connexion"
+  es: "La radio MileZero sobre el navegador: qué suena, un botón de reproducción (en pausa hasta que lo pulses), peticiones de canciones; la calidad del flujo sigue tu conexión"
+  be: "Радыё MileZero над навігатарам: што грае, кнопка прайгравання (паўза, пакуль не націснеце), заказ песень; якасць патоку падладжваецца пад злучэнне"
+  ca: "La ràdio MileZero sobre el navegador: què sona, un botó de reproducció (en pausa fins que el premeu), peticions de cançons; la qualitat del flux segueix la vostra connexió"
+  cs: "Rádio MileZero nad navigací: co hraje, tlačítko přehrávání (pozastaveno, dokud ho nestisknete), žádosti o písně; kvalita proudu se řídí vaším připojením"
+  hi: "नेविगेटर के ऊपर MileZero रेडियो: क्या बज रहा है, प्ले बटन (दबाने तक रुका रहता है), गाने के अनुरोध; स्ट्रीम की गुणवत्ता आपके कनेक्शन के अनुसार बदलती है"
+  hu: "A MileZero rádió a navigátor felett: mi szól, lejátszás gomb (megnyomásig szünetel), dalkérések; a stream minősége a kapcsolatodhoz igazodik"
+  id: "Radio MileZero di atas navigator: apa yang diputar, tombol putar (dijeda sampai Anda menekannya), permintaan lagu; kualitas stream mengikuti koneksi Anda"
+  it: "La radio MileZero sopra il navigatore: cosa suona, un pulsante di riproduzione (in pausa finché non lo premi), richieste di brani; la qualità dello stream segue la tua connessione"
+  ja: "ナビの上に表示されるMileZeroラジオ：再生中の曲、再生ボタン（押すまで一時停止）、リクエスト。ストリーム品質は回線に合わせて変わります"
+  kk: "Навигатор үстіндегі MileZero радиосы: не ойнап тұр, ойнату түймесі (басқанша кідіртілген), ән сұрау; ағын сапасы байланысыңызға бейімделеді"
+  ko: "내비게이터 위의 MileZero 라디오: 재생 중인 곡, 재생 버튼(누르기 전까지 일시정지), 곡 신청; 스트림 품질은 연결 상태에 맞춰집니다"
+  ms: "Radio MileZero di atas navigator: apa yang dimainkan, butang main (dijeda sehingga anda menekannya), permintaan lagu; kualiti strim mengikut sambungan anda"
+  nl: "De MileZero-radio boven de navigator: wat er speelt, een afspeelknop (gepauzeerd tot je erop drukt), verzoeknummers; de streamkwaliteit volgt je verbinding"
+  pl: "Radio MileZero nad nawigacją: co gra, przycisk odtwarzania (wstrzymane, dopóki go nie naciśniesz), prośby o piosenki; jakość strumienia dopasowuje się do połączenia"
+  pt: "A rádio MileZero sobre o navegador: o que está a tocar, um botão de reprodução (em pausa até o premir), pedidos de músicas; a qualidade da transmissão segue a sua ligação"
+  pt-pt: "A rádio MileZero sobre o navegador: o que está a tocar, um botão de reprodução (em pausa até o premir), pedidos de músicas; a qualidade da transmissão segue a sua ligação"
+  sr: "Radio MileZero iznad navigatora: šta svira, dugme za reprodukciju (pauzirano dok ga ne pritisnete), zahtevi za pesme; kvalitet strima prati vašu vezu"
+  sv: "MileZero-radion ovanför navigatorn: vad som spelas, en uppspelningsknapp (pausad tills du trycker), önskemål om låtar; strömmens kvalitet följer din anslutning"
+  th: "วิทยุ MileZero เหนือเนวิเกเตอร์: เพลงที่กำลังเล่น ปุ่มเล่น (หยุดไว้จนกว่าจะกด) การขอเพลง คุณภาพสตรีมปรับตามการเชื่อมต่อของคุณ"
+  tl: "Ang MileZero radio sa ibabaw ng navigator: kung ano ang tumutugtog, play button (naka-pause hanggang pindutin mo), mga request ng kanta; sumusunod ang kalidad ng stream sa koneksyon mo"
+  tr: "Navigatörün üstünde MileZero radyosu: çalan parça, oynat düğmesi (basana kadar duraklatılmış), şarkı istekleri; yayın kalitesi bağlantınıza uyar"
+  uk: "Радіо MileZero над навігатором: що грає, кнопка відтворення (пауза, доки не натиснете), замовлення пісень; якість потоку підлаштовується під з'єднання"
+  vi: "Radio MileZero phía trên trình điều hướng: bài đang phát, nút phát (tạm dừng cho đến khi bạn bấm), yêu cầu bài hát; chất lượng luồng theo kết nối của bạn"
+  zh: "导航上方的 MileZero 电台：正在播放的内容、播放按钮（按下前保持暂停）、点歌；音质随网络连接调整"
+  zh-tw: "導航上方的 MileZero 電台：正在播放的內容、播放按鈕（按下前保持暫停）、點歌；音質隨網路連線調整"
+  ka: "MileZero-ს რადიო ნავიგატორის ზემოთ: რა უკრავს, დაკვრის ღილაკი (დაპაუზებულია, სანამ არ დააჭერთ), სიმღერების მოთხოვნა; ნაკადის ხარისხი თქვენს კავშირს მისდევს"
+"Loading":
+  ru: "Загрузка"
+  de: "Lädt"
+  fr: "Chargement"
+  es: "Cargando"
+  be: "Загрузка"
+  ca: "Carregant"
+  cs: "Načítání"
+  hi: "लोड हो रहा है"
+  hu: "Betöltés"
+  id: "Memuat"
+  it: "Caricamento"
+  ja: "読み込み中"
+  kk: "Жүктелуде"
+  ko: "로딩 중"
+  ms: "Memuatkan"
+  nl: "Laden"
+  pl: "Wczytywanie"
+  pt: "A carregar"
+  pt-pt: "A carregar"
+  sr: "Učitavanje"
+  sv: "Läser in"
+  th: "กำลังโหลด"
+  tl: "Naglo-load"
+  tr: "Yükleniyor"
+  uk: "Завантаження"
+  vi: "Đang tải"
+  zh: "加载中"
+  zh-tw: "載入中"
+  ka: "იტვირთება"
+"Request":
+  ru: "Заказать"
+  de: "Wunsch"
+  fr: "Demander"
+  es: "Pedir"
+  be: "Заказаць"
+  ca: "Demanar"
+  cs: "Požádat"
+  hi: "अनुरोध"
+  hu: "Kérés"
+  id: "Minta"
+  it: "Richiedi"
+  ja: "リクエスト"
+  kk: "Сұрау"
+  ko: "신청"
+  ms: "Minta"
+  nl: "Aanvragen"
+  pl: "Poproś"
+  pt: "Pedir"
+  pt-pt: "Pedir"
+  sr: "Zatraži"
+  sv: "Önska"
+  th: "ขอเพลง"
+  tl: "I-request"
+  tr: "İste"
+  uk: "Замовити"
+  vi: "Yêu cầu"
+  zh: "点歌"
+  zh-tw: "點歌"
+  ka: "მოთხოვნა"
+"Live radio":
+  ru: "Прямой эфир"
+  de: "Live-Radio"
+  fr: "Radio en direct"
+  es: "Radio en directo"
+  be: "Жывое радыё"
+  ca: "Ràdio en directe"
+  cs: "Živé rádio"
+  hi: "लाइव रेडियो"
+  hu: "Élő rádió"
+  id: "Radio langsung"
+  it: "Radio in diretta"
+  ja: "ライブラジオ"
+  kk: "Тікелей радио"
+  ko: "라이브 라디오"
+  ms: "Radio langsung"
+  nl: "Live radio"
+  pl: "Radio na żywo"
+  pt: "Rádio em direto"
+  pt-pt: "Rádio ao vivo"
+  sr: "Radio uživo"
+  sv: "Liveradio"
+  th: "วิทยุสด"
+  tl: "Live na radyo"
+  tr: "Canlı radyo"
+  uk: "Живе радіо"
+  vi: "Đài phát trực tiếp"
+  zh: "直播电台"
+  zh-tw: "直播電台"
+  ka: "პირდაპირი რადიო"
+"On air: {}":
+  ru: "В эфире: {}"
+  de: "Auf Sendung: {}"
+  fr: "À l'antenne : {}"
+  es: "En el aire: {}"
+  be: "У эфіры: {}"
+  ca: "En antena: {}"
+  cs: "V éteru: {}"
+  hi: "ऑन एयर: {}"
+  hu: "Adásban: {}"
+  id: "Mengudara: {}"
+  it: "In onda: {}"
+  ja: "放送中：{}"
+  kk: "Эфирде: {}"
+  ko: "방송 중: {}"
+  ms: "Di udara: {}"
+  nl: "On air: {}"
+  pl: "Na antenie: {}"
+  pt: "No ar: {}"
+  pt-pt: "Em emissão: {}"
+  sr: "U etru: {}"
+  sv: "I etern: {}"
+  th: "กำลังออกอากาศ: {}"
+  tl: "On air: {}"
+  tr: "Yayında: {}"
+  uk: "В ефірі: {}"
+  vi: "Đang phát sóng: {}"
+  zh: "正在播出：{}"
+  zh-tw: "正在播出：{}"
+  ka: "ეთერშია: {}"
+"{} · auto quality":
+  ru: "{} · авто-качество"
+  de: "{} · automatische Qualität"
+  fr: "{} · qualité auto"
+  es: "{} · calidad automática"
+  be: "{} · аўтаякасць"
+  ca: "{} · qualitat automàtica"
+  cs: "{} · automatická kvalita"
+  hi: "{} · स्वचालित गुणवत्ता"
+  hu: "{} · automatikus minőség"
+  id: "{} · kualitas otomatis"
+  it: "{} · qualità automatica"
+  ja: "{} · 自動画質"
+  kk: "{} · автоматты сапа"
+  ko: "{} · 자동 품질"
+  ms: "{} · kualiti automatik"
+  nl: "{} · automatische kwaliteit"
+  pl: "{} · jakość automatyczna"
+  pt: "{} · qualidade automática"
+  pt-pt: "{} · qualidade automática"
+  sr: "{} · automatski kvalitet"
+  sv: "{} · automatisk kvalitet"
+  th: "{} · คุณภาพอัตโนมัติ"
+  tl: "{} · awtomatikong kalidad"
+  tr: "{} · otomatik kalite"
+  uk: "{} · авто-якість"
+  vi: "{} · chất lượng tự động"
+  zh: "{} · 自动画质"
+  zh-tw: "{} · 自動畫質"
+  ka: "{} · ავტომატური ხარისხი"
+"Type a song and press Enter (Esc cancels)":
+  ru: "Введите песню и нажмите Enter (Esc — отмена)"
+  de: "Titel eingeben und Enter drücken (Esc bricht ab)"
+  fr: "Saisissez un morceau puis Entrée (Échap annule)"
+  es: "Escribe una canción y pulsa Enter (Esc cancela)"
+  be: "Увядзіце песню і націсніце Enter (Esc — адмена)"
+  ca: "Escriviu una cançó i premeu Intro (Esc cancel·la)"
+  cs: "Napište píseň a stiskněte Enter (Esc zruší)"
+  hi: "गाना लिखें और Enter दबाएँ (Esc रद्द करता है)"
+  hu: "Írj be egy dalt és nyomj Entert (Esc megszakítja)"
+  id: "Ketik lagu lalu tekan Enter (Esc membatalkan)"
+  it: "Scrivi un brano e premi Invio (Esc annulla)"
+  ja: "曲名を入力してEnter（Escで取消）"
+  kk: "Әнді теріп, Enter басыңыз (Esc — бас тарту)"
+  ko: "곡을 입력하고 Enter를 누르세요 (Esc로 취소)"
+  ms: "Taip lagu dan tekan Enter (Esc membatalkan)"
+  nl: "Typ een nummer en druk op Enter (Esc annuleert)"
+  pl: "Wpisz piosenkę i naciśnij Enter (Esc anuluje)"
+  pt: "Escreva uma música e prima Enter (Esc cancela)"
+  pt-pt: "Escreva uma música e prima Enter (Esc cancela)"
+  sr: "Ukucajte pesmu i pritisnite Enter (Esc otkazuje)"
+  sv: "Skriv en låt och tryck Enter (Esc avbryter)"
+  th: "พิมพ์ชื่อเพลงแล้วกด Enter (Esc ยกเลิก)"
+  tl: "Mag-type ng kanta at pindutin ang Enter (Esc para kanselahin)"
+  tr: "Bir şarkı yazıp Enter'a basın (Esc iptal eder)"
+  uk: "Введіть пісню та натисніть Enter (Esc — скасувати)"
+  vi: "Nhập tên bài hát rồi nhấn Enter (Esc để hủy)"
+  zh: "输入歌曲后按 Enter（Esc 取消）"
+  zh-tw: "輸入歌曲後按 Enter（Esc 取消）"
+  ka: "ჩაწერეთ სიმღერა და დააჭირეთ Enter-ს (Esc გაუქმებს)"
+"Sending the request ...":
+  ru: "Отправка заказа ..."
+  de: "Wunsch wird gesendet ..."
+  fr: "Envoi de la demande ..."
+  es: "Enviando la petición ..."
+  be: "Адпраўка заказу ..."
+  ca: "Enviant la petició ..."
+  cs: "Odesílání žádosti ..."
+  hi: "अनुरोध भेजा जा रहा है ..."
+  hu: "Kérés küldése ..."
+  id: "Mengirim permintaan ..."
+  it: "Invio della richiesta ..."
+  ja: "リクエストを送信中 ..."
+  kk: "Сұрау жіберілуде ..."
+  ko: "신청 전송 중 ..."
+  ms: "Menghantar permintaan ..."
+  nl: "Verzoek wordt verzonden ..."
+  pl: "Wysyłanie prośby ..."
+  pt: "A enviar o pedido ..."
+  pt-pt: "A enviar o pedido ..."
+  sr: "Slanje zahteva ..."
+  sv: "Skickar önskemålet ..."
+  th: "กำลังส่งคำขอ ..."
+  tl: "Ipinapadala ang request ..."
+  tr: "İstek gönderiliyor ..."
+  uk: "Надсилання замовлення ..."
+  vi: "Đang gửi yêu cầu ..."
+  zh: "正在发送点歌 ..."
+  zh-tw: "正在傳送點歌 ..."
+  ka: "მოთხოვნა იგზავნება ..."
+"Request sent":
+  ru: "Заказ отправлен"
+  de: "Wunsch gesendet"
+  fr: "Demande envoyée"
+  es: "Petición enviada"
+  be: "Заказ адпраўлены"
+  ca: "Petició enviada"
+  cs: "Žádost odeslána"
+  hi: "अनुरोध भेज दिया गया"
+  hu: "Kérés elküldve"
+  id: "Permintaan terkirim"
+  it: "Richiesta inviata"
+  ja: "リクエストを送信しました"
+  kk: "Сұрау жіберілді"
+  ko: "신청이 전송되었습니다"
+  ms: "Permintaan dihantar"
+  nl: "Verzoek verzonden"
+  pl: "Prośba wysłana"
+  pt: "Pedido enviado"
+  pt-pt: "Pedido enviado"
+  sr: "Zahtev poslat"
+  sv: "Önskemål skickat"
+  th: "ส่งคำขอแล้ว"
+  tl: "Naipadala ang request"
+  tr: "İstek gönderildi"
+  uk: "Замовлення надіслано"
+  vi: "Đã gửi yêu cầu"
+  zh: "点歌已发送"
+  zh-tw: "點歌已傳送"
+  ka: "მოთხოვნა გაიგზავნა"
+"You have been blocked from sending requests":
+  ru: "Вам запрещено отправлять заказы"
+  de: "Sie dürfen keine Wünsche senden"
+  fr: "Vous ne pouvez plus envoyer de demandes"
+  es: "Se te ha bloqueado el envío de peticiones"
+  be: "Вам забаронена адпраўляць заказы"
+  ca: "Se us ha bloquejat l'enviament de peticions"
+  cs: "Odesílání žádostí vám bylo zablokováno"
+  hi: "आपको अनुरोध भेजने से रोक दिया गया है"
+  hu: "Le lettél tiltva a kérések küldéséről"
+  id: "Anda diblokir dari mengirim permintaan"
+  it: "Ti è stato bloccato l'invio di richieste"
+  ja: "リクエストの送信がブロックされています"
+  kk: "Сізге сұрау жіберуге тыйым салынған"
+  ko: "신청 전송이 차단되었습니다"
+  ms: "Anda disekat daripada menghantar permintaan"
+  nl: "Je bent geblokkeerd voor het sturen van verzoeken"
+  pl: "Zablokowano ci wysyłanie próśb"
+  pt: "Foi bloqueado de enviar pedidos"
+  pt-pt: "Foi bloqueado de enviar pedidos"
+  sr: "Blokirano vam je slanje zahteva"
+  sv: "Du har blockerats från att skicka önskemål"
+  th: "คุณถูกบล็อกไม่ให้ส่งคำขอ"
+  tl: "Na-block ka sa pagpapadala ng mga request"
+  tr: "İstek göndermeniz engellendi"
+  uk: "Вам заборонено надсилати замовлення"
+  vi: "Bạn đã bị chặn gửi yêu cầu"
+  zh: "你已被禁止点歌"
+  zh-tw: "你已被禁止點歌"
+  ka: "მოთხოვნების გაგზავნა თქვენთვის დაბლოკილია"
+"The request could not be sent":
+  ru: "Не удалось отправить заказ"
+  de: "Der Wunsch konnte nicht gesendet werden"
+  fr: "La demande n'a pas pu être envoyée"
+  es: "No se pudo enviar la petición"
+  be: "Не ўдалося адправіць заказ"
+  ca: "No s'ha pogut enviar la petició"
+  cs: "Žádost se nepodařilo odeslat"
+  hi: "अनुरोध नहीं भेजा जा सका"
+  hu: "A kérést nem sikerült elküldeni"
+  id: "Permintaan tidak dapat dikirim"
+  it: "Impossibile inviare la richiesta"
+  ja: "リクエストを送信できませんでした"
+  kk: "Сұрауды жіберу мүмкін болмады"
+  ko: "신청을 전송하지 못했습니다"
+  ms: "Permintaan tidak dapat dihantar"
+  nl: "Het verzoek kon niet worden verzonden"
+  pl: "Nie udało się wysłać prośby"
+  pt: "Não foi possível enviar o pedido"
+  pt-pt: "Não foi possível enviar o pedido"
+  sr: "Zahtev nije mogao biti poslat"
+  sv: "Önskemålet kunde inte skickas"
+  th: "ส่งคำขอไม่สำเร็จ"
+  tl: "Hindi naipadala ang request"
+  tr: "İstek gönderilemedi"
+  uk: "Не вдалося надіслати замовлення"
+  vi: "Không thể gửi yêu cầu"
+  zh: "无法发送点歌"
+  zh-tw: "無法傳送點歌"
+  ka: "მოთხოვნის გაგზავნა ვერ მოხერხდა"
 "All my sessions":
   es: "Todas mis sesiones"
   ca: "Totes les meves sessions"
@@ -69234,6 +69737,7 @@ _version: 2
   pt: "Todas as minhas sessões"
   pt-pt: "Todas as minhas sessões"
   ka: "ჩემი ყველა სესია"
+  sr: "Sve moje sesije"
 "Allow their voice chat again":
   es: "Permitir de nuevo su chat de voz"
   ca: "Permet de nou el seu xat de veu"
@@ -69249,6 +69753,7 @@ _version: 2
   pt: "Permitir o chat de voz dele de novo"
   pt-pt: "Permitir de novo o seu chat de voz"
   ka: "მათი ხმოვანი ჩატის ხელახლა დაშვება"
+  sr: "Ponovo dozvoli njihov glasovni čet"
 "Allow voice chat again":
   es: "Permitir de nuevo el chat de voz"
   ca: "Permet de nou el xat de veu"
@@ -69264,6 +69769,7 @@ _version: 2
   pt: "Permitir o chat de voz de novo"
   pt-pt: "Permitir de novo o chat de voz"
   ka: "ხმოვანი ჩატის ხელახლა დაშვება"
+  sr: "Ponovo dozvoli glasovni čet"
 "Ban the machine of":
   es: "Vetar el equipo de"
   ca: "Veta l'equip de"
@@ -69279,6 +69785,7 @@ _version: 2
   pt: "Banir a máquina de"
   pt-pt: "Banir a máquina de"
   ka: "მოწყობილობის დაბლოკვა:"
+  sr: "Blokiraj uređaj igrača"
 "Ban this machine...":
   es: "Vetar este equipo..."
   ca: "Veta aquest equip..."
@@ -69294,6 +69801,7 @@ _version: 2
   pt: "Banir esta máquina..."
   pt-pt: "Banir esta máquina..."
   ka: "ამ მოწყობილობის დაბლოკვა..."
+  sr: "Blokiraj ovaj uređaj..."
 "Banned machines":
   es: "Equipos vetados"
   ca: "Equips vetats"
@@ -69309,6 +69817,7 @@ _version: 2
   pt: "Máquinas banidas"
   pt-pt: "Máquinas banidas"
   ka: "დაბლოკილი მოწყობილობები"
+  sr: "Blokirani uređaji"
 "Banned machines (a ban holds the machine, not the name)":
   es: "Equipos vetados (el veto es del equipo, no del nombre)"
   ca: "Equips vetats (el veto és de l'equip, no del nom)"
@@ -69324,6 +69833,7 @@ _version: 2
   pt: "Máquinas banidas (o banimento vale para a máquina, não para o nome)"
   pt-pt: "Máquinas banidas (um banimento aplica-se à máquina, não ao nome)"
   ka: "დაბლოკილი მოწყობილობები (ბლოკი მოწყობილობას ეხება და არა სახელს)"
+  sr: "Blokirani uređaji (blokada se odnosi na uređaj, a ne na ime)"
 "Lift:":
   es: "Levantar:"
   ca: "Aixeca:"
@@ -69339,6 +69849,7 @@ _version: 2
   pt: "Remover banimento:"
   pt-pt: "Levantar banimento:"
   ka: "ბლოკის მოხსნა:"
+  sr: "Ukloni zabranu:"
 "Nobody is banned":
   es: "Nadie está vetado"
   ca: "Ningú no està vetat"
@@ -69354,6 +69865,7 @@ _version: 2
   pt: "Ninguém está banido"
   pt-pt: "Ninguém está banido"
   ka: "არავინ არის დაბლოკილი"
+  sr: "Niko nije blokiran"
 "Only for this run (by name and address, not the machine)":
   es: "Solo en esta ejecución (por nombre y dirección, no por equipo)"
   ca: "Només en aquesta execució (per nom i adreça, no per equip)"
@@ -69369,6 +69881,7 @@ _version: 2
   pt: "Só nesta execução (por nome e endereço, não pela máquina)"
   pt-pt: "Só nesta execução (por nome e endereço, não pela máquina)"
   ka: "მხოლოდ ამ გაშვებისთვის (სახელით და მისამართით, არა მოწყობილობით)"
+  sr: "Samo za ovo pokretanje (prema imenu i adresi, a ne uređaju)"
 "Only the host and the server's admins can send players away":
   es: "Solo el anfitrión y los administradores del servidor pueden expulsar jugadores"
   ca: "Només l'amfitrió i els administradors del servidor poden expulsar jugadors"
@@ -69384,6 +69897,7 @@ _version: 2
   pt: "Só o anfitrião e os administradores do servidor podem expulsar jogadores"
   pt-pt: "Só o anfitrião e os administradores do servidor podem expulsar jogadores"
   ka: "მოთამაშეების გაძევება მხოლოდ ჰოსტს და სერვერის ადმინებს შეუძლიათ"
+  sr: "Samo domaćin i administratori servera mogu da izbace igrače"
 "Player list":
   es: "Lista de jugadores"
   ca: "Llista de jugadors"
@@ -69399,6 +69913,7 @@ _version: 2
   pt: "Lista de jogadores"
   pt-pt: "Lista de jogadores"
   ka: "მოთამაშეების სია"
+  sr: "Spisak igrača"
 "Players in this session":
   es: "Jugadores en esta sesión"
   ca: "Jugadors d'aquesta sessió"
@@ -69414,6 +69929,7 @@ _version: 2
   pt: "Jogadores nesta sessão"
   pt-pt: "Jogadores nesta sessão"
   ka: "ამ სესიის მოთამაშეები"
+  sr: "Igrači u ovoj sesiji"
 "Reason":
   es: "Motivo"
   ca: "Motiu"
@@ -69429,6 +69945,7 @@ _version: 2
   pt: "Motivo"
   pt-pt: "Motivo"
   ka: "მიზეზი"
+  sr: "Razlog"
 "Send away":
   es: "Expulsar"
   ca: "Expulsa"
@@ -69444,6 +69961,7 @@ _version: 2
   pt: "Expulsar"
   pt-pt: "Expulsar"
   ka: "გაძევება"
+  sr: "Izbaci"
 "Send away now":
   es: "Expulsar ahora"
   ca: "Expulsa ara"
@@ -69459,6 +69977,7 @@ _version: 2
   pt: "Expulsar agora"
   pt-pt: "Expulsar agora"
   ka: "ახლავე გაძევება"
+  sr: "Izbaci odmah"
 "Silence their voice chat for everybody":
   es: "Silenciar su chat de voz para todos"
   ca: "Silencia el seu xat de veu per a tothom"
@@ -69474,6 +69993,7 @@ _version: 2
   pt: "Silenciar o chat de voz dele para todos"
   pt-pt: "Silenciar o seu chat de voz para todos"
   ka: "მათი ხმოვანი ჩატის დადუმება ყველასთვის"
+  sr: "Isključi njihov glasovni čet za sve"
 "Silence voice chat":
   es: "Silenciar el chat de voz"
   ca: "Silencia el xat de veu"
@@ -69489,6 +70009,7 @@ _version: 2
   pt: "Silenciar o chat de voz"
   pt-pt: "Silenciar o chat de voz"
   ka: "ხმოვანი ჩატის დადუმება"
+  sr: "Isključi glasovni čet"
 "That player is no longer here: pick them again":
   es: "Ese jugador ya no está aquí: elígelo de nuevo"
   ca: "Aquest jugador ja no és aquí: tria'l de nou"
@@ -69504,6 +70025,7 @@ _version: 2
   pt: "Esse jogador não está mais aqui: escolha-o de novo"
   pt-pt: "Esse jogador já não está aqui: escolha-o de novo"
   ka: "ეს მოთამაშე აქ აღარ არის: ხელახლა აირჩიეთ"
+  sr: "Taj igrač više nije tu: izaberi ga ponovo"
 "This session":
   es: "Esta sesión"
   ca: "Aquesta sessió"
@@ -69519,6 +70041,7 @@ _version: 2
   pt: "Esta sessão"
   pt-pt: "Esta sessão"
   ka: "ეს სესია"
+  sr: "Ova sesija"
 "Voice chat of everybody else":
   es: "Chat de voz de los demás"
   ca: "Xat de veu dels altres"
@@ -69534,6 +70057,7 @@ _version: 2
   pt: "Chat de voz de todos os outros"
   pt-pt: "Chat de voz de todos os outros"
   ka: "ყველა დანარჩენის ხმოვანი ჩატი"
+  sr: "Glasovni čet svih ostalih"
 "Voice chat: audible. Mute them":
   es: "Chat de voz: se oye. Silenciar"
   ca: "Xat de veu: s'escolta. Silencia'l"
@@ -69549,6 +70073,7 @@ _version: 2
   pt: "Chat de voz: audível. Silenciar"
   pt-pt: "Chat de voz: audível. Silenciá-lo"
   ka: "ხმოვანი ჩატი: ისმის. დადუმება"
+  sr: "Glasovni čet: igrač se čuje. Utišaj ga"
 "Voice chat: muted. Hear them again":
   es: "Chat de voz: silenciado. Volver a oírlo"
   ca: "Xat de veu: silenciat. Torna'l a escoltar"
@@ -69564,6 +70089,7 @@ _version: 2
   pt: "Chat de voz: silenciado. Ouvir de novo"
   pt-pt: "Chat de voz: silenciado. Ouvi-lo de novo"
   ka: "ხმოვანი ჩატი: დადუმებულია. ხელახლა მოსმენა"
+  sr: "Glasovni čet: utišan. Ponovo uključi zvuk"
 "Voice: an admin has silenced your voice chat":
   es: "Voz: un administrador ha silenciado tu chat de voz"
   ca: "Veu: un administrador ha silenciat el teu xat de veu"
@@ -69579,6 +70105,7 @@ _version: 2
   pt: "Voz: um administrador silenciou seu chat de voz"
   pt-pt: "Voz: um administrador silenciou o seu chat de voz"
   ka: "ხმა: ადმინმა თქვენი ხმოვანი ჩატი დაადუმა"
+  sr: "Glas: administrator ti je isključio glasovni čet"
 "Voice: the microphone cannot be used":
   es: "Voz: no se puede usar el micrófono"
   ca: "Veu: no es pot fer servir el micròfon"
@@ -69594,6 +70121,7 @@ _version: 2
   pt: "Voz: o microfone não pode ser usado"
   pt-pt: "Voz: o microfone não pode ser usado"
   ka: "ხმა: მიკროფონის გამოყენება შეუძლებელია"
+  sr: "Glas: mikrofon ne može da se koristi"
 "Voice: this session has no voice chat":
   es: "Voz: esta sesión no tiene chat de voz"
   ca: "Veu: aquesta sessió no té xat de veu"
@@ -69609,6 +70137,7 @@ _version: 2
   pt: "Voz: esta sessão não tem chat de voz"
   pt-pt: "Voz: esta sessão não tem chat de voz"
   ka: "ხმა: ამ სესიაში ხმოვანი ჩატი არ არის"
+  sr: "Glas: u ovoj sesiji nema glasovnog četa"
 "Voice: you are talking on the radio":
   es: "Voz: hablas por la radio"
   ca: "Veu: parles per ràdio"
@@ -69624,6 +70153,7 @@ _version: 2
   pt: "Voz: você está falando no rádio"
   pt-pt: "Voz: está a falar pelo rádio"
   ka: "ხმა: თქვენ რადიოთი საუბრობთ"
+  sr: "Glas: govoriš preko radio-veze"
 "Voice: you are talking to the players nearby":
   es: "Voz: hablas con los jugadores cercanos"
   ca: "Veu: parles amb els jugadors propers"
@@ -69639,6 +70169,7 @@ _version: 2
   pt: "Voz: você está falando com os jogadores por perto"
   pt-pt: "Voz: está a falar com os jogadores por perto"
   ka: "ხმა: თქვენ ახლომდებარე მოთამაშეებს ესაუბრებით"
+  sr: "Glas: razgovaraš sa igračima u blizini"
 "all sessions":
   es: "todas las sesiones"
   ca: "totes les sessions"
@@ -69654,6 +70185,7 @@ _version: 2
   pt: "todas as sessões"
   pt-pt: "todas as sessões"
   ka: "ყველა სესია"
+  sr: "sve sesije"
 "ends in":
   es: "termina en"
   ca: "acaba en"
@@ -69669,6 +70201,7 @@ _version: 2
   pt: "termina em"
   pt-pt: "termina em"
   ka: "დარჩა"
+  sr: "ističe za"
 "for a day":
   es: "por un día"
   ca: "per un dia"
@@ -69684,6 +70217,7 @@ _version: 2
   pt: "por um dia"
   pt-pt: "por um dia"
   ka: "ერთი დღით"
+  sr: "na jedan dan"
 "for a week":
   es: "por una semana"
   ca: "per una setmana"
@@ -69699,6 +70233,7 @@ _version: 2
   pt: "por uma semana"
   pt-pt: "por uma semana"
   ka: "ერთი კვირით"
+  sr: "na jednu nedelju"
 "for good":
   es: "para siempre"
   ca: "per sempre"
@@ -69714,6 +70249,7 @@ _version: 2
   pt: "para sempre"
   pt-pt: "para sempre"
   ka: "სამუდამოდ"
+  sr: "zauvek"
 "host":
   es: "anfitrión"
   ca: "amfitrió"
@@ -69729,6 +70265,7 @@ _version: 2
   pt: "anfitrião"
   pt-pt: "anfitrião"
   ka: "ჰოსტი"
+  sr: "domaćin"
 "muted":
   es: "silenciado"
   ca: "silenciat"
@@ -69744,6 +70281,7 @@ _version: 2
   pt: "silenciado"
   pt-pt: "silenciado"
   ka: "დადუმებული"
+  sr: "utišan"
 "nearby":
   es: "cerca"
   ca: "a prop"
@@ -69759,6 +70297,7 @@ _version: 2
   pt: "por perto"
   pt-pt: "por perto"
   ka: "ახლოს"
+  sr: "u blizini"
 "on the radio":
   es: "por la radio"
   ca: "per ràdio"
@@ -69774,6 +70313,7 @@ _version: 2
   pt: "no rádio"
   pt-pt: "pelo rádio"
   ka: "რადიოთი"
+  sr: "preko radio-veze"
 "aboard a bus":
   es: "a bordo de un autobús"
   ca: "a bord d'un autobús"
@@ -69789,6 +70329,7 @@ _version: 2
   pt: "a bordo de um ônibus"
   pt-pt: "a bordo de um autocarro"
   ka: "ავტობუსში"
+  sr: "u autobusu"
 "this session":
   es: "esta sesión"
   ca: "aquesta sessió"
@@ -69804,6 +70345,7 @@ _version: 2
   pt: "esta sessão"
   pt-pt: "esta sessão"
   ka: "ეს სესია"
+  sr: "ova sesija"
 "unknown name":
   es: "nombre desconocido"
   ca: "nom desconegut"
@@ -69819,6 +70361,7 @@ _version: 2
   pt: "nome desconhecido"
   pt-pt: "nome desconhecido"
   ka: "უცნობი სახელი"
+  sr: "nepoznato ime"
 "you":
   es: "tú"
   ca: "tu"
@@ -69834,6 +70377,7 @@ _version: 2
   pt: "você"
   pt-pt: "você"
   ka: "თქვენ"
+  sr: "ti"
 "Shadows in the mirrors":
   es: "Sombras en los espejos"
   ca: "Ombres als miralls"
@@ -69849,6 +70393,7 @@ _version: 2
   pt: "Sombras nos espelhos"
   pt-pt: "Sombras nos espelhos"
   ka: "ჩრდილები სარკეებში"
+  sr: "Senke u retrovizorima"
 "The mirrors show the sun's shadows (they look up the picture's shadow maps; no pass of their own)":
   es: "Los espejos muestran las sombras del sol (usan los mapas de sombras de la imagen; sin pasada propia)"
   ca: "Els miralls mostren les ombres del sol (fan servir els mapes d'ombres de la imatge; sense passada pròpia)"
@@ -69864,6 +70409,7 @@ _version: 2
   pt: "Os espelhos mostram as sombras do sol (usam os mapas de sombra da imagem; sem passagem própria)"
   pt-pt: "Os espelhos mostram as sombras do sol (usam os mapas de sombras da imagem; sem passagem própria)"
   ka: "სარკეები მზის ჩრდილებს აჩვენებს (ისინი გამოსახულების ჩრდილების რუკებს იყენებს; საკუთარი გავლის გარეშე)"
+  sr: "Retrovizori prikazuju senke koje baca sunce (koriste mape senki glavnog prikaza; ne renderuju ih zasebno)"
 "Smoke and spray in the mirrors":
   es: "Humo y salpicaduras en los espejos"
   ca: "Fum i esquitxos als miralls"
@@ -69879,6 +70425,7 @@ _version: 2
   pt: "Fumaça e respingos nos espelhos"
   pt-pt: "Fumo e salpicos nos espelhos"
   ka: "კვამლი და შხეფები სარკეებში"
+  sr: "Dim i voda koju točkovi prskaju, vidljivi u retrovizorima"
 "The mirrors show exhaust and the spray of the wheels, as OMSI 2 does without its \"No PS in reflections\"":
   es: "Los espejos muestran el escape y las salpicaduras de las ruedas, como OMSI 2 sin su opción «No PS in reflections»"
   ca: "Els miralls mostren l'escapament i els esquitxos de les rodes, com OMSI 2 sense l'opció «No PS in reflections»"
@@ -69894,6 +70441,7 @@ _version: 2
   pt: "Os espelhos mostram o escapamento e os respingos das rodas, como o OMSI 2 faz sem o seu \"No PS in reflections\""
   pt-pt: "Os espelhos mostram o escape e os salpicos das rodas, como o OMSI 2 faz sem a sua opção \"No PS in reflections\""
   ka: "სარკეები აჩვენებს გამონაბოლქვს და ბორბლების შხეფებს, როგორც OMSI 2 მისი „No PS in reflections“-ის გარეშე"
+  sr: "Retrovizori prikazuju izduvne gasove i vodu koju podižu točkovi, kao u OMSI 2 kada opcija „No PS in reflections“ nije uključena"
 "Voice chat in multiplayer":
   es: "Chat de voz en multijugador"
   ca: "Xat de veu en multijugador"
@@ -69909,6 +70457,7 @@ _version: 2
   pt: "Chat de voz no multijogador"
   pt-pt: "Chat de voz no multijogador"
   ka: "ხმოვანი ჩატი მრავალმოთამაშიან რეჟიმში"
+  sr: "Glasovni čet u igri za više igrača"
 "Hold the nearby (V) or radio (B) key to talk. The microphone is used only while a key is held; nothing is recorded":
   es: "Mantén la tecla de cercanía (V) o de radio (B) para hablar. El micrófono solo se usa mientras se mantiene una tecla; no se graba nada"
   ca: "Mantén la tecla de proximitat (V) o de ràdio (B) per parlar. El micròfon només s'usa mentre es manté una tecla; no s'enregistra res"
@@ -69924,6 +70473,7 @@ _version: 2
   pt: "Segure a tecla de proximidade (V) ou de rádio (B) para falar. O microfone só é usado enquanto uma tecla está pressionada; nada é gravado"
   pt-pt: "Mantenha premida a tecla de proximidade (V) ou de rádio (B) para falar. O microfone só é usado enquanto uma tecla está premida; nada é gravado"
   ka: "სასაუბროდ დააჭირეთ და გეჭიროთ ახლომდებარეთა (V) ან რადიოს (B) კლავიში. მიკროფონი მხოლოდ კლავიშის დაჭერისას გამოიყენება; არაფერი იწერება"
+  sr: "Drži pritisnut taster za razgovor sa igračima u blizini (V) ili preko radio-veze (B). Mikrofon se koristi samo dok držiš taster; ništa se ne snima"
 "Everybody else's voice chat off":
   es: "Chat de voz de los demás desactivado"
   ca: "Xat de veu dels altres desactivat"
@@ -69939,6 +70489,7 @@ _version: 2
   pt: "Chat de voz de todos os outros desligado"
   pt-pt: "Chat de voz de todos os outros desligado"
   ka: "ყველა დანარჩენის ხმოვანი ჩატი გამორთულია"
+  sr: "Glasovni čet svih ostalih je isključen"
 "Single players are muted in the player list":
   es: "Los jugadores se silencian uno a uno en la lista de jugadores"
   ca: "Els jugadors es silencien un a un a la llista de jugadors"
@@ -69954,6 +70505,7 @@ _version: 2
   pt: "Cada jogador pode ser silenciado na lista de jogadores"
   pt-pt: "Cada jogador pode ser silenciado na lista de jogadores"
   ka: "ცალკეული მოთამაშეები მოთამაშეების სიაში დუმდება"
+  sr: "Igrače možeš pojedinačno da utišaš na spisku igrača"
 "Show who is talking":
   es: "Mostrar quién habla"
   ca: "Mostra qui parla"
@@ -69969,6 +70521,7 @@ _version: 2
   pt: "Mostrar quem está falando"
   pt-pt: "Mostrar quem está a falar"
   ka: "მოსაუბრის ჩვენება"
+  sr: "Prikaži ko govori"
 "A line for each player you hear":
   es: "Una línea por cada jugador al que oyes"
   ca: "Una línia per cada jugador que sents"
@@ -69984,6 +70537,7 @@ _version: 2
   pt: "Uma linha para cada jogador que você ouve"
   pt-pt: "Uma linha por cada jogador que ouve"
   ka: "თითო სტრიქონი ყოველ მოთამაშეზე, რომელიც გესმით"
+  sr: "Prikaži poseban red za svakog igrača čiji glas čuješ"
 
 
 "Calculating route":

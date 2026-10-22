@@ -208,10 +208,13 @@ impl Navigator {
         let (icon_n, icon_tex) = self.place.upload(gpu, device, queue, 16, &icon_verts);
         gpu.upload_atlas(queue, &mut self.atlas);
         let flat = Layer::flat(clip_panel, radius, 1.0);
-        let backdrop = Layer::flat(clip_panel, radius, if self.cockpit_display { self.opacity } else { omsi_ui::theme::backdrop(self.opacity).min(1.0) });
+        let backdrop = Layer::flat(clip_panel, radius, if self.cockpit_display { 1.0 } else { omsi_ui::theme::backdrop(self.opacity).min(1.0) });
         let mut layers = [flat, map_layer, map_layer.with_shadow(), depth_layer, depth_layer, backdrop];
+        // The cockpit setting fades the map and its labels too; opaque map geometry
+        // would otherwise cover the background whose opacity was changed.
+        let opacity = self.shown * if self.cockpit_display { self.opacity } else { 1.0 };
         for l in layers.iter_mut() {
-            l.opacity *= self.shown;
+            l.opacity *= opacity;
         }
         let solid_n = self.roads.as_ref().map_or(0, |r| r.houses[1] as u32);
         let three = self.show_3d;

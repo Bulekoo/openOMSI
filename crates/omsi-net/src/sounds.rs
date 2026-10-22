@@ -156,6 +156,7 @@ struct Tx {
 struct Sender {
     next: u64,
     queue: VecDeque<Tx>,
+    full: bool,
 }
 struct Assembly {
     size: usize,
@@ -191,9 +192,12 @@ impl Sync {
         for &peer in peers {
             let s = self.tx.entry(peer).or_default();
             if s.queue.len() >= 512 {
-                log::warn!("LAN sound events awaiting acknowledgement from {peer}: queue full");
+                if !std::mem::replace(&mut s.full, true) {
+                    log::warn!("LAN sound events awaiting acknowledgement from {peer}: queue full");
+                }
                 continue;
             }
+            s.full &= s.queue.len() >= 256;
             s.next += 1;
             s.queue.push_back(Tx {
                 seq: s.next,

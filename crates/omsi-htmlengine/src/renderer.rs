@@ -15,15 +15,15 @@ pub struct EngineRenderer {
     pub(crate) pressed: bool,
     /// The pictures of the page (`<img>`, `background-image`), loaded when first drawn.
     pub(crate) imgs: Arc<ImageStore>,
-    /// The laid-out page of the last `dom.gen`, shared by `render` and `hit_node`.
+    /// The laid-out page of the last `dom.generation`, shared by `render` and `hit_node`.
     pub(crate) cache: Mutex<Option<LayoutCache>>,
-    /// `dom.gen` of the last frame handed out.
+    /// `dom.generation` of the last frame handed out.
     pub(crate) rendered_gen: u64,
 }
 
 /// The laid-out body and the root style it was built with.
 pub(crate) struct LayoutCache {
-    pub(crate) gen: u64,
+    pub(crate) generation: u64,
     pub(crate) root: Style,
     pub(crate) b: LBox,
 }
@@ -73,13 +73,13 @@ impl EngineRenderer {
     /// The cached layout when it is still current, else a fresh one.
     fn layout_cache(&self, lay: &Layouter) -> LayoutCache {
         if let Some(c) = self.cache.lock().unwrap().take() {
-            if c.gen == self.js.dom.gen {
+            if c.generation == self.js.dom.generation {
                 return c;
             }
         }
         let root = self.root_style(lay);
         let b = lay.build(self.js.dom.body, &root, 0.0, 0.0, self.width as f32, self.height as f32);
-        LayoutCache { gen: self.js.dom.gen, root, b }
+        LayoutCache { generation: self.js.dom.generation, root, b }
     }
 
     pub(crate) fn clock(&mut self) {
@@ -329,12 +329,12 @@ impl HtmlRenderer for EngineRenderer {
     fn poll_frame(&mut self) -> Option<Vec<u8>> {
         self.clock();
         self.run_timers();
-        if !self.dirty && self.js.dom.gen == self.rendered_gen {
+        if !self.dirty && self.js.dom.generation == self.rendered_gen {
             return None;
         }
         self.dirty = false;
         let frame = self.render();
-        self.rendered_gen = self.js.dom.gen;
+        self.rendered_gen = self.js.dom.generation;
         Some(frame)
     }
 

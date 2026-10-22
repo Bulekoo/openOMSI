@@ -951,14 +951,14 @@ mod setup_tests {
         let not_omsi = home.join("Downloads");
         std::fs::create_dir_all(&not_omsi).unwrap();
         let was = (std::env::var_os("HOME"), std::env::var_os("USERPROFILE"));
-        std::env::set_var("HOME", &home);
-        std::env::set_var("USERPROFILE", &home);
+        unsafe { std::env::set_var("HOME", &home) };
+        unsafe { std::env::set_var("USERPROFILE", &home) };
         let r = config_save(not_omsi.to_string_lossy().to_string(), String::new()).unwrap();
         let written = home.join(".openomsi").join("launcher.json").exists();
         for (k, v) in [("HOME", was.0), ("USERPROFILE", was.1)] {
             match v {
-                Some(v) => std::env::set_var(k, v),
-                None => std::env::remove_var(k),
+                Some(v) => unsafe { std::env::set_var(k, v) },
+                None => unsafe { std::env::remove_var(k) },
             }
         }
         assert_eq!(r["saved"], json!(false));

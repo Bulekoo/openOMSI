@@ -106,6 +106,7 @@ pub struct Gpu {
     buffers: Vec<(Option<wgpu::Buffer>, u64)>,
     textures: Vec<Option<Tex>>,
     msaa: Option<(wgpu::TextureView, u32, u32)>,
+    failed_target: Option<(u32, u32)>,
     samples: u32,
     format: wgpu::TextureFormat,
     atlas_size: u32,
@@ -201,7 +202,7 @@ impl Gpu {
             mipmap_filter: wgpu::MipmapFilterMode::Linear,
             ..Default::default()
         });
-        let mut g = Gpu { pipeline, pipeline_depth, pipeline_shadow, depth: None, tex_layout, uniform, uniform_group, sampler, buffers: Vec::new(), textures: Vec::new(), msaa: None, samples, format, atlas_size: atlas_size.max(1), device: device.clone() };
+        let mut g = Gpu { pipeline, pipeline_depth, pipeline_shadow, depth: None, tex_layout, uniform, uniform_group, sampler, buffers: Vec::new(), textures: Vec::new(), msaa: None, failed_target: None, samples, format, atlas_size: atlas_size.max(1), device: device.clone() };
         let atlas = vec![0u8; (atlas_size * atlas_size * 4) as usize];
         g.add_texture_internal(device, None, atlas_size, atlas_size, &atlas);
         g
@@ -380,6 +381,36 @@ impl Gpu {
         }
     }
 
+    fn attachment(&mut self, device: &wgpu::Device, label: &str, (w, h): (u32, u32), format: wgpu::TextureFormat) -> Option<wgpu::TextureView> {
+        let oom = device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
+        let valid = device.push_error_scope(wgpu::ErrorFilter::Validation);
+        let t = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(label),
+            size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: self.samples,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let view = t.create_view(&Default::default());
+        let invalid = pollster::block_on(valid.pop());
+        let out_of_memory = pollster::block_on(oom.pop());
+        match invalid.or(out_of_memory) {
+            None => {
+                self.failed_target = None;
+                Some(view)
+            }
+            Some(e) => {
+                if self.failed_target.replace((w, h)) != Some((w, h)) {
+                    log::warn!("omsi-ui: {label} ({w}x{h}) could not be made: {e}");
+                }
+                None
+            }
+        }
+    }
+
     /// Draw into `target` (`size` pixels): cleared to `clear` first when given.
     #[allow(clippy::too_many_arguments)]
     pub fn render(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, encoder: &mut wgpu::CommandEncoder, target: &wgpu::TextureView, size: (u32, u32), clear: Option<wgpu::Color>, layers: &[Layer], draws: &[Draw]) {
@@ -394,35 +425,19 @@ impl Gpu {
         }
         queue.write_buffer(&self.uniform, 0, &data[..(SLOT as usize * layers.len().clamp(1, MAX_LAYERS as usize))]);
         if self.samples > 1 && self.msaa.as_ref().map(|m| (m.1, m.2) != (w, h)).unwrap_or(true) {
-            let t = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("omsi-ui msaa"),
-                size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
-                mip_level_count: 1,
-                sample_count: self.samples,
-                dimension: wgpu::TextureDimension::D2,
-                format: self.format,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[],
-            });
-            self.msaa = Some((t.create_view(&Default::default()), w, h));
+            self.msaa = None;
+            let Some(view) = self.attachment(device, "omsi-ui msaa", (w, h), self.format) else { return };
+            self.msaa = Some((view, w, h));
+        }
+        if self.pipeline_depth.is_some() && self.depth.as_ref().map(|d| (d.1, d.2) != (w, h)).unwrap_or(true) {
+            self.depth = None;
+            let Some(view) = self.attachment(device, "omsi-ui depth", (w, h), DEPTH_FORMAT) else { return };
+            self.depth = Some((view, w, h));
         }
         let (view, resolve) = match (&self.msaa, self.samples > 1) {
             (Some(m), true) => (&m.0, Some(target)),
             _ => (target, None),
         };
-        if self.pipeline_depth.is_some() && self.depth.as_ref().map(|d| (d.1, d.2) != (w, h)).unwrap_or(true) {
-            let t = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("omsi-ui depth"),
-                size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
-                mip_level_count: 1,
-                sample_count: self.samples,
-                dimension: wgpu::TextureDimension::D2,
-                format: DEPTH_FORMAT,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[],
-            });
-            self.depth = Some((t.create_view(&Default::default()), w, h));
-        }
         let depth_view = self.pipeline_depth.as_ref().and(self.depth.as_ref()).map(|d| &d.0);
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("omsi-ui"),
@@ -501,5 +516,37 @@ mod tests {
     fn shader_validates() {
         let m = naga::front::wgsl::parse_str(include_str!("ui.wgsl")).expect("parse");
         naga::valid::Validator::new(naga::valid::ValidationFlags::all(), naga::valid::Capabilities::all()).validate(&m).expect("valid");
+    }
+
+    #[test]
+    fn a_target_that_cannot_be_made_is_skipped_and_made_again_later() {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+        let Ok(adapter) = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default())) else {
+            eprintln!("no graphics adapter: skipped");
+            return;
+        };
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).unwrap();
+        let format = wgpu::TextureFormat::Rgba8UnormSrgb;
+        let mut gpu = super::Gpu::new(&device, format, 4, 256);
+        let target = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d { width: 64, height: 64, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let view = target.create_view(&Default::default());
+        let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
+        let mut encoder = device.create_command_encoder(&Default::default());
+        let huge = device.limits().max_texture_dimension_2d + 1;
+        gpu.render(&device, &queue, &mut encoder, &view, (huge, 64), None, &[], &[]);
+        assert!(gpu.msaa.is_none());
+        gpu.render(&device, &queue, &mut encoder, &view, (64, 64), None, &[], &[]);
+        assert!(gpu.msaa.is_some());
+        queue.submit([encoder.finish()]);
+        assert!(pollster::block_on(scope.pop()).is_none());
     }
 }

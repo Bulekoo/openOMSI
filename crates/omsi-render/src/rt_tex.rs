@@ -29,7 +29,7 @@ pub(super) const NO_UV: u32 = u32::MAX;
 
 /// A mesh's coordinates in the buffer (in triangles).
 struct MeshUv {
-    gen: u64,
+    generation: u64,
     at: u64,
     tris: u64,
     used: u64,
@@ -157,7 +157,7 @@ impl TexStore {
     /// has none yet - at most `UV_BUDGET` a frame; None while it has none.
     pub(super) fn mesh_uvs(&mut self, device: &wgpu::Device, id: MeshId, m: &GpuMesh, frame: u64) -> Option<u32> {
         if let Some(e) = self.meshes.get_mut(&id) {
-            if e.gen == m.gen {
+            if e.generation == m.generation {
                 e.used = frame;
                 return Some(e.at as u32);
             }
@@ -189,7 +189,7 @@ impl TexStore {
             page_give(&mut self.uv_free, &mut self.uv_top, at, tris);
             return None;
         }
-        self.meshes.insert(id, MeshUv { gen: m.gen, at, tris, used: frame });
+        self.meshes.insert(id, MeshUv { generation: m.generation, at, tris, used: frame });
         self.jobs.push(UvJob { vb: m.vertex_buf.clone(), ib: m.index_buf.clone(), job: [m.base_vertex.max(0) as u32, m.first_index, tris as u32, at as u32] });
         Some(at as u32)
     }

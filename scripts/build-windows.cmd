@@ -20,6 +20,11 @@ if errorlevel 1 goto :failed
 if not exist "dist\windows" mkdir "dist\windows"
 copy /y "target\%TARGET%\release\openomsi.exe" "dist\windows\openomsi.exe" >nul || goto :failed
 copy /y "target\%TARGET%\release\openomsi-launcher.exe" "dist\windows\openomsi-launcher.exe" >nul || goto :failed
+rustup target add i686-pc-windows-msvc || goto :failed
+set "CARGO_TARGET_I686_PC_WINDOWS_MSVC_RUSTFLAGS=-C target-feature=+crt-static"
+cargo build --locked --release --target i686-pc-windows-msvc -p omsi-plugin --bin omsi-plugin-host
+if errorlevel 1 goto :failed
+copy /y "target\i686-pc-windows-msvc\release\omsi-plugin-host.exe" "dist\windows\omsi-plugin-host32.exe" >nul || goto :failed
 rem the desktop launcher (launcher\, Tauri on WebView2): a plain start of openomsi.exe opens it,
 rem stamped with the release version (numbers only)
 if defined OPENOMSI_VERSION for /f "tokens=1 delims=-" %%v in ("%OPENOMSI_VERSION%") do set "TAURI_CONFIG={"version":"%%v"}"

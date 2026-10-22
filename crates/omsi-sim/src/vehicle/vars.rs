@@ -73,7 +73,7 @@ impl VehicleInstance {
     pub fn var_name(&self, index: usize) -> Option<&str> {
         self.var_index
             .iter()
-            .find(|(_, &i)| i as usize == index)
+            .find(|&(_, &i)| i as usize == index)
             .map(|(n, _)| n.as_str())
     }
 

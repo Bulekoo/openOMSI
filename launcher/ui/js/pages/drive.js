@@ -17,13 +17,22 @@ export const hms = (s) => hhmm((s || 0) / 60);
 /** An entry point's name, or its number when the map gives it none. */
 export const entryName = (e) => e.name?.trim() || `${t('Entry point')} ${e.index + 1}`;
 
-export function tripLength(tour) {
-  const runs = tour.trips.filter((x) => !depotRun(x)).map((x) => x.arrival - x.departure).sort((a, b) => a - b);
-  if (!runs.length) return '';
-  const m = Math.max(1, Math.round(runs[runs.length >> 1] / 60));
-  const unit = (n, u) => new Intl.NumberFormat(language(), { style: 'unit', unit: u, unitDisplay: 'short' }).format(n);
+/** A length of time in seconds as the player's language writes it, short: "22 min", "1 hr 5 min"
+ *  (a narrow column breaks it between the hours and the minutes, never inside "5 min"). */
+export function duration(seconds) {
+  const m = Math.max(1, Math.round(seconds / 60));
+  const unit = (n, u) => new Intl.NumberFormat(language(), { style: 'unit', unit: u, unitDisplay: 'short' }).format(n).replace(/ /g, '\u00a0');
   if (m < 60) return unit(m, 'minute');
   return m % 60 ? `${unit(Math.floor(m / 60), 'hour')} ${unit(m % 60, 'minute')}` : unit(m / 60, 'hour');
+}
+
+/** How long a trip takes, from its departure to its arrival (#2813). The arrival of a trip
+ *  over midnight runs on past 24:00, so the difference is its length. */
+export const tripTime = (x) => duration(x.arrival - x.departure);
+
+export function tripLength(tour) {
+  const runs = tour.trips.filter((x) => !depotRun(x)).map((x) => x.arrival - x.departure).sort((a, b) => a - b);
+  return runs.length ? duration(runs[runs.length >> 1]) : '';
 }
 
 export const mapPicture = (file) => (file ? contentUrl(file.replace(/\\/g, '/').replace(/[^/]*$/, 'picture.jpg')) : '');

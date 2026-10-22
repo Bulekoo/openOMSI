@@ -1163,6 +1163,16 @@
       "permission": null
     },
     {
+      "name": "duty.tour",
+      "group": "duty",
+      "since": "0.3.40",
+      "doc": "The complete source tour of the selected duty, even when only one trip was selected. Same structure as `timetable.tour`; times align with the active duty's service day, with `time_offset` seconds applied to all trips and stops.",
+      "params": [],
+      "returns": "table or nil",
+      "multi": false,
+      "permission": null
+    },
+    {
       "name": "duty.trip_stops",
       "group": "duty",
       "since": "0.2.22",
@@ -1674,6 +1684,42 @@
       "params": [],
       "returns": "string",
       "multi": false,
+      "permission": null
+    },
+    {
+      "name": "game.queries",
+      "group": "data",
+      "since": "0.3.40",
+      "doc": "Read-only game data getters: `{name, args = {{name, type}, ...}, result}`. Names and zero-based indices follow the M.V. getter names, but plugins read the game data directly without executing scripts. `rgba` means four results in the range 0–255.",
+      "params": [],
+      "returns": "list of tables",
+      "multi": false,
+      "permission": null
+    },
+    {
+      "name": "game.query",
+      "group": "data",
+      "since": "0.3.40",
+      "doc": "Read a getter listed by `game.queries` from the player's vehicle's HOF, timetable, passengers, tickets, radio, fonts or textures. Arguments are an ordered list (empty by default). No script callback is invoked. `STReadPixel` returns RGBA without changing the bus's drawing colour. Supply a loaded scripted map object's id as `object` to read its data, including `GetArrBus*` on departure boards, without needing a player vehicle. Object ids can be found through `map.objects_near`. Without `object`, reads use the player's vehicle. Unknown names, mutating operations and invalid arguments raise an error; no vehicle returns nil and a reason.",
+      "params": [
+        {
+          "name": "name",
+          "type": "string",
+          "optional": false
+        },
+        {
+          "name": "args",
+          "type": "table",
+          "optional": true
+        },
+        {
+          "name": "object",
+          "type": "integer",
+          "optional": true
+        }
+      ],
+      "returns": "value(s), or nil and reason",
+      "multi": true,
       "permission": null
     },
     {
@@ -3004,6 +3050,27 @@
       ],
       "returns": "list of tables",
       "multi": false,
+      "permission": null
+    },
+    {
+      "name": "timetable.tour",
+      "group": "duty",
+      "since": "0.3.40",
+      "doc": "Read a full tour without taking it: `{line, number, ai_group, extra, today, time_offset, trips}`. Each trip has `number`, `source_number` (both from 1), `name`, `line`, `terminus`, `track`, `reverse`, `profile_index` (from 0), `profile` (`name`, `factor`), `departure`, `arrival`, and all `stops` (`id`, `name`, `arrival`, `departure`, `stops`, optional `x,y,z`). Times are seconds from service-day midnight and can exceed 86400; passing stops are retained. Unknown trip references are skipped, retaining their source numbers. No AI vehicle is reserved.",
+      "params": [
+        {
+          "name": "line",
+          "type": "string",
+          "optional": false
+        },
+        {
+          "name": "tour",
+          "type": "string",
+          "optional": false
+        }
+      ],
+      "returns": "table, or nil and reason",
+      "multi": true,
       "permission": null
     },
     {

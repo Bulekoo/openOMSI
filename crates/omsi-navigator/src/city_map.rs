@@ -504,7 +504,7 @@ impl Navigator {
                 let b = job();
                 let [verts, houses @ ..] = b.counts.map(|n| n as u32);
                 self.city.ground = Some(CityGround { key, anchor: b.anchor, centre, radius, mpp, verts, houses });
-                return Some(b);
+                return Some(b.made_on(device));
             }
             let device = device.clone();
             self.city_job = Some(super::build::Job::start(CityJob { key, centre, radius, mpp }, move || job().made_on(&device)));

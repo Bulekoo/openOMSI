@@ -640,16 +640,16 @@ mod tests {
     #[test]
     fn cached_as_env() {
         // the flag reads through `env`'s cache: what `env` saw first is what the flag sees
-        std::env::set_var("OMSI_FLAGS_TEST_PROBE", "2.5");
+        unsafe { std::env::set_var("OMSI_FLAGS_TEST_PROBE", "2.5") };
         let f = Flag::new("OMSI_FLAGS_TEST_PROBE", Ty::Num, Kind::Test, Read::Test, "-", "");
         let f: &'static Flag = Box::leak(Box::new(f));
         assert_eq!(crate::env::var("OMSI_FLAGS_TEST_PROBE").as_deref(), Ok("2.5"));
-        std::env::set_var("OMSI_FLAGS_TEST_PROBE", "7");
+        unsafe { std::env::set_var("OMSI_FLAGS_TEST_PROBE", "7") };
         assert!(f.is_set());
         assert_eq!(f.var(), Some("2.5"));
         assert_eq!(f.parse::<f32>(), Some(2.5));
         assert_eq!(f.parse::<u32>(), None);
         assert_eq!(f.live_var().as_deref(), Ok("7"));
-        std::env::remove_var("OMSI_FLAGS_TEST_PROBE");
+        unsafe { std::env::remove_var("OMSI_FLAGS_TEST_PROBE") };
     }
 }

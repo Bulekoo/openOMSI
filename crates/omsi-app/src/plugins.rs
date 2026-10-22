@@ -396,6 +396,23 @@ use crate::plugin_io::{bus as pbus, duty as pduty, world as pworld};
 use omsi_plugin as op;
 
 impl PluginIo for Io<'_> {
+    fn duty_tour(&self) -> Option<omsi_plugin::api::Value> {
+        let app = self.app()?;
+        let d = app.session.duty.as_ref()?;
+        pduty::tour(app, &d.line, &d.tour, true).ok()
+    }
+    fn timetable_tour(&self, line: &str, tour: &str) -> Result<omsi_plugin::api::Value, String> {
+        pduty::tour(self.app().ok_or("no game")?, line, tour, false)
+    }
+
+    fn data_query(&mut self, query: omsi_plugin::data::DataQuery, args: &[omsi_plugin::data::QueryValue], object: Option<i64>) -> Result<Vec<omsi_plugin::data::QueryValue>, String> {
+        if let Some(id) = object {
+            let object = self.app_mut().ok_or("no game")?.session.scenery.find_mut(id).ok_or("scripted scenery object not loaded")?;
+            let number = object.inst.str_var("number").to_owned();
+            return crate::plugin_io::data::read(&mut object.inst.host, &number, query, args);
+        }
+        crate::plugin_io::data::query(self.veh_mut().ok_or("no player vehicle")?, query, args)
+    }
     fn system(&mut self, name: &str) -> Option<f32> {
         let v = SysVar::from_name(name)?;
         self.veh_mut().map(|veh| veh.host.sys_var(v))
