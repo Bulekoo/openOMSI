@@ -2171,6 +2171,8 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
     // stop, as in OMSI; #1773)
     v["ai_wait_timed_stops_only"] = json!(false);
     v["pax_bad_driving"] = json!(true);
+    // the arrival half of the stops of a depot file that keeps two recordings per stop
+    v["auto_announce"] = json!(false);
     // OMSI's own options
     for (k, d) in [("maintenance", json!(0)), ("ai_unsched_factor", json!(100)), ("standing_chance", json!(5)), ("ai_max_scheduled", json!(0)), ("ai_max_parked", json!(0)), ("ai_max_humans", json!(200)), ("use_real_time", json!(false)), ("use_real_date", json!(false)), ("use_real_year", json!(false)), ("collision_vehicles", json!(true)), ("collision_objects", json!(true)), ("collision_pedestrians", json!(true)), ("head_movement", json!(true)), ("driverview_smooth", json!(true)), ("hands_in_cab", json!(false)), ("alt_view", json!(true)), ("precision_zoom", json!(false))] {
         v[k] = d;
@@ -2309,7 +2311,7 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
             "perf_overlay" => v[&k] = json!(perf_overlay_mode(val)),
             "sim_thread" => v[&k] = json!(b(val)),
             "mirror_hud" => v[&k] = json!(val.trim().parse::<u8>().map(|x| x.min(7)).unwrap_or(0)),
-            "windy_trees" | "mirror_hud_every_frame" | "mirror_shadows" | "mirror_particles" | "ai_wait_timed_stops_only" | "pax_bad_driving" | "ambient" => v[&k] = json!(b(val)),
+            "windy_trees" | "mirror_hud_every_frame" | "mirror_shadows" | "mirror_particles" | "ai_wait_timed_stops_only" | "pax_bad_driving" | "auto_announce" | "ambient" => v[&k] = json!(b(val)),
             "time_speed" => v[&k] = json!(val.trim_start_matches(['x', 'X']).parse::<f64>().map(|x| x.clamp(1.0, 30.0)).map(|x| if x.fract() == 0.0 { format!("{}", x as i64) } else { x.to_string() }).unwrap_or_else(|_| "1".into())),
             "language" => v[&k] = json!(language_code(val)),
             "graphics" | "renderer" => graphics = Some(graphics_mode(val)),
@@ -2706,6 +2708,7 @@ pub fn settings_to_text(v: &Value, old: Option<&str>) -> String {
     text.push_str(&format!("ai_wait_timed_stops_only={}\n", b("ai_wait_timed_stops_only", false)));
     text.push_str(&format!("trip_summary={}\nfull_tank={}\n", b("trip_summary", true), b("full_tank", true)));
     text.push_str(&format!("pax_bad_driving={}\n", b("pax_bad_driving", true)));
+    text.push_str(&format!("auto_announce={}\n", b("auto_announce", false)));
     text.push_str(&format!("triple_left_angle_deg={}\ntriple_right_angle_deg={}\ntriple_eye_height_mm={}\n", f("triple_left_angle_deg", 45.0).clamp(0.0, 90.0), f("triple_right_angle_deg", 45.0).clamp(0.0, 90.0), f("triple_eye_height_mm", 0.0).clamp(-500.0, 500.0)));
     text.push_str(&format!("photo_mode={}\n", if v.get("photo_mode").and_then(|x| x.as_str()) == Some("advanced") { "advanced" } else { "simple" }));
     text.push_str(&format!("passenger_animation={}\n", if v.get("passenger_animation").and_then(|x| x.as_str()) == Some("enhanced") { "enhanced" } else { "original" }));

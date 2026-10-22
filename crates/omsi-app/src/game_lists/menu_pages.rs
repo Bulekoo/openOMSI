@@ -30,6 +30,7 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         switch_row(app, "exact_fare", "Passengers pay the exact fare", "No change is given at the cash desk"),
         switch_row(app, "full_tank", "Start with a full tank", "Each new bus starts with its tank full (many maps have no petrol station); a saved situation keeps its own"),
         switch_row(app, "pax_bad_driving", "Passengers react to bad driving", "They complain about rough driving and may get off at the next stop"),
+        switch_row(app, "auto_announce", "Arrival announcements at the stop", "On depot files that keep two recordings per stop (the Chinese maps), the arrival one is played as the bus reaches the stop: the IBIS's next stop key, pressed as the driver would"),
         pick("boarding", "Boarding", "How passengers get their tickets"),
         pick("standing_chance", "Standing passengers", "The chance a passenger stands although a seat is free"),
         pick("maintenance", "Maintenance", later),

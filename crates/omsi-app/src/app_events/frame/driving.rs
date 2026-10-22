@@ -282,6 +282,7 @@ pub(super) fn audio(cx: AudioCx, dt: f32) {
         }
     }
     if let Some(a) = cx.sound.audio.as_ref() {
+        cx.sound.milezero.update(a, cx.common.settings.milezero, cx.common.settings.volume);
         match cx.player.player.as_mut() {
             Some(p) => {
                 let inside = cx.view.cam.in_cab;

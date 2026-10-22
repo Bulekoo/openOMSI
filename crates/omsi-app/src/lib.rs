@@ -13,6 +13,7 @@
 
 mod admin;
 mod admin_panel;
+mod auto_announce;
 mod player_list;
 mod voice_chat;
 use omsi_scene::check;
@@ -72,6 +73,7 @@ mod mirror_hud;
 use omsi_navigator as navigator;
 mod vr_navigator;
 use omsi_scene::money;
+mod milezero;
 mod radio;
 
 use omsi_scene::puddles;
@@ -790,6 +792,7 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
         },
         sound: SoundState {
             radio,
+            milezero: Default::default(),
             audio: None,
             ambience: None,
             soundscape: None,

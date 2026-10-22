@@ -3,7 +3,117 @@
 
 use super::*;
 
+pub struct TourPlan {
+    pub line: String,
+    pub number: String,
+    pub ai_group: String,
+    pub extra: String,
+    pub available: bool,
+    pub trips: Vec<TourPlanTrip>,
+}
+
+pub struct TourPlanTrip {
+    /// Position in the source tour, including missing trip references.
+    pub source_index: usize,
+    pub track: String,
+    pub reverse: bool,
+    pub profile_index: usize,
+    pub profile: Option<omsi_timetable::TripProfile>,
+    pub trip: PlannedTrip,
+}
+
 impl ScheduleSim {
+    /// A complete read-only tour snapshot. Times retain the service day's 24:xx values.
+    /// Unlike `player_duty`, this neither reserves the AI vehicle nor changes selection.
+    pub fn tour_plan(
+        &self,
+        world: &dyn TimetableWorld,
+        line: &str,
+        tour: &str,
+    ) -> Result<TourPlan, String> {
+        let l = self
+            .data
+            .lines
+            .iter()
+            .find(|l| l.name.trim().eq_ignore_ascii_case(line.trim()))
+            .ok_or("unknown line")?;
+        let t = l
+            .tours
+            .iter()
+            .find(|t| t.number.trim().eq_ignore_ascii_case(tour.trim()))
+            .ok_or("unknown tour")?;
+        Ok(TourPlan {
+            line: l.name.clone(),
+            number: t.number.clone(),
+            ai_group: t.ai_group.clone(),
+            extra: t.extra.clone(),
+            available: self.tour_available(t),
+            trips: self.plan_tour_entries(world, t),
+        })
+    }
+
+    fn plan_tour_entries(
+        &self,
+        world: &dyn TimetableWorld,
+        t: &omsi_timetable::Tour,
+    ) -> Vec<TourPlanTrip> {
+        let mut out = Vec::new();
+        for (source_index, tt) in t.trips.iter().enumerate() {
+            let Some(ti) = self
+                .data
+                .trips
+                .iter()
+                .position(|x| x.name.eq_ignore_ascii_case(&tt.trip))
+            else {
+                continue;
+            };
+            let trip = &self.data.trips[ti];
+            let departure = tt.departure as f64 * 60.0;
+            let times = &self.times[ti][usize::try_from(tt.profile)
+                .unwrap_or(0)
+                .min(self.times[ti].len() - 1)];
+            let stops = trip_stations(trip)
+                .iter()
+                .enumerate()
+                .map(|(i, id)| {
+                    let name = self.station_name(trip, i, *id);
+                    let position = world.object_positions().get(id).map(|p| p.0);
+                    let (arr, dep) = times.stations[i];
+                    PlannedStop {
+                        object_id: *id,
+                        name,
+                        arr: departure + arr,
+                        dep: departure + dep,
+                        position,
+                        dir: StopDir::default(),
+                        stops: times.stops[i],
+                        closed: None,
+                    }
+                })
+                .collect();
+            let mut planned = PlannedTrip {
+                name: trip.name.clone(),
+                line: trip.line.clone(),
+                terminus: trip.terminus.clone(),
+                departure,
+                end: departure + times.duration,
+                stops,
+            };
+            planned.set_dirs();
+            let profile_index = usize::try_from(tt.profile)
+                .unwrap_or(0)
+                .min(self.times[ti].len() - 1);
+            out.push(TourPlanTrip {
+                source_index,
+                track: trip.display_name.clone(),
+                reverse: trip.train_reverse,
+                profile_index,
+                profile: trip.profiles.get(profile_index).cloned(),
+                trip: planned,
+            });
+        }
+        out
+    }
     /// The stops of a tour in the order it drives them, over all its trips: (trip number in
     /// the duty, stop number in the trip, name, departure there in seconds). Passing stations
     /// are left out.
@@ -247,51 +357,7 @@ impl ScheduleSim {
                 first
             }
         };
-        let mut trips = Vec::new();
-        for tt in &t.trips {
-            let Some(ti) = self
-                .data
-                .trips
-                .iter()
-                .position(|x| x.name.eq_ignore_ascii_case(&tt.trip))
-            else {
-                continue;
-            };
-            let trip = &self.data.trips[ti];
-            let departure = tt.departure as f64 * 60.0;
-            let times = &self.times[ti][usize::try_from(tt.profile)
-                .unwrap_or(0)
-                .min(self.times[ti].len() - 1)];
-            let stops = trip_stations(trip)
-                .iter()
-                .enumerate()
-                .map(|(i, id)| {
-                    let name = self.station_name(trip, i, *id);
-                    let position = world.object_positions().get(id).map(|p| p.0);
-                    let (arr, dep) = times.stations[i];
-                    PlannedStop {
-                        object_id: *id,
-                        name,
-                        arr: departure + arr,
-                        dep: departure + dep,
-                        position,
-                        dir: StopDir::default(),
-                        stops: times.stops[i],
-                        closed: None,
-                    }
-                })
-                .collect();
-            let mut planned = PlannedTrip {
-                name: trip.name.clone(),
-                line: trip.line.clone(),
-                terminus: trip.terminus.clone(),
-                departure,
-                end: departure + times.duration,
-                stops,
-            };
-            planned.set_dirs();
-            trips.push(planned);
-        }
+        let mut trips: Vec<_> = self.plan_tour_entries(world, t).into_iter().map(|p| p.trip).collect();
         if trips.is_empty() {
             return Err(format!(
                 "line {} tour {} has no trip the timetable knows ({} listed)",
@@ -384,5 +450,118 @@ impl ScheduleSim {
             }
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    struct World {
+        path: PathBuf,
+        ai: omsi_map::AiLists,
+        positions: crate::world_data::ObjectPlaces,
+    }
+    impl TimetableWorld for World {
+        fn root(&self) -> &Path {
+            &self.path
+        }
+        fn map_dir(&self) -> &Path {
+            &self.path
+        }
+        fn chrono_dirs(&self) -> Vec<PathBuf> {
+            vec![]
+        }
+        fn ailists(&self) -> &omsi_map::AiLists {
+            &self.ai
+        }
+        fn raw_tiles(&self) -> Vec<(i32, i32)> {
+            vec![]
+        }
+        fn has_tile(&self, _: (i32, i32)) -> bool {
+            false
+        }
+        fn date(&self) -> i32 {
+            20221010
+        }
+        fn object_positions(&self) -> &crate::world_data::ObjectPlaces {
+            &self.positions
+        }
+        fn stop_side(&self, _: i64) -> f32 {
+            0.0
+        }
+    }
+    #[test]
+    fn full_tour_snapshot_preserves_profiles_passing_stops_and_service_day() {
+        let w = World {
+            path: std::env::temp_dir().join(format!("omsi_tour_plan_{}", std::process::id())),
+            ai: Default::default(),
+            positions: Default::default(),
+        };
+        let mut s = ScheduleSim::new(&w.path, &w, &crate::SimClock::default());
+        s.data.trips.push(omsi_timetable::Trip {
+            name: "night".into(),
+            line: "N1".into(),
+            terminus: "Airport".into(),
+            stations: vec![10, 20],
+            display_name: "track".into(),
+            train_reverse: true,
+            profiles: vec![omsi_timetable::TripProfile {
+                name: "night profile".into(),
+                factor: 1.2,
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        s.times = vec![vec![TripTimes {
+            stations: vec![(0.0, 30.0), (120.0, 150.0)],
+            stops: vec![true, false],
+            duration: 150.0,
+            ..Default::default()
+        }]];
+        s.data.bus_stops.push(omsi_timetable::BusStopEntry {
+            object_id: 10,
+            name: "Start".into(),
+            ..Default::default()
+        });
+        let tt = |name: &str, departure| omsi_timetable::TourTrip {
+            trip: name.into(),
+            departure,
+            profile: 0,
+        };
+        s.data.lines.push(omsi_timetable::Line {
+            name: "N1".into(),
+            tours: vec![omsi_timetable::Tour {
+                number: "1".into(),
+                ai_group: "Depot".into(),
+                extra: "1023".into(),
+                trips: vec![
+                    tt("night", 1439.0),
+                    tt("missing", 1440.0),
+                    tt("night", 1441.0),
+                ],
+            }],
+            ..Default::default()
+        });
+        let plan = s.tour_plan(&w, "n1", "1").unwrap();
+        assert_eq!(plan.trips.len(), 2);
+        assert_eq!(plan.trips[1].source_index, 2);
+        assert_eq!(plan.trips[1].trip.departure, 86460.0);
+        assert_eq!(plan.trips[1].trip.stops[1].arr, 86580.0);
+        assert!(!plan.trips[1].trip.stops[1].stops);
+        assert_eq!(plan.trips[0].trip.stops[0].name, "Start");
+        assert_eq!(
+            plan.trips[0].profile.as_ref().unwrap().name,
+            "night profile"
+        );
+        assert!(plan.trips[0].reverse);
+        assert!(s.player_tour.is_none() && s.player_departure.is_none() && !s.purge_player_tour);
+        assert!(s.tour_plan(&w, "N1", "unknown").is_err());
+        // Selecting only the second known trip must not truncate a later read of its tour.
+        let duty = s
+            .player_duty(&w, "N1", "1", 86400.0, Some("2"), false)
+            .unwrap();
+        assert_eq!(duty.trips.len(), 1);
+        assert_eq!(duty.first_trip, 1);
+        assert_eq!(s.tour_plan(&w, "N1", "1").unwrap().trips.len(), 2);
     }
 }

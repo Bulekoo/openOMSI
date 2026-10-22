@@ -12,6 +12,13 @@ use std::path::Path;
 
 /// The game's side of a frame.
 pub trait PluginIo {
+    fn duty_tour(&self) -> Option<Value> { None }
+    fn timetable_tour(&self, _line: &str, _tour: &str) -> Result<Value, String> { Err("timetable unavailable".into()) }
+
+    /// Read game data directly; never invoke the script VM or its callbacks.
+    fn data_query(&mut self, _query: crate::data::DataQuery, _args: &[crate::data::QueryValue], _object: Option<i64>) -> Result<Vec<crate::data::QueryValue>, String> {
+        Err("game data queries unavailable".into())
+    }
     fn system(&mut self, name: &str) -> Option<f32>;
     fn set_system(&mut self, name: &str, v: f32);
     fn has_vehicle(&self) -> bool;
