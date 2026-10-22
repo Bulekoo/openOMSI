@@ -18,7 +18,7 @@ impl World {
         self.mirror_aspect.lock().clear();
         self.mirror_glass.lock().clear();
         let set = self.upload_vehicle(renderer, scene, vt, scheme, true);
-        let mut render = self.instantiate_vehicle(renderer, scene, vt, &set, None, None);
+        let mut render = self.instantiate_vehicle(renderer, scene, vt, &set, None, None, false);
         own_skinned_meshes(renderer, scene, vt, &mut render);
         render
     }
@@ -41,7 +41,7 @@ impl World {
         } else {
             None
         };
-        let mut render = self.instantiate_vehicle(renderer, scene, vt, &set, None, shared);
+        let mut render = self.instantiate_vehicle(renderer, scene, vt, &set, None, shared, false);
         own_skinned_meshes(renderer, scene, vt, &mut render);
         render
     }
@@ -151,6 +151,21 @@ impl World {
         scheme: Option<usize>,
         lead: Option<&VehicleRender>,
     ) -> VehicleRender {
+        self.add_vehicle_shared_lod(renderer, scene, vt, scheme, lead, false)
+    }
+
+    /// [`World::add_vehicle_shared`] for a vehicle whose pose the caller also gives the
+    /// instances of its lower levels of detail (`VehicleRender::far`), which are drawn in
+    /// place of the full model while it is small on the screen (the AI traffic's).
+    pub fn add_vehicle_shared_lod(
+        &self,
+        renderer: &Renderer,
+        scene: &mut Scene,
+        vt: &omsi_sim::VehicleType,
+        scheme: Option<usize>,
+        lead: Option<&VehicleRender>,
+        lod: bool,
+    ) -> VehicleRender {
         let shared = lead.and_then(|l| {
             (vt.def.script_share || vt.model.script_textures.is_empty()).then(|| l.script_textures.as_slice())
         });
@@ -168,7 +183,7 @@ impl World {
             s.users += 1;
             s.idle_since = None;
         }
-        let mut render = self.instantiate_vehicle(renderer, scene, vt, &set, Some(key), shared);
+        let mut render = self.instantiate_vehicle(renderer, scene, vt, &set, Some(key), shared, lod);
         // an articulated AI bus (timetable or random traffic, and its coupled rear section)
         // bends its own bellows too, from a mesh copy of its own (freed again in
         // `release_vehicle`) - the shared set's copy has to stay in the rest pose, since
@@ -196,7 +211,7 @@ impl World {
                 gpu.free_instances.entry(slots).or_default().push(*instance);
                 renderer.free_mesh(scene, *mesh);
             }
-            for i in render.instances {
+            for i in render.instances.into_iter().chain(render.far) {
                 renderer.remove_instance(scene, i);
                 let slots = renderer.instance_slots(scene, i);
                 gpu.free_instances.entry(slots).or_default().push(i);
@@ -586,6 +601,7 @@ impl World {
         set: &VehicleSet,
         key: Option<VehicleKey>,
         shared_script: Option<&[Option<TextureId>]>,
+        lod: bool,
     ) -> VehicleRender {
         let mut gpu = self.gpu.lock();
         let blank = |gpu: &mut GpuCache, scene: &mut Scene, w: i32, h: i32| {
@@ -806,6 +822,32 @@ impl World {
                 }
             }
         }
+        // The levels of detail, as Omsi.exe picks one by the vehicle's size on the screen: the
+        // full model for a big one, the lower levels' meshes (plain, still, standing where the
+        // body does) for a small one - a bus far down the street was every one of its 200
+        // meshes, tens of thousands of triangles, for a handful of pixels.
+        let mut bands = lod_bands(&vt.model);
+        // (OMSI_FORCE_LOD=1, to look at the lower levels: they are drawn at any size)
+        if std::env::var_os("OMSI_FORCE_LOD").is_some() && bands.len() > 1 {
+            bands = std::iter::once((f32::MAX * 0.5, f32::MAX)).chain(bands.iter().skip(1).map(|_| (0.0, f32::MAX))).collect();
+        }
+        let mut far = Vec::new();
+        if lod && !set.far.is_empty() && bands.len() > 1 {
+            for &inst in &instances {
+                if scene.instances.get(inst).is_some_and(|x| !x.blob) {
+                    renderer.set_lod_range(scene, inst, bands[0].0, bands[0].1);
+                }
+            }
+            renderer.begin_shared_object(scene, (&vt.def.path, "far"));
+            for f in &set.far {
+                let (lo, hi) = bands.get(f.level).copied().unwrap_or((0.0, f32::MAX));
+                let i = renderer.add_instance(scene, f.mesh, DVec3::ZERO, Mat4::IDENTITY, f.mats.clone());
+                renderer.set_omsi_caster(scene, i, f.casts);
+                renderer.set_roof(scene, i, vt.def.bounding_box.map(|b| b[5] + b[2] * 0.5));
+                renderer.set_lod_range(scene, i, lo, hi);
+                far.push(if key.is_some() { gpu.instance(renderer, scene, i) } else { i });
+            }
+        }
         // the vehicle is drawn or left out as one object (see `set_object_culling`): its
         // sphere about the vehicle's origin, which every mesh instance shares
         let radius = set
@@ -817,12 +859,13 @@ impl World {
             .fold(0.0f32, f32::max);
         let any_distance =
             vt.model.no_distance_check || vt.model.meshes.iter().any(|m| m.no_distance_check);
-        for inst in &instances {
+        for inst in instances.iter().chain(&far) {
             renderer.set_object_culling(scene, *inst, radius, vt.model.detail_factor, any_distance);
         }
         VehicleRender {
             window_wipers: None,
             instances,
+            far,
             text_textures,
             script_textures,
             shared_script: shared_script.is_some(),
@@ -919,6 +962,41 @@ impl World {
             mesh_secs += t_mesh.elapsed().as_secs_f64();
             up.instances.push((id, mats));
         }
+        // the lower levels of detail: plain materials, as the scenery's (`type_gpu_lods`)
+        let mut far = Vec::new();
+        for (k, vm) in vt.lod_meshes.iter().enumerate() {
+            let def = &vt.model.meshes[vm.def_index];
+            if only.is_some() || hide.is_some() {
+                break;
+            }
+            let mats: Vec<MaterialId> = vm
+                .materials
+                .iter()
+                .enumerate()
+                .map(|(slot, m)| self.far_material(renderer, scene, &mut up, vm, slot, m))
+                .collect();
+            let key = (vt.def.path.clone(), FAR_MESH_KEY + k);
+            let id = match mesh_ids.get_mut(&key) {
+                Some(e) => {
+                    if !mesh_keys.contains(&key) {
+                        e.1 += 1;
+                        mesh_keys.push(key);
+                    }
+                    e.0
+                }
+                None => {
+                    let id = self.gpu.lock().add_mesh(renderer, scene, &vm.data);
+                    scene.meshes[id].source = Some(vt.def.path.display().to_string());
+                    mesh_ids.insert(key.clone(), (id, 1));
+                    mesh_keys.push(key);
+                    id
+                }
+            };
+            far.push(FarMesh { level: def.lod, mesh: id, mats, casts: def.shadow });
+        }
+        if omsi_cfg::flags::OMSI_PROFILE.is_set() && !vt.lod_meshes.is_empty() {
+            log::info!("  vehicle set {}: {} meshes of {} lower levels of detail ({:?})", vt.def.path.file_name().unwrap_or_default().to_string_lossy(), far.len(), vt.model.lods.len().saturating_sub(1), lod_bands(&vt.model));
+        }
         let VehicleUpload { held, mut materials, tex_time, instances, mut missing_tex, variants, dyn_slots, .. } = up;
         if !missing_tex.is_empty() {
             missing_tex.sort();
@@ -942,6 +1020,7 @@ impl World {
         }
         VehicleSet {
             meshes: instances,
+            far,
             dyn_slots,
             variants,
             textures: held,
@@ -950,6 +1029,33 @@ impl World {
             users: 0,
             idle_since: Some(std::time::Instant::now()),
         }
+    }
+
+    /// The plain material of one slot of a lower level of detail's mesh: its texture (in the
+    /// paint scheme's pictures) and its alpha mode, nothing the scripts switch.
+    fn far_material(
+        &self,
+        renderer: &Renderer,
+        scene: &mut Scene,
+        up: &mut VehicleUpload,
+        vm: &omsi_sim::vehicle::VehicleMesh,
+        slot: usize,
+        m: &omsi_o3d::Material,
+    ) -> MaterialId {
+        let name = up
+            .subst
+            .get(&m.texture.to_ascii_lowercase())
+            .cloned()
+            .unwrap_or_else(|| m.texture.clone());
+        let tex = if is_null_texture(&m.texture) || name.trim().is_empty() || name.starts_with("\\S:") {
+            None
+        } else {
+            self.vehicle_texture(renderer, scene, &mut up.tex_ids, &mut up.held, name.trim(), up.dirs_ref)
+        };
+        let mat = renderer.add_material_night(scene, tex, material_alpha(&vm.materials, slot, &vm.overrides), [1.0; 4], false, None, None);
+        let mat = self.gpu.lock().material(renderer, scene, mat);
+        up.materials.push(mat);
+        mat
     }
 
     /// The material of one slot of a vehicle mesh being uploaded (see
@@ -1520,4 +1626,23 @@ struct VehicleUpload<'a> {
     only: Option<String>,
     variants: Vec<VariantSlot>,
     dyn_slots: Vec<DynSlot>,
+}
+
+/// Where the keys of the lower levels' meshes start in a vehicle's mesh cache (the full model's
+/// meshes are keyed by their index).
+const FAR_MESH_KEY: usize = 1 << 20;
+
+/// The size band each level of detail is drawn in, by the object's screen size: OMSI picks the
+/// first level, in the order the model lists them, whose least size the object reaches, else
+/// the last one whatever its own (Omsi.exe 0x5ef860, as the scenery's levels, see
+/// `type_gpu_lods`): a level is drawn from its least size (the last from 0) up to the least of
+/// the sizes listed before it.
+pub(crate) fn lod_bands(model: &omsi_model::Model) -> Vec<(f32, f32)> {
+    let mins: Vec<f32> = model.lods.iter().map(|l| l.min_size).collect();
+    (0..mins.len())
+        .map(|i| {
+            let lo = if i + 1 == mins.len() { 0.0 } else { mins[i] };
+            (lo, mins[..i].iter().copied().fold(f32::MAX, f32::min))
+        })
+        .collect()
 }
