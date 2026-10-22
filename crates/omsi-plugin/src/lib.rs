@@ -47,6 +47,7 @@
 //! Wine elsewhere). The frame is one round trip.
 
 pub mod api;
+pub mod data;
 pub mod io;
 pub mod lua;
 pub mod ui;

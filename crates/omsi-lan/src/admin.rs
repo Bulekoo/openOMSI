@@ -508,7 +508,7 @@ mod passenger_density_command_tests {
 
     fn session() -> LanSession {
         // (no rendezvous on the internet from a test)
-        std::env::set_var("OMSI_NO_BRIDGE", "1");
+        unsafe { std::env::set_var("OMSI_NO_BRIDGE", "1") };
         LanSession::host(0, "server", omsi_net::WorldInfo::default(), true).unwrap()
     }
 

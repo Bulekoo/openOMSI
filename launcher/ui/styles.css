@@ -495,7 +495,7 @@ table.table { width: 100%; border-collapse: collapse; }
 .roadbook-head b { font-size: 15px; }
 .roadbook-trips { flex: 1; min-height: 0; overflow: auto; padding: 0 8px 8px; container-type: inline-size; }
 .trip-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border-radius: var(--radius-sm); background: none; color: inherit; text-align: left; cursor: pointer; }
-.trip-row .time { width: 44px; flex: none; font-weight: 700; display: flex; flex-direction: column; }
+.trip-row .time { width: 52px; flex: none; font-weight: 700; display: flex; flex-direction: column; }
 .trip-row .time small, .m-time small { font-weight: 400; font-size: 12px; color: var(--muted); }
 /* (wide enough for the longest depot run label, "Garázsmenet" in Hungarian, about 72 px; a
    longer one ends in an ellipsis rather than running into the terminus) */

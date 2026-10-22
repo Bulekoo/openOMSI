@@ -420,6 +420,21 @@ impl App {
         if self.menus.game_menu.is_none() && self.editor_mouse(pressed) {
             return;
         }
+        // the MileZero card: its buttons, and a press on it goes no further
+        if pressed && self.settings.milezero {
+            let (x, y) = self.input.cursor;
+            let at = |r: Option<[f32; 4]>| r.is_some_and(|r| x >= r[0] && x < r[2] && y >= r[1] && y < r[3]);
+            let (play, request, card) = self.ui.as_ref().map_or((false, false, false), |u| (at(u.mz.play), at(u.mz.request), at(u.mz.rect)));
+            if play {
+                self.sound.milezero.want_play = !self.sound.milezero.want_play;
+                return;
+            } else if request {
+                self.sound.milezero.typing = Some(String::new());
+                return;
+            } else if card {
+                return;
+            }
+        }
         // a trolleybus's pole in the mouse's hand: let go, or taken (see `trolley_mouse`)
         if pressed && self.menus.game_menu.is_none() && self.trolley_mouse_click() {
             return;
@@ -795,5 +810,33 @@ mod reach_tests {
         assert!(part_in_reach(eye, DVec3::new(0.0, -12.0, 0.0), 0.0, Some(rear)));
         // (the box's centre turns with the part: heading 180, the rear is ahead)
         assert!(part_in_reach(DVec3::new(-2.0, 17.0, 1.7), DVec3::new(0.0, 12.0, 0.0), 180.0, Some(rear)));
+    }
+}
+
+impl App {
+    /// A key pressed while a MileZero song request is being typed: true when it was taken.
+    pub(crate) fn milezero_typing(&mut self, event: &winit::event::KeyEvent) -> bool {
+        use winit::keyboard::{Key, NamedKey};
+        let mz = &mut self.sound.milezero;
+        if event.state != ElementState::Pressed || mz.typing.is_none() {
+            return false;
+        }
+        match &event.logical_key {
+            Key::Named(NamedKey::Enter) => mz.submit(),
+            Key::Named(NamedKey::Escape) => mz.typing = None,
+            Key::Named(NamedKey::Backspace) => {
+                if let Some(t) = mz.typing.as_mut() {
+                    t.pop();
+                }
+            }
+            _ => {
+                if let (Some(t), Some(text)) = (mz.typing.as_mut(), event.text.as_deref()) {
+                    if t.chars().count() < 200 {
+                        t.extend(text.chars().filter(|c| !c.is_control()));
+                    }
+                }
+            }
+        }
+        true
     }
 }

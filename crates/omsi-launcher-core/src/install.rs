@@ -318,7 +318,7 @@ fn free_space_impl(p: &Path) -> Option<u64> {
 fn free_space_impl(p: &Path) -> Option<u64> {
     use std::os::windows::ffi::OsStrExt;
     #[link(name = "kernel32")]
-    extern "system" {
+    unsafe extern "system" {
         fn GetDiskFreeSpaceExW(dir: *const u16, avail: *mut u64, total: *mut u64, free: *mut u64) -> i32;
     }
     let wide: Vec<u16> = p.as_os_str().encode_wide().chain(Some(0)).collect();
@@ -341,7 +341,7 @@ pub fn pid_alive(pid: u32) -> bool {
 #[cfg(windows)]
 pub fn pid_alive(pid: u32) -> bool {
     #[link(name = "kernel32")]
-    extern "system" {
+    unsafe extern "system" {
         fn OpenProcess(access: u32, inherit: i32, pid: u32) -> isize;
         fn GetExitCodeProcess(h: isize, code: *mut u32) -> i32;
         fn CloseHandle(h: isize) -> i32;

@@ -46,7 +46,7 @@ pub(super) struct LinesText {
 /// The languages that write a decimal with a comma.
 fn decimal_comma(lang: &str) -> bool {
     let base = lang.split(['-', '_']).next().unwrap_or("");
-    matches!(base, "es" | "ca" | "sv" | "pt" | "fr" | "de" | "nl" | "ru" | "pl" | "uk" | "it" | "cs" | "tr" | "hu" | "be" | "kk" | "id" | "vi")
+    matches!(base, "es" | "ca" | "sv" | "pt" | "fr" | "de" | "nl" | "ru" | "pl" | "uk" | "it" | "cs" | "tr" | "hu" | "be" | "kk" | "id" | "vi" | "ka")
 }
 
 pub(super) fn lines_text() -> LinesText {

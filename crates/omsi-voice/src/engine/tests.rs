@@ -234,7 +234,7 @@ fn a_flood_of_speakers_and_junk_is_bounded() {
 /// The whole chain on its threads, with the synthetic microphone: two voices, one speaks.
 #[test]
 fn two_engines_talk_through_the_test_tone() {
-    std::env::set_var("OMSI_VOICE_TEST_TONE", "440");
+    unsafe { std::env::set_var("OMSI_VOICE_TEST_TONE", "440") };
     let (a, b) = (Voice::new(), Voice::new());
     a.set_settings(&on());
     b.set_settings(&on());
@@ -269,5 +269,5 @@ fn two_engines_talk_through_the_test_tone() {
     a.set_settings(&Settings::default());
     std::thread::sleep(Duration::from_millis(150));
     assert!(!a.status().mic_open);
-    std::env::remove_var("OMSI_VOICE_TEST_TONE");
+    unsafe { std::env::remove_var("OMSI_VOICE_TEST_TONE") };
 }

@@ -6,7 +6,7 @@
 
 #[test]
 fn pictures_larger_than_the_chip_takes_are_made_to_fit() {
-    std::env::set_var("OMSI_GPU_LIMITS", "downlevel");
+    unsafe { std::env::set_var("OMSI_GPU_LIMITS", "downlevel") };
     let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
     descriptor.backends = wgpu::Backends::NOOP;
     descriptor.backend_options.noop = wgpu::NoopBackendOptions { enable: true };

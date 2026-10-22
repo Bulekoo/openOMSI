@@ -530,7 +530,7 @@ impl Interp {
                     let cls: Vec<String> = to_str(&v).split_whitespace().map(str::to_string).collect();
                     if self.dom.nodes[*i].classes != cls {
                         self.dom.nodes[*i].classes = cls;
-                        self.dom.gen += 1;
+                        self.dom.generation += 1;
                     }
                 }
                 "id" | "src" | "width" | "height" => {
@@ -544,7 +544,7 @@ impl Interp {
                     };
                     if *slot != s {
                         *slot = s;
-                        self.dom.gen += 1;
+                        self.dom.generation += 1;
                     }
                 }
                 k if k.len() > 2 && k.starts_with("on") => {
@@ -564,7 +564,7 @@ impl Interp {
                 if !inline.last().is_some_and(|(k, x)| *k == prop && *x == val) {
                     inline.retain(|(k, _)| *k != prop);
                     inline.push((prop, val));
-                    self.dom.gen += 1;
+                    self.dom.generation += 1;
                 }
             }
             _ => {}
@@ -739,14 +739,14 @@ impl Interp {
                     "add" => {
                         if !has && !cls.is_empty() {
                             n.classes.push(cls);
-                            self.dom.gen += 1;
+                            self.dom.generation += 1;
                         }
                         Some(Val::Undef)
                     }
                     "remove" => {
                         if has {
                             n.classes.retain(|c| *c != cls);
-                            self.dom.gen += 1;
+                            self.dom.generation += 1;
                         }
                         Some(Val::Undef)
                     }
@@ -754,10 +754,10 @@ impl Interp {
                         let want = args.get(1).map(truthy).unwrap_or(!has);
                         if want && !has && !cls.is_empty() {
                             n.classes.push(cls);
-                            self.dom.gen += 1;
+                            self.dom.generation += 1;
                         } else if !want && has {
                             n.classes.retain(|c| *c != cls);
-                            self.dom.gen += 1;
+                            self.dom.generation += 1;
                         }
                         Some(Val::Bool(want))
                     }
@@ -767,7 +767,7 @@ impl Interp {
             }
             Val::Elem(i) if name == "setAttribute" => {
                 let (k, v) = (arg_s(0), arg_s(1));
-                self.dom.gen += 1;
+                self.dom.generation += 1;
                 let n = &mut self.dom.nodes[*i];
                 match k.as_str() {
                     "class" => n.classes = v.split_whitespace().map(str::to_string).collect(),

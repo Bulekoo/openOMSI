@@ -11,7 +11,7 @@ import { Spinner, Toggle, Slider } from '../ui.js';
 import { BusPreview } from '../preview.js';
 import { RouteMap } from '../routemap.js';
 import { choose, curMap, curBus, curLine, curTour, pickedTrip, realTime, realDate, start, weatherName, weatherOfItsOwn, askJoined, noServerBus, mapName, serverBuses, busFile } from '../data.js';
-import { hms, mapPicture, tripAt, depotRun, pickTrip, lineMatches, findTours, chooseLine, chooseTour, setSeason, localNow, SEASONS, PHASES, TripEnds, weatherFacts, entryName } from '../pages/drive.js';
+import { hms, mapPicture, tripAt, depotRun, pickTrip, lineMatches, findTours, chooseLine, chooseTour, setSeason, localNow, SEASONS, PHASES, TripEnds, tripTime, weatherFacts, entryName } from '../pages/drive.js';
 import { MultiplayerPage } from '../pages/multiplayer.js';
 import { ProfilePage } from '../pages/profile.js';
 import { ModsPage } from '../pages/mods.js';
@@ -254,7 +254,7 @@ function TripSheet({ close }) {
   const trip = tour.trips[cur];
   return html`<div class="m-split">
     <div class="m-split-list">
-      ${tour.trips.map((x, i) => pick(i === cur, () => pickTrip(x), html`<span class="m-time">${hms(x.departure)}<small>${hms(x.arrival)}</small></span>${depotRun(x) ? html`<span class="muted">${t('Depot run')}</span>` : html`<span class="line-badge">${x.line}</span>`}<span class="m-pick-text"><${TripEnds} trip=${x} stack /></span>`))}
+      ${tour.trips.map((x, i) => pick(i === cur, () => pickTrip(x), html`<span class="m-time">${hms(x.departure)}<small>${hms(x.arrival)}</small><small>${tripTime(x)}</small></span>${depotRun(x) ? html`<span class="muted">${t('Depot run')}</span>` : html`<span class="line-badge">${x.line}</span>`}<span class="m-pick-text"><${TripEnds} trip=${x} stack /></span>`))}
     </div>
     <div class="m-split-map">
       ${trip && html`<${RouteMap} map=${c.map} date=${c.date} trip=${trip.name} entry=${c.entry} height=${0} stops=${trip.stops.map((x) => ({ time: hms(x.dep || x.arr), name: x.name }))} onEntry=${(entry) => choose({ entry })} />`}

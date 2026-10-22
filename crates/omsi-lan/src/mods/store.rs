@@ -43,7 +43,7 @@ fn free_space_impl(p: &Path) -> Option<u64> {
 fn free_space_impl(p: &Path) -> Option<u64> {
     use std::os::windows::ffi::OsStrExt;
     #[link(name = "kernel32")]
-    extern "system" {
+    unsafe extern "system" {
         fn GetDiskFreeSpaceExW(dir: *const u16, avail: *mut u64, total: *mut u64, free: *mut u64) -> i32;
     }
     let wide: Vec<u16> = p.as_os_str().encode_wide().chain(Some(0)).collect();

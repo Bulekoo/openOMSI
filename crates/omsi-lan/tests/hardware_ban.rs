@@ -45,7 +45,7 @@ fn run(host: &mut LanSession, adm: &ServerAdmin, role: Role, text: &str) -> omsi
 
 #[test]
 fn a_banned_machine_is_sent_away_stays_out_and_comes_back_when_lifted() {
-    std::env::set_var("OMSI_NO_BRIDGE", "1");
+    unsafe { std::env::set_var("OMSI_NO_BRIDGE", "1") };
     let dir = std::env::temp_dir().join(format!("omsi-hwban-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     omsi_lan::bans::install(BanStore::open(Some(dir.join("bans.json")), Some(dir.join("owner.json"))));

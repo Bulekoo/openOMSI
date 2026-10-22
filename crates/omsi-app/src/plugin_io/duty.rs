@@ -222,3 +222,136 @@ pub(crate) fn lane(app: &App, x: f64, y: f64) -> Option<op::Lane> {
     let l = &t.net.lanes[i];
     Some(op::Lane { index: i, distance: dist, speed_limit_kmh: l.speed_limit_kmh, name: l.name.clone(), has_light: l.traffic_light.is_some() })
 }
+
+/// The complete source tour, aligned with the active duty even when only one trip was picked.
+pub(crate) fn tour(
+    app: &App,
+    line: &str,
+    tour: &str,
+    selected: bool,
+) -> Result<op::api::Value, String> {
+    use op::api::Value as V;
+    fn rec(p: Vec<(&str, V)>) -> V {
+        V::Map(p.into_iter().map(|(k, v)| (k.into(), v)).collect())
+    }
+    let sch = crate::duty_book::timetable(app).ok_or("no timetable")?;
+    let w = app.world.as_ref().ok_or("no world")?.data();
+    let plan = sch.tour_plan(w.as_ref(), line, tour)?;
+    let offset = if selected {
+        tour_time_offset(&plan, app.session.duty.as_ref())
+    } else {
+        0.0
+    };
+    let entries = plan
+        .trips
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let t = &p.trip;
+            let stops = t
+                .stops
+                .iter()
+                .map(|s| {
+                    let mut fields = vec![
+                        ("id", V::Int(s.object_id)),
+                        ("name", s.name.clone().into()),
+                        ("arrival", (s.arr + offset).into()),
+                        ("departure", (s.dep + offset).into()),
+                        ("stops", s.stops.into()),
+                    ];
+                    if let Some(p) = s.position {
+                        fields.extend([("x", p.x.into()), ("y", p.y.into()), ("z", p.z.into())]);
+                    }
+                    rec(fields)
+                })
+                .collect();
+            let profile = p.profile.as_ref().map(|f| {
+                rec(vec![
+                    ("name", f.name.clone().into()),
+                    ("factor", (f.factor as f64).into()),
+                ])
+            });
+            rec(vec![
+                ("number", (i + 1).into()),
+                ("source_number", (p.source_index + 1).into()),
+                ("name", t.name.clone().into()),
+                ("line", t.line.clone().into()),
+                ("terminus", t.terminus.clone().into()),
+                ("track", p.track.clone().into()),
+                ("reverse", p.reverse.into()),
+                ("profile_index", p.profile_index.into()),
+                ("profile", profile.into()),
+                ("departure", (t.departure + offset).into()),
+                ("arrival", (t.end + offset).into()),
+                ("stops", V::List(stops)),
+            ])
+        })
+        .collect();
+    Ok(rec(vec![
+        ("line", plan.line.into()),
+        ("number", plan.number.into()),
+        ("ai_group", plan.ai_group.into()),
+        ("extra", plan.extra.into()),
+        ("today", plan.available.into()),
+        ("time_offset", offset.into()),
+        ("trips", V::List(entries)),
+    ]))
+}
+
+fn tour_time_offset(
+    plan: &omsi_sim::timetable_run::TourPlan,
+    duty: Option<&omsi_sim::timetable_run::PlayerDuty>,
+) -> f64 {
+    duty.and_then(|d| {
+        plan.trips
+            .get(d.first_trip + d.trip_index)
+            .zip(d.trips.get(d.trip_index))
+    })
+    .map_or(0.0, |(raw, active)| active.departure - raw.trip.departure)
+}
+
+#[cfg(test)]
+mod tour_tests {
+    use super::*;
+    use omsi_sim::timetable_run::{PlannedTrip, PlayerDuty, TourPlan, TourPlanTrip};
+    fn planned(departure: f64) -> PlannedTrip {
+        PlannedTrip {
+            name: "N1".into(),
+            line: "N1".into(),
+            terminus: "End".into(),
+            departure,
+            end: departure + 60.0,
+            stops: vec![],
+        }
+    }
+    #[test]
+    fn a_single_selected_trip_aligns_its_full_tour_after_midnight() {
+        let entry = |departure| TourPlanTrip {
+            source_index: 0,
+            track: String::new(),
+            reverse: false,
+            profile_index: 0,
+            profile: None,
+            trip: planned(departure),
+        };
+        let plan = TourPlan {
+            line: "N1".into(),
+            number: "1".into(),
+            ai_group: String::new(),
+            extra: String::new(),
+            available: true,
+            trips: vec![entry(85800.0), entry(86700.0)],
+        };
+        let duty = PlayerDuty::new("N1".into(), "1".into(), vec![planned(300.0)], 0, 1, true);
+        assert_eq!(tour_time_offset(&plan, Some(&duty)), -86400.0);
+        assert_eq!(
+            plan.trips[0].trip.departure + tour_time_offset(&plan, Some(&duty)),
+            -600.0
+        );
+        assert_eq!(
+            plan.trips[1].trip.departure + tour_time_offset(&plan, Some(&duty)),
+            300.0
+        );
+        assert_eq!(tour_time_offset(&plan, None), 0.0);
+    }
+}

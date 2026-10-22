@@ -13,8 +13,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 YML = os.path.join(ROOT, "crates", "omsi-app", "locales", "app.yml")
 OUT = os.path.join(ROOT, "apple", "Resources", "Localizable.xcstrings")
+LANGS = os.path.join(ROOT, "crates", "omsi-cfg", "src", "lang.rs")
+PLISTS = [os.path.join(ROOT, "apple", p, "Info.plist") for p in ("iOS", "macOS")]
 
-# app.yml's language codes → Apple's
+# app.yml's language codes → Apple's (the same map as AppLanguage.apple)
 APPLE = {"pt": "pt-BR", "pt-pt": "pt-PT", "zh": "zh-Hans", "zh-tw": "zh-Hant", "tl": "fil"}
 
 
@@ -57,6 +59,18 @@ def write(strings):
         f.write('{\n  "sourceLanguage": "en",\n  "strings": {\n    ' + ",\n    ".join(rows) + '\n  },\n  "version": "1.0"\n}\n')
 
 
+def game_languages():
+    return re.findall(r'^    \("[A-Z]{3}", "[^"]*", "([^"]+)"', open(LANGS, encoding="utf-8").read(), re.M)
+
+
+def write_plists(langs):
+    array = "<array>\n" + "".join(f"\t\t<string>{l}</string>\n" for l in langs) + "\t</array>"
+    for path in PLISTS:
+        text = open(path, encoding="utf-8").read()
+        text = re.sub(r"(<key>CFBundleLocalizations</key>\s*)<array>.*?</array>", lambda m: m.group(1) + array, text, flags=re.S)
+        open(path, "w", encoding="utf-8").write(text)
+
+
 def main():
     table = read_yml(YML)
     used = swift_texts()
@@ -68,6 +82,7 @@ def main():
         strings[text] = {"localizations": {APPLE.get(l, l): {"stringUnit": {"state": "translated", "value": v}} for l, v in sorted(tr.items())}}
     write(strings)
     langs = sorted({l for s in strings.values() for l in s["localizations"]})
+    write_plists(["en", *sorted(APPLE.get(l, l) for l in game_languages() if l != "en")])
     print(f"{len(strings)} of {len(used)} texts translated, {len(langs)} languages: {' '.join(langs)}")
 
 

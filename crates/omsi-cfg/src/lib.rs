@@ -1012,7 +1012,7 @@ pub fn drop_unusable_home() {
     let p = std::path::PathBuf::from(&h);
     let usable = p.is_absolute() && p.is_dir() && std::fs::create_dir_all(p.join(".openomsi")).is_ok();
     if !usable && std::env::var_os("USERPROFILE").is_some() {
-        std::env::remove_var("HOME");
+        unsafe { std::env::remove_var("HOME") };
     }
 }
 

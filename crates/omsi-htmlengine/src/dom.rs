@@ -42,7 +42,7 @@ pub(crate) struct Dom {
     pub(crate) scripts: Vec<String>,
     pub(crate) body: usize,
     /// Counts every visible change of the page; layout and frame caches key on it.
-    pub(crate) gen: u64,
+    pub(crate) generation: u64,
 }
 
 pub(crate) const VOID: &[&str] = &["br", "img", "hr", "meta", "link", "input", "area", "base", "col", "source", "wbr"];
@@ -244,7 +244,7 @@ impl Dom {
             if self.nodes[k].tag == "#text" {
                 if self.nodes[k].text.as_deref() != Some(s.as_str()) {
                     self.nodes[k].text = Some(s);
-                    self.gen += 1;
+                    self.generation += 1;
                 }
                 return;
             }
@@ -252,7 +252,7 @@ impl Dom {
         let t = self.nodes.len();
         self.nodes.push(Node { tag: "#text".into(), text: Some(s), parent: Some(idx), ..Node::default() });
         self.nodes[idx].kids = vec![t];
-        self.gen += 1;
+        self.generation += 1;
     }
 
     /// A new element that hangs nowhere yet (`document.createElement`).
@@ -264,7 +264,7 @@ impl Dom {
     pub(crate) fn detach(&mut self, idx: usize) {
         if let Some(p) = self.nodes[idx].parent.take() {
             self.nodes[p].kids.retain(|&k| k != idx);
-            self.gen += 1;
+            self.generation += 1;
         }
     }
 
@@ -288,7 +288,7 @@ impl Dom {
         self.detach(child);
         self.nodes[child].parent = Some(parent);
         self.nodes[parent].kids.push(child);
-        self.gen += 1;
+        self.generation += 1;
     }
 
     pub(crate) fn copy_from(&mut self, src: &Dom, s: usize, parent: usize) {
@@ -311,7 +311,7 @@ impl Dom {
         for &k in &frag.nodes[frag.body].kids {
             self.copy_from(&frag, k, parent);
         }
-        self.gen += 1;
+        self.generation += 1;
     }
 
     pub(crate) fn by_id(&self, id: &str) -> Option<usize> {

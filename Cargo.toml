@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "crates/omsi-cfg",
     "crates/omsi-script",
@@ -50,7 +50,7 @@ exclude = ["launcher/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "AGPL-3.0-only"
 
 # Every dependency that more than one crate uses is declared here once, so an update (by

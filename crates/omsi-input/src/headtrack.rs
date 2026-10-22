@@ -409,8 +409,8 @@ mod npclient {
         }
 
         unsafe fn symbol<T: Copy>(dll: HMODULE, name: windows::core::PCSTR) -> Option<T> {
-            let proc = GetProcAddress(dll, name)?;
-            Some(transmute_copy(&proc))
+            let proc = unsafe { GetProcAddress(dll, name) }?;
+            Some(unsafe { transmute_copy(&proc) })
         }
 
         fn try_start(&mut self) -> Option<()> {
