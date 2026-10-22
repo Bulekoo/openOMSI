@@ -84,8 +84,6 @@ impl<'a> Offscreen<'a> {
         let (duty, duty_error) = player_duty(args, &world, schedule.as_mut(), player.as_mut());
         if let Some(p) = player.as_mut() {
             crate::duty_start::set_starting_cabin_temperature(args, &mut p.vehicle);
-        }
-        if let Some(p) = player.as_mut() {
             let active = if duty.is_some() { 1.0 } else { 0.0 };
             p.vehicle.host.schedule_active = active;
             p.vehicle.set_var("schedule_active", active);
