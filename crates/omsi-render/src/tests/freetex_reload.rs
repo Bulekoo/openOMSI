@@ -31,11 +31,11 @@ fn changed_freetex_reuses_cached_materials_and_rebinds_only_after_resize() {
     let cached_one =
         renderer.add_material(&mut scene, Some(one), AlphaMode::Opaque, [1.0; 4], true);
     let old_group = scene.materials[cached_zero].bind_group.clone();
-    let old_generation = scene.textures[zero].gen;
+    let old_generation = scene.textures[zero].generation;
     // Page one is selected while page zero's file is regenerated.
     assert_eq!(scene.materials[cached_one].texture, Some(one));
     assert!(!renderer.refresh_texture(&mut scene, zero, &picture(4, &[0, 255, 0, 255])));
-    assert_eq!(scene.textures[zero].gen, old_generation);
+    assert_eq!(scene.textures[zero].generation, old_generation);
     assert_eq!(scene.materials[cached_zero].bind_group, old_group);
     assert_eq!(
         read_first_texture_block(&renderer, &scene.textures[zero]),
@@ -44,7 +44,7 @@ fn changed_freetex_reuses_cached_materials_and_rebinds_only_after_resize() {
     // Selecting the cached material again sees those new pixels, without rebuilding it.
     assert_eq!(scene.materials[cached_zero].texture, Some(zero));
     assert!(renderer.refresh_texture(&mut scene, zero, &picture(8, &[255, 255, 0, 255])));
-    assert_ne!(scene.textures[zero].gen, old_generation);
+    assert_ne!(scene.textures[zero].generation, old_generation);
     assert_eq!(renderer.rebind_textures(&mut scene, &[zero]), 1);
     assert_ne!(scene.materials[cached_zero].bind_group, old_group);
     assert_eq!(
@@ -96,10 +96,10 @@ fn changed_freetex_reuses_cached_materials_and_rebinds_only_after_resize() {
             gpu_mips: false,
         };
         let id = renderer.add_texture_data(&mut scene, &data);
-        let generation = scene.textures[id].gen;
+        let generation = scene.textures[id].generation;
         data.levels[0] = green.clone();
         assert!(!renderer.refresh_texture(&mut scene, id, &data));
-        assert_eq!(scene.textures[id].gen, generation);
+        assert_eq!(scene.textures[id].generation, generation);
         assert_eq!(
             read_first_texture_block(&renderer, &scene.textures[id]),
             green
