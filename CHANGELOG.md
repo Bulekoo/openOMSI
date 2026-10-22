@@ -13,7 +13,7 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 - **Every light casts a shadow** (Enhanced and Enhanced+): the lamps' shadow maps were four, now
   there are forty-four, tiles of an eighth of the far shadow map's width (256 texels at the
   default 2048) in six rows under it - only where the picture is an Enhanced one, so Vanilla and
-  Vanilla+ keep the far map's size - and smaller where the graphics card's textures are too low
+  Vanilla+ need no more than the far map itself - and smaller where the graphics card's textures are too low
   for them. Twenty are the world's: the street lamps, floodlights and platform lights lighting
   the view most keep their map while they stay among the strongest, and a lamp new to the set
   takes a free one (six a frame at most). Eight look along the road from the headlamps of the
