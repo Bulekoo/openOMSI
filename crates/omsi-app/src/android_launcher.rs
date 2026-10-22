@@ -83,7 +83,7 @@ fn take(env: &mut JNIEnv, s: &JString) -> String {
 
 /// `LauncherBridge.call(cmd, args)`: a command of the page (on the bridge's worker thread);
 /// "1" and the JSON answer, or "0" and the error.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_org_openomsi_game_LauncherBridge_call<'a>(mut env: JNIEnv<'a>, class: JClass<'a>, cmd: JString<'a>, args: JString<'a>) -> jstring {
     if BRIDGE.get().is_none() {
         if let Ok(g) = env.new_global_ref(&class) {
@@ -105,7 +105,7 @@ pub extern "system" fn Java_org_openomsi_game_LauncherBridge_call<'a>(mut env: J
 
 /// `LauncherBridge.bytes(cmd, args)`: a command answering bytes (the preview's pictures);
 /// the bytes after a 1, or a 0 and the error's text.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_org_openomsi_game_LauncherBridge_bytes<'a>(mut env: JNIEnv<'a>, _class: JClass<'a>, cmd: JString<'a>, args: JString<'a>) -> jbyteArray {
     let cmd = take(&mut env, &cmd);
     let args: Value = serde_json::from_str(&take(&mut env, &args)).unwrap_or(Value::Null);

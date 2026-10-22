@@ -294,10 +294,9 @@ impl Vr {
             .map(|image| {
                 // OpenXR retains ownership; cloning the COM interface gives wgpu a
                 // separate reference for the lifetime of the imported texture.
+                let raw = image.cast();
                 let resource = unsafe {
-                    windows::Win32::Graphics::Direct3D12::ID3D12Resource::from_raw_borrowed(
-                        &image.cast(),
-                    )
+                    windows::Win32::Graphics::Direct3D12::ID3D12Resource::from_raw_borrowed(&raw)
                 }
                 .ok_or_else(|| anyhow!("OpenXR returned a null swapchain image"))?
                 .clone();

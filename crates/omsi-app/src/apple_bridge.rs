@@ -71,9 +71,9 @@ pub(crate) fn game_status(text: &str) {
 /// # Safety
 /// `cmd` and `arg` are nul-terminated strings (or null); the reply is freed with
 /// `openomsi_bridge_free`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openomsi_bridge(cmd: *const c_char, arg: *const c_char) -> *mut c_char {
-    let read = |p: *const c_char| if p.is_null() { String::new() } else { CStr::from_ptr(p).to_string_lossy().into_owned() };
+    let read = |p: *const c_char| if p.is_null() { String::new() } else { unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned() };
     let (cmd, arg) = (read(cmd), read(arg));
     let reply = match std::panic::catch_unwind(|| call(&cmd, &arg)) {
         Ok(Ok(v)) => json!({ "ok": true, "value": v }),
@@ -85,10 +85,10 @@ pub unsafe extern "C" fn openomsi_bridge(cmd: *const c_char, arg: *const c_char)
 
 /// # Safety
 /// `p` is a reply of `openomsi_bridge` (or null), freed once.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openomsi_bridge_free(p: *mut c_char) {
     if !p.is_null() {
-        drop(CString::from_raw(p));
+        drop(unsafe { CString::from_raw(p) });
     }
 }
 
@@ -723,7 +723,7 @@ fn want_preview(s: &State) {
 ///
 /// # Safety
 /// `out` points at `cap` writable bytes; `out_w` and `out_h` at writable u32s.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openomsi_preview_frame(w: u32, h: u32, out: *mut u8, cap: usize, out_w: *mut u32, out_h: *mut u32) -> i32 {
     if let Some(s) = STATE.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
         want_preview(s);
@@ -734,9 +734,11 @@ pub unsafe extern "C" fn openomsi_preview_frame(w: u32, h: u32, out: *mut u8, ca
     }
     match rx.recv() {
         Ok(Some((pw, ph, px))) if px.len() <= cap && !out.is_null() => {
-            std::ptr::copy_nonoverlapping(px.as_ptr(), out, px.len());
-            *out_w = pw;
-            *out_h = ph;
+            unsafe {
+                std::ptr::copy_nonoverlapping(px.as_ptr(), out, px.len());
+                *out_w = pw;
+                *out_h = ph;
+            }
             1
         }
         _ => 0,
@@ -744,17 +746,17 @@ pub unsafe extern "C" fn openomsi_preview_frame(w: u32, h: u32, out: *mut u8, ca
 }
 
 /// The preview turned by a drag (points) or zoomed (a factor).
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn openomsi_preview_orbit(dx: f32, dy: f32) {
     preview_send(PreviewMsg::Orbit(dx, dy));
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn openomsi_preview_zoom(k: f32) {
     preview_send(PreviewMsg::Zoom(k.clamp(0.5, 2.0)));
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn openomsi_preview_view(view: u32) {
     if let Some(v) = crate::launcher::showroom::PreviewView::ALL.get(view as usize) {
         preview_send(PreviewMsg::View(*v));

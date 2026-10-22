@@ -67,7 +67,7 @@ fn system_code_page() -> Option<CodePage> {
     #[cfg(windows)]
     {
         #[link(name = "kernel32")]
-        extern "system" {
+        unsafe extern "system" {
             fn GetACP() -> u32;
         }
         static ACP: std::sync::OnceLock<u32> = std::sync::OnceLock::new();

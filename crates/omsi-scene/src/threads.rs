@@ -12,7 +12,7 @@
 pub fn lower_thread_priority() {
     #[cfg(target_os = "macos")]
     {
-        extern "C" {
+        unsafe extern "C" {
             fn pthread_set_qos_class_self_np(qos_class: u32, relative_priority: i32) -> i32;
         }
         const QOS_CLASS_UTILITY: u32 = 0x11;
@@ -24,7 +24,7 @@ pub fn lower_thread_priority() {
     #[cfg(windows)]
     {
         #[link(name = "kernel32")]
-        extern "system" {
+        unsafe extern "system" {
             fn GetCurrentThread() -> isize;
             fn SetThreadPriority(thread: isize, priority: i32) -> i32;
         }
@@ -36,7 +36,7 @@ pub fn lower_thread_priority() {
     }
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
-        extern "C" {
+        unsafe extern "C" {
             fn setpriority(which: i32, who: u32, prio: i32) -> i32;
         }
         // (PRIO_PROCESS with 0 names the calling thread on Linux)

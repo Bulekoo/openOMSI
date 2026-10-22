@@ -38,8 +38,8 @@ const NO_TEX: u32 = u32::MAX;
 struct BlasKey {
     vb: wgpu::Buffer,
     ib: wgpu::Buffer,
-    /// The mesh (its `gen`) and where it lies in its page's buffers.
-    gen: u64,
+    /// The mesh (its `generation`) and where it lies in its page's buffers.
+    generation: u64,
     first_vertex: u32,
     first_index: u32,
     vertex_count: u32,
@@ -56,7 +56,7 @@ struct BlasKey {
 struct BlasKeyRef<'a> {
     vb: &'a wgpu::Buffer,
     ib: &'a wgpu::Buffer,
-    gen: u64,
+    generation: u64,
     first_vertex: u32,
     first_index: u32,
     vertex_count: u32,
@@ -69,8 +69,8 @@ impl hashbrown::Equivalent<BlasKey> for BlasKeyRef<'_> {
     fn equivalent(&self, k: &BlasKey) -> bool {
         *self.vb == k.vb
             && *self.ib == k.ib
-            && (self.gen, self.first_vertex, self.first_index, self.vertex_count, self.solid, self.cut, self.glass)
-                == (k.gen, k.first_vertex, k.first_index, k.vertex_count, k.solid, k.cut, k.glass)
+            && (self.generation, self.first_vertex, self.first_index, self.vertex_count, self.solid, self.cut, self.glass)
+                == (k.generation, k.first_vertex, k.first_index, k.vertex_count, k.solid, k.cut, k.glass)
     }
 }
 
@@ -79,7 +79,7 @@ impl BlasKeyRef<'_> {
         BlasKey {
             vb: self.vb.clone(),
             ib: self.ib.clone(),
-            gen: self.gen,
+            generation: self.generation,
             first_vertex: self.first_vertex,
             first_index: self.first_index,
             vertex_count: self.vertex_count,
@@ -604,7 +604,7 @@ impl Renderer {
                 let key = BlasKeyRef {
                     vb: &m.vertex_buf,
                     ib: &m.index_buf,
-                    gen: m.gen,
+                    generation: m.generation,
                     first_vertex: m.base_vertex.max(0) as u32,
                     first_index: m.first_index,
                     vertex_count: (m.vertex_bytes / std::mem::size_of::<Vertex>() as u64) as u32,
@@ -808,7 +808,7 @@ impl Renderer {
                     continue;
                 }
                 let t = t as usize;
-                if t < scene.textures.len() && rt.tex_gen[t] != scene.textures[t].gen && !wanted.contains(&t) {
+                if t < scene.textures.len() && rt.tex_gen[t] != scene.textures[t].generation && !wanted.contains(&t) {
                     wanted.push(t);
                     if wanted.len() >= AVG_BUDGET {
                         break;
@@ -852,7 +852,7 @@ impl Renderer {
             }
         }
         for &t in &wanted {
-            rt.tex_gen[t] = scene.textures[t].gen;
+            rt.tex_gen[t] = scene.textures[t].generation;
         }
     }
 

@@ -412,6 +412,13 @@ func hhmm(_ seconds: Double) -> String {
     return String(format: "%02d:%02d", (s / 3600) % 24, (s % 3600) / 60)
 }
 
+/// How long a trip takes, from its departure to its arrival, short: "22 min", "1 hr, 5 min"
+/// (#2813). The arrival of a trip over midnight runs on past 24:00, so the difference is its length.
+func tripTime(_ x: TripInfo) -> String {
+    let minutes = max(1, Int(((x.arrival - x.departure) / 60).rounded()))
+    return Duration.seconds(minutes * 60).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))
+}
+
 func formatBytes(_ b: UInt64) -> String {
     let d = Double(b)
     if d >= 1_073_741_824 { return String(format: "%.1f GB", d / 1_073_741_824) }

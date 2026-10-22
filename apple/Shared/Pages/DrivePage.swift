@@ -362,8 +362,9 @@ struct DutyCard: View {
     }
 }
 
-/// The trips of the tour: departure, line, from, to, arrival; the one a start takes is marked,
-/// the ones gone by before the start time are dimmed; a click starts the tour there.
+/// The trips of the tour: departure (and how long the trip takes), line, from, to, arrival; the
+/// one a start takes is marked, the ones gone by before the start time are dimmed; a click starts
+/// the tour there.
 struct TripsTable: View {
     @Environment(LauncherStore.self) private var store
     @Environment(\.compactLayout) private var compact
@@ -411,7 +412,11 @@ struct TripsTable: View {
     private func row(_ x: TripInfo, on: Bool, past: Bool, odd: Bool) -> some View {
         Button { store.act("pick_trip", ["index": x.index, "departure": x.departure]) } label: {
             HStack(spacing: 10) {
-                Text(hhmm(x.departure)).font(.inter(14, .bold).monospacedDigit()).frame(width: 58, alignment: .leading)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(hhmm(x.departure)).font(.inter(14, .bold).monospacedDigit())
+                    Text(tripTime(x)).font(.inter(11.5)).foregroundStyle(Theme.muted).lineLimit(2)
+                }
+                .frame(width: 58, alignment: .leading)
                 Group {
                     if isDepotRun(x) { Text("Depot run").font(.inter(12.5)).foregroundStyle(Theme.muted).lineLimit(1) } else { LineBadge(line: x.line) }
                 }

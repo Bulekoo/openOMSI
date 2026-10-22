@@ -377,6 +377,7 @@ pub(super) fn toggle_now(app: &App, id: &str) -> Option<bool> {
         "nav_light" => app.menus.navigator.as_ref().map_or(s.nav_light, |n| n.light),
         "nav_3d" => app.menus.navigator.as_ref().map_or(s.nav_3d, |n| n.show_3d),
         "nav_widget" => app.menus.navigator.as_ref().map_or(s.nav_widget, |n| n.widget),
+        "milezero" => s.milezero,
         "shadows" => s.shadows,
         "head" => s.head_movement,
         "cam_smooth" => s.driverview_smooth,
@@ -509,6 +510,10 @@ pub(super) fn toggle_set(app: &mut App, id: &str, on: bool) -> Option<(&'static 
             }
             app.settings.nav_widget = on;
             Some(("nav_widget", bit))
+        }
+        "milezero" => {
+            app.settings.milezero = on;
+            Some(("milezero", bit))
         }
         "shadows" => {
             app.settings.shadows = on;

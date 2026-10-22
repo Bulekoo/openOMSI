@@ -1069,7 +1069,7 @@ pub fn open_url(url: &str) {
     {
         // (the Swift app's UIApplication.open, linked into the same program, see omsi-app's
         // `apple.rs`)
-        extern "C" {
+        unsafe extern "C" {
             fn openomsi_swift_open_url(url: *const std::ffi::c_char);
         }
         if let Ok(u) = std::ffi::CString::new(url) {

@@ -551,7 +551,7 @@ struct PhoneSheetView: View {
                         if isDepotRun(x) { Text("Depot run").font(.inter(12.5)).foregroundStyle(Theme.muted).lineLimit(1).minimumScaleFactor(0.8) } else { LineBadge(line: x.line) }
                     }
                     .frame(width: 58, alignment: .leading)
-                    text(x.terminus, "\(String(localized: "From")) \(x.from) - \(hhmm(x.arrival))")
+                    text(x.terminus, "\(String(localized: "From")) \(x.from) - \(hhmm(x.arrival)) - \(tripTime(x))")
                 }
             }
         }

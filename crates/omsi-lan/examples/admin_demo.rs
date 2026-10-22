@@ -21,7 +21,7 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let udp: u16 = args.next().and_then(|a| a.parse().ok()).unwrap_or(27315);
     let web: u16 = args.next().and_then(|a| a.parse().ok()).unwrap_or(27325);
-    std::env::set_var("OMSI_NO_BRIDGE", "1");
+    unsafe { std::env::set_var("OMSI_NO_BRIDGE", "1") };
     let world = WorldInfo { map: "maps/Grundorf/global.cfg".into(), date: "1989-05-30".into(), time: 9.0 * 3600.0, ..Default::default() };
     let mut lan = LanSession::host(udp, "admin demo", world.clone(), false).expect("the UDP port is free");
     let hub = Arc::new(Hub::new(Auth::new(Passwords { admin: "admin secret".into(), moderator: "mod secret".into() }, AuthCfg::default()), Audit::new(None, 0)));

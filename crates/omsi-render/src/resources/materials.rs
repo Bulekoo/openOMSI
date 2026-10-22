@@ -510,7 +510,7 @@ impl Renderer {
             uniform.ambient[3] = if texture.is_none() { -1.0 } else { snow_texture_flag(scene, texture) };
         }
         let slot = |t: Option<TextureId>| {
-            t.and_then(|t| scene.textures.get(t).map(|g| (t, g.gen)))
+            t.and_then(|t| scene.textures.get(t).map(|g| (t, g.generation)))
                 .unwrap_or((usize::MAX, 0))
         };
         let key = BindKey {
@@ -833,7 +833,7 @@ impl Renderer {
             glow: [if lightmap.is_some() { extra.glow.max(0.0) } else { 0.0 }, extra.led_glow.map_or(1.0, |g| g.clamp(0.0, 1.0)), 0.0, 0.0],
         };
         let slot = |t: Option<TextureId>| {
-            t.and_then(|t| scene.textures.get(t).map(|g| (t, g.gen)))
+            t.and_then(|t| scene.textures.get(t).map(|g| (t, g.generation)))
                 .unwrap_or((usize::MAX, 0))
         };
         let key = BindKey {

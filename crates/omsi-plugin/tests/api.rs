@@ -282,3 +282,47 @@ fn errors_name_the_function_and_argument() {
     "#, &mut g, 1);
     assert_eq!(g.messages, ["yes"]);
 }
+
+#[test]
+fn data_queries_validate_types_and_reject_mutations_without_a_vehicle() {
+    let mut g = Game::default();
+    run("data-queries", r#"
+        function on_frame()
+        omsi.data.sentinel = "preserved"
+        assert(#omsi.game.queries() >= 30)
+        local value, reason = omsi.game.query("GetTTBusstopArr", {0})
+        assert(value == nil and type(reason) == "string")
+        assert(not pcall(omsi.game.query, "GiveChangeCoin", {0}))
+        assert(not pcall(omsi.game.query, "GetFontIndex", {"Arial"}))
+        assert(omsi.process == nil)
+        assert(not pcall(omsi.game.query, "STDrawPixel", {0,1,2}))
+        assert(not pcall(omsi.game.query, "GetTTDelay", {1}))
+        assert(not pcall(omsi.game.query, "GetTTBusstopArr", {"0"}))
+        assert(not pcall(omsi.game.query, "GetTTBusstopArr", {0/0}))
+        assert(not pcall(omsi.game.query, "GetTTBusstopArr", {math.huge}))
+        assert(omsi.duty.tour() == nil)
+        local tour, err = omsi.timetable.tour("none", "none")
+        assert(tour == nil and type(err) == "string")
+        assert(omsi.data.sentinel == "preserved")
+        omsi.message("validated")
+        end
+    "#, &mut g, 1);
+    assert_eq!(g.messages,["validated"]);
+}
+
+#[test]
+fn nested_emit_keeps_the_outer_calls_budget() {
+    let mut g = Game::new();
+    let began = std::time::Instant::now();
+    let p = run("nested-budget", r#"
+        omsi.on("nested", function() omsi.message("nested ran") end)
+        function on_frame()
+            omsi.emit("nested")
+            while true do end
+        end
+    "#, &mut g, 1);
+    assert!(p.lua[0].disabled);
+    assert!(g.messages.iter().any(|m| m == "nested ran"));
+    assert!(g.messages.iter().any(|m| m.contains("longer than 50 ms")));
+    assert!(began.elapsed().as_secs_f32() < 2.0);
+}

@@ -504,6 +504,28 @@ impl App {
             let menu_disabled: &[&str] = &[];
             let (menu_kind, menu_head, menu_preview) = crate::game_lists::menu_extras(self.menus.list_kind.as_ref(), self.menus.admin_list.as_deref(), chooser_sel, self.session.schedule.as_ref().or(self.session.timetable_book.as_ref()), self.clock.time);
             crate::telemetry::publish(self.player.as_ref(), self.session.duty.as_ref(), self.session.humans.as_ref(), self.paused, self.session.schedule.as_ref(), self.session.traffic.as_ref());
+            let mz_view = (self.settings.milezero && self.menus.game_menu.is_none()).then(|| {
+                let m = &self.sound.milezero;
+                let song = m.song().unwrap_or_default();
+                let (cx, cy) = self.input.cursor;
+                let over = ui.mz.rect.is_some_and(|q| cx >= q[0] && cx < q[2] && cy >= q[1] && cy < q[3]);
+                ui::MzView {
+                    title: song.title,
+                    artist: song.artist,
+                    dj: song.dj,
+                    duration: song.duration,
+                    light: self.menus.navigator.as_ref().map_or(self.settings.nav_light, |n| n.light),
+                    art: song.cover,
+                    elapsed: m.elapsed(),
+                    playing: m.is_playing(),
+                    loading: m.loading(),
+                    quality: m.quality(),
+                    typing: m.typing.clone(),
+                    status: m.request_status(),
+                    hover: over || m.typing.is_some(),
+                }
+            });
+            let mz_gap = if mz_view.is_some() { ui.mz.extent } else { 0.0 };
             let frame = ui::Frame {
                 scale,
                 ui_scale: ui::size_factor(h, scale, self.settings.ui_scale, self.settings.ui_scale_window),
@@ -556,7 +578,13 @@ impl App {
                 chat_size: self.settings.chat_size,
                 tags,
                 notices: &self.menus.notices,
-                notice_anchor: self.menus.navigator.as_ref().and_then(|n| n.screen_rect()),
+                notice_anchor: self.menus.navigator.as_ref().and_then(|n| n.screen_rect()).map(|mut a| {
+                    // (the MileZero card stands between the navigator and the notices)
+                    if a[1] > h * 0.5 { a[1] -= mz_gap } else { a[3] += mz_gap }
+                    a
+                }),
+                milezero: mz_view.as_ref(),
+                nav_rect: self.menus.navigator.as_ref().and_then(|n| n.screen_rect()),
             };
             ui.draw_at(r, scene, &frame, dt, hud[0]);
         }

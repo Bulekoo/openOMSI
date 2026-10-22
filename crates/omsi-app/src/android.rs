@@ -23,7 +23,7 @@ static SAFER_TRIED: AtomicBool = AtomicBool::new(false);
 /// Where the app keeps what a person puts on the phone for it.
 pub const SHARED: &str = "/storage/emulated/0/openOMSI";
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 fn android_main(app: AndroidApp) {
     crate::view_sync::install_sim_decoder();
     crate::startup::install_scene_settings();
@@ -57,7 +57,7 @@ fn android_main(app: AndroidApp) {
     omsi_platform::android::install(omsi_platform::android::Hooks { install_apk, install_status, open_url });
     // the app's own folder is the home of settings.cfg, launcher.json, the profiles
     if let Some(home) = app.internal_data_path() {
-        std::env::set_var("HOME", &home);
+        unsafe { std::env::set_var("HOME", &home) };
         // Adreno 6xx-8xx Vulkan drivers corrupt the shader cache Android keeps in the app's
         // `code_cache`, and then hand back broken pipelines without an error: a black game
         // and grey previews (#1310). After a run on such a chip the cache is thrown away and
@@ -80,7 +80,7 @@ fn android_main(app: AndroidApp) {
         log::warn!("{SHARED} cannot be written (no access to the storage yet): the content folder is the app's own");
         app.external_data_path().unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()))
     };
-    std::env::set_var("OMSI_CONTENT", &content);
+    unsafe { std::env::set_var("OMSI_CONTENT", &content) };
     let _ = std::fs::write(content.join("README.txt"), README);
     // (beside the start, not before it: a folder read and a file written for each of the
     // content folder's folders, on a slow card storage while the screen stayed empty)
@@ -96,7 +96,7 @@ fn android_main(app: AndroidApp) {
                 let k = k.trim();
                 if k.starts_with("OMSI_") && !k.contains(char::is_whitespace) {
                     log::info!("env.txt: {k}");
-                    std::env::set_var(k, v.trim());
+                    unsafe { std::env::set_var(k, v.trim()) };
                 }
             }
         }
@@ -225,7 +225,7 @@ impl log::Log for TeeLogger {
 
 /// A system property (`ro.product.model` ...), for the log's first lines.
 fn prop(name: &str) -> String {
-    extern "C" {
+    unsafe extern "C" {
         fn __system_property_get(name: *const std::ffi::c_char, value: *mut std::ffi::c_char) -> i32;
     }
     let (Ok(n), mut buf) = (std::ffi::CString::new(name), [0 as std::ffi::c_char; 92]) else { return String::new() };
@@ -371,7 +371,7 @@ impl Shell {
         if !SAFER_TRIED.swap(true, Ordering::Relaxed) && previous_run_crash().is_some() {
             let prev = std::fs::read_to_string(omsi_launcher_lib::data_dir().join("game-prev.log")).unwrap_or_default();
             let vulkan = prev.lines().any(|l| l.contains("renderer: ") && l.contains("(Vulkan)")) || prev.lines().any(|l| l.contains("graphics: ") && l.to_ascii_uppercase().contains("VULKAN"));
-            std::env::set_var("OMSI_SAFE_GPU", "1");
+            unsafe { std::env::set_var("OMSI_SAFE_GPU", "1") };
             // It went down while the graphics driver compiled the shaders (the last it said
             // was a stage of that): the phone's Vulkan driver cannot take them, and will not
             // next time either (the Maleoon and several Mali drivers after the cloud noise,
@@ -389,7 +389,7 @@ impl Shell {
                 }
             }
             if vulkan && omsi_cfg::flags::OMSI_BACKEND.live_os().is_none() {
-                std::env::set_var("OMSI_BACKEND", "gl");
+                unsafe { std::env::set_var("OMSI_BACKEND", "gl") };
             }
             log::warn!("the last run closed in the middle of a drive: this one starts with safer graphics{}", if vulkan { " on OpenGL" } else { "" });
         }
@@ -519,7 +519,7 @@ struct SensorEvent {
 }
 
 #[link(name = "android")]
-extern "C" {
+unsafe extern "C" {
     fn ASensorManager_getInstanceForPackage(package: *const std::ffi::c_char) -> *mut std::ffi::c_void;
     fn ASensorManager_getDefaultSensor(manager: *mut std::ffi::c_void, kind: i32) -> *const std::ffi::c_void;
     fn ASensorManager_createEventQueue(manager: *mut std::ffi::c_void, looper: *mut std::ffi::c_void, ident: i32, callback: *const std::ffi::c_void, data: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
