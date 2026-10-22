@@ -54,7 +54,7 @@ pub(crate) struct Args {
     /// the flag then only has the duty's next trips typed into the IBIS as they come.
     #[arg(long)]
     pub(crate) autostart: bool,
-    /// Start a new drive at 22 °C inside, except on the first trip of a tour.
+    /// Start a new drive at 22 °C inside when enabled, regardless of the selected trip.
     /// Saved situations retain their cabin temperature.
     #[arg(long)]
     pub(crate) comfortable_cabin_on_start: bool,

@@ -731,7 +731,7 @@ impl App {
                     );
                 }
                 if let Some(p) = self.player.as_mut() {
-                    crate::duty_start::set_starting_cabin_temperature(&self.args, &mut p.vehicle, self.session.duty.as_ref());
+                    crate::duty_start::set_starting_cabin_temperature(&self.args, &mut p.vehicle);
                 }
                 self.world = Some(w);
             }

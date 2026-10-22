@@ -4,9 +4,9 @@ import { t } from '../i18n.js';
 import { call } from '../api.js';
 import { Icon } from '../icons.js';
 import { Button, Field, Input, Select, Toggle, Segmented, Slider } from '../ui.js';
-import { choose, realTime, realDate, weatherName, weatherOfItsOwn, curTour, pickedTrip } from '../data.js';
+import { choose, realTime, realDate, weatherName, weatherOfItsOwn } from '../data.js';
 import { WeatherEditor, isCustomWeather, editableWeather } from './weather-editor.js';
-import { SEASONS, PHASES, setSeason, localNow, TimeInput, DateInput, DatePicker, tripAt, seasonOf, weatherFits, weatherFacts, weatherIcon } from './drive.js';
+import { SEASONS, PHASES, setSeason, localNow, TimeInput, DateInput, DatePicker, seasonOf, weatherFits, weatherFacts, weatherIcon } from './drive.js';
 
 function WeatherTile({ on, icon, name, sub, title, onClick }) {
   return html`<button type="button" class=${'weather-tile' + (on ? ' on' : '')} aria-pressed=${on} onClick=${onClick} title=${title || sub || name}>
@@ -16,15 +16,12 @@ function WeatherTile({ on, icon, name, sub, title, onClick }) {
 }
 
 export function CabinTemperatureOption() {
-  const c = useStore().choice;
-  const tour = c.free ? null : curTour();
-  const picked = pickedTrip();
-  const current = tour ? (picked != null ? tour.trips.findIndex((x) => x.index === picked) : tripAt(tour, c.time * 60)) : -1;
-  const first = current === 0;
+  const s = useStore();
+  const c = s.choice;
+  const temperature = s.settings?.units === 'us' ? '72°F' : '22°C';
   return html`<div class="stack" style="gap:4px">
-    <${Toggle} checked=${c.comfortable_cabin_on_start} onChange=${(comfortable_cabin_on_start) => choose({ comfortable_cabin_on_start })} label="Start with a comfortable cabin temperature (except first trip of a tour)" />
-    <div class="muted small">${t('Sets the cabin to 22°C when starting a drive. The first trip of a tour keeps its normal temperature to simulate a depot departure.')}</div>
-    ${c.comfortable_cabin_on_start && first && html`<div class="muted small">${t('First trip of this tour: normal cabin temperature will be used.')}</div>`}
+    <${Toggle} checked=${c.comfortable_cabin_on_start} onChange=${(comfortable_cabin_on_start) => choose({ comfortable_cabin_on_start })} label="Start with a comfortable cabin temperature" />
+    <div class="muted small">${t('Sets the cabin to {temperature} when starting a drive.', { temperature })}</div>
   </div>`;
 }
 

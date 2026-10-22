@@ -169,14 +169,12 @@ pub(crate) fn place_on_duty(args: &mut Args) {
     log::info!("duty start: no stop of the next trips can be reached from the entry points; the timetable decides, {:.1} s", t0.elapsed().as_secs_f64());
 }
 
-/// Adjust the new session's cabin once, after script initialization and duty selection.
-/// A single selected trip may be stored at index zero with a nonzero tour offset.
+/// Adjust the new session's cabin once after script initialization, on any trip.
 pub(crate) fn set_starting_cabin_temperature(
     args: &Args,
     vehicle: &mut omsi_sim::VehicleInstance,
-    duty: Option<&schedule::PlayerDuty>,
 ) {
-    if use_comfortable_cabin(args, duty) {
+    if use_comfortable_cabin(args) {
         if args.on_foot {
             args.pending_cabin_temperature
                 .store(true, std::sync::atomic::Ordering::Relaxed);
@@ -186,10 +184,8 @@ pub(crate) fn set_starting_cabin_temperature(
     }
 }
 
-fn use_comfortable_cabin(args: &Args, duty: Option<&schedule::PlayerDuty>) -> bool {
-    args.comfortable_cabin_on_start
-        && !args.is_resuming()
-        && !duty.is_some_and(|d| d.first_trip + d.trip_index == 0)
+fn use_comfortable_cabin(args: &Args) -> bool {
+    args.comfortable_cabin_on_start && !args.is_resuming()
 }
 
 #[cfg(test)]
@@ -197,22 +193,20 @@ mod cabin_temperature_tests {
     use super::*;
 
     #[test]
-    fn cabin_start_respects_tour_position_and_saved_state() {
+    fn cabin_start_follows_switch_on_every_trip_and_preserves_saved_state() {
         let mut args = Args::parse_from(["openomsi", "--comfortable-cabin-on-start"]);
-        let mut duty = schedule::PlayerDuty::new("5".into(), "1".into(), Vec::new(), 0, 0, true);
-        assert!(!use_comfortable_cabin(&args, Some(&duty)));
-        duty.trip_index = 1;
-        assert!(use_comfortable_cabin(&args, Some(&duty)));
-        // A later trip selected on its own starts at zero within its shortened duty.
-        duty.trip_index = 0;
-        duty.first_trip = 3;
-        assert!(use_comfortable_cabin(&args, Some(&duty)));
-        assert!(use_comfortable_cabin(&args, None));
+        assert!(use_comfortable_cabin(&args));
+        // The same enabled switch applies to the first and later trips of a tour.
+        args.line = Some("5".into());
+        args.tour = Some("1".into());
+        for trip in ["1", "2", "4"] {
+            args.trip = Some(trip.into());
+            assert!(use_comfortable_cabin(&args));
+        }
         args.comfortable_cabin_on_start = false;
-        assert!(!use_comfortable_cabin(&args, Some(&duty)));
+        assert!(!use_comfortable_cabin(&args));
         args.comfortable_cabin_on_start = true;
         args.situation = Some("saved.osn".into());
-        assert!(!use_comfortable_cabin(&args, Some(&duty)));
-        assert!(!use_comfortable_cabin(&args, None));
+        assert!(!use_comfortable_cabin(&args));
     }
 }
