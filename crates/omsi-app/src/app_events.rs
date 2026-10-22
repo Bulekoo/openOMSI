@@ -201,6 +201,10 @@ impl ApplicationHandler for App {
                         }
                     }
                 }
+                // a MileZero song request being typed takes the keyboard
+                if self.milezero_typing(&event) {
+                    return;
+                }
                 // '/' opens the chat's input box wherever the keyboard has it (the key
                 // itself is then swallowed by the chat) - but not Numpad ÷, OMSI's stock
                 // front door key (keyboard.cfg `bus_doorfront0 181`)

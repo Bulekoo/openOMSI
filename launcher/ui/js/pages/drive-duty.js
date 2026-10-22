@@ -7,7 +7,7 @@ import { choose, curMap, curLine, curTour, pickedTrip, mapName, duty, busFile, r
 import { call } from '../api.js';
 import { RouteMap } from '../routemap.js';
 import { MapPicker } from './map-picker.js';
-import { hms, mapPicture, depotRun, tripAt, lineMatches, findTours, tourRoute, chooseLine, chooseTour, pickTrip, Notes, tripLength, TripEnds, entryName } from './drive.js';
+import { hms, mapPicture, depotRun, tripAt, lineMatches, findTours, tourRoute, chooseLine, chooseTour, pickTrip, Notes, tripLength, tripTime, TripEnds, entryName } from './drive.js';
 
 export function MapRow() {
   const s = useStore();
@@ -259,7 +259,7 @@ export function Roadbook({ tour, trips, current, now }) {
     </div>
     <div class="roadbook-trips" ref=${ref}>
       ${trips.map((x, i) => html`<button type="button" class=${'trip-row' + (i === current ? ' on' : '') + (x.arrival < now - 60 && i !== current ? ' past' : '')} onClick=${() => pickTrip(x)}>
-        <span class="num time">${hms(x.departure)}<small>${hms(x.arrival)}</small></span>
+        <span class="num time" title=${`${t('Trip duration')}: ${tripTime(x)}`}>${hms(x.departure)}<small>${hms(x.arrival)}</small><small>${tripTime(x)}</small></span>
         <span class="kind">${depotRun(x) ? html`<span class="depot">${t('Depot run')}</span>` : html`<span class="line-badge">${x.line}</span>`}</span>
         <span class="grow" title=${`${x.from} → ${x.terminus}`}><${TripEnds} trip=${x} stack />${x.km > 0 && html`<small class="muted">${x.km.toFixed(1)} km</small>`}</span>
       </button>

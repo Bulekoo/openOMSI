@@ -12,7 +12,7 @@
 //! tiles of their run in order of strength each frame (a pair of lamps shares one map). The
 //! saloon's lamps look down from the player's bus: see `cabin`.
 
-use glam::Vec3;
+use glam::{Mat4, Vec3};
 use std::ops::Range;
 
 /// How many shadow maps there are in all.
@@ -162,6 +162,19 @@ pub(crate) fn group_spots(spots: &mut [Spot]) -> Vec<SpotGroup> {
     out
 }
 
+/// Whether a sphere may lie in the view of `view_proj` (render-origin relative): it does not
+/// touch the side planes of the frustum, nor the near and far ones, whichever way depth runs.
+/// A plane the projection makes none of (an infinite far one) is not tested.
+pub(crate) fn sphere_in_view(view_proj: &Mat4, center: Vec3, radius: f32) -> bool {
+    let r = [view_proj.row(0), view_proj.row(1), view_proj.row(2), view_proj.row(3)];
+    let planes = [r[3] + r[0], r[3] - r[0], r[3] + r[1], r[3] - r[1], r[2], r[3] - r[2]];
+    let c = center.extend(1.0);
+    planes.iter().all(|p| {
+        let n = p.truncate().length();
+        n < 1e-4 || p.dot(c) / n >= -radius
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,6 +211,19 @@ mod tests {
         let given = slots.assign(&wants, usize::MAX);
         assert_eq!(given.len(), WORLD_SLOTS.end);
         assert!(given.iter().all(|(w, _)| *w < WORLD_SLOTS.end));
+    }
+
+    /// A sphere is in the view when it touches the frustum, however the depth runs.
+    #[test]
+    fn the_view_test_culls_what_lies_outside_it() {
+        let look = Mat4::look_to_rh(Vec3::ZERO, Vec3::Y, Vec3::Z);
+        for vp in [Mat4::perspective_rh(1.2, 1.5, 0.1, 100.0) * look, Mat4::perspective_rh(1.2, 1.5, 100.0, 0.1) * look, Mat4::perspective_infinite_reverse_rh(1.2, 1.5, 0.1) * look] {
+            assert!(sphere_in_view(&vp, Vec3::new(0.0, 20.0, 0.0), 1.0));
+            assert!(sphere_in_view(&vp, Vec3::new(0.0, -2.0, 0.0), 3.0), "touching the near plane");
+            assert!(!sphere_in_view(&vp, Vec3::new(0.0, -30.0, 0.0), 5.0), "behind");
+            assert!(!sphere_in_view(&vp, Vec3::new(60.0, 10.0, 0.0), 2.0), "far to the side");
+            assert!(sphere_in_view(&vp, Vec3::new(14.0, 10.0, 0.0), 8.0), "touching the side");
+        }
     }
 
     /// The shaders carry the numbers of the tiles as literals: they must be these.

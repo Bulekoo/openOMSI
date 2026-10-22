@@ -71,7 +71,7 @@ impl Renderer {
         // A mirror's picture (a texture, no overlays) has no shadow pass: it looks the window's
         // cascades up as they were last drawn, with their own matrices. They are the sun's
         // for this origin, or the mirror has no shadows (the first frames, a moved origin).
-        if !f.with_overlays && projection.is_none() && f.exclude_texture.is_some() && casts {
+        if !f.with_overlays && projection.is_none() && f.exclude_texture.is_some() && (self.options.mirror_shadows || self.options.mirror_enhanced) && casts {
             let (near, _, near_origin, near_sun) = self.shadows.shadow_near_cache.get();
             let (far, _, far_origin, far_sun) = self.shadows.shadow_far_cache.get();
             let (close, close_origin, close_sun) = self.shadows.shadow_close_cache.get();
@@ -206,7 +206,16 @@ impl Renderer {
         // a source embedded in a pole's fixture leaves its own fixture out, see `PointLight::shadow_owner`)
         let mut shadow_batches: [Vec<Batch>; SHADOW_LISTS] = std::array::from_fn(|_| Vec::new());
         let lamp_reaches = |l: &LampShadow, c: Vec3, r: f32| l.reaches(c, r);
-        let lamp_reach = |c: Vec3, r: f32| lamp_shadows.iter().any(|l| lamp_reaches(l, c, r));
+        // (a sphere round every lamp's reach, tried first: most of the instances in a lit block
+        // are out of all the forty-four maps' reach at once)
+        let lamp_union = LampShadow::union_sphere(lamp_shadows);
+        let lamp_reach = |c: Vec3, r: f32| lamp_union.is_none_or(|(uc, ur)| (c - uc).length() < ur + r) && lamp_shadows.iter().any(|l| lamp_reaches(l, c, r));
+        // (what stands still in the player's vehicle, for its saloon lamps' tiles)
+        if let Some(cabin) = lamp_shadows.iter().find_map(|l| l.cabin.as_ref()) {
+            self.shadows.cabin_motion.borrow_mut().update(scene, cabin);
+        }
+        let motion = self.shadows.cabin_motion.borrow();
+        let still: &[bool] = &motion.still;
         // an instance's screen size as the camera pass measures it for the LOD choice
         let lod_fov = camera.fov_deg.to_radians().max(1e-3);
         let lod_size = |inst: &Instance| -> f32 {
@@ -233,7 +242,8 @@ impl Renderer {
         // same, see `LampTiles`; bending foliage changes every frame)
         let windy = f.lighting.windy_trees;
         let casters = |span: std::ops::Range<usize>, out: &mut [Vec<DrawItem>; SHADOW_LISTS], ranges: &mut Vec<(u8, u32, u32, usize, u32)>, sig: &mut LampSigs| {
-            for inst in &scene.instances[span] {
+            let first = span.start;
+            for (at, inst) in scene.instances[span].iter().enumerate() {
                 // (the roof map takes the ground and the roads as well, which cast no shadow:
                 // the splashes land on them, see rain.wgsl `splash`)
                 let caster = inst.casts_shadow && !(omsi_shadow_casters && !inst.omsi_caster);
@@ -332,6 +342,10 @@ impl Renderer {
                         // (the parts of the vehicle whose headlamps these are cast nothing: the
                         // lamps stand in them)
                         if light.hosts && inst.roof.is_some() && (c - light.position).length() < r + 0.4 {
+                            continue;
+                        }
+                        // (a saloon lamp's tile holds what stands still in the vehicle, see `CabinMotion`)
+                        if light.cabin.is_some() && !still.get(first + at).copied().unwrap_or(false) {
                             continue;
                         }
                         for &(kind, ri, slot, mat_id, look) in ranges.iter() {

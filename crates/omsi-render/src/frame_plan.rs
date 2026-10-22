@@ -478,6 +478,8 @@ pub(crate) struct ShadowRes {
     pub(crate) shadow_clear_pipeline: wgpu::RenderPipeline,
     /// What the street lamps' shadow tiles hold, kept while nothing in them changes.
     pub(crate) lamp_tiles: std::cell::Cell<passes::LampTiles>,
+    /// Which parts of the player's vehicle stand still in it (the saloon's lamp tiles hold those).
+    pub(crate) cabin_motion: std::cell::RefCell<passes::CabinMotion>,
     /// What stands over the ground round the camera, for the rain and the snow.
     pub(crate) precip: passes::PrecipMap,
 }

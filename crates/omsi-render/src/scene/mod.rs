@@ -307,6 +307,9 @@ pub struct Scene {
     pub(crate) lamp_slots: WorldSlots,
     /// The same for the lamps of the player's saloon (`Cabin`).
     pub(crate) cabin_slots: CabinSlots,
+    /// Where each of `interior_lights` hangs in the player's vehicle's frame, as last taken for
+    /// its tile (`lamp_tiles`).
+    pub(crate) cabin_places: Vec<Vec3>,
     pub(crate) last_lights: Vec<u8>,
     /// Material bind groups and uniform buffers made since the last `prepare`, by what they
     /// hold: materials made in one go with the same textures and values share them (a C2's

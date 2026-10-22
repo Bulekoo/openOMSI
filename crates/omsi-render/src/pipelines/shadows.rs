@@ -14,9 +14,14 @@ pub(crate) struct Shadows {
     pub pipelines: Vec<wgpu::RenderPipeline>,
 }
 
-pub(crate) fn build(device: &wgpu::Device, scene: &SceneBase, shadow_size: u32) -> Shadows {
+/// `lamps`: the picture is an Enhanced one, which looks the lamps' shadows up (the plain ones
+/// have no tiles under the far map, nor pipelines to draw them).
+pub(crate) fn build(device: &wgpu::Device, scene: &SceneBase, shadow_size: u32, lamps: bool) -> Shadows {
     // (the lamps' tiles are left out where their pipelines are: see `basic_pipelines`)
-    let lamp_atlas = LampAtlas::new(shadow_size, !basic_pipelines());
+    let lamp_atlas = LampAtlas::new(shadow_size, lamps && !basic_pipelines(), device.limits().max_texture_dimension_2d);
+    if lamp_atlas.rows == 0 && lamps && !basic_pipelines() {
+        log::warn!("renderer: no room for the lamps' shadow tiles under a far shadow map of {shadow_size} texels: the lamps cast no shadows");
+    }
     // sun shadow map: depth only, from the light's orthographic camera
     let shadow_tex = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("shadow map"),
@@ -116,16 +121,16 @@ pub(crate) fn build(device: &wgpu::Device, scene: &SceneBase, shadow_size: u32) 
         make_shadow(PIPE_OPAQUE, 2),
         make_shadow(PIPE_ALPHA_TEST, 2),
     ];
-    if !basic_pipelines() {
+    if lamp_atlas.rows > 0 {
         // (the lamps' tiles, 6 + kind: one vertex shader draws every tile, reading its matrix
-        // by the tile named in the draw list's entries)
+        // by the tile named in the draw list's entries; only where there are tiles)
         log::info!("renderer: compiling the lamps' shadow shaders");
         // (left out alone where the driver fails on them: the lamps then cast no shadows,
         // `shadow_pipelines.len() > 6`)
-        let lamps = optional_pipeline(device, "the lamps' shadows", || {
+        let tile_pipelines = optional_pipeline(device, "the lamps' shadows", || {
             vec![make_shadow(PIPE_OPAQUE, 3), make_shadow(PIPE_ALPHA_TEST, 3)]
         });
-        shadow_pipelines.extend(lamps.into_iter().flatten());
+        shadow_pipelines.extend(tile_pipelines.into_iter().flatten());
     }
     Shadows {
         view: shadow_view,

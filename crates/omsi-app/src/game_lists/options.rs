@@ -377,6 +377,7 @@ pub(super) fn toggle_now(app: &App, id: &str) -> Option<bool> {
         "nav_light" => app.menus.navigator.as_ref().map_or(s.nav_light, |n| n.light),
         "nav_3d" => app.menus.navigator.as_ref().map_or(s.nav_3d, |n| n.show_3d),
         "nav_widget" => app.menus.navigator.as_ref().map_or(s.nav_widget, |n| n.widget),
+        "milezero" => s.milezero,
         "shadows" => s.shadows,
         "head" => s.head_movement,
         "cam_smooth" => s.driverview_smooth,
@@ -415,12 +416,14 @@ pub(super) fn toggle_now(app: &App, id: &str) -> Option<bool> {
         "nav_arrows" => app.menus.navigator.as_ref().map_or(s.nav_arrows, |n| n.arrows),
         "exact_fare" => s.exact_fare,
         "pax_bad_driving" => s.pax_bad_driving,
+        "auto_announce" => s.auto_announce,
         "collision_pedestrians" => s.collision_pedestrians,
         "ssao" => s.ssao,
         "detail_textures" => s.detail_textures,
         "clouds" => s.clouds,
         "windy_trees" => s.windy_trees,
         "mirror_hud_every_frame" => s.mirror_hud_every_frame,
+        "mirror_shadows" => s.mirror_shadows,
         "mirror_particles" => s.mirror_particles,
         "ambient" => s.ambient,
         "fullscreen" => s.fullscreen,
@@ -508,6 +511,10 @@ pub(super) fn toggle_set(app: &mut App, id: &str, on: bool) -> Option<(&'static 
             }
             app.settings.nav_widget = on;
             Some(("nav_widget", bit))
+        }
+        "milezero" => {
+            app.settings.milezero = on;
+            Some(("milezero", bit))
         }
         "shadows" => {
             app.settings.shadows = on;
@@ -676,6 +683,10 @@ pub(super) fn toggle_set(app: &mut App, id: &str, on: bool) -> Option<(&'static 
             app.settings.pax_bad_driving = on;
             Some(("pax_bad_driving", bit))
         }
+        "auto_announce" => {
+            app.settings.auto_announce = on;
+            Some(("auto_announce", bit))
+        }
         "collision_pedestrians" => {
             app.settings.collision_pedestrians = on;
             Some(("collision_pedestrians", bit))
@@ -705,6 +716,7 @@ fn toggle_set_graphics_and_controls(app: &mut App, id: &str, on: bool, bit: Stri
             Some(("windy_trees", bit))
         }
         "mirror_hud_every_frame" => { app.settings.mirror_hud_every_frame = on; Some(("mirror_hud_every_frame", bit)) }
+        "mirror_shadows" => { app.settings.mirror_shadows = on; Some(("mirror_shadows", bit)) }
         "mirror_particles" => { app.settings.mirror_particles = on; Some(("mirror_particles", bit)) }
         "ambient" => { app.settings.ambient = on; Some(("ambient", bit)) }
         "fullscreen" => {

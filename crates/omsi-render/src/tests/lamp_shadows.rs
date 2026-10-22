@@ -19,7 +19,7 @@ fn renderer() -> Renderer {
 }
 
 fn shadowed(renderer: &Renderer, scene: &mut Scene, y: f32) -> Vec<i32> {
-    let (_, lamps) = renderer.prepare_lights(scene, Vec3::new(0.0, y, 1.5), true, true, None, None);
+    let (_, lamps) = renderer.prepare_lights(scene, &LightEye::at(Vec3::new(0.0, y, 1.5)), true, true);
     let mut ys: Vec<i32> = lamps.iter().map(|l| l.position.y.round() as i32).collect();
     ys.sort();
     ys
@@ -43,7 +43,7 @@ fn a_mirror_picture_leaves_the_street_lamps_their_shadow_maps() {
         .collect();
     assert_eq!(shadowed(&renderer, &mut scene, 15.0), vec![0, 10, 20, 30, 40]);
     assert_eq!(shadowed(&renderer, &mut scene, 21.0), vec![0, 10, 20, 30, 40]);
-    let _ = renderer.prepare_lights(&mut scene, Vec3::new(0.0, 21.0, 1.5), false, false, None, None);
+    let _ = renderer.prepare_lights(&mut scene, &LightEye::at(Vec3::new(0.0, 21.0, 1.5)), false, false);
     assert_eq!(shadowed(&renderer, &mut scene, 21.0), vec![0, 10, 20, 30, 40]);
 }
 
@@ -221,7 +221,7 @@ fn a_handrail_in_the_players_saloon_shades_the_floor_from_its_lamp() {
     renderer.set_interior_light(&mut scene, slot, PointLight { position: DVec3::new(-1.5, 0.0, 3.5), radius: 100.0, core: 1.0, color: [1.0; 3], intensity: 1.0, ..Default::default() });
     let mut lighting = night();
     lighting.inside = Some((DVec3::ZERO, 0.0, [10.0, 10.0, 4.0, 0.0, 0.0, 2.0]));
-    let (_, tiles) = renderer.prepare_lights(&mut scene, Vec3::new(0.0, 0.0, 8.0), true, true, lighting.inside.as_ref(), None);
+    let (_, tiles) = renderer.prepare_lights(&mut scene, &LightEye { cam_rel: Vec3::new(0.0, 0.0, 8.0), view_proj: None, vehicle: lighting.inside.as_ref().map(|b| (b, None)) }, true, true);
     assert!(tiles.iter().any(|t| t.cabin.is_some() && CABIN_SLOTS.contains(&t.slot)), "the saloon's lamp has a tile: {} tiles", tiles.len());
     let reach = 8.0 * 2.0 * 30f32.to_radians().tan();
     let rgba = renderer.render_to_image(&mut scene, 64, 64, &from_above(8.0), &lighting).unwrap();
@@ -259,7 +259,7 @@ fn another_vehicles_headlamps_throw_the_shadow_of_what_stands_in_their_beams() {
             ..Default::default()
         })
         .to_vec();
-    let (_, tiles) = renderer.prepare_lights(&mut scene, Vec3::new(0.0, 14.0, 20.0), true, true, None, None);
+    let (_, tiles) = renderer.prepare_lights(&mut scene, &LightEye::at(Vec3::new(0.0, 14.0, 20.0)), true, true);
     assert!(tiles.iter().any(|t| t.look.is_some() && VEHICLE_SLOTS.contains(&t.slot) && t.hosts), "the pair has a map: {} tiles", tiles.len());
     let camera = Camera { position: DVec3::new(0.0, 14.0, 20.0), ..from_above(20.0) };
     let rgba = renderer.render_to_image(&mut scene, 64, 64, &camera, &night()).unwrap();
@@ -269,4 +269,52 @@ fn another_vehicles_headlamps_throw_the_shadow_of_what_stands_in_their_beams() {
     let beside = ground_at(&rgba, reach, 3.0, 18.0 - 14.0);
     assert!(beside > 12.0, "the beams light the road: {beside}");
     assert!(behind * 2.0 < beside, "the post keeps the light off the road behind it: {behind} against {beside}");
+}
+
+#[test]
+#[ignore = "requires a graphics adapter; run with --ignored on a GPU host"]
+fn a_part_that_moves_in_the_saloon_is_left_out_of_its_lamps_tiles_until_it_stops() {
+    let renderer = renderer();
+    let mut scene = renderer.new_scene();
+    let grey = renderer.add_material(&mut scene, None, AlphaMode::Opaque, [0.8, 0.8, 0.8, 1.0], false);
+    let mesh = renderer.add_mesh(&mut scene, &quad(Vec3::new(0.0, 0.0, 1.0), 0, Vec3::new(0.0, 0.3, 1.0)));
+    let seat = renderer.add_instance(&mut scene, mesh, DVec3::ZERO, Mat4::IDENTITY, vec![grey]);
+    let wheel = renderer.add_instance(&mut scene, mesh, DVec3::ZERO, Mat4::from_translation(Vec3::new(2.0, 0.0, 0.0)), vec![grey]);
+    let outside = renderer.add_instance(&mut scene, mesh, DVec3::ZERO, Mat4::from_translation(Vec3::new(40.0, 0.0, 0.0)), vec![grey]);
+    let bus = (DVec3::ZERO, 0.0, [10.0, 10.0, 4.0, 0.0, 0.0, 2.0]);
+    let cabin = Cabin { vehicle: passes::VehicleBox::new(&bus, DVec3::ZERO), to_local: Mat4::IDENTITY, lamp: Vec3::new(0.0, 0.0, 3.5) };
+    let mut motion = passes::CabinMotion::default();
+    let still = |m: &passes::CabinMotion| [m.still[seat], m.still[wheel], m.still[outside]];
+    renderer.prepare(&mut scene);
+    // the first frame: what is in the vehicle counts as still (a picture of one frame has its saloon)
+    motion.update(&scene, &cabin);
+    assert_eq!(still(&motion), [true, true, false]);
+    // the wheel turns a little every frame, the seat stands: the wheel is out from the second frame
+    for k in 1..=12 {
+        let turned = Mat4::from_translation(Vec3::new(2.0, 0.0, 0.0)) * Mat4::from_rotation_z(k as f32 * 0.2);
+        renderer.set_transform(&mut scene, wheel, DVec3::ZERO, turned);
+        renderer.prepare(&mut scene);
+        motion.update(&scene, &cabin);
+        assert_eq!(still(&motion), [true, false, false], "frame {k}");
+    }
+    // it stops: it is back after the frames it takes to settle, and not before
+    let mut back = 0;
+    for k in 1..=60 {
+        motion.update(&scene, &cabin);
+        if motion.still[wheel] {
+            back = k;
+            break;
+        }
+    }
+    assert!((29..=31).contains(&back), "the wheel is back after {back} frames");
+    // the whole vehicle drives off with the saloon in it (the frame of the vehicle moves): nothing in it moves
+    let ahead = DVec3::new(0.0, 5.0, 0.0);
+    let moved = Cabin { vehicle: passes::VehicleBox::new(&(ahead, 0.0, bus.2), DVec3::ZERO), to_local: Mat4::from_translation(-ahead.as_vec3()), ..cabin };
+    for id in [seat, wheel] {
+        let at = scene.instances[id].transform;
+        renderer.set_transform(&mut scene, id, ahead, at);
+    }
+    renderer.prepare(&mut scene);
+    motion.update(&scene, &moved);
+    assert_eq!(still(&motion), [true, true, false]);
 }

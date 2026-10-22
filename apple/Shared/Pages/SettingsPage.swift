@@ -135,6 +135,7 @@ struct SettingsPage: View {
     }
 
     private var display: some View {
+        let enhanced = (store.setting("graphics")?.string ?? "vanilla_plus").hasPrefix("enhanced")
         let mirrors = store.setting("mirror_size")?.string ?? "256"
         return Card("Display") {
             if !phone {
@@ -150,6 +151,9 @@ struct SettingsPage: View {
             SettingSelect(label: "Small objects", key: "min_obj_size", options: Choices.smallObjects)
             SettingSelect(label: "Mirrors", key: "mirror_size", options: Choices.mirrorSize)
             SettingSelect(label: "Bus mirror refresh", key: "mirror_refresh", options: Choices.mirrorRefresh, fallback: "full", heavy: { $0 == "every" && mirrors != "0" })
+            if enhanced {
+                SettingSelect(label: "Mirror quality", key: "mirror_quality", options: [("standard", "Standard"), ("enhanced", "As the picture (Enhanced)")])
+            }
             SettingToggle(label: "Mirror panels every frame", key: "mirror_hud_every_frame")
             SettingSelect(label: "Video memory", key: "video_memory", options: [("0", "Automatic"), ("1000", "1 GB"), ("1500", "1.5 GB"), ("2000", "2 GB"), ("3000", "3 GB"), ("4000", "4 GB"), ("6000", "6 GB"), ("8000", "8 GB"), ("12000", "12 GB"), ("16000", "16 GB")], help: "Everything the game keeps on the graphics card: textures, models and the picture itself. Automatic is nine tenths of the card.")
             SettingToggle(label: "Compress textures on loading", key: "texture_compression", fallback: true)

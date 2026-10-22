@@ -340,6 +340,7 @@ pub(crate) fn duty_step(
     game_clock: Option<&omsi_sim::SimClock>,
     learn_loaded: bool,
     plugin_events: Option<&mut Vec<omsi_plugin::GameEvent>>,
+    announce: bool,
 ) {
     if let Some(stop) = p.html_next_stop.take() {
         if d.skip_to(stop) {
@@ -352,6 +353,14 @@ pub(crate) fn duty_step(
     }
     let due = (d.trip_index, d.next_stop);
     let served = d.update(&mut p.vehicle, time);
+    // (the depot file's second recording of each stop, for the maps that keep two: a stock
+    // IBIS steps on by itself only when a stop is left - see `auto_announce`)
+    if announce {
+        // (seconds of play, not the time of day: a night line runs past midnight, and a
+        // clock that wraps would hold every press back until the same time the next day)
+        let run = game_clock.unwrap_or(&p.vehicle.host.clock).run_time;
+        p.announce.step(d, &mut p.vehicle, run);
+    }
     // (also one ended between frames: the last stop skipped from the menu; a trip reopened
     // by a page counts from its start again, and its next end is told too)
     if let Some(run) = d.take_reopened() {

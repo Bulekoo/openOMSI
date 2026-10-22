@@ -56,6 +56,11 @@ fn duty(d: &Duty) -> Value {
 }
 
 pub static FNS: &[ApiFn] = &[
+    def!("duty.tour", "duty", [], "table or nil", "The complete source tour of the selected duty, even when only one trip was selected. Same structure as `timetable.tour`; times align with the active duty's service day, with `time_offset` seconds applied to all trips and stops.", "0.3.40", None, false, |c, a| c.io().duty_tour()),
+    def!("timetable.tour", "duty", [p("line", "string"), p("tour", "string")], "table, or nil and reason", "Read a full tour without taking it: `{line, number, ai_group, extra, today, time_offset, trips}`. Each trip has `number`, `source_number` (both from 1), `name`, `line`, `terminus`, `track`, `reverse`, `profile_index` (from 0), `profile` (`name`, `factor`), `departure`, `arrival`, and all `stops` (`id`, `name`, `arrival`, `departure`, `stops`, optional `x,y,z`). Times are seconds from service-day midnight and can exceed 86400; passing stops are retained. Unknown trip references are skipped, retaining their source numbers. No AI vehicle is reserved.", "0.3.40", None, true, |c, a| {
+        let (line, tour) = (a.str(0)?, a.str(1)?);
+        Ok::<_, ApiError>(Value::List(match c.io().timetable_tour(&line, &tour) { Ok(v) => vec![v], Err(e) => vec![Value::Nil, e.into()] }))
+    }),
     def!("duty.active", "duty", [], "boolean", "Whether the player drives a duty (a line and tour of the timetable).", NEW, None, false, |c, a| c.io().duty().is_some()),
     def!("duty.get", "duty", [], "table or nil", "The duty now: `line`, `tour`, `trip` (its number in the duty, from 1), `trips`, `trip_name`, `terminus`, `departure`, `arrival`, `stops`, `next_stop` and `previous_stop` (each a stop: `{number, name, id, arrival, departure, stops, x, y, z}`), `at_stop`, `trip_done`, `delay` (seconds, late positive).", NEW, None, false, |c, a| c.io().duty().map(|d| duty(&d))),
     def!("duty.delay", "duty", [], "number or nil", "Seconds the bus is late (early negative), worked out between the stops as the game's timetable does.", NEW, None, false, |c, a| c.io().duty().map(|d| d.delay)),

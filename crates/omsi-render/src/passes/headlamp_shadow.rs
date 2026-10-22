@@ -80,7 +80,7 @@ pub(crate) fn headlamp_shadow(lamps: &[(Vec3, Vec3, f32)], own: VehicleBox, cam_
     }
     // (the index the shaders compare is the tile's own code: every one of the lamps marked
     // as the player's reads this map, see `lamp_shadow_at`)
-    Some(LampShadow { slot: VEHICLE_SLOTS.start, position, range, owner: None, look: Some(look), own: Some(own), hosts: false, near: 0.1, cabin: None, index: 0 })
+    Some(LampShadow { position, range, look: Some(look), own: Some(own), ..LampShadow::new(VEHICLE_SLOTS.start) })
 }
 
 impl LampShadow {

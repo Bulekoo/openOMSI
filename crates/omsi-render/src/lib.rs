@@ -265,6 +265,12 @@ pub struct RenderOptions {
     /// The original's `performance_maxObjDist` (m): objects farther away are not drawn
     /// unless they say `[noDistanceCheck]`. 0 = no limit.
     pub max_obj_dist: f32,
+    /// The mirrors of an Enhanced picture are shaded as the picture is (the settings'
+    /// `mirror_quality=enhanced`), not with the plain light (see `Renderer::render_inner`).
+    pub mirror_enhanced: bool,
+    /// The mirrors show the sun's shadows (the window's shadow maps, as they were last drawn,
+    /// are looked up from the mirror's camera: no shadow pass of their own).
+    pub mirror_shadows: bool,
     /// The mirrors show the smoke and spray particles as the window last had them (OMSI's
     /// `No PS in reflections`, turned round).
     pub mirror_particles: bool,
@@ -308,6 +314,8 @@ impl Default for RenderOptions {
             fxaa: true,
             min_obj_size: 0.013,
             max_obj_dist: 0.0,
+            mirror_enhanced: false,
+            mirror_shadows: false,
             mirror_particles: false,
             omsi_shadow_casters: false,
             shadow_blobs: true,

@@ -100,17 +100,19 @@ impl Renderer {
         };
         let aspect = self.texture_aspect.unwrap_or(width as f32 / height.max(1) as f32);
         let cam_rel = (camera.position - ro).as_vec3();
-        // The mirrors are drawn as the picture is, by the graphics the player chose: Enhanced
-        // mirrors show the Enhanced light, sky and shadows, plain ones the plain picture.
-        // (They were once drawn with the plain shading in Enhanced, 12.7 ms of GPU time for
-        // one 256-pixel mirror against 5.8 ms for the whole window without the depth
-        // prepass: they have a prepass of their own now, see `depth_wanted`.)
+        // The mirrors are drawn as the picture is (the settings' `mirror_quality=enhanced`,
+        // `RenderOptions::mirror_enhanced`, the default) or with the plain shading in
+        // Enhanced: a mirror has no depth prepass (sized for the window), so every layer of its
+        // picture runs the enhanced shader - 12.7 ms of GPU time for one 256-pixel mirror
+        // against 5.8 ms for the whole window on a weak card; plainly shaded it is 0.6 ms. The
+        // player who needs the frames takes the plain mirrors (`mirror_quality=standard`);
+        // `OMSI_MIRROR_ENHANCED=1` draws them as the picture whatever the setting.
         // The headset's eyes are the real picture as much as the window is (#784: VR showed
         // the plain graphics with Enhanced on); the first eye is the one that moves the
         // exposure, the sky cube and the frame clock on, as the window does without VR.
         let xr_view = projection.is_some();
         let lead_view = (with_overlays || xr_view) && !second_eye;
-        let enhanced_frame = lighting.enhanced && self.hdr_pass.is_some() && !env.no_enhanced && (with_overlays || xr_view || !env.mirror_plain);
+        let enhanced_frame = lighting.enhanced && self.hdr_pass.is_some() && !env.no_enhanced && (with_overlays || xr_view || env.mirror_enhanced || self.options.mirror_enhanced);
         // the mirrors are drawn by the same path as the window (their picture graded with
         // the window's exposure, see the post passes)
         let enhanced = enhanced_frame;
@@ -126,7 +128,12 @@ impl Renderer {
             && !env.no_puddle_reflections;
         let reflection_frame = !enhanced && puddles_wanted && self.reflection_pass.is_some();
         let masked_frame = enhanced || reflection_frame;
-        let (grid, lamp_shadows) = self.prepare_lights(scene, cam_rel, enhanced_frame, lighting.lamp_shadows && with_overlays && projection.is_none() && self.shadows.shadow_pipelines.len() > 6, lighting.inside.as_ref(), lighting.inside_rotation);
+        let eye = LightEye {
+            cam_rel,
+            view_proj: projection.is_none().then(|| camera.view_proj(aspect, ro)),
+            vehicle: lighting.inside.as_ref().map(|b| (b, lighting.inside_rotation)),
+        };
+        let (grid, lamp_shadows) = self.prepare_lights(scene, &eye, enhanced_frame, lighting.lamp_shadows && with_overlays && projection.is_none() && self.shadows.shadow_pipelines.len() > 6);
         self.prepare_coronas(scene, lighting.night, lighting.inside.as_ref().filter(|v| point_in_vehicle_box(camera.position, v)));
         // (the mirrors draw no smoke, see `encode_main_late`)
         if exclude_texture.is_none() {

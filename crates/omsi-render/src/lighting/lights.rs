@@ -233,13 +233,31 @@ pub(crate) struct LampAtlas {
 }
 
 impl LampAtlas {
-    /// The layout for a far map `shadow_size` texels wide; `lamps` false (a phone's
-    /// pipelines, which do not look the lamps' shadows up) leaves the tiles out.
-    pub(crate) fn new(shadow_size: u32, lamps: bool) -> LampAtlas {
-        let tile = (shadow_size / 4).clamp(64, LAMP_TILE_MAX);
-        let cols = (shadow_size / tile).max(1);
-        let rows = if lamps { (LAMP_SHADOWS as u32).div_ceil(cols) } else { 0 };
-        LampAtlas { shadow_size, tile, cols, rows }
+    /// The layout for a far map `shadow_size` texels wide, in a texture of `max_dim` texels a
+    /// side at most. The tiles are an eighth of the far map's width (so that eight lie in a row and
+    /// the forty-four of them take six rows: the texture is 1.75 times as high as wide, not 7.5
+    /// times, which 512-texel tiles made of it at 2048), at most `LAMP_TILE_MAX`; where the
+    /// texture would be too high they are made smaller, down to 64 texels, and left out when
+    /// even those do not fit. `lamps` false - the plain pictures, which do not look the lamps'
+    /// shadows up, and a phone's pipelines - leaves them out too: Vanilla and Vanilla+ keep the
+    /// far map's own 1.25 times its width.
+    pub(crate) fn new(shadow_size: u32, lamps: bool, max_dim: u32) -> LampAtlas {
+        let layout = |tile: u32| {
+            let cols = (shadow_size / tile).max(1);
+            LampAtlas { shadow_size, tile, cols, rows: (LAMP_SHADOWS as u32).div_ceil(cols) }
+        };
+        let none = LampAtlas { shadow_size, tile: 64, cols: 1, rows: 0 };
+        if !lamps {
+            return none;
+        }
+        let mut atlas = layout((shadow_size / 8).clamp(64, LAMP_TILE_MAX));
+        while atlas.height() > max_dim && atlas.tile > 64 {
+            atlas = layout(atlas.tile / 2);
+        }
+        if atlas.height() > max_dim {
+            return none;
+        }
+        atlas
     }
 
     /// The texture's height (texels): the far map and the tiles under it.
@@ -280,6 +298,9 @@ pub(crate) struct LampShadow {
     /// How near its map's depth begins (m): a street lamp's head and a saloon lamp's fixture,
     /// which the light sits in, are no shade for it.
     pub(crate) near: f32,
+    /// How wide its map looks down (degrees): a street lamp's light leaves its head over most of
+    /// the sky below, a saloon lamp's reaches the floor, the seats and the walls under it.
+    pub(crate) fov: f32,
     /// A lamp of the player's saloon: its map is drawn in the vehicle's own frame.
     pub(crate) cabin: Option<Cabin>,
     /// A saloon lamp's record in the light buffer (the first of those at its place).
@@ -305,8 +326,26 @@ pub(crate) const CABIN_REACH: f32 = 8.0;
 /// How near the saloon lamps' maps begin (m): the lamp's fixture and the roof lining it hangs
 /// in are within it.
 pub(crate) const CABIN_NEAR: f32 = 0.3;
+/// How wide a saloon lamp's map looks down (degrees): the floor, the seats and the walls under a
+/// lamp 2 to 3.5 m up, in a tile that is a few hundred texels, three to ten centimetres each.
+pub(crate) const CABIN_FOV: f32 = 120.0;
 
 impl LampShadow {
+    /// A light with no tile description yet but the slot: the rest to be filled in by the one
+    /// that makes it (a world lamp looks straight down, 0.1 m to its reach).
+    pub(crate) fn new(slot: usize) -> LampShadow {
+        LampShadow { slot, position: Vec3::ZERO, range: 0.0, owner: None, look: None, own: None, hosts: false, near: 0.1, fov: LAMP_SHADOW_FOV, cabin: None, index: 0 }
+    }
+
+    /// A sphere (centre, radius) that holds the reach of all of `lamps`; `None` for none.
+    pub(crate) fn union_sphere(lamps: &[LampShadow]) -> Option<(Vec3, f32)> {
+        let first = lamps.first()?;
+        let (lo, hi) = lamps.iter().fold((first.position, first.position), |(lo, hi), l| (lo.min(l.position), hi.max(l.position)));
+        let centre = (lo + hi) * 0.5;
+        let radius = lamps.iter().map(|l| (l.position - centre).length() + l.range).fold(0.0, f32::max);
+        Some((centre, radius))
+    }
+
     /// The shadow map's view and projection: straight down, depth 0..1 over its reach (a
     /// vehicle's headlamps' along the road, see `headlamp_view_proj`).
     pub(crate) fn view_proj(&self) -> Mat4 {
@@ -323,13 +362,13 @@ impl LampShadow {
     /// tile the one in the vehicle's frame, which does not change as the vehicle moves.
     pub(crate) fn key_matrix(&self) -> Mat4 {
         if let Some(c) = &self.cabin {
-            let proj = Mat4::perspective_rh(LAMP_SHADOW_FOV.to_radians(), 1.0, self.near, self.range.max(1.0));
+            let proj = Mat4::perspective_rh(self.fov.to_radians(), 1.0, self.near, self.range.max(1.0));
             return proj * Mat4::look_to_rh(c.lamp, -Vec3::Z, Vec3::Y);
         }
         if let Some(look) = self.look {
             return self.headlamp_view_proj(look);
         }
-        let proj = Mat4::perspective_rh(LAMP_SHADOW_FOV.to_radians(), 1.0, self.near, self.range.max(1.0));
+        let proj = Mat4::perspective_rh(self.fov.to_radians(), 1.0, self.near, self.range.max(1.0));
         let view = Mat4::look_to_rh(self.position, -Vec3::Z, Vec3::Y);
         proj * view
     }
@@ -399,15 +438,13 @@ impl Renderer {
     /// by, whose radius it reads as 0, and the mirrors show no headlight pools. The three
     /// stand-in points stay out of it, or a street full of cars would fill the grid cells'
     /// sixteen places before the street lamps got theirs.
-    pub(crate) fn prepare_lights(&self, scene: &mut Scene, cam_rel: Vec3, enhanced: bool, lamp_shadows: bool, own: Option<&(DVec3, f64, [f32; 6])>, rotation: Option<Mat4>) -> ([f32; 4], Vec<LampShadow>) {
+    pub(crate) fn prepare_lights(&self, scene: &mut Scene, eye: &LightEye, enhanced: bool, lamp_shadows: bool) -> ([f32; 4], Vec<LampShadow>) {
         // the lights that get a shadow map: the world's lamps lighting the camera's
         // surroundings most (by their strength over the distance), as many as there are
-        // tiles, and the headlamps of the vehicles in front of the camera
-        let mut world: Vec<(f32, LampKey, u32, LampShadow)> = Vec::new();
-        let mut spots: Vec<Spot> = Vec::new();
-        let mut own_marked: Vec<u32> = Vec::new();
-        // (the lights' tiles, to be marked in the light buffer: light, tile)
-        let mut tiled: Vec<(u32, usize)> = Vec::new();
+        // tiles, the headlamps of the vehicles in front of the camera and the lamps of the
+        // player's saloon (see `lamp_tiles`)
+        let mut wants = TileWants::default();
+        let cam_rel = eye.cam_rel;
         let ro = scene.render_origin;
         let side = LIGHT_GRID_SIDE;
         let half = side as f32 * LIGHT_CELL * 0.5;
@@ -423,15 +460,8 @@ impl Renderer {
         for l in &scene.interior_lights {
             gpu_lights.push(gpu_light(l, (l.position - ro).as_vec3()));
         }
-        // (the player's vehicle in its own frame, for the saloon's lamps: the world to the frame
-        // of its body, whose rotation the app gives - the heading alone without it)
-        let cabin_frame = own.filter(|_| lamp_shadows && enhanced && !omsi_cfg::flags::OMSI_NO_CABIN_SHADOWS.is_set()).map(|b| {
-            let to_world = rotation.unwrap_or_else(|| Mat4::from_rotation_z(-(b.1 as f32).to_radians()));
-            (passes::VehicleBox::new(b, ro), (Mat4::from_translation((b.0 - ro).as_vec3()) * to_world).inverse())
-        });
         // (the player's headlamps, which share a map of their own: see `passes::headlamp_shadow`)
-        let own = own.filter(|_| lamp_shadows && enhanced).map(|b| passes::VehicleBox::new(b, ro));
-        let mut own_lamps: Vec<(Vec3, Vec3, f32)> = Vec::new();
+        let own = eye.vehicle.filter(|_| lamp_shadows && enhanced).map(|(b, _)| passes::VehicleBox::new(b, ro));
         self.lights.cookies.begin_frame();
         // The grid is made in a room kept all unused but for the cells the last one filled,
         // which are cleared first: half a megabyte set and compared twice a frame (the
@@ -489,42 +519,11 @@ impl Renderer {
             let is_own = own.as_ref().is_some_and(|b| passes::own_headlamp(l, p, b));
             if is_own {
                 marks += 16.0;
-                own_lamps.push((p, l.direction, l.radius));
-                own_marked.push(idx);
+                wants.own_headlamp(idx, p, l);
             }
-            // The lights that cast shadows (Enhanced): a lamp aimed along the road is one of a
-            // vehicle's headlamps, any other light with no direction a lamp that looks
-            // straight down (a spot that lights a door or a work place has none yet).
+            // The lights that cast shadows (Enhanced): see `TileWants::consider`.
             if enhanced && l.intensity > 0.0 && l.mode != LightMode::Vanilla && !is_own {
-                let key = lamp_key(l.position);
-                let road = l.beam != 0.0 || (l.cookie.is_some() && l.direction.normalize_or_zero().z.abs() < 0.5);
-                let aimed = l.direction.length_squared() > 1e-6 || l.beam != 0.0;
-                // (how far it is from the camera along the ground: a camera high above the street
-                // - the free camera - sees the ground below it, which the lamps round it light)
-                let d = (p - cam_rel).length();
-                let d_ground = (p - cam_rel).truncate().length();
-                if !lamp_shadows {
-                    // (a frame that draws no tiles - a mirror's picture - marks the lamps the
-                    // window's last frame gave one, and looks theirs up)
-                    if let Some(slot) = scene.lamp_slots.slot_of(&key).filter(|_| !aimed) {
-                        marks += LAMP_MARK * (slot + 1) as f32;
-                    }
-                } else if road {
-                    if l.mode == LightMode::Enhanced && d < l.radius.min(passes::HEADLAMP_SHADOW_REACH) + LAMP_SHADOW_REACH {
-                        let score = l.intensity * (l.color[0] + l.color[1] + l.color[2]) / (d * d + 25.0);
-                        spots.push(Spot { index: idx, position: p, direction: l.direction, range: l.radius, score });
-                    }
-                } else if !aimed && d_ground < l.radius + LAMP_SHADOW_REACH {
-                    let core = l.core.max(l.radius * 0.125);
-                    let mut score = l.intensity * (l.color[0] + l.color[1] + l.color[2]) * core * core / (d_ground * d_ground + 25.0);
-                    // (a lamp that had a map keeps it until another is clearly stronger: the
-                    // set changing with every metre the camera moved switched shadows on and
-                    // off between lamps that light the view about alike, #1613)
-                    if scene.lamp_slots.slot_of(&key).is_some() {
-                        score *= KEEP_FACTOR;
-                    }
-                    world.push((score, key, idx, LampShadow { slot: 0, position: p, range: l.radius, owner: l.shadow_owner, look: None, own: None, hosts: false, near: 0.1, cabin: None, index: 0 }));
-                }
+                marks += wants.consider(&scene.lamp_slots, eye, l, p, idx, lamp_shadows);
             }
             if marks > 0.0 {
                 if let Some(g) = gpu_lights.last_mut() {
@@ -566,98 +565,18 @@ impl Renderer {
                 }
             }
         }
-        // The lights' tiles. The world's lamps keep theirs while they stay among the strongest,
-        // the vehicles' headlamps are given the vehicle run in order of strength, the player's
-        // pair first (a pair of lamps shares one map, which looks along the road from between
-        // them).
-        let mut tiles: Vec<LampShadow> = Vec::new();
-        if lamp_shadows && enhanced {
-            world.sort_by(|a, b| b.0.total_cmp(&a.0));
-            let wants: Vec<LampKey> = world.iter().map(|w| w.1).collect();
-            let fresh = if scene.lamp_slots.is_cold() { usize::MAX } else { NEW_LAMPS_PER_FRAME };
-            for (w, slot) in scene.lamp_slots.assign(&wants, fresh) {
-                let (_, _, idx, mut lamp) = world[w];
-                lamp.slot = slot;
-                tiled.push((idx, slot));
-                tiles.push(lamp);
-            }
-            let mut next = VEHICLE_SLOTS.start;
-            if let Some(mut map) = own.and_then(|b| passes::headlamp_shadow(&own_lamps, b, cam_rel)) {
-                map.slot = next;
-                next += 1;
-                tiled.extend(own_marked.iter().map(|&i| (i, map.slot)));
-                tiles.push(map);
-            }
-            for g in group_spots(&mut spots) {
-                if next >= VEHICLE_SLOTS.end {
-                    break;
-                }
-                let range = g.range.min(passes::HEADLAMP_SHADOW_REACH);
-                tiles.push(LampShadow { slot: next, position: g.position, range, owner: None, look: Some(g.look), own: None, hosts: true, near: 0.1, cabin: None, index: 0 });
-                tiled.extend(g.members.iter().map(|&i| (i, next)));
-                next += 1;
-            }
-            for &(idx, slot) in &tiled {
-                if let Some(g) = gpu_lights.get_mut(idx as usize) {
-                    g.pos[3] = -(-g.pos[3]).max(0.0) - LAMP_MARK * (slot + 1) as f32;
-                }
-            }
-            // The lamps of the player's saloon, the strongest in the camera's reach (a lamp
-            // appears once for each set of meshes it lights, in the slots of the interior
-            // lights: one tile for all of them, named by where it hangs in the vehicle).
-            if let Some((vbox, to_local)) = cabin_frame {
-                let mut groups: Vec<(LampKey, Vec3, Vec3, Vec<usize>, f32)> = Vec::new();
-                for (i, l) in scene.interior_lights.iter().enumerate() {
-                    if l.intensity <= 0.0 {
-                        continue;
-                    }
-                    let p = (l.position - ro).as_vec3();
-                    if !vbox.contains(p, 0.3) {
-                        continue;
-                    }
-                    let lp = to_local.transform_point3(p);
-                    let key: LampKey = [(lp.x * 40.0).round() as i64, (lp.y * 40.0).round() as i64, (lp.z * 40.0).round() as i64];
-                    if let Some(g) = groups.iter_mut().find(|g| g.0 == key) {
-                        g.3.push(i);
-                        continue;
-                    }
-                    // (the lamp's strength over its distance from the camera, as the world's)
-                    let core = l.core.max(0.1);
-                    let d = (p - cam_rel).length();
-                    let mut score = l.intensity * (l.color[0] + l.color[1] + l.color[2]) * core * core / (d * d + 1.0);
-                    if scene.cabin_slots.slot_of(&key).is_some() {
-                        score *= KEEP_FACTOR;
-                    }
-                    groups.push((key, p, lp, vec![i], score));
-                }
-                groups.sort_by(|a, b| b.4.total_cmp(&a.4));
-                let wants: Vec<LampKey> = groups.iter().map(|g| g.0).collect();
-                let fresh = if scene.cabin_slots.is_cold() { usize::MAX } else { NEW_LAMPS_PER_FRAME };
-                for (w, s) in scene.cabin_slots.assign(&wants, fresh) {
-                    let (_, p, lp, members, _) = &groups[w];
-                    let slot = CABIN_SLOTS.start + s;
-                    tiles.push(LampShadow {
-                        slot,
-                        position: *p,
-                        range: CABIN_REACH,
-                        owner: None,
-                        look: None,
-                        own: None,
-                        hosts: false,
-                        near: CABIN_NEAR,
-                        cabin: Some(Cabin { vehicle: vbox, to_local, lamp: *lp }),
-                        index: members[0] as u32,
-                    });
-                    // (one record names the tile; the lamp's copies in the other sets are lit
-                    // as before, and shaded by `cabin_visibility`)
-                    if let Some(g) = gpu_lights.get_mut(members[0]) {
-                        g.pos[3] = -LAMP_MARK * (slot + 1) as f32;
-                    }
-                }
-            }
-        }
+        let tiles = if lamp_shadows && enhanced { wants.tiles(scene, eye, own, &mut gpu_lights) } else { Vec::new() };
         // (the beams' pictures the lamps found layers for, after the lights: see `cookies`)
         self.lights.cookies.append(&mut gpu_lights);
+        scene.grid_counts = counts;
+        scene.grid_strength = strength;
+        self.send_lights(scene, gpu_lights, grid);
+        ([origin[0], origin[1], LIGHT_CELL, side as f32], tiles)
+    }
+
+    /// Send the frame's lights and their grid to the GPU: only what differs from what the
+    /// buffers hold is written (most lights and most cells stand still).
+    fn send_lights(&self, scene: &mut Scene, mut gpu_lights: Vec<GpuPointLight>, grid: Vec<u32>) {
         if gpu_lights.is_empty() {
             gpu_lights.push(GpuPointLight {
                 pos: [0.0; 4],
@@ -666,9 +585,8 @@ impl Renderer {
                 extra: [0.0; 4],
             });
         }
-        scene.grid_counts = counts;
-        scene.grid_strength = strength;
         let lbytes: &[u8] = bytemuck::cast_slice(&gpu_lights);
+        let cells = LIGHT_GRID_SIDE * LIGHT_GRID_SIDE;
         let mut rebuilt = false;
         match &scene.light_buf {
             Some(b) if b.size() >= lbytes.len() as u64 => {
@@ -735,7 +653,6 @@ impl Renderer {
         if rebuilt {
             self.rebuild_camera_bind_group(scene);
         }
-        ([origin[0], origin[1], LIGHT_CELL, side as f32], tiles)
     }
 
     /// Upload this frame's smoke particles, farthest first (they are blended over each other).
@@ -980,4 +897,39 @@ pub(crate) struct LightRes {
     pub(crate) lm_atlas_view: wgpu::TextureView,
     pub(crate) lm_uniform: wgpu::Buffer,
     pub(crate) lm_place: std::cell::Cell<(f64, f64, f64)>,
+}
+
+#[cfg(test)]
+mod atlas_tests {
+    use super::*;
+
+    /// The tiles are an eighth of the far map's width, forty-four of them in six rows, and take
+    /// no more of the texture than 1.75 times the far map's width in all.
+    #[test]
+    fn the_lamp_tiles_take_six_rows_of_an_eighth() {
+        for (size, tile) in [(1024, 128), (2048, 256), (4096, 512), (8192, 512)] {
+            let a = LampAtlas::new(size, true, 16384);
+            assert_eq!((a.tile, a.cols), (tile, size / tile), "{size}");
+            assert_eq!(a.rows, if size == 8192 { 3 } else { 6 }, "{size}");
+            let last = a.origin(LAMP_SHADOWS - 1);
+            assert!(last.0 + a.tile <= size && last.1 + a.tile <= a.height(), "{size}: the last tile lies in the texture");
+        }
+        let a = LampAtlas::new(2048, true, 16384);
+        assert_eq!(a.height(), 2048 + 6 * 256);
+        assert_eq!(a.uniform(), [256.0, 8.0, 3584.0, LAMP_SHADOWS as f32]);
+    }
+
+    /// Vanilla and Vanilla+ have no tiles (the far map keeps its own height), a texture too low
+    /// for them gets smaller tiles, and one too low for the smallest none.
+    #[test]
+    fn the_atlas_fits_the_texture_or_leaves_the_tiles_out() {
+        let plain = LampAtlas::new(2048, false, 16384);
+        assert_eq!((plain.rows, plain.height(), plain.uniform()[3]), (0, 2048, 0.0));
+        let low = LampAtlas::new(2048, true, 2600);
+        assert!(low.rows > 0 && low.height() <= 2600 && low.tile < 256, "{low:?}");
+        let none = LampAtlas::new(2048, true, 2048);
+        assert_eq!((none.rows, none.uniform()[3]), (0, 0.0));
+        // a device that reads 4096 texels at most: the far map is 2048 wide there (see `open`)
+        assert!(LampAtlas::new(2048, true, 4096).height() <= 4096);
+    }
 }

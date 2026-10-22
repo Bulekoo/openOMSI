@@ -4,6 +4,7 @@
 //! departure leaves when, with which vehicle, where on its route). The game's `schedule`
 //! puts the buses on the road with them.
 
+pub mod announce;
 mod duty;
 mod ibis;
 mod route;
