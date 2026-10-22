@@ -215,6 +215,22 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 
 ### Fixes
 
+- **Enhanced is twice as light in daylight**: since 0.2.42 the AI cars were lent headlamp beams
+  whenever their lights were on, and in a grey winter noon (cars' lights on, no street lamp lit)
+  those twelve cars' beams cost 13 ms of a 25 ms frame on an M4 - any light at all in the
+  scene makes every pixel look through the lamp grid and has the weather's fog work the lamps'
+  air light out. They are lent only while it is dark enough (the darkness is 0.12 or more) for
+  them to show; the night picture is as before. 27.4 ms -> 13.0 ms of GPU a frame in that
+  place.
+- **AI cars and buses are drawn with their model's lower levels of detail** (`[LOD]`, as
+  Omsi.exe picks them by the vehicle's size on the screen, and as the scenery's levels are):
+  only the first level was loaded, so each AI vehicle was all its meshes at any distance.
+  `OMSI_FORCE_LOD=1` draws the lower levels at any size, for a look at them.
+- **Timetable buses no longer stall the frame when they appear**: a departure whose vehicle was
+  not on the graphics card yet (the clock set far ahead, a type nothing read ahead) had its
+  meshes and textures built on the frame it appeared on - 120 to 300 ms; it is tried again
+  once the vehicle is read ahead. A parallel loop's caller sleeps while it waits for the items
+  a helper has started instead of spinning.
 - Review of the round: `hwban 3 session é` (a multi-byte last character of a duration) no longer
   stops a dedicated server; the hardware bans are given to every session a game hosts, not only
   the first of a run; the host passes voice frames only to players that have voice chat on
