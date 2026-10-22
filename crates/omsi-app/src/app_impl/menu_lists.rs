@@ -10,6 +10,18 @@ impl App {
         // (a search belongs to its list; `chooser_pick` has taken the kind when it goes on)
         if self.menus.list_kind.as_ref().is_some_and(|k| *k != kind) {
             self.menus.forget_search();
+            if self.menus.menu_edit_number {
+                if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
+                self.menus.menu_edit_number=false; self.menus.menu_edit=None;
+            }
+            if self.menus.menu_edit_ident {
+                if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
+                self.menus.menu_edit_ident=false; self.menus.menu_edit=None;
+            }
+            if self.menus.menu_edit_icao {
+                if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
+                self.menus.menu_edit_icao=false; self.menus.menu_edit=None;
+            }
         }
         self.menus.dropdown = None;
         self.menus.admin_list = Some(crate::game_lists::items(self, &kind));
