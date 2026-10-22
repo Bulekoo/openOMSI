@@ -583,6 +583,7 @@ struct TimeCard: View {
             Field("Weather", help: weatherHelp) {
                 SelectField(options: weatherOptions, selection: weatherValue, onChange: pickWeather)
             }
+            CabinTemperatureOption()
             if c.weather.hasPrefix("metar:") {
                 Field("Airport") { AirportField(code: WeatherChoice.metar(c)) }
             }
@@ -663,6 +664,22 @@ struct TimeCard: View {
         f.locale = Locale(identifier: "en_US_POSIX")
         f.isLenient = false
         if let d = f.date(from: date.trimmingCharacters(in: .whitespaces)) { store.act("date", ["date": f.string(from: d)]) } else { date = store.choice.date }
+    }
+}
+
+struct CabinTemperatureOption: View {
+    @Environment(LauncherStore.self) private var store
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ToggleRow(label: "Start with a comfortable cabin temperature (except first trip of a tour)", help: "Sets the cabin to 22°C when starting a drive. The first trip of a tour keeps its normal temperature to simulate a depot departure.", isOn: store.choice.comfortable_cabin_on_start) {
+                store.act("flag", ["name": "comfortable_cabin_on_start", "on": $0])
+            }
+            if store.choice.comfortable_cabin_on_start && !store.choice.free && store.snapshot.first_trip == 0 {
+                Text("First trip of this tour: normal cabin temperature will be used.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
     }
 }
 

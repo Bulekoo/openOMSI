@@ -151,6 +151,7 @@ pub struct Choice {
     pub passengers: bool,
     pub schedule: bool,
     pub autostart: bool,
+    pub comfortable_cabin_on_start: bool,
     /// Start on foot (no bus of one's own until one is placed).
     pub on_foot: bool,
     /// off, host, join
@@ -187,6 +188,7 @@ impl Default for Choice {
             passengers: true,
             schedule: true,
             autostart: false,
+            comfortable_cabin_on_start: false,
             on_foot: false,
             lan_mode: "off".into(),
             lan_addr: String::new(),
@@ -708,6 +710,7 @@ impl State {
             passengers: Some(c.passengers),
             schedule: Some(c.schedule),
             autostart: Some(c.autostart),
+            comfortable_cabin_on_start: Some(c.comfortable_cabin_on_start),
             on_foot: Some(c.on_foot),
             profile: Some(self.config.profile.clone()).filter(|p| !p.is_empty()),
             lan: Some(lan),
@@ -1417,10 +1420,13 @@ mod choice_tests {
     fn an_old_duty_file_loads_and_a_typed_plate_is_kept() {
         let old: super::Choice = serde_json::from_str(r#"{"bus":"Vehicles/x.bus","map":"maps/x/global.cfg"}"#).unwrap();
         assert_eq!(old.plate, "");
+        assert!(!old.comfortable_cabin_on_start);
         let mut c = super::Choice::default();
         c.plate = "B-AB 1234".into();
+        c.comfortable_cabin_on_start = true;
         let back: super::Choice = serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
         assert_eq!(back.plate, "B-AB 1234");
+        assert!(back.comfortable_cabin_on_start);
     }
 }
 

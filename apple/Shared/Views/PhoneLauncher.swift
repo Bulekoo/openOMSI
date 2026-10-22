@@ -256,6 +256,7 @@ struct PhoneDrive: View {
                     toggle("Passengers", "passengers", c.passengers)
                     toggle("Timetable buses", "schedule", c.schedule)
                     toggle("Bus ready to go", "autostart", c.autostart)
+                    CabinTemperatureOption()
                     toggle("Start on foot", "on_foot", c.on_foot)
                 }
                 .padding(.horizontal, 14).padding(.vertical, 10)

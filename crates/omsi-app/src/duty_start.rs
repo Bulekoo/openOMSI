@@ -168,3 +168,51 @@ pub(crate) fn place_on_duty(args: &mut Args) {
     }
     log::info!("duty start: no stop of the next trips can be reached from the entry points; the timetable decides, {:.1} s", t0.elapsed().as_secs_f64());
 }
+
+/// Adjust the new session's cabin once, after script initialization and duty selection.
+/// A single selected trip may be stored at index zero with a nonzero tour offset.
+pub(crate) fn set_starting_cabin_temperature(
+    args: &Args,
+    vehicle: &mut omsi_sim::VehicleInstance,
+    duty: Option<&schedule::PlayerDuty>,
+) {
+    if use_comfortable_cabin(args, duty) {
+        if args.on_foot {
+            args.pending_cabin_temperature
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        } else {
+            vehicle.set_cabin_temperature(22.0);
+        }
+    }
+}
+
+fn use_comfortable_cabin(args: &Args, duty: Option<&schedule::PlayerDuty>) -> bool {
+    args.comfortable_cabin_on_start
+        && !args.is_resuming()
+        && !duty.is_some_and(|d| d.first_trip + d.trip_index == 0)
+}
+
+#[cfg(test)]
+mod cabin_temperature_tests {
+    use super::*;
+
+    #[test]
+    fn cabin_start_respects_tour_position_and_saved_state() {
+        let mut args = Args::parse_from(["openomsi", "--comfortable-cabin-on-start"]);
+        let mut duty = schedule::PlayerDuty::new("5".into(), "1".into(), Vec::new(), 0, 0, true);
+        assert!(!use_comfortable_cabin(&args, Some(&duty)));
+        duty.trip_index = 1;
+        assert!(use_comfortable_cabin(&args, Some(&duty)));
+        // A later trip selected on its own starts at zero within its shortened duty.
+        duty.trip_index = 0;
+        duty.first_trip = 3;
+        assert!(use_comfortable_cabin(&args, Some(&duty)));
+        assert!(use_comfortable_cabin(&args, None));
+        args.comfortable_cabin_on_start = false;
+        assert!(!use_comfortable_cabin(&args, Some(&duty)));
+        args.comfortable_cabin_on_start = true;
+        args.situation = Some("saved.osn".into());
+        assert!(!use_comfortable_cabin(&args, Some(&duty)));
+        assert!(!use_comfortable_cabin(&args, None));
+    }
+}
