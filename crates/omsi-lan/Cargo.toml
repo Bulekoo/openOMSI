@@ -9,6 +9,8 @@ description = "openOMSI's multiplayer on top of omsi-net: the host's mods for jo
 omsi-model = { path = "../omsi-model" }
 omsi-cfg = { path = "../omsi-cfg" }
 omsi-admin = { path = "../omsi-admin" }
+# the public server list: moderation of its names and icons, the service's client
+omsi-serverlist = { path = "../omsi-serverlist" }
 omsi-net = { path = "../omsi-net" }
 omsi-map = { path = "../omsi-map" }
 omsi-sim = { path = "../omsi-sim" }
@@ -20,7 +22,11 @@ omsi-o3d = { path = "../omsi-o3d" }
 # its files go in over the wire
 omsi-texture = { path = "../omsi-texture" }
 flate2.workspace = true
+# the fonts of a fetched bus, shared as the world's are (`mods::vehicles::fonts_of`)
+parking_lot.workspace = true
 zstd.workspace = true
+# `map_pack`: a map packed into a .zip for a server on another machine
+zip.workspace = true
 anyhow.workspace = true
 glam.workspace = true
 hashbrown.workspace = true
@@ -30,7 +36,7 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 ring.workspace = true
-# the chat's word filter
+# the chat's word filter, and the public server list's (`moderation`)
 rustrict = "0.7"
 
 [target.'cfg(unix)'.dependencies]
@@ -40,6 +46,8 @@ libc.workspace = true
 [target.'cfg(windows)'.dependencies]
 windows = { workspace = true, features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Cryptography"] }
 
+
 [dev-dependencies]
-# `mods::quarantine`'s scan of a mod archive, read in place as the game reads one
-zip.workspace = true
+# the tests: the box's picture (a mod archive is read in place with `zip`, a dependency for
+# `map_pack`'s archives)
+image.workspace = true

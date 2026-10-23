@@ -125,8 +125,12 @@ fn snow_on_pane(in: FsIn, cover: f32) -> vec4<f32> {
     if (cover <= 0.0) {
         return vec4<f32>(1.0, 1.0, 1.0, 0.0);
     }
-    // the position on the pane in metres, so that crystals keep their size on every pane
-    let m = in.wipe_uv.xy / max(abs(material.wipe_bounds.zw), vec2<f32>(1e-4));
+    // the position on the pane in metres, so that crystals keep their size on every pane:
+    // the film mesh's own coordinates, laid out in metres on each pane's glass when the mesh
+    // is uploaded (omsi-scene `pane_uv`). Not the mask's projection, which is one plane for
+    // all the slot's panes - a rear window in the slot of the side windows lay edge-on in it,
+    // and its snow came out as streaks.
+    let m = in.uv - in.params.zw;
     var flakes = 0.0;
     for (var layer = 0; layer < 2; layer++) {
         let cell = select(0.011, 0.02, layer == 1);

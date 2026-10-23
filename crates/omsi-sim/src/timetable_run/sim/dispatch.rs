@@ -33,18 +33,11 @@ impl ScheduleSim {
         self.retry_at.clear();
         self.startup.clear();
         self.later_layover.clear();
-        // (the clock set back over midnight: the day before)
-        while day_time < self.day_base {
-            self.day_base -= DAY;
-            let mut c = self.date_clock.clone();
-            if c.day_of_year > 1 {
-                c.day_of_year -= 1;
-            } else {
-                c.year -= 1;
-                c.day_of_year = crate::clock::days_in_year(c.year);
-            }
-            self.date_clock = c.clone();
-            self.set_day(&c);
+        // Skip directly to the requested date, rather than rebuilding the timetable
+        // once for every intervening day (hundreds of reassignments on year jumps).
+        if day_time.is_finite() && day_time < self.day_base {
+            let days_back = ((self.day_base - day_time) / DAY).ceil() as i64;
+            self.shift_calendar_days(-days_back);
         }
         self.roll_day(day_time);
         for i in 0..self.departures.len() {

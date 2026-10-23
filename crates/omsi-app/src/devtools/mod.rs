@@ -231,10 +231,10 @@ impl App {
         self.shell.ui.focus = None;
         if self.devtools.take().is_some() {
             self.shell.clear();
-            self.service_msg = Some(("Developer tools closed".into(), 2.0));
+            self.service_msg = Some((omsi_ui::tr("Developer tools closed").into_owned(), 2.0));
         } else {
             self.devtools = Some(Box::new(DevTools::new(self.player.as_ref())));
-            self.service_msg = Some(("Developer tools (Ctrl+Shift+D closes them)".into(), 3.0));
+            self.service_msg = Some((omsi_ui::tr("Developer tools (Ctrl+Shift+D closes them)").into_owned(), 3.0));
         }
     }
 
@@ -372,7 +372,7 @@ impl App {
                 let log = omsi_launcher_lib::data_dir().join("game.log");
                 open_file(&log);
                 if let Some(d) = self.devtools.as_mut() {
-                    d.say(format!("opened {}", log.display()));
+                    d.say(format!("{}: {}", omsi_ui::tr("Log opened"), log.display()));
                 }
             }
             Request::CopyMirror(i) => {

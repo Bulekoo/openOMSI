@@ -23,6 +23,7 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         switch_row(app, "get_up", "Ability to get up (Ctrl+Shift+G)", "Allows you to get out of the car and explore the world"),
         switch_row(app, "coll_objects", "Collisions with objects", "Enables/disables collisions with objects such as buildings, streetlights, etc."),
         switch_row(app, "coll_vehicles", "Collisions with vehicles", "Enables/Disables Collisions with Other Vehicles"),
+        switch_row(app, "realistic_road", "Realistic road physics", "Tyres that slip, grip and roughness by road surface, wind on the bus; off, the buses drive as in OMSI 2"),
         switch_row(app, "collision_pedestrians", "Collisions with people", "Enables/disables knocking down people"),
         switch_row(app, "timetable_win", "Timetable window (Insert)", "Displays a list of all stops (only when a tour is active)"),
         switch_row(app, "trip_summary", "Trip summary", "At the end of each trip: its stops with the times planned and driven, to copy or to save"),
@@ -30,6 +31,7 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         switch_row(app, "exact_fare", "Passengers pay the exact fare", "No change is given at the cash desk"),
         switch_row(app, "full_tank", "Start with a full tank", "Each new bus starts with its tank full (many maps have no petrol station); a saved situation keeps its own"),
         switch_row(app, "pax_bad_driving", "Passengers react to bad driving", "They complain about rough driving and may get off at the next stop"),
+        switch_row(app, "auto_announce", "Arrival announcements at the stop", "On depot files that keep two recordings per stop (the Chinese maps), the arrival one is played as the bus reaches the stop: the IBIS's next stop key, pressed as the driver would"),
         pick("boarding", "Boarding", "How passengers get their tickets"),
         pick("standing_chance", "Standing passengers", "The chance a passenger stands although a seat is free"),
         pick("maintenance", "Maintenance", later),
@@ -62,6 +64,7 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         switch_row(app, "clouds", "Clouds", later),
         pick("cloud_quality", "Cloud quality", "Enhanced: the volumetric clouds marched in fewer steps - faster, a little grainier").filter(|_| shown("cloud_quality") && app.settings.clouds),
         pick("rain_quality", "Rain quality", "Lower is faster: the drops on the glass painted less often, less spray and fewer streaks; Low shows OMSI 2's own rain on the glass (from the next bus loaded)"),
+        pick("vehicle_smoke", "Vehicle smoke", "Controls the vehicles' smoke particles, not scenery effects or glowing particles."),
         pick("puddles", "Puddles", "The wet roads' reflections in the rain: Low only near the bus and in fewer rays, much cheaper; Off none (the reflections on paint and glass stay)").filter(|_| app.settings.reflections > 0.0),
         switch_row(app, "windy_trees", "Windy trees", "The trees' leaves bend and sway in the wind and its gusts; with no wind they stand still"),
     ]
@@ -150,6 +153,8 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         pick("mirror_size", "Mirrors", later),
         pick("mirror_refresh", "Bus mirror refresh", "How often the mirrors are drawn: every frame, the street moves through them as smoothly as through the windscreen"),
         pick("mirror_quality", "Mirror quality", "In Enhanced and Enhanced+: the mirrors shaded as the picture is, with its light and its sky, instead of the plain light").filter(|_| shown("mirror_quality")),
+        switch_row(app, "mirror_shadows", "Shadows in the mirrors", "The mirrors show the sun's shadows (they look up the picture's shadow maps; no pass of their own)"),
+        switch_row(app, "mirror_particles", "Smoke and spray in the mirrors", "The mirrors show exhaust and the spray of the wheels, as OMSI 2 does without its \"No PS in reflections\""),
         switch_row(app, "mirror_hud_every_frame", "Mirror panels every frame", "The mirror panels in the cab (Ctrl+M) are drawn every frame, as in ETS2, instead of taking turns with the other mirrors"),
         pick("video_memory", "Video memory", later),
         switch_row(app, "texture_compression", "Compress textures on loading", later),
@@ -165,6 +170,11 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         slider_row(app, "vol_scenery", "Surroundings", "How loud the sounds of the scenery are", &pct),
         switch_row(app, "doppler", "Doppler effect", "Approaching sounds higher, receding ones lower"),
         pick("pax_voices", "Passenger voices", "What passengers say"),
+        switch_row(app, "voice_enabled", "Voice chat in multiplayer", "Hold the nearby (V) or radio (B) key to talk. The microphone is used only while a key is held; nothing is recorded"),
+        switch_row(app, "voice_all_off", "Everybody else's voice chat off", "Single players are muted in the player list"),
+        switch_row(app, "voice_talker_list", "Show who is talking", "A line for each player you hear"),
+        slider_row(app, "voice_volume", "Voices: volume", "How loud the other players' voices are", &pct),
+        slider_row(app, "voice_mic_gain", "Microphone gain", "How much your microphone is amplified", &pct),
     ]
         .into_iter()
         .chain(crate::radio::option_rows(app, &pct))
@@ -209,6 +219,8 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         .flatten()
         .collect();
     camera.push(button("Reset the seat position", "Reset", "Put the seat back where the vehicle has it.", "seat_reset"));
+    camera.extend(pick("mirror_hud", "Mirror panels on the screen", "Copies of the bus's mirrors over the picture in the cab, as in ETS2 (Ctrl+M shows or hides them); a bus whose panels you arranged keeps its own"));
+    if app.player.is_some() && !app.vr_active() && s.mirror_size != 0 { camera.push(button("Arrange the mirror panels", "Open", "Drag them where you want them and change their size, saved for this vehicle (Ctrl+Shift+M).", "mirror_hud_edit")); }
     if app.player.is_some() && !app.vr_active() { camera.push(button("Edit the view and mirrors", "Open", "A panel at the side of the driver's view: the eye, the direction, the field of view and each mirror, saved for this vehicle.", "view_editor")); }
     if cfg!(windows) {
         camera.extend(
@@ -293,9 +305,18 @@ pub(super) fn vehicle_pages(app: &App) -> Vec<Page> {
     let server = crate::input_script::on_server(&app.args);
     let mut display: Vec<(String, String)> = Vec::new();
     if has {
+        let typed_number = if app.menus.menu_edit_number {
+            app.menus.menu_edit.clone().unwrap_or_default()
+        } else { app.player.as_ref().unwrap().vehicle.number() };
+        let typed_ident = if app.menus.menu_edit_ident {
+            app.menus.menu_edit.clone().unwrap_or_default()
+        } else { app.player.as_ref().unwrap().vehicle.ident() };
+
         display.push(opens("Destination display", "Change the current destination", "dest"));
         display.push(opens("Depot file (HOF)", "Change the current depot file (used for the timetable)", "hof"));
         display.push(opens("Fleet number", "Change the vehicle's current fleet number", "number"));
+        display.push((row("Custom fleet number", if app.menus.menu_edit_number{'E'}else{'e'}, &typed_number, "Enter custom fleet number (not from the list)", None), "custom_number_edit".to_string()));
+        display.push((row("Custom plate", if app.menus.menu_edit_ident{'E'}else{'e'}, &typed_ident, "Enter custom plate (leave free for automatic)", None), "custom_ident_edit".to_string()));
     }
     if !server {
         display.push(opens("Driver", "Change the current driver profile", "driver"));
@@ -408,7 +429,7 @@ pub(super) fn world_pages(app: &App) -> Vec<Page> {
         let src = if app.settings.metar_station.is_empty() { format!("{} ({})", app.metar_station(), omsi_ui::tr("automatic")) } else { app.metar_station() };
         weather.push((row("METAR source", 'o', &src, "The airport used for real weather.", None), "metar_src".to_string()));
         let typed=if app.menus.menu_edit_icao{
-            let mut s=app.menus.menu_edit.clone().unwrap_or_default(); while s.len()<4{s.push('_');} format!("{s}  (typing)")
+            let mut s=app.menus.menu_edit.clone().unwrap_or_default(); while s.len()<4{s.push('_');} format!("{s}  ({})", omsi_ui::tr("typing"))
         }else{app.metar_station()};
         weather.push((row("ICAO",if app.menus.menu_edit_icao{'E'}else{'e'},&typed,"Enter any 4-letter ICAO station.",None),"metar_icao_edit".to_string()));
         if app.metar_locked() {
@@ -433,7 +454,7 @@ pub(super) fn world_pages(app: &App) -> Vec<Page> {
         weather.extend(switch_row(app,"snow_road","Snow on road","Treat the road surface as snow-covered."));
         climate.extend(slider_row(app, "temp", "Temperature", "The air temperature.", &|v| format!("{} °C", v as i64)));
         let dew_temp=app.session.weather.as_ref().map(|w|w.temp.0).unwrap_or(15.0);
-        climate.extend(slider_row(app,"humidity","Humidity","Relative humidity of the air.",&|v|format!("{:.0} % | dew {:.0} °C",v,crate::weather_setup::dew_point_c(dew_temp,v))));
+        climate.extend(slider_row(app,"humidity","Humidity","Relative humidity of the air.",&|v|format!("{:.0} % | {}",v,omsi_ui::tr("dew point {t} °C").replace("{t}",&format!("{:.0}",crate::weather_setup::dew_point_c(dew_temp,v))))));
         climate.extend(slider_row(app, "wind_speed", "Wind speed", "How fast the wind blows; it drives the clouds.", &|v| format!("{} m/s", v as i64)));
         climate.extend(slider_row(app, "wind_dir", "Wind direction", "The direction of the wind in degrees (0 is north).", &|v| format!("{}°", v as i64)));
         // the METAR sync on: only its own rows stay (the weather is the report's)
@@ -444,7 +465,7 @@ pub(super) fn world_pages(app: &App) -> Vec<Page> {
         tools.push(button("Object editor", "Open", "Place and move objects in the world.", "editor"));
     }
     let mut people: Vec<(String, String)> = Vec::new();
-    people.extend(slider_row(app, "traffic", "Traffic", "How many vehicles drive around the map.", &|v| format!("{} vehicles", v as i64)));
+    people.extend(slider_row(app, "traffic", "Traffic", "How many vehicles drive around the map.", &|v| omsi_ui::tr("{n} vehicles").replace("{n}", &(v as i64).to_string())));
     if !client && app.session.traffic.is_some() {
         people.push(button("Clear AI traffic", "Clear", "Remove the current AI cars from the road; random traffic will return automatically.", "traffic_clear"));
     }

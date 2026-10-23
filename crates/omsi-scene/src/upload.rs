@@ -113,10 +113,11 @@ impl World {
                 push(tex, &ot.texture_dirs(&self.root), &mut names);
             }
         }
-        // the painted ground layers (and their detail textures) of the tile
+        // the painted ground layers (and their detail textures) of the tile, the masks moved to `paint` once cut
         let ground_dirs = vec![self.root.clone()];
-        for (layer, _) in &p.paint_masks {
-            if let Some(gt) = self.global.ground_textures.get(*layer) {
+        let layers = p.paint_masks.iter().map(|m| m.0).chain(p.paint.iter().map(|m| m.0)).chain(p.wall_paint.iter().map(|m| m.0));
+        for layer in layers {
+            if let Some(gt) = self.global.ground_textures.get(layer) {
                 push(&gt.texture, &ground_dirs, &mut names);
                 push(&gt.detail_texture, &ground_dirs, &mut names);
             }

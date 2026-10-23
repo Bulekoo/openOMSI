@@ -17,6 +17,7 @@ change behaviour is checked is in [REFACTOR_CHECKS.md](REFACTOR_CHECKS.md).
 | `mc_complMapObj`, `mc_splines`         | `omsi-scenery`                | parser done |
 | `mc_mapclass`, `mc_terrain_2`, `mc_chrono`, `mc_fahrstrasse` | `omsi-map` | parser done; chrono folders applied (records patched by ID, lines taken off a date) |
 | `mc_roadvehicle`, `mc_vehicle`, `mc_train`, `mc_passcabin`, `mc_sound` | `omsi-vehicle` | parser done |
+| - (no original counterpart: OMSI 2 runs its trolleybus wire in a plugin) | `omsi-trolley` | the overhead wire network with its sections and switches, the poles' mechanics, the rheostat and asynchronous traction, arcs; used by `omsi-vehicle` (the `[trolley_*]` blocks), run on a vehicle by `omsi-sim` (`vehicle/trolley.rs`) and drawn by `omsi-scene::trolley_view`; see [TROLLEYBUS.md](TROLLEYBUS.md) |
 | `mc_timetable`, `mc_station`           | `omsi-timetable`              | parser done; the runtime (duties, trips, layovers, departure boards) is `omsi-sim::timetable_run` (`ScheduleSim`), its buses put on the road by `omsi-app::schedule` |
 | `mc_weather`, `mc_himmel`, `mc_font`, `mc_language`, `mc_money`, `mc_human`, `mc_driver`, `mc_situation`, `mc_input`, options | `omsi-content` | parsers done |
 | `mc_texMan`                            | `omsi-texture`                | loading done incl. seasonal and `_LOW` variants; BC1-3 on the GPU (DXT as is, others compressed) and a texture budget |
@@ -43,7 +44,7 @@ Bottom up:
 | simulation | `omsi-sim` | vehicles (`vehicle/` by subsystem), scripts' host (`host/`), AI traffic, people, timetable, physics; no renderer, audio, texture decoder or network: pictures and HTML pages come through hooks the game registers (`image_decode`, `htmltex::set_backend`) |
 | beside the simulation | `omsi-htmlengine`, `omsi-weather`, `omsi-career` | the `[htmltexture]` engine; the weather and season models; the driver's career and real-time mode |
 | presentation | `omsi-render`, `omsi-audio`, `omsi-soundscape`, `omsi-photo`, `omsi-scene` | the renderer (`gpu/`, `resources/`, `scene/`, `lighting/`, `frame_plan`, shader parts); the mixer; ambience, scenery sounds and the radio; photo mode's lens and darkroom; the scene: loaded content turned into renderer data |
-| devices and services | `omsi-input`, `omsi-xr`, `omsi-net`, `omsi-lan`, `omsi-platform`, `omsi-plugin`, `omsi-plugin-ui` | controllers, force feedback, head tracking, key names; OpenXR; the LAN transport and the game-side session; updater, Discord, the presence count, version stamp; plugin hosting and its UI |
+| devices and services | `omsi-input`, `omsi-xr`, `omsi-net`, `omsi-lan`, `omsi-voice` (voice chat: microphone, Opus, jitter buffer, radio shaping; the relay is `omsi-net::voice_net`, see `docs/VOICE.md`), `omsi-serverlist` (the public server list: moderation, registration, the launcher's view), `omsi-platform`, `omsi-plugin`, `omsi-plugin-ui` | controllers, force feedback, head tracking, key names; OpenXR; the LAN transport and the game-side session; updater, Discord, the presence count, version stamp; plugin hosting and its UI |
 | launcher | `omsi-launcher-core`, `omsi-launcher-api`, `omsi-launcher-model` | the launcher's data side; the page's commands (desktop launcher and Android's web view); the window-free model the Swift launcher works on (`state`, the map as data), asking the game through `omsi_launcher_model::host::Host`. The launcher's window is `launcher/` (Tauri, a workspace of its own) |
 | app | `omsi-app` | the glue: `App` and its field groups, the frame (`frame_stages`: one declared list of stages for the window and one for the offscreen run, one runner), view sync, the adapters that hold the crates' state in `App` |
 
@@ -342,7 +343,8 @@ checked against it.
   vehicles, destination displays). A frame is `tick_send`, the shared world, `tick_receive`,
   then `view_sync::apply_lan` draws and sounds the others from `LanGame::drawn`. The app's
   side is `omsi-app/src/lan_play.rs` (name tags, the HUD's line, `AppLanHost`). Still the
-  app's: the shared world's mirror (`omsi-app/src/lan_world.rs`), which drives `Traffic`,
+  app's: the shared world's mirror (`omsi-app/src/lan_world.rs`), which drives `Traffic`
+  from the traffic table (`omsi-net::traffic_table`, see `docs/TRAFFIC_TABLE.md`),
   `Humans` and their view directly; it goes to omsi-lan once it is simulation state plus
   events for the view, as the other players' vehicles are.
 

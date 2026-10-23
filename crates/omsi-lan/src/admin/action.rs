@@ -32,6 +32,11 @@ pub enum WeatherAction {
 pub enum Action {
     /// A player sent away (`ban`: for the session), with what they read (`kick <id> [reason]`).
     Kick { id: u32, ban: bool, why: Option<String> },
+    /// A player's machine banned (`hwban <id> <session|all> [<n>h|<n>d] [reason]`), and the
+    /// player sent away.
+    HwBan { id: u32, scope: crate::bans::Scope, hours: Option<u32>, why: Option<String> },
+    /// A hardware ban lifted (`unban <ban id>`).
+    Unban(String),
     /// A player brought beside the bus of whoever asks.
     Bring(u32),
     /// Whoever asks goes beside a player's bus.
@@ -65,9 +70,32 @@ pub enum Action {
     Service { kind: String, whom: Whom },
     /// A player's bus put back on its wheels.
     Unstick(u32),
+    /// A player's voice chat silenced for the session (`vmute <id>`) or allowed again
+    /// (`vunmute <id>`); their chat and everything else go on.
+    VoiceMute { id: u32, muted: bool },
+}
+
+/// `12h` or `3d` as hours (1 .. a year), else None.
+fn ban_hours(word: &str) -> Option<u32> {
+    let (n, days) = match (word.strip_suffix('h'), word.strip_suffix('d')) {
+        (Some(n), _) => (n, false),
+        (_, Some(n)) => (n, true),
+        _ => return None,
+    };
+    let n: u32 = n.parse().ok()?;
+    let h = if days { n.checked_mul(24)? } else { n };
+    (1..=omsi_admin::MAX_BAN_HOURS).contains(&h).then_some(h)
 }
 
 impl Action {
+    /// An unban names a ban by its id: hex digits only.
+    fn checked(self) -> Option<Action> {
+        match &self {
+            Action::Unban(id) if id.is_empty() || id.len() > 16 || !id.bytes().all(|b| b.is_ascii_hexdigit()) => None,
+            _ => Some(self),
+        }
+    }
+
     /// The action of a line of the menu (`kick 3`, `service repair all`, ...), or None.
     pub fn parse(text: &str) -> Option<Action> {
         let (verb, arg) = text.split_once(' ').unwrap_or((text, ""));
@@ -79,6 +107,21 @@ impl Action {
                 let why = words.next().map(str::trim).filter(|w| !w.is_empty()).map(str::to_string);
                 Action::Kick { id, ban: verb == "ban", why }
             }
+            "hwban" => {
+                let mut words = arg.trim().splitn(3, ' ');
+                let id = words.next()?.parse().ok()?;
+                let scope = crate::bans::Scope::parse(words.next()?)?;
+                let mut rest = words.next().unwrap_or("").trim();
+                let mut hours = None;
+                if let Some((first, tail)) = rest.split_once(' ').or(Some((rest, ""))) {
+                    if let Some(h) = ban_hours(first) {
+                        hours = Some(h);
+                        rest = tail.trim();
+                    }
+                }
+                Action::HwBan { id, scope, hours, why: Some(rest.to_string()).filter(|w| !w.is_empty()) }
+            }
+            "unban" => Action::Unban(arg.trim().to_string()).checked()?,
             "bring" => Action::Bring(id()?),
             "goto" => Action::Goto(id()?),
             "bringall" => Action::BringAll,
@@ -116,6 +159,7 @@ impl Action {
                 Action::Service { kind: kind.to_string(), whom }
             }
             "unstick" => Action::Unstick(id()?),
+            "vmute" | "vunmute" => Action::VoiceMute { id: id()?, muted: verb == "vmute" },
             _ => return None,
         })
     }
@@ -202,6 +246,22 @@ pub fn act_on_session(lan: &mut LanSession, action: &Action, admin: &Admin) -> D
             }
         }
         Action::Unstick(id) => lan.command(*id, "unstick"),
+        Action::VoiceMute { id, muted } => {
+            lan.set_voice_muted(*id, *muted);
+            lan.command(*id, if *muted { "voice-muted 1" } else { "voice-muted 0" });
+        }
+        // (the host's own game and the server's `exec` call `ban::hardware_ban` for the answer)
+        Action::HwBan { id, scope, hours, why } => {
+            let by = admin.id.map(|i| format!("player {i}")).unwrap_or_else(|| "the host".to_string());
+            if let Err(e) = super::ban::hardware_ban(lan, *id, *scope, *hours, why.as_deref().unwrap_or(""), &by) {
+                log::info!("admin: hwban {id}: {e}");
+            }
+        }
+        Action::Unban(id) => {
+            if let Err(e) = super::ban::unban(lan, id) {
+                log::info!("admin: unban {id}: {e}");
+            }
+        }
         Action::Goto(_) | Action::Time(_) | Action::Speed(_) | Action::Clock(_) | Action::Weather(_) | Action::Traffic(_) | Action::PassengerDensity(_) => return Done::World,
     }
     Done::Session
@@ -211,10 +271,23 @@ pub fn act_on_session(lan: &mut LanSession, action: &Action, admin: &Admin) -> D
 mod tests {
     use super::*;
 
+    /// A duration is `<n>h` or `<n>d`; a last character of several bytes is no unit (and no panic).
+    #[test]
+    fn a_ban_length_with_a_wide_last_character_is_none() {
+        assert_eq!(ban_hours("12h"), Some(12));
+        assert_eq!(ban_hours("3d"), Some(72));
+        for bad in ["3é", "é", "", "3", "h", "3x", "日"] {
+            assert_eq!(ban_hours(bad), None, "{bad}");
+        }
+    }
+
     /// Every line of the menu reads as the action it names; numbers held to their ranges, and
     /// a line that is not one is no action.
     #[test]
     fn a_line_reads_as_its_action() {
+        assert_eq!(Action::parse("vmute 3"), Some(Action::VoiceMute { id: 3, muted: true }));
+        assert_eq!(Action::parse("vunmute 3"), Some(Action::VoiceMute { id: 3, muted: false }));
+        assert_eq!(Action::parse("vmute x"), None);
         assert_eq!(Action::parse("kick 3"), Some(Action::Kick { id: 3, ban: false, why: None }));
         assert_eq!(Action::parse("ban 4 spam"), Some(Action::Kick { id: 4, ban: true, why: Some("spam".into()) }));
         assert_eq!(Action::parse("time 999999"), Some(Action::Time(86400.0)));
@@ -234,6 +307,17 @@ mod tests {
         assert_eq!(Action::parse("passengers 1.5"), Some(Action::PassengerDensity(1.5)));
         assert_eq!(Action::parse("passengers 0"), Some(Action::PassengerDensity(0.0)));
         for bad in ["passengers", "passengers -1", "passengers 4", "passengers NaN", "passengers on"] {
+            assert_eq!(Action::parse(bad), None, "{bad}");
+        }
+        use crate::bans::Scope;
+        assert_eq!(Action::parse("hwban 3 session"), Some(Action::HwBan { id: 3, scope: Scope::Session, hours: None, why: None }));
+        assert_eq!(Action::parse("hwban 3 all 12h spamming the chat"), Some(Action::HwBan { id: 3, scope: Scope::Owner, hours: Some(12), why: Some("spamming the chat".into()) }));
+        assert_eq!(Action::parse("hwban 3 all 2d"), Some(Action::HwBan { id: 3, scope: Scope::Owner, hours: Some(48), why: None }));
+        assert_eq!(Action::parse("hwban 3 session 5 times"), Some(Action::HwBan { id: 3, scope: Scope::Session, hours: None, why: Some("5 times".into()) }));
+        assert_eq!(Action::parse("hwban 3 world"), None);
+        assert_eq!(Action::parse("hwban 3 all 0h"), Some(Action::HwBan { id: 3, scope: Scope::Owner, hours: None, why: Some("0h".into()) }));
+        assert_eq!(Action::parse("unban 0badf00d"), Some(Action::Unban("0badf00d".into())));
+        for bad in ["unban", "unban x", "unban 1; kick 2"] {
             assert_eq!(Action::parse(bad), None, "{bad}");
         }
         assert_eq!(Action::parse("goto x"), None);

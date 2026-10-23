@@ -229,12 +229,14 @@ impl Network {
     /// The grid cells a lane's points touch (see [`Network::build_grid`]).
     pub fn lane_cells(l: &Lane) -> Vec<(i32, i32)> {
         let mut cells: Vec<(i32, i32)> = Vec::new();
+        // (a set beside the list: GPM's TCSP8.sco has a path 968 km long, 19 613 cells searched one by one)
+        let mut seen: hashbrown::HashSet<(i32, i32)> = hashbrown::HashSet::new();
         for w in l.points.windows(2) {
             let n = ((w[1] - w[0]).truncate().length() / (GRID_CELL * 0.5)).ceil().max(1.0) as usize;
             for k in 0..=n {
                 let q = w[0].lerp(w[1], k as f64 / n as f64);
                 let c = ((q.x / GRID_CELL).floor() as i32, (q.y / GRID_CELL).floor() as i32);
-                if !cells.contains(&c) {
+                if seen.insert(c) {
                     cells.push(c);
                 }
             }

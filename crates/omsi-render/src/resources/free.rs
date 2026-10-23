@@ -93,7 +93,7 @@ impl Renderer {
                 view: self.white_texture.view.clone(),
                 size: (1, 1),
                 bytes: 0,
-                gen: next_gen(),
+                generation: next_gen(),
             };
         }
     }

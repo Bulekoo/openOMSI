@@ -3,7 +3,7 @@ import { useStore, remembered, remember } from '../store.js';
 import { t } from '../i18n.js';
 import { Icon } from '../icons.js';
 import { Button, Select, Dialog, Notice, Spinner } from '../ui.js';
-import { choose, curBus, curTour, pickedTrip, weatherName, realTime, realDate, askJoined, noServerBus } from '../data.js';
+import { choose, curBus, curTour, pickedTrip, weatherName, realTime, realDate, askJoined, noServerBus, depotBusOf } from '../data.js';
 import { BusPreview } from '../preview.js';
 import { RouteMap } from '../routemap.js';
 import { BusList, BusOptions, withoutMaker } from './bus-list.js';
@@ -11,7 +11,7 @@ import { BusPicker } from './bus-picker.js';
 import { DayStep } from './drive-day.js';
 import { DutyStep, Roadbook } from './drive-duty.js';
 import { StartBar, BusStage } from './drive-classic.js';
-import { hms, tripAt, TimeInput, DateInput, localNow } from './drive.js';
+import { hms, tripAt, TimeInput, DateInput, localNow, seasonOf, weatherFits } from './drive.js';
 
 export function LayoutDrive({ layout }) {
   const s = useStore();
@@ -52,7 +52,8 @@ function Book() {
 
 function weatherOptions(s) {
   const c = s.choice;
-  const out = [['', t('Natural weather')], ['cycle', t('Weather cycle')], ['tomorrow', 'Tomorrow.io'], ...(s.weather || []).map((x) => [x.file, x.name])];
+  // (the presets that fit the season, as on the Day & weather tiles; the chosen one is added below)
+  const out = [['', t('Natural weather')], ['cycle', t('Weather cycle')], ['tomorrow', 'Tomorrow.io'], ...(s.weather || []).filter((x) => weatherFits(x, seasonOf(c))).map((x) => [x.file, x.name])];
   if (c.weather && !out.some(([f]) => f === c.weather)) out.push([c.weather, weatherName(c.weather, s.weather)]);
   return out;
 }
@@ -102,6 +103,7 @@ function BusThumb({ compact }) {
         <div class="grow"><b class="ellipsis bt-name">${v ? withoutMaker(v.name, v.manufacturer) : t('No bus is installed.')}</b><div class="muted small ellipsis">${v?.manufacturer || ''}</div></div>
         ${!(compact && v) && buttons}
       </div>
+      ${depotBusOf() && html`<div class="row small depot-tag"><${Icon} name="garage" size=${16} /><span class="ellipsis">${t('Your bus: {name}', { name: `${depotBusOf().name} (${depotBusOf().plate})` })}</span></div>`}
       ${noServerBus() && html`<${Notice} kind="danger">${t('The server offers none of the vehicles installed here')}</${Notice}>`}
       ${v && html`<div class="row livery">
         <div class="grow"><${Select} raw value=${c.paint} options=${paints} onChange=${(paint) => choose({ paint })} /></div>

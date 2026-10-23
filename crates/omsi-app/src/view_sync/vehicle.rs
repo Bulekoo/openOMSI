@@ -243,8 +243,12 @@ pub(crate) fn sync_materials(
                     }
                     resolved.and_then(|path| {
                         let mut shared = f.shared.lock();
+                        // (a picture a display generator rewrites is reloaded in place,
+                        // under the same id, see `FreeTextureReloads`)
+                        let max_dimension = renderer.device.limits().max_texture_dimension_2d;
                         if let Some(e) = shared.get_mut(&path) {
                             e.1 += 1;
+                            f.reloads.watch(path.clone(), e.0, &f.shared, max_dimension);
                             f.held.push(path);
                             return Some(e.0);
                         }
@@ -255,6 +259,7 @@ pub(crate) fn sync_materials(
                         }
                         attach_pbr(renderer, scene, &path, id);
                         shared.insert(path.clone(), (id, 1));
+                        f.reloads.watch(path.clone(), id, &f.shared, max_dimension);
                         f.held.push(path);
                         Some(id)
                     })

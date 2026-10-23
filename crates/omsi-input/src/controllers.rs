@@ -1342,6 +1342,14 @@ impl Controllers {
     pub fn poll(&mut self) -> Analog {
         let mut out = Analog::default();
         self.raw_buttons = self.devices.poll();
+        if omsi_cfg::flags::OMSI_DEBUG_PAD.is_set() {
+            for (name, n, down) in &self.raw_buttons {
+                log::info!("pad: {name}: button {n} {}", if *down { "down" } else { "up" });
+            }
+            for (name, b, down) in &self.devices.pad_buttons {
+                log::info!("pad: {name}: gamepad button {b:?} {}", if *down { "down" } else { "up" });
+            }
+        }
         for (name, n, down) in &self.raw_buttons {
             if self.editing { self.held.while_editing(name, *n, *down); }
             if self.editing || !self.enabled || self.off(name) {

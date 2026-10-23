@@ -153,7 +153,7 @@ fn kind(c: &omsi_sim::ai_traffic::model::AiCar) -> &'static str {
     if c.is_rail() {
         return "tram";
     }
-    if c.vehicle.ty.def.mass > 0.0 && c.vehicle.ty.def.mass <= 0.3 {
+    if !c.is_bus() && omsi_sim::ai_traffic::model::is_bicycle(&c.vehicle.ty.def) {
         return "bicycle";
     }
     match c.state.veh_type {
@@ -334,7 +334,7 @@ pub(crate) fn set_ticket(app: &mut App, id: u32, c: &op::TicketChange, by: &str)
         op::TicketKind::Stamp => TICKET_STAMP,
         op::TicketKind::Buy => TICKET_BUY,
     });
-    let change = omsi_sim::people::TicketChange { kind, ticket: c.ticket, name: c.name.clone(), price: c.price, voice: c.voice.clone(), tag: c.tag.clone() };
+    let change = omsi_sim::people::TicketChange { kind, ticket: c.ticket, name: c.name.clone(), price: c.price, voice: c.voice.clone(), tag: c.tag.clone(), payment: c.payment };
     h.set_ticket(id, &change, by).map_err(str::to_string)
 }
 

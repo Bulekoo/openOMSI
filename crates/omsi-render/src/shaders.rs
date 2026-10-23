@@ -50,13 +50,16 @@ mod tests {
     /// map's shadow where no traced one is found, 0.2.51's clear coat that stays sharp on
     /// lacquer, the draw order's depth step of a surface lying on another of its object, and a
     /// livery's tint above the alpha test, the painted lines' pull and the wet paint's water film, and the player's vehicle
-    /// standing between other vehicles' lamps and what lies behind it).
+    /// standing between other vehicles' lamps and what lies behind it, and clear vehicle
+    /// lamps taking coverage from their active night map, and #3019's larger rain caps, and the tracked panes' snow laid out in the film mesh's own
+    /// metres, and the lamps' shadow maps by the tile their record names and the saloon's visibility term
+    /// with the ground no longer lit by the tile light map).
     /// (with Unix line ends: a Windows checkout may turn the parts' into CRLF, as it did the
     /// single files', and the 0.2.31 release's Windows test failed on that alone)
     #[test]
     fn assembled_shaders_are_the_old_files() {
         let (scene, enhanced) = (super::SCENE.replace("\r\n", "\n"), super::ENHANCED.replace("\r\n", "\n"));
-        assert_eq!((scene.len(), fnv1a(&scene)), (124_351, 0x7ade_e884_bcda_7196));
-        assert_eq!((enhanced.len(), fnv1a(&enhanced)), (87_903, 0xac03_9b68_6de3_69a1));
+        assert_eq!((scene.len(), fnv1a(&scene)), (127_064, 0x5258_0f7e_2b60_fc94));
+        assert_eq!((enhanced.len(), fnv1a(&enhanced)), (91_447, 0xa5b4_2e35_ecb8_33c8));
     }
 }

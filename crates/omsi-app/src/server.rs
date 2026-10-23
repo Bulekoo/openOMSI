@@ -48,10 +48,13 @@ pub(crate) fn prepare(args: &mut Args, path: &Path) -> Result<ServerCfg> {
     SERVER_MODE.store(true, std::sync::atomic::Ordering::Relaxed);
     let _ = SERVER_ADMIN.set((cfg.admin_password.clone(), cfg.moderator_password.clone(), if cfg.real_time { 1.0 } else { cfg.time_speed }));
     start_administration(&cfg, path);
+    // the machine bans: this server's list beside server.cfg, and the owner's (all my sessions)
+    omsi_lan::bans::announce_local_hardware_id();
+    omsi_lan::bans::require_hardware_id(cfg.require_hardware_id);
+    omsi_lan::bans::install(omsi_lan::bans::BanStore::open(Some(cfg.dir.join("bans.json")), cfg.owner_bans.clone().or_else(omsi_lan::bans::BanStore::default_owner_path)));
     crate::real_time::set_server_real(cfg.real_time);
     let _ = SERVER_VEHICLES.set(cfg.vehicles.clone());
     cfg.apply_to_mods();
-    let _ = SERVER_VOICE.set(cfg.voice.clone());
     args.map = cfg.map.clone();
     args.time = cfg.time.clone();
     if let Some(d) = &cfg.date {
@@ -107,9 +110,6 @@ pub(crate) use omsi_lan::server_cfg::installed_maps;
 
 /// The airport whose METAR report a dedicated server's weather follows (None: no METAR sync).
 pub(crate) static SERVER_METAR: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
-
-/// A dedicated server's voice server (`voice_*` of `server.cfg`).
-pub(crate) use omsi_lan::voice::SERVER_VOICE;
 
 /// A dedicated server's admin and moderator passwords and clock speed (for the host loop).
 pub(crate) static SERVER_ADMIN: std::sync::OnceLock<(String, String, f64)> = std::sync::OnceLock::new();
@@ -186,4 +186,26 @@ pub(crate) fn tick_status(lan: &omsi_net::LanSession, time: f64, weather: &str) 
     let poses: Vec<&omsi_net::Pose> = lan.peers().filter(|p| p.has_info && p.has_pose).map(|p| &p.pose).collect();
     let list = poses.iter().filter_map(|q| player_info(q, |id| poses.iter().copied().find(|o| o.id == id))).collect();
     crate::lan::update_server_players(list);
+}
+
+/// The public server list's publisher while the server runs (`public_server = 1`).
+static PUBLIC_LIST: std::sync::Mutex<Option<omsi_lan::public_list::Handle>> = std::sync::Mutex::new(None);
+
+/// List the server in the public list if `server.cfg` says so; the log says why it is not.
+pub(crate) fn start_public_list(cfg: &ServerCfg) {
+    if !cfg.public_server {
+        return;
+    }
+    match omsi_lan::public_list::start(cfg, &format!("{} ({})", omsi_platform::VERSION, BUILD)) {
+        Ok(h) => {
+            log::info!("server: public_server = 1: listing in the public server list (checked first; it appears once the list service has reached the web port or the tunnel)");
+            if let Ok(mut p) = PUBLIC_LIST.lock() {
+                *p = Some(h);
+            }
+        }
+        Err(why) => {
+            log::warn!("server: not listed in the public server list: {why}");
+            eprintln!("  Not listed in the public server list: {why}");
+        }
+    }
 }

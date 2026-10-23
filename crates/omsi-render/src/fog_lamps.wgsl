@@ -29,13 +29,14 @@ struct Camera {
     flags: vec4<f32>,
     light_view_proj_close: mat4x4<f32>,
     wind: vec4<f32>,
-    lamp_view_proj: array<mat4x4<f32>, 4>,
-    lamp_shadow: vec4<f32>,
+    lamp_view_proj: array<mat4x4<f32>, 44>,
+    lamp_atlas: vec4<f32>,
     tree_wind: vec4<f32>,
     inside2_a: vec4<f32>,
     inside2_b: vec4<f32>,
     inside2_c: vec4<f32>,
     cookies: array<vec4<f32>, 8>,
+    cabin_lamps: array<vec4<f32>, 4>,
 };
 @group(0) @binding(0) var<uniform> camera: Camera;
 
@@ -105,7 +106,7 @@ fn sun_reaches(x: vec3<f32>) -> f32 {
         return 1.0;
     }
     // (the far map takes the top of its texture, see shader.wgsl `shadow_pcf_far`)
-    return textureSampleCompareLevel(t_shadow_far, s_shadow, vec2<f32>(fuv.x, fuv.y * 0.8), fp2.z - 0.6 / SHAFT_DEPTH_RANGE);
+    return textureSampleCompareLevel(t_shadow_far, s_shadow, vec2<f32>(fuv.x, fuv.y * (1.0 / (camera.shadow.y * camera.lamp_atlas.z))), fp2.z - 0.6 / SHAFT_DEPTH_RANGE);
 }
 
 // Shafts of sunlight - crepuscular rays: the air between the camera and what it sees
@@ -165,7 +166,8 @@ fn fs_fog_lamps(in: FogVsOut) -> @location(0) vec4<f32> {
         return vec4<f32>(seen, 0.0, 0.0, 0.0);
     }
     let r = pixel_ray(floor(in.clip.xy) * 2.0 + vec2<f32>(0.5));
-    let ign = fract(52.9829189 * fract(dot(floor(in.clip.xy), vec2<f32>(0.06711056, 0.00583715))));
+    let q = vec2<i32>(in.clip.xy) & vec2<i32>(1);
+    let ign = (f32(q.x * 2 + (q.x ^ q.y)) + 0.5) * 0.25;
     // (the lamps' halo and cones only from the mist's and fog's droplets: fp.size.w)
     let l = (lamp_airlight(camera.cam_pos.xyz, r.xyz, 0.0, r.w, ign) * fp.size.w + sun_shafts(camera.cam_pos.xyz, r.xyz, r.w, ign)) * enh.exposure.x;
     return vec4<f32>(clamp(l, vec3<f32>(-4000.0), vec3<f32>(4000.0)), r.w);
@@ -274,7 +276,14 @@ fn gathered_air_light(at: vec2<f32>, len: f32) -> vec3<f32> {
         let dy = abs(f32(o.y) - f.y);
         let bil = max(1.0 - dx * 0.5, 0.0) * max(1.0 - dy * 0.5, 0.0);
         let dd = abs(s.a - len);
-        let w = (bil + 1e-3) * exp(-dd / (0.05 * len + 0.5));
+        // (a Gaussian of the distance difference, not an exponential: a road's rows differ by
+        // a few per cent of its length from one half-size row to the next, and an exponential
+        // weighted every row differently - the offsets of the staggered steps, which cancel
+        // over the tent exactly when its weights are even, then came out as a stripe along
+        // every other row of a bright beam. A step in depth, a pole against what is behind it,
+        // still keeps the taps of the far side out.)
+        let tol = (dd / (0.05 * len + 0.5)) * 1.2;
+        let w = (bil + 1e-3) * exp(-tol * tol);
         sum = sum + s.rgb * w;
         wsum = wsum + w;
         if (dd < best_d) {

@@ -226,6 +226,52 @@ fn settings_make_a_panel_and_tell_their_changes() {
 }
 
 #[test]
+fn a_line_in_the_pause_menu_is_heard_when_chosen() {
+    let mut g = Game::new();
+    let src = r#"
+        assert(omsi.ui.set_menu_item("board", "Duty board", "departure_board"))
+        assert(omsi.ui.set_menu_item("log", "Trip log"))
+        assert(omsi.ui.set_menu_item("board", "Duty board (3)", "departure_board"))
+        local ok, why = omsi.ui.set_menu_item("x", ""); assert(not ok and why:find("empty"))
+        assert(omsi.ui.remove_menu_item("log") and not omsi.ui.remove_menu_item("log"))
+        omsi.on("menu_item", function(id) omsi.message("chose " .. id) end)
+    "#;
+    let mut p = run("menu", src, &mut g, 1);
+    let items = p.ui.borrow().menu_items().to_vec();
+    assert_eq!(items.iter().map(|m| (m.id.as_str(), m.label.as_str(), m.icon.as_deref())).collect::<Vec<_>>(), [("board", "Duty board (3)", Some("departure_board"))]);
+    p.ui.borrow_mut().pick_menu_item(items[0].owner, "board");
+    p.frame(&mut g);
+    assert_eq!(g.messages, ["chose board"]);
+    // the plugin stopped: its lines go
+    p.finalize();
+    assert!(p.ui.borrow().menu_items().is_empty());
+}
+
+#[test]
+fn the_navigators_board_is_told_to_the_plugin() {
+    let mut g = Game::new();
+    let src = r##"
+        assert(omsi.ui.version >= 3)
+        function on_frame()
+          local n = select("#", omsi.ui.dock())
+          if n == 0 then omsi.message("no board") return end
+          omsi.ui.set("board", { anchor = "navigator", children = {} })
+          local w, room, h, mine = omsi.ui.dock()
+          omsi.message(string.format("%d %d %d %s", w, room, h, tostring(mine)))
+        end
+    "##;
+    let mut p = run("dock", src, &mut g, 1);
+    let mut d = omsi_plugin::ui::Dock { width: 360.0, room: 420.0, height: 96.0, owner: Some(u64::MAX) };
+    p.ui.borrow_mut().set_dock(Some(d));
+    p.frame(&mut g);
+    // (another plugin's panel in it, then this one's)
+    d.owner = Some(p.ui.borrow().panels()[0].owner);
+    p.ui.borrow_mut().set_dock(Some(d));
+    p.frame(&mut g);
+    assert_eq!(g.messages, ["no board", "360 420 96 false", "360 420 96 true"]);
+}
+
+#[test]
 fn errors_name_the_function_and_argument() {
     let mut g = Game::new();
     run("errs", r#"
@@ -235,4 +281,48 @@ fn errors_name_the_function_and_argument() {
         end
     "#, &mut g, 1);
     assert_eq!(g.messages, ["yes"]);
+}
+
+#[test]
+fn data_queries_validate_types_and_reject_mutations_without_a_vehicle() {
+    let mut g = Game::default();
+    run("data-queries", r#"
+        function on_frame()
+        omsi.data.sentinel = "preserved"
+        assert(#omsi.game.queries() >= 30)
+        local value, reason = omsi.game.query("GetTTBusstopArr", {0})
+        assert(value == nil and type(reason) == "string")
+        assert(not pcall(omsi.game.query, "GiveChangeCoin", {0}))
+        assert(not pcall(omsi.game.query, "GetFontIndex", {"Arial"}))
+        assert(omsi.process == nil)
+        assert(not pcall(omsi.game.query, "STDrawPixel", {0,1,2}))
+        assert(not pcall(omsi.game.query, "GetTTDelay", {1}))
+        assert(not pcall(omsi.game.query, "GetTTBusstopArr", {"0"}))
+        assert(not pcall(omsi.game.query, "GetTTBusstopArr", {0/0}))
+        assert(not pcall(omsi.game.query, "GetTTBusstopArr", {math.huge}))
+        assert(omsi.duty.tour() == nil)
+        local tour, err = omsi.timetable.tour("none", "none")
+        assert(tour == nil and type(err) == "string")
+        assert(omsi.data.sentinel == "preserved")
+        omsi.message("validated")
+        end
+    "#, &mut g, 1);
+    assert_eq!(g.messages,["validated"]);
+}
+
+#[test]
+fn nested_emit_keeps_the_outer_calls_budget() {
+    let mut g = Game::new();
+    let began = std::time::Instant::now();
+    let p = run("nested-budget", r#"
+        omsi.on("nested", function() omsi.message("nested ran") end)
+        function on_frame()
+            omsi.emit("nested")
+            while true do end
+        end
+    "#, &mut g, 1);
+    assert!(p.lua[0].disabled);
+    assert!(g.messages.iter().any(|m| m == "nested ran"));
+    assert!(g.messages.iter().any(|m| m.contains("longer than 50 ms")));
+    assert!(began.elapsed().as_secs_f32() < 2.0);
 }

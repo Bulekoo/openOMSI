@@ -462,7 +462,8 @@ impl App {
                     self.toggle_pause();
                     return true;
                 }
-                // OMSI's `quicksave` (Alt+S)
+                // Alt+S: our own second quick save key, beside OMSI's `quicksave` (Ctrl+S in
+                // keyboard.cfg)
                 KeyCode::KeyS if alt && !ctrl => {
                     self.quick_save();
                     return true;
@@ -572,6 +573,19 @@ impl App {
                         }
                     }
 
+                KeyCode::KeyP if shift_chord =>
+                    {
+                        // Shift+P: a rail vehicle's pantograph up or down (the key a tram
+                        // whose pantograph is a bus script's "door" has no other key for)
+                        if let Some(p) = self.player.as_mut() {
+                            let msg = match p.vehicle.toggle_pantograph() {
+                                Some(true) => "Raising the pantograph ...",
+                                Some(false) => "Lowering the pantograph ...",
+                                None => "This vehicle has no pantograph switch",
+                            };
+                            self.service_msg = Some((msg.to_string(), 4.0));
+                        }
+                    }
                 KeyCode::KeyR if shift_chord =>
                     {
                         // Shift+R: the next internet radio station (see radio.rs)
@@ -964,8 +978,14 @@ impl App {
                     self.on_right(arg == "down");
                     log::info!("input script: right button {arg}: zoom drag {}, look {}, zoom {:?}, orbit {:.1}", self.input.both_drag.is_some(), self.input.mouse_look, self.cam.view_zoom.get(&self.view), self.cam.orbit);
                 }
-                "press" => self.on_left(true),
-                "release" => self.on_left(false),
+                "press" => {
+                    self.input.buttons_held.0 = true;
+                    self.on_left(true);
+                }
+                "release" => {
+                    self.input.buttons_held.0 = false;
+                    self.on_left(false);
+                }
                 // `type <text>`: characters into the open LAN chat line (after `key V`)
                 "type" => {
                     let text = cmd.split_once(' ').map(|x| x.1).unwrap_or("");
@@ -1151,6 +1171,7 @@ impl App {
         self.input.dragging = false;
         self.input.buttons_held = (false, false);
         self.input.both_drag = None;
+        self.menus.hud_resize = None;
         self.input.mouse_look = false;
         self.input.steer_cursor = None;
         self.input.mouse_pedals.0 = 0.0;

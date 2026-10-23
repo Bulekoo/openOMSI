@@ -25,13 +25,14 @@ struct Camera {
     flags: vec4<f32>,
     light_view_proj_close: mat4x4<f32>,
     wind: vec4<f32>,
-    lamp_view_proj: array<mat4x4<f32>, 4>,
-    lamp_shadow: vec4<f32>,
+    lamp_view_proj: array<mat4x4<f32>, 44>,
+    lamp_atlas: vec4<f32>,
     tree_wind: vec4<f32>,
     inside2_a: vec4<f32>,
     inside2_b: vec4<f32>,
     inside2_c: vec4<f32>,
     cookies: array<vec4<f32>, 8>,
+    cabin_lamps: array<vec4<f32>, 4>,
 };
 @group(0) @binding(0) var<uniform> camera: Camera;
 
@@ -52,6 +53,7 @@ fn hash4(n: u32) -> vec4<f32> {
 // The precipitation's roof map (passes/precip_map.rs): what stands over the ground round
 // the camera, its depth seen from straight above.
 @group(1) @binding(1) var roof_map: texture_depth_2d;
+fn roof_depth(t: vec2<i32>) -> f32 { return textureLoad(roof_map, t, 0); }
 
 // Whether something solid stands over `p` (the map's matrix `m`; `on` 0 without a map): a
 // bus's or a car's roof, a shelter, a bridge, a house - no drop or flake falls there.
@@ -60,7 +62,7 @@ fn under_roof(p: vec3<f32>, m: mat4x4<f32>, on: f32) -> bool {
     let uv = vec2<f32>(c.x * 0.5 + 0.5, 0.5 - c.y * 0.5);
     let side = f32(textureDimensions(roof_map).x);
     let t = vec2<i32>(clamp(uv, vec2<f32>(0.0), vec2<f32>(0.9999)) * side);
-    let top = textureLoad(roof_map, t, 0);
+    let top = roof_depth(t);
     // (5 cm under it: the map's depth reaches 300 m)
     return on > 0.5 && all(abs(c.xy) < vec2<f32>(1.0)) && c.z > top + 0.00017;
 }

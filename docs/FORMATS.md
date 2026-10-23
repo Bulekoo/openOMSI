@@ -174,6 +174,22 @@ Ruede Trafohaus scales its frame unevenly). 27 stock scenery `.x` files have tra
 (the Verkehrszeichen_MC street name signs, Ruede's chestnut trees, bus stop poles and old
 shelter, Trafohaus, Buildings_MC's wohn_03/04 and hoch_01).
 
+**Binary `.x`** (`xof 0303bin 0032`, or `0064` for double floats) holds the same objects as
+little-endian tokens, each a WORD: 1 name and 2 string (DWORD length, then the bytes; a string
+is followed by its `,`/`;` token as a DWORD), 3 integer, 5 GUID (16 bytes), 6 integer list and
+7 float list (DWORD count, then the values), 10-20 the marks `{ } ( ) [ ] < > . , ;`,
+31 `template`, 40-52 the template member types. `omsi-o3d` reads both encodings through one
+token stream; the compressed `tzip`/`bzip` variants are refused. Mod scenery exported this way
+(the PAD-Labs houses) loads like the text files.
+
+**DeclData** inside a `Mesh` carries per-vertex data as a Direct3D 9 vertex declaration: a
+count and that many D3DVERTEXELEMENT9 entries (type, method, usage, usage index), then a
+count of DWORDs holding the vertex buffer, the elements packed one after another in each
+vertex (floats as their bit patterns). The first NORMAL and the first TEXCOORD set replace
+`MeshNormals` / `MeshTextureCoords`; packed types (DEC3N, SHORT2N, FLOAT16_2, ...) widen to
+floats as Direct3D 9 does. Without it such meshes (the PAD-Labs houses, the Köln trees) come
+out in one flat colour.
+
 **Scrambled vertices (version ≥ 4).** The `key` field (`0xFFFFFFFF` = none) selects a vertex
 scrambling reproduced from the original loader (`omsi-o3d`):
 
@@ -632,6 +648,12 @@ set_camera_outside_center schwerpunkt rollwiderstand rot_pnt_long inv_min_turnra
 newachse (achse_long achse_maxwidth achse_minwidth achse_raddurchmesser achse_feder achse_maxforce
 achse_daempfer achse_antrieb achse_inertia_inv) number registration_automatic registration_list
 registration_free kmcounter_init + model/script/sound/paths/passengercabin.
+openOMSI's own blocks (read the same way, `key value` lines to the next block): `[trolley_pole]`,
+`[trolley_rheostat]`, `[trolley_async]`, `[trolley_battery]`, `[trolley_aux]`, `[trolley_vars]`:
+the poles on the roof and the traction drive of a trolleybus (OMSI 2 has none: its trolleybus
+add-ons run a plugin beside the game). Every key, the variables the game writes for models and
+the map's `trolley.txt` (`[trolley_net]`, `[trolley_section]`, `[trolley_span]`,
+`[trolley_switch]`, `[trolley_insulator]`) are in [TROLLEYBUS.md](TROLLEYBUS.md).
 Built-in vehicle variables are listed in `program/varlist_roadvehicle.txt`; generated per axle:
 `Wheel_Rotation_ Wheel_RotationSpeed_ Axle_Steering_ Axle_Suspension_ Axle_Springfactor_
 Axle_Brakeforce_ Axle_SurfaceID_` × `{n}_{L|R}`, `PAX_Entry{n}_Open/_Req`, `PAX_Exit{n}_…`,

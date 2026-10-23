@@ -12,16 +12,17 @@
 //! moment and then leaves hanging behind it, where it drifts with the air, spreads and
 //! slowly settles. All of it grows with the square of the speed - next to nothing at walking
 //! pace, a cloud at 50 km/h and more - and with the water there is: standing water throws
-//! by far the most, a road that is merely wet through only a thin haze at speed, and a bus
-//! or a lorry throws more than a car. A tyre that hits a puddle hard adds a short splash out
+//! by far the most, a road that is merely wet gives nothing (a tyre lifts spray from water
+//! that stands, not from damp asphalt), and a bus or a lorry throws more than a car. A tyre that hits a puddle hard adds a short splash out
 //! to the side.
 //!
 //! Some vehicles spray through their own `[smoke]` systems as well, at their wheels, fed by
 //! `tire_wet_freq` / `tire_wet_live`: the stock AI cars (set by their `main_AI` scripts) and
-//! the stock SD200, SD202 and NL/NG buses, the AI SD84 among them (set by their `spray.osc`),
-//! only once the road is wet through (`StreetCond` 1). Those keep spraying as OMSI has them;
-//! such a vehicle gets no haze of its own here on the wet road (that is what its `[smoke]`
-//! draws), only what standing water throws, which OMSI knows nothing of, on top.
+//! the stock SD200, SD202 and NL/NG buses, the AI SD84 among them (set by their `spray.osc`).
+//! The scripts switch them on for any `StreetCond` above 0, that is on every wet road, so the
+//! particle systems scale what those variables ask for by the water under the emitter
+//! (`omsi_sim::particles::set_road_water`): they spray where the tyre runs through a puddle,
+//! and stop as the puddles dry out, like the spray made here, which they get on top of.
 
 use glam::{DVec3, Mat4, Vec3};
 use omsi_render::SmokeParticle;
@@ -116,8 +117,6 @@ pub struct Tyre {
     /// How much water the vehicle's tyres throw against a car's (1): wider and twin tyres
     /// under a heavy vehicle throw more, up to twice as much.
     pub heavy: f32,
-    /// The vehicle sprays on a wet road through its own `[smoke]` (see the module's notes).
-    pub own_spray: bool,
 }
 
 /// A vehicle's body (or a coupled part's): its `[boundingbox]` placed in the world, so that
@@ -178,13 +177,6 @@ fn spray_look(graphics: crate::host::GraphicsKind) -> ([f32; 3], f32) {
     ([grey, grey * 1.02, grey * 1.06], opacity)
 }
 
-/// Whether a set of particle systems sprays from the tyres itself: a `[smoke]` that the
-/// stock vehicles' `tire_wet_freq` / `tire_wet_live` variables drive.
-pub fn has_own_tyre_spray(set: &omsi_sim::particles::ParticleSet) -> bool {
-    let wet = |v: &omsi_model::PsValue| matches!(v, omsi_model::PsValue::Var(n) if n.to_ascii_lowercase().starts_with("tire_wet"));
-    set.emitters.iter().any(|e| wet(&e.def.freq.0) || wet(&e.def.life.0))
-}
-
 /// How much more water a vehicle of this mass throws than a car: 1 up to 1.3 t, twice as
 /// much from about 5 t (a bus, a lorry: wider tyres, twin ones at the back).
 fn heaviness(mass_kg: f32) -> f32 {
@@ -205,7 +197,7 @@ pub fn vehicle_tyres(v: &omsi_sim::VehicleInstance, key: u64, out: &mut Vec<Tyre
     let heavy = heaviness(v.physics.mass_kg);
     let mut n = 0u64;
     // (every wheel keeps its number, whether it touches the road this frame or not)
-    let mut part = |origin: DVec3, rot: Mat4, own_spray: bool, wheels: &mut dyn Iterator<Item = Option<Vec3>>, out: &mut Vec<Tyre>| {
+    let mut part = |origin: DVec3, rot: Mat4, wheels: &mut dyn Iterator<Item = Option<Vec3>>, out: &mut Vec<Tyre>| {
         let (fwd, right) = level_axes(rot);
         let travel = if speed < 0.0 { -fwd } else { fwd };
         for local in wheels {
@@ -218,18 +210,15 @@ pub fn vehicle_tyres(v: &omsi_sim::VehicleInstance, key: u64, out: &mut Vec<Tyre
                 out: if local.x < 0.0 { -right } else { right },
                 speed: speed.abs(),
                 heavy,
-                own_spray,
             });
         }
     };
     let rot = v.body_rotation();
-    let own = has_own_tyre_spray(&v.particles);
     match v.rigid.as_ref() {
         // the player's: the wheels that stand on the road, where they touch it
         Some(rb) => part(
             v.position,
             rot,
-            own,
             &mut rb.wheels.iter().map(|w| w.on_ground.then(|| w.attach + Vec3::Z * (w.compression.max(-omsi_sim::rigid::DROOP) - w.radius))),
             out,
         ),
@@ -237,7 +226,7 @@ pub fn vehicle_tyres(v: &omsi_sim::VehicleInstance, key: u64, out: &mut Vec<Tyre
         // placed over
         None => {
             let lift = v.ai_rest_offset().0;
-            part(v.position, rot, own, &mut v.physics.wheels.iter().flatten().map(|w| Some(Vec3::new(w.lat, w.long, -lift))), out)
+            part(v.position, rot, &mut v.physics.wheels.iter().flatten().map(|w| Some(Vec3::new(w.lat, w.long, -lift))), out)
         }
     }
     for t in &v.trailers {
@@ -246,7 +235,6 @@ pub fn vehicle_tyres(v: &omsi_sim::VehicleInstance, key: u64, out: &mut Vec<Tyre
         part(
             t.position,
             t.body_rotation(),
-            has_own_tyre_spray(&t.particles),
             &mut axles.iter().flat_map(|a| [-0.5, 0.5].map(|s| Some(Vec3::new(a.max_width * s, a.long, -lift)))),
             out,
         );
@@ -262,6 +250,24 @@ pub fn road_wetness(wetness: f32, snow: bool) -> f32 {
     } else {
         w.clamp(0.0, 1.0)
     }
+}
+
+/// How much spray the water gives at a point, 0 (none) .. 1 (deep in a puddle).
+pub fn water_spray(w: &Water) -> f32 {
+    w.puddle * (0.45 + 0.55 * w.depth)
+}
+
+/// What the vehicles' own `[smoke]` tyre spray is scaled by (see
+/// `omsi_sim::particles::set_road_water`): the water spray at world (x, y) on the wet roads
+/// of `world`.
+pub fn road_water_hook(world: &crate::World, wetness: f32) -> omsi_sim::particles::RoadWater {
+    let data = world.data.clone();
+    std::sync::Arc::new(move |x, y| {
+        if wetness <= 0.0 {
+            return 0.0;
+        }
+        water_spray(&water_at(x, y, data.peek().wet_road_at(x, y, wetness)))
+    })
 }
 
 /// The key of a LAN player's vehicle (`| id`) beside the AI's (their ids + 1) and the
@@ -284,8 +290,6 @@ const REF_SPEED: f32 = 13.9;
 const MIST_RATE: f32 = 65.0;
 /// Heavy drops a second (the fan behind the tyre), likewise.
 const SHEET_RATE: f32 = 45.0;
-/// What a road wet through without standing water gives against a puddle.
-const FILM: f32 = 0.12;
 /// The mist settles at most this fast (m/s).
 const SETTLE: f32 = 0.22;
 /// A mist puff's middle stays at least this many of its half widths above the road.
@@ -490,14 +494,11 @@ impl Spray {
         state.puddle = w.puddle;
         state.seen = true;
         let v = tyre.speed;
-        // standing water, more of it deeper in; a road wet through only lends a film, which
-        // a vehicle with its own `[smoke]` spray already throws
-        let puddle = w.puddle * (0.45 + 0.55 * w.depth);
-        let film = if tyre.own_spray { 0.0 } else { smoothstep(0.55, 1.0, w.wet) * FILM };
-        // with the square of the speed: next to nothing at walking pace; the film needs
-        // real speed before a tyre lifts it at all
+        // standing water, more of it deeper in; wet asphalt between the puddles gives nothing
+        let puddle = water_spray(&w);
+        // with the square of the speed: next to nothing at walking pace
         let sp = (v / REF_SPEED).powi(2).min(3.0) * smoothstep(1.5, 5.0, v);
-        let amount = (puddle * sp + film * sp * smoothstep(6.0, 12.0, v)) * tyre.heavy;
+        let amount = puddle * sp * tyre.heavy;
         if amount <= 0.0 {
             state.debt = [0.0; 2];
             return;
@@ -528,12 +529,15 @@ impl Spray {
             mist -= 1.0;
             let r: [f32; 6] = std::array::from_fn(|_| self.rand());
             // from the back of the contact patch, just outside the tread
-            let pos = tyre.contact + (back * (0.3 + 0.4 * r[0]) + tyre.out * (0.05 + 0.2 * r[1])).as_dvec3() + DVec3::Z * (0.15 + 0.25 * r[2]) as f64;
+            let mut pos = tyre.contact + (back * (0.3 + 0.4 * r[0]) + tyre.out * (0.05 + 0.2 * r[1])).as_dvec3() + DVec3::Z * (0.15 + 0.25 * r[2]) as f64;
             // the wake behind the vehicle carries it along for a moment - it lags the vehicle
             // from the start, but stays close behind it - lifts it and draws it in behind
             // the body as much as out to the side
             let vel = tyre.travel * v * (0.3 + 0.4 * r[3]) + tyre.out * v * (-0.08 + 0.14 * r[4]) + Vec3::Z * (0.4 + 0.1 * v) * (0.5 + 0.5 * r[5]) * up;
             let r2: [f32; 4] = std::array::from_fn(|_| self.rand());
+            // (a new puff lies on the road like the rest, not half in it for its first frame)
+            let size0 = 0.25 + 0.15 * r2[1];
+            pos.z = pos.z.max(tyre.contact.z + (size0 * GROUND_HOLD) as f64);
             let fast = (v / REF_SPEED).min(1.6);
             self.puffs.push(Puff {
                 kind: Kind::Mist,
@@ -541,7 +545,7 @@ impl Spray {
                 vel,
                 age: 0.0,
                 life: 1.0 + 1.0 * r2[0] + 0.05 * v,
-                size0: 0.25 + 0.15 * r2[1],
+                size0,
                 size1: (0.55 + 0.45 * r2[2]) * (0.75 + 0.25 * fast) * (0.85 + 0.15 * tyre.heavy) * grow,
                 // (the smoke picture is faint: a puff at its most covers a sixth of what is
                 // behind it, and the spray is the many of them together)
@@ -688,7 +692,7 @@ mod tests {
 
     /// A car tyre at the origin going north (+y) at `speed`, its outside to the east.
     fn tyre(speed: f32) -> Tyre {
-        Tyre { key: 1, contact: DVec3::new(0.0, 0.0, 33.0), travel: Vec3::Y, out: Vec3::X, speed, heavy: 1.0, own_spray: false }
+        Tyre { key: 1, contact: DVec3::new(0.0, 0.0, 33.0), travel: Vec3::Y, out: Vec3::X, speed, heavy: 1.0 }
     }
 
     fn puddle(_: f64, _: f64) -> Water {
@@ -799,20 +803,12 @@ mod tests {
     }
 
     #[test]
-    fn a_wet_road_gives_a_thin_haze_and_a_puddle_a_cloud() {
-        let haze = run(&[tyre(16.0)], 2.0, &wet_road).len();
+    fn a_puddle_throws_a_cloud_and_a_wet_road_nothing() {
         let cloud = run(&[tyre(16.0)], 2.0, &puddle).len();
-        assert!(haze > 0, "a road wet through hazes at 58 km/h");
-        assert!(cloud > 5 * haze, "a puddle throws far more: {cloud} puffs vs {haze}");
-        // only at speed on a mere film, and not at all on a damp road
-        assert_eq!(run(&[tyre(5.0)], 2.0, &wet_road).len(), 0, "a film at 18 km/h throws nothing");
-        let damp = |_: f64, _: f64| Water { puddle: 0.0, depth: 0.0, wet: 0.4 };
-        assert_eq!(run(&[tyre(16.0)], 2.0, &damp).len(), 0, "a damp road throws nothing");
-        // a vehicle spraying through its own [smoke] keeps only what the puddles add
-        let mut own = tyre(16.0);
-        own.own_spray = true;
-        assert_eq!(run(&[own], 2.0, &wet_road).len(), 0, "no second haze over its own [smoke] spray");
-        assert!(run(&[own], 2.0, &puddle).len() as f32 > 0.8 * cloud as f32, "but the puddles' spray all the same");
+        assert!(cloud > 20, "a puddle at 58 km/h throws a cloud: {cloud}");
+        // wet asphalt, however wet, is not standing water: no haze at any speed
+        assert_eq!(run(&[tyre(16.0)], 2.0, &wet_road).len(), 0, "a road wet through throws nothing at 58 km/h");
+        assert_eq!(run(&[tyre(25.0)], 2.0, &wet_road).len(), 0, "nor at 90 km/h");
     }
 
     #[test]

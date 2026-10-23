@@ -60,6 +60,21 @@ impl omsi_launcher_api::Platform for Phone {
     fn renderer(&self, req: Value, wait: Duration) -> Result<(Value, Vec<u8>), String> {
         service().ask(req, wait)
     }
+    // (no game program to start with --export-diagnostics: the game is this app's library)
+    fn support_package(&self, out: &std::path::Path) -> Option<Result<std::path::PathBuf, String>> {
+        Some((|| {
+            // Android sets OMSI_CONTENT to shared storage or the app's external data folder.
+            let folder = std::env::var_os("OMSI_CONTENT").ok_or("the Android content folder is not available")?;
+            let out = std::path::PathBuf::from(folder).join(out.file_name().ok_or("invalid support package filename")?);
+            let value = crate::support_bundle::snapshot(None, &crate::settings::Settings::load(), None, None, "launcher");
+            crate::support_bundle::export(&out, &value).map_err(|e| format!("{e:#}"))?;
+            Ok(out)
+        })())
+    }
+    // (the game runs in this app: a crash took the launcher down with it)
+    fn previous_run_crash(&self) -> Option<(String, String)> {
+        crate::android::previous_run_crash()
+    }
 }
 
 fn take(env: &mut JNIEnv, s: &JString) -> String {
@@ -68,7 +83,7 @@ fn take(env: &mut JNIEnv, s: &JString) -> String {
 
 /// `LauncherBridge.call(cmd, args)`: a command of the page (on the bridge's worker thread);
 /// "1" and the JSON answer, or "0" and the error.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_org_openomsi_game_LauncherBridge_call<'a>(mut env: JNIEnv<'a>, class: JClass<'a>, cmd: JString<'a>, args: JString<'a>) -> jstring {
     if BRIDGE.get().is_none() {
         if let Ok(g) = env.new_global_ref(&class) {
@@ -90,7 +105,7 @@ pub extern "system" fn Java_org_openomsi_game_LauncherBridge_call<'a>(mut env: J
 
 /// `LauncherBridge.bytes(cmd, args)`: a command answering bytes (the preview's pictures);
 /// the bytes after a 1, or a 0 and the error's text.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_org_openomsi_game_LauncherBridge_bytes<'a>(mut env: JNIEnv<'a>, _class: JClass<'a>, cmd: JString<'a>, args: JString<'a>) -> jbyteArray {
     let cmd = take(&mut env, &cmd);
     let args: Value = serde_json::from_str(&take(&mut env, &args)).unwrap_or(Value::Null);

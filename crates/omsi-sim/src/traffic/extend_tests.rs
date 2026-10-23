@@ -160,3 +160,14 @@ fn added_lanes_only_change_reach_of_their_predecessors() {
     assert_eq!(grown.reach, whole.reach);
     assert_eq!(grown.reach[2], distant_reach);
 }
+
+#[test]
+fn lane_cells_once_each_in_the_order_reached() {
+    // (there and back: the cells of the way back are already listed)
+    let back = LaneBuilder::polyline(vec![DVec3::new(0.0, 0.0, 0.0), DVec3::new(0.0, 120.0, 0.0), DVec3::new(0.0, 10.0, 0.0)], LaneKind::Street, 3.0);
+    assert_eq!(Network::lane_cells(&back), vec![(0, 0), (0, 1), (0, 2)]);
+    // a path drawn 1000 km long (GPM's TCSP8.sco has one): every cell once
+    let cells = Network::lane_cells(&straight(10.0, 0.0, -1_000_000.0, 1, (0, 0)));
+    assert_eq!(cells.len(), 20_001);
+    assert_eq!((cells[0], cells[20_000]), ((0, 0), (0, -20_000)));
+}

@@ -90,6 +90,7 @@ fn ticket_change(t: &Value) -> Result<TicketChange, ApiError> {
         price: field("price").map(|v| v.as_f64().filter(|n| n.is_finite() && *n >= 0.0).map(|n| n as f32).ok_or_else(|| bad("price", "a number of 0 or more"))).transpose()?,
         voice: text("voice")?,
         tag: text("tag")?,
+        payment: field("payment").map(|v| v.as_f64().filter(|n| n.is_finite() && *n >= 0.0).map(|n| n as f32).ok_or_else(|| bad("payment", "a number of 0 or more"))).transpose()?,
     })
 }
 
@@ -163,7 +164,7 @@ pub static FNS: &[ApiFn] = &[
         let id = a.int(0)?;
         Ok::<_, ApiError>(c.io().people_list().into_iter().find(|p| p.id as i64 == id).map(person))
     }),
-    def!("people.set_ticket", "people", [p("id", "integer"), p("ticket", "table")], "true, or false and the reason", "Changes the ticket of a passenger boarding the player's bus (the `passenger_ticket` event names them): `{kind, ticket, name, price, voice, tag}`, each optional. `kind` (`\"none\"`: a pass, `\"stamp\"`, `\"buy\"`) only until they are in the bus; `ticket` another ticket of the pack (from 1, its name and price with it; a buyer always has one: 0 is refused for them, and somebody made a buyer without `ticket` gets the pack's ticket for their age), `name` and `price` what they ask for and pay, `voice` a line of their voice folder said instead of `Ticket_<n>_<k>` (`\"Zone_4\"`: `Zone_4.wav`; where it is missing the usual line, `\"\"` back to it) - until they have asked at the cash desk. `tag` is a text of the plugin's own kept with the person (`people.get`), at any time. `false` and the reason when nothing changed.", TICKETS, TrafficWrite, true, |c, a| {
+    def!("people.set_ticket", "people", [p("id", "integer"), p("ticket", "table")], "true, or false and the reason", "Changes the ticket of a passenger boarding the player's bus (the `passenger_ticket` event names them): `{kind, ticket, name, price, payment, voice, tag}`, each optional. `kind` (`\"none\"`: a pass, `\"stamp\"`, `\"buy\"`) can only be changed until they are in the bus; `ticket` selects another ticket from the pack (starting at 1, with its name and price; a buyer must have a ticket: 0 is refused, and a buyer created without `ticket` gets the pack's ticket for their age). `name` and `price` set the ticket name and ticket price, respectively, until the passenger has asked at the cash desk. `payment` specifies the amount of money handed over for a ticket purchase; it does not change the ticket price and is raised to at least the ticket price. It must be set before the passenger reaches the cash desk. If the currency's denominations cannot represent the requested amount exactly, the amount handed over may be higher. `voice` selects a line from the passenger's voice folder to use instead of `Ticket_<n>_<k>` (`\"Zone_4\"` selects `Zone_4.wav`; if the file is missing, the usual line is used; `\"\"` also falls back to the usual line), until the passenger has asked at the cash desk. `tag` is plugin-defined text kept with the person (`people.get`), and can be set at any time. Returns `false` and the reason when nothing changed.", TICKETS, TrafficWrite, true, |c, a| {
         let id = a.int(0)?;
         let change = ticket_change(a.table(1)?)?;
         let by = c.state().name.clone();

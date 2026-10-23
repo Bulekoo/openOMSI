@@ -9,12 +9,12 @@
 /// as a game asks (build.rs exports them from the executable). Without them such a driver
 /// could hand the game the weaker chip, or a card it then would not open.
 #[cfg(windows)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[used]
 pub static NvOptimusEnablement: u32 = 1;
 
 #[cfg(windows)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[used]
 pub static AmdPowerXpressRequestHighPerformance: u32 = 1;
 

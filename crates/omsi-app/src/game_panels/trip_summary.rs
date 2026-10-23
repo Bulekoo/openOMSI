@@ -96,7 +96,7 @@ impl TripPanel {
                     .map(|(i, p, l)| row(vec![icon(i, 16.0, ACCENT), Element { grow: true, ..label(l) }, Element { color: Some(grade(*p)), ..text(&p.map(|p| format!("{p:.0} %")).unwrap_or_else(|| "-".into()), 13.0, Weight::Bold) }], RowAlign::Start))
                     .collect(),
             ));
-            children.push(columns(gauges.iter().map(|(_, p, _)| Element { color: Some(grade(*p)), ..el(None, Kind::Bar { value: p.map_or(0.0, |p| (p / 100.0).clamp(0.0, 1.0) as f32), height: 6.0, background: None }) }).collect()));
+            children.push(columns(gauges.iter().map(|(_, p, _)| Element { color: Some(grade(*p)), ..el(None, Kind::Bar { value: p.map_or(0.0, |p| (p / 100.0).clamp(0.0, 1.0) as f32), height: 6.0, background: None, segments: Vec::new() }) }).collect()));
         }
         children.push(divider());
         let rows: Vec<Vec<String>> = s.rows.iter().map(|r| r.to_vec()).collect();
@@ -107,6 +107,8 @@ impl TripPanel {
                 rows,
                 widths: vec![0.36, 0.15, 0.15, 0.16, 0.18],
                 size: 13.0,
+                aligns: Vec::new(),
+                inks: Vec::new(),
             },
         ));
         children.push(grow_row(vec![button("copy", &tr("Copy"), Some("content_copy")), button("save", &tr("Save"), Some("save")), button("close", &tr("Close"), Some("close"))]));
@@ -156,10 +158,10 @@ pub(crate) fn click(app: &mut crate::App, id: &str) {
     let Some(t) = app.menus.game_panels.trip.as_mut() else { return };
     match id {
         "copy" => {
-            t.said = Some(if to_clipboard(&t.summary.text()) { omsi_ui::tr("Copied to the clipboard").into_owned() } else { omsi_ui::tr("The clipboard cannot be reached").into_owned() });
+            t.said = Some(if to_clipboard(&t.summary.text_in(|s| omsi_ui::tr(s).into_owned())) { omsi_ui::tr("Copied to the clipboard").into_owned() } else { omsi_ui::tr("The clipboard cannot be reached").into_owned() });
         }
         "save" => {
-            t.said = Some(match t.summary.save() {
+            t.said = Some(match t.summary.save_in(|s| omsi_ui::tr(s).into_owned()) {
                 Ok(p) => format!("{} {}", omsi_ui::tr("Saved:"), p.display()),
                 Err(e) => format!("{} {e}", omsi_ui::tr("Not saved:")),
             });

@@ -46,12 +46,16 @@ impl TextCache {
     /// The texture of `text` at `px` pixels in `color` (alpha = opacity of the outline), and
     /// its size.
     pub(super) fn label(&mut self, r: &Renderer, scene: &mut Scene, text: &str, px: u32, color: [u8; 4]) -> Label {
+        self.label_raw(r, scene, &omsi_ui::tr(text), px, color)
+    }
+
+    /// Render text already prepared by the caller, including player chat and names.
+    pub(super) fn label_raw(&mut self, r: &Renderer, scene: &mut Scene, text: &str, px: u32, color: [u8; 4]) -> Label {
         let color = [color[0], color[1], color[2], outline_for(color, if self.flat { 1.0 } else { self.backdrop })];
         // (in the interface's language: the menu, the notes, the windows; a letter and its
         // combining mark as one, as macOS gives file names - the weather "Eiseska\u{308}lte"
         // showed a box after its "a" in the menu's list)
-        let text = omsi_ui::tr(text);
-        let text = &*omsi_ui::text::composed(&text);
+        let text = &*omsi_ui::text::composed(text);
         let key = (text.to_string(), px, color);
         if let Some(l) = self.labels.get_mut(&key) {
             l.used = self.frame;

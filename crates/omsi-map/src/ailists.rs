@@ -362,16 +362,24 @@ impl ChronoCfg {
 /// the original): depth first, a folder's subfolders before its own files, names in the
 /// order Windows lists them (case-insensitive). A later scenario overrides an earlier one.
 fn chrono_cfgs(dir: &Path, out: &mut Vec<PathBuf>) {
-    let mut entries = omsi_cfg::vfs::list_dir(dir).unwrap_or_default();
-    entries.sort_by_key(|(n, _)| n.to_string_lossy().to_uppercase());
-    for (n, is_dir) in &entries {
+    let mut entries: Vec<(String, std::ffi::OsString, bool, PathBuf)> = Vec::new();
+    for d in omsi_cfg::mirrored_dirs(dir) {
+        for (n, is_dir) in omsi_cfg::vfs::list_dir(&d).unwrap_or_default() {
+            let key = n.to_string_lossy().to_uppercase();
+            if !entries.iter().any(|e| e.0 == key) {
+                entries.push((key, n, is_dir, d.clone()));
+            }
+        }
+    }
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    for (_, n, is_dir, _) in &entries {
         if *is_dir {
             chrono_cfgs(&dir.join(n), out);
         }
     }
-    for (n, is_dir) in &entries {
+    for (_, n, is_dir, d) in &entries {
         if !*is_dir && n.to_string_lossy().eq_ignore_ascii_case("Chrono.cfg") {
-            out.push(dir.join(n));
+            out.push(d.join(n));
         }
     }
 }
@@ -520,6 +528,26 @@ pub fn parse_signalroutes(f: &CfgFile) -> Vec<SignalRoute> {
 mod tests {
     include!("../../../tools/test-support/original_root.rs");
     use super::*;
+
+    #[test]
+    fn chrono_folders_of_every_content_root_are_listed() {
+        let tmp = std::env::temp_dir().join(format!("omsi-chrono-roots-{}", std::process::id()));
+        let (overlay, base) = (tmp.join("openomsi"), tmp.join("omsi2"));
+        for (root, folder) in [(&base, "Base"), (&base, "Shared"), (&overlay, "Mod"), (&overlay, "Shared")] {
+            let d = root.join("maps/ChronoRoots/Chrono").join(folder);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join("Chrono.cfg"), "").unwrap();
+        }
+        omsi_cfg::add_content_root(overlay.clone());
+        omsi_cfg::add_content_root(base.clone());
+        let mut cfgs = Vec::new();
+        chrono_cfgs(&omsi_cfg::resolve_path(&base.join("maps/ChronoRoots"), "Chrono"), &mut cfgs);
+        omsi_cfg::remove_content_root(&overlay);
+        omsi_cfg::remove_content_root(&base);
+        let _ = std::fs::remove_dir_all(&tmp);
+        let chrono = |root: &Path, folder: &str| root.join("maps/ChronoRoots/Chrono").join(folder).join("Chrono.cfg");
+        assert_eq!(cfgs, [chrono(&base, "Base"), chrono(&overlay, "Mod"), chrono(&overlay, "Shared")]);
+    }
 
     #[test]
     fn date_codes() {

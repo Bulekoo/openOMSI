@@ -144,10 +144,10 @@ impl App {
                     }
                     Kind::Scripts => Err("scripts are not read again: place the bus anew".to_string()),
                 };
-                let name = Kind::BUTTONS.iter().find(|b| b.0 == kind).map(|b| b.1).unwrap_or("scripts");
+                let name = Kind::BUTTONS.iter().find(|b| b.0 == kind).map(|b| b.1).unwrap_or("Scripts");
                 match r {
-                    Ok(what) => format!("{name} read again in {:.0} ms: {what}", at.elapsed().as_secs_f64() * 1000.0),
-                    Err(why) => format!("{name} not taken over: {why}"),
+                    Ok(what) => format!("Reloaded {name} in {:.0} ms: {what}", at.elapsed().as_secs_f64() * 1000.0),
+                    Err(why) => format!("Reload failed for {name}: {why}"),
                 }
             }
         };
@@ -158,6 +158,7 @@ impl App {
             }
             d.files = watched_files(&p.vehicle);
         }
+        let msg = omsi_ui::tr(&msg).into_owned();
         match self.devtools.as_mut() {
             Some(d) => d.say(msg.clone()),
             None => log::info!("developer tools: {msg}"),
@@ -173,7 +174,7 @@ fn reload_cabin(p: &mut crate::player::Player, humans: Option<&mut crate::humans
     if let Some(d) = d {
         d.parts = part_defs(&p.vehicle).iter().map(|def| super::overlay::PartFiles::load(def)).collect();
     }
-    let Some(h) = humans else { return Ok("drawn anew (no passengers in this game)".into()) };
+    let Some(h) = humans else { return Ok("Cabin drawn anew (no passengers in this game)".into()) };
     let key: Vec<PathBuf> = part_defs(&p.vehicle).iter().map(|d| d.path.clone()).collect();
     let old = h.cabins.remove(&key).flatten();
     let new = h.cabin_for(&p.vehicle);
@@ -185,7 +186,7 @@ fn reload_cabin(p: &mut crate::player::Player, humans: Option<&mut crate::humans
     };
     if aboard > 0 && fewer {
         h.cabins.insert(key, old);
-        return Err(format!("{aboard} people aboard and the new cabin has fewer places, doors or points - let them off first"));
+        return Err(format!("Cannot reload cabin: {aboard} people aboard and the new cabin has fewer places, doors or points - let them off first"));
     }
     let Some(c) = new else {
         h.player_cabin = None;
@@ -197,7 +198,7 @@ fn reload_cabin(p: &mut crate::player::Player, humans: Option<&mut crate::humans
     h.exit_req.resize(c.exits.len().max(1), false);
     h.entry_busy.resize(c.entries.len(), false);
     h.exit_busy.resize(c.exits.len(), false);
-    let what = format!("{} path points, {} places, {} entries, {} exits", c.graph.points.len(), c.seats.len(), c.entries.len(), c.exits.len());
+    let what = format!("Cabin reloaded: {} path points, {} places, {} entries, {} exits", c.graph.points.len(), c.seats.len(), c.entries.len(), c.exits.len());
     h.player_cabin = Some(c);
     Ok(what)
 }

@@ -21,14 +21,15 @@
   Inter for every text (`apple/Resources/Fonts`, with its licence), radius 8 for cards and 6
   for controls; Liquid Glass only where the system draws it (the tab bar). It is only a view: what it knows and does is the game
   launcher's own `launcher::state::State`, read and changed through `apple_bridge.rs`
-  (`openomsi_bridge(cmd, json)`). The bus preview is drawn by the game's renderer (the
+  (`openomsi_bridge(cmd, json)`); its `api` command answers every command of the desktop
+  launcher's page (`omsi-launcher-api`), as Android's web view gets them. The bus preview is drawn by the game's renderer (the
   launcher's showroom, off the screen), the Drive page's map from the same data the game's
   city map uses (`mapview::overview`).
-- **Layouts**: the desktop launcher's sidebar (Drive, Multiplayer, Profile, Mods, Settings,
-  Controls; Running games, Tutorials, Setup; the driver at the foot) on a Mac and an iPad,
+- **Layouts**: the desktop launcher's sidebar (Drive, Depot, Multiplayer, Profile, Mods,
+  Timetable, Settings, Controls; Running games, Tutorials, Setup; the driver at the foot) on a Mac and an iPad,
   icons only below 1040 points. A phone has a launcher of its own, as the phone launcher
   of the other systems (`launcher/ui/js/mobile`): a rail of icons (Drive, Multiplayer,
-  Profile, Mods, Settings, More); Drive is the bus with the destination sign and Start over
+  Profile, Mods, Settings, More, where Depot and Timetable are); Drive is the bus with the destination sign and Start over
   it and the duty as grouped rows, each opening a full-screen sheet (maps, buses, paints,
   lines, tours, trips and start places beside the route map, time and date by steps,
   weather). The desktop Drive page: the

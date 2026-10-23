@@ -31,7 +31,7 @@ include!("passenger_animation_tests.rs");
 fn the_games_options_survive_a_save() {
     // what the pause menu's Options change, read back as they were set
     let mut v = settings_from_text(None);
-    for (k, x) in [("steer_look", json!(true)), ("discord_status", json!(false)), ("voice_chat", json!(false)), ("launcher_rest", json!(false)), ("camera_collision", json!(false)), ("brake_hold", json!(false)), ("auto_clutch", json!(false)), ("momentary_gears", json!(true)), ("ff_enabled", json!(false)), ("head_tracking", json!(true)), ("collision_objects", json!(false)), ("led_mips", json!(2.5)), ("led_glow", json!(11)), ("look_sens", json!(0.5)), ("look_smoothing_ms", json!(120.0)), ("blinker_cancel", json!(false)), ("pedal_brake", json!(1.5)), ("mouse_pedal_strength", json!(1.75)), ("head_idle", json!(0.35)), ("head_idle_pace", json!(1.5)), ("seat_y", json!(-0.1)), ("seat_pitch_deg", json!(8.0))] {
+    for (k, x) in [("steer_look", json!(true)), ("discord_status", json!(false)), ("voice_enabled", json!(true)), ("voice_mode", json!("open")), ("voice_range", json!(120)), ("voice_mic_gain", json!(2.0)), ("launcher_rest", json!(false)), ("camera_collision", json!(false)), ("brake_hold", json!(false)), ("auto_clutch", json!(false)), ("momentary_gears", json!(true)), ("ff_enabled", json!(false)), ("head_tracking", json!(true)), ("collision_objects", json!(false)), ("led_mips", json!(2.5)), ("led_glow", json!(11)), ("look_sens", json!(0.5)), ("look_smoothing_ms", json!(120.0)), ("blinker_cancel", json!(false)), ("pedal_brake", json!(1.5)), ("mouse_pedal_strength", json!(1.75)), ("head_idle", json!(0.35)), ("head_idle_pace", json!(1.5)), ("seat_y", json!(-0.1)), ("seat_pitch_deg", json!(8.0))] {
         v[k] = x;
     }
     let back = settings_from_text(Some(&settings_to_text(&v, None)));
@@ -43,12 +43,14 @@ fn the_games_options_survive_a_save() {
     assert_eq!(settings_from_text(Some(&settings_to_text(&r, None)))["resolution"], json!("1280x800"));
     assert_eq!(resolution_text("1920 x 1080"), "1920x1080");
     assert_eq!(resolution_text("huge"), "auto");
-    for k in ["steer_look", "discord_status", "voice_chat", "launcher_rest", "camera_collision", "brake_hold", "auto_clutch", "momentary_gears", "ff_enabled", "head_tracking", "collision_objects", "led_mips", "led_glow", "look_sens", "look_smoothing_ms", "blinker_cancel", "pedal_brake", "mouse_pedal_strength", "head_idle", "head_idle_pace", "seat_y", "seat_pitch_deg"] {
+    for k in ["steer_look", "discord_status", "voice_enabled", "voice_mode", "voice_range", "voice_mic_gain", "launcher_rest", "camera_collision", "brake_hold", "auto_clutch", "momentary_gears", "ff_enabled", "head_tracking", "collision_objects", "led_mips", "led_glow", "look_sens", "look_smoothing_ms", "blinker_cancel", "pedal_brake", "mouse_pedal_strength", "head_idle", "head_idle_pace", "seat_y", "seat_pitch_deg"] {
         assert_eq!(back[k], v[k], "{k}");
     }
     assert!(settings_from_text(None)["discord_status"].as_bool().unwrap());
     assert!(settings_from_text(None)["launcher_rest"].as_bool().unwrap());
-    assert!(settings_from_text(None)["voice_chat"].as_bool().unwrap());
+    // voice chat is off until switched on
+    assert!(!settings_from_text(None)["voice_enabled"].as_bool().unwrap());
+    assert_eq!(settings_from_text(Some("voice_chat=1\n"))["voice_enabled"], json!(false));
     let prior = settings_from_text(Some("discord_status=1\ndiscord_status=0\n"));
     assert!(!prior["discord_status"].as_bool().unwrap());
     let mut enabled = prior;
@@ -144,6 +146,17 @@ fn mirror_refresh_survives_the_launcher() {
         assert_eq!(v["mirror_refresh"], mode);
         let text = settings_to_text(&v, None);
         assert!(text.lines().any(|l| l == format!("mirror_refresh={mode}")), "{text}");
+    }
+}
+
+#[test]
+fn mirror_hud_survives_the_launcher() {
+    assert_eq!(settings_from_text(None)["mirror_hud"], 0);
+    for (word, kept) in [("0", 0), ("3", 3), ("7", 7), ("9", 7), ("x", 0)] {
+        let v = settings_from_text(Some(&format!("mirror_hud={word}\n")));
+        assert_eq!(v["mirror_hud"], kept, "{word}");
+        let text = settings_to_text(&v, Some("mirror_hud=1\n"));
+        assert_eq!(text.lines().filter(|l| l.starts_with("mirror_hud=")).collect::<Vec<_>>(), [format!("mirror_hud={kept}")], "{text}");
     }
 }
 
@@ -273,6 +286,12 @@ fn interface_size_round_trip() {
     let text = settings_to_text(&v, None);
     assert_eq!(text.lines().filter(|l| l.starts_with("chat_size=")).collect::<Vec<_>>(), ["chat_size=2.2"], "{text}");
     assert_eq!(settings_from_text(Some(&text))["chat_size"], json!(2.2));
+    v["timetable_size"] = json!(1.4);
+    let text = settings_to_text(&v, None);
+    assert_eq!(text.lines().filter(|l| l.starts_with("timetable_size=")).collect::<Vec<_>>(), ["timetable_size=1.4"], "{text}");
+    assert_eq!(settings_from_text(Some(&text))["timetable_size"], json!(1.4));
+    assert_eq!(settings_from_text(Some("perf_size=9\n"))["perf_size"], json!(2.0));
+    assert_eq!(settings_from_text(None)["info_size"], json!(1.0));
     assert_eq!(settings_from_text(Some("ui_scale=9\n"))["ui_scale"], json!(2.0));
     assert_eq!(settings_from_text(Some("ui_scale=0.1\n"))["ui_scale"], json!(0.5));
     assert_eq!(settings_from_text(Some("ui_scale=big\n"))["ui_scale"], json!(1.0));
@@ -423,4 +442,86 @@ fn dates_are_fitted_to_the_maps_year_span() {
     assert_eq!(span((2010, 0)), Some((2010, i32::MAX)));
     assert_eq!(span((2010, 2004)), Some((2010, i32::MAX)), "a last year before the first");
     assert_eq!(span((1972, 1989)), Some((1972, 1989)));
+}
+
+/// A date the player chose keeps its year; only the machine's calendar is fitted to the
+/// map's `[years]`.
+#[test]
+fn a_chosen_duty_date_keeps_its_year() {
+    let span = Some((1986, 2000));
+    assert_eq!(date_for_game("2025-06-01", false, span), "2025-06-01");
+    assert_eq!(date_for_game("2025-06-01", true, span), "2000-06-01");
+}
+
+#[test]
+fn a_depot_bus_is_handed_to_the_game() {
+    let d = Duty { map: "maps/x/global.cfg".into(), bus: "Vehicles/x.bus".into(), time: "09:00".into(), depot: Some("6703c1a0".into()), ..Default::default() };
+    let a = duty_args_for_root(&d, Path::new("test-omsi")).unwrap();
+    let k = a.iter().position(|x| x == "--depot").unwrap();
+    assert_eq!(a[k + 1], "6703c1a0");
+    let none = duty_args_for_root(&Duty { depot: None, ..d }, Path::new("test-omsi")).unwrap();
+    assert!(!none.iter().any(|x| x == "--depot"));
+}
+
+/// Same-number tours on alternating weekdays remain separate across date changes.
+#[test]
+fn duplicate_tour_numbers_have_distinct_stable_selections() {
+    let map = std::env::temp_dir().join(format!("openomsi-duplicate-tours-{}", std::process::id()));
+    let tt = map.join("TTData");
+    std::fs::create_dir_all(&tt).unwrap();
+    std::fs::write(
+        tt.join("A.ttp"),
+        "[trip]\n\nWest\n5\n[profile]\nNormal\n10\n",
+    )
+    .unwrap();
+    std::fs::write(
+        tt.join("B.ttp"),
+        "[trip]\n\nEast\n5\n[profile]\nNormal\n10\n",
+    )
+    .unwrap();
+    // Both school-day flags, plus Mon/Wed/Fri or Tue/Thu respectively.
+    std::fs::write(tt.join("5.ttl"), "[userallowed]\n[newtour]\n1\nBuses\n789\n[addtrip]\nA\n0\n420\n[newtour]\n1\nBuses\n778\n[addtrip]\nB\n0\n360\n").unwrap();
+    let monday = lines_on(&map, "2026-10-19").unwrap();
+    let tuesday = lines_on(&map, "2026-10-20").unwrap();
+    let mon = &monday[0];
+    let tue = &tuesday[0];
+    assert_eq!(mon.tours.len(), 2);
+    assert_ne!(mon.tours[0].id, mon.tours[1].id);
+    let selected = mon.tours.iter().find(|t| !t.runs).unwrap();
+    assert_eq!(selected.next_run.as_deref(), Some("2026-10-20"));
+    // An explicit other-day choice wins over the active tour with the same number.
+    assert_eq!(mon.tour(&selected.id).unwrap().trips[0].name, "B");
+    assert!(tue.tour(&selected.id).unwrap().runs);
+    assert_eq!(tue.tour(&selected.id).unwrap().trips[0].name, "B");
+    // Legacy saved choices prefer the variant operating on the selected date.
+    assert_eq!(mon.tour("1").unwrap().trips[0].name, "A");
+    assert_eq!(tue.tour("1").unwrap().trips[0].name, "B");
+    assert!(mon.tour("missing").is_none());
+    std::fs::remove_dir_all(map).unwrap();
+}
+
+#[test]
+fn comfortable_cabin_is_an_independent_opt_in_launch_flag() {
+    let d = Duty {
+        map: "maps/x/global.cfg".into(),
+        bus: "Vehicles/x.bus".into(),
+        time: "09:00".into(),
+        ..Default::default()
+    };
+    assert!(
+        !duty_args_for_root(&d, Path::new("test-omsi"))
+            .unwrap()
+            .iter()
+            .any(|a| a == "--comfortable-cabin-on-start")
+    );
+    let enabled = duty_args_for_root(
+        &Duty {
+            comfortable_cabin_on_start: Some(true),
+            ..d
+        },
+        Path::new("test-omsi"),
+    )
+    .unwrap();
+    assert!(enabled.iter().any(|a| a == "--comfortable-cabin-on-start"));
+    assert!(!enabled.iter().any(|a| a == "--autostart"));
 }

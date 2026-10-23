@@ -38,6 +38,21 @@ impl App {
         ) {
             log::warn!("writing the session summary: {e}");
         }
+        if let (Some(id), Some(p)) = (self.args.depot.as_deref(), self.player.as_ref()) {
+            let c = &self.session.career;
+            let outing = omsi_launcher_lib::depot::Outing {
+                map: self.args.map.clone(),
+                line: self.args.line.clone().unwrap_or_default(),
+                tour: self.args.tour.clone().unwrap_or_default(),
+                metres: c.metres,
+                seconds: c.seconds,
+                stops: c.stops[0],
+                tickets: c.tickets.0,
+                takings: c.tickets.1,
+                crashes: c.crashes[0],
+            };
+            crate::depot_bus::record(&p.vehicle, id, &outing);
+        }
         self.session.career.seconds = 0.0;
     }
 
@@ -71,7 +86,7 @@ impl App {
                 true
             }
             Err(e) => {
-                self.service_msg = Some((format!("Could not start the game again: {e}"), 5.0));
+                self.service_msg = Some((format!("Could not start the game again ({e})"), 5.0));
                 false
             }
         }
@@ -199,7 +214,7 @@ impl App {
             }
             Err(e) => {
                 log::warn!("saving {}: {e}", out.display());
-                self.service_msg = Some((format!("Could not save: {e}"), 5.0));
+                self.service_msg = Some((format!("Could not save ({e})"), 5.0));
             }
         }
     }
@@ -267,7 +282,7 @@ impl App {
             }
             Err(e) => {
                 log::warn!("saving {}: {e}", out.display());
-                self.service_msg = Some((format!("Could not save: {e}"), 5.0));
+                self.service_msg = Some((format!("Could not save ({e})"), 5.0));
             }
         }
     }

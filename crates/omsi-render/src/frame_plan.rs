@@ -453,14 +453,24 @@ pub(crate) struct ShadowRes {
     pub(crate) shadow_sampler: wgpu::Sampler,
     pub(crate) shadow_layout: wgpu::BindGroupLayout,
     /// [near opaque, near alpha-tested, far opaque, far alpha-tested, close opaque, close
-    /// alpha-tested], then the street lamps' (6 + 2 k + kind; not with `basic_pipelines`)
+    /// alpha-tested], then the lamps' (6 + kind; not with `basic_pipelines`)
     pub(crate) shadow_pipelines: Vec<wgpu::RenderPipeline>,
+    /// Where the lamps' tiles lie under the far cascade (the shaders read it from the
+    /// camera uniform).
+    pub(crate) lamp_atlas: LampAtlas,
+    /// The lamps' matrices as the window's last frame drew them: the mirrors look the tiles
+    /// up with them (see `Renderer::prepare_camera`).
+    pub(crate) lamp_matrices: std::cell::RefCell<Vec<Mat4>>,
     /// The far shadow cascade as last drawn: its light matrix, frames since, the render
     /// origin and the sun it was drawn for.
     pub(crate) shadow_far_cache: std::cell::Cell<(Mat4, u32, DVec3, Vec3)>,
     /// The same for the near cascade, drawn every other frame (see `render_inner`), with the
     /// window frames counted instead of its age (the frame's `ShadowPhase`).
     pub(crate) shadow_near_cache: std::cell::Cell<(Mat4, u32, DVec3, Vec3)>,
+    /// The close cascade as the window last drew it: its light matrix, the render origin and
+    /// the sun it was drawn for. The mirrors look the window's three cascades up from where
+    /// they are, without a shadow pass of their own.
+    pub(crate) shadow_close_cache: std::cell::Cell<(Mat4, DVec3, Vec3)>,
     /// Shadow atlas matrices from the first OpenXR eye, reused by the second eye.
     pub(crate) xr_shadow_cache: std::cell::Cell<Option<(DVec3, Vec3, Mat4, Mat4, Mat4)>>,
     /// Depth-only pipeline that fills its viewport with the far depth: clears the close
@@ -468,6 +478,8 @@ pub(crate) struct ShadowRes {
     pub(crate) shadow_clear_pipeline: wgpu::RenderPipeline,
     /// What the street lamps' shadow tiles hold, kept while nothing in them changes.
     pub(crate) lamp_tiles: std::cell::Cell<passes::LampTiles>,
+    /// Which parts of the player's vehicle stand still in it (the saloon's lamp tiles hold those).
+    pub(crate) cabin_motion: std::cell::RefCell<passes::CabinMotion>,
     /// What stands over the ground round the camera, for the rain and the snow.
     pub(crate) precip: passes::PrecipMap,
 }

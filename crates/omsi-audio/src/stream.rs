@@ -44,6 +44,9 @@ pub struct StreamInner {
     /// How much is gathered before playing starts again after a stall, in seconds: a
     /// connection that stalled once tends to stall again, so each stall asks for more.
     prebuffer: f32,
+    /// How much more each stall asks for, and the most it ever asks for (seconds).
+    step: f32,
+    limit: f32,
     /// The voice ends (the radio was switched off or to another station).
     pub closed: bool,
     /// Frames taken out, and the flush mark last acted on (see `StreamBuf::flush_to`).
@@ -84,7 +87,7 @@ impl StreamInner {
             (Some(a), Some(b)) => Some((a, b)),
             _ => {
                 self.playing = false;
-                self.prebuffer = (self.prebuffer + 1.0).min(6.0);
+                self.prebuffer = (self.prebuffer + self.step).min(self.limit);
                 None
             }
         }
@@ -99,10 +102,19 @@ impl StreamInner {
 
 impl Default for StreamBuf {
     fn default() -> Self {
-        let (tx, rx) = spsc::channel(FRAMES);
+        Self::with_buffering(FRAMES, 1.5, 1.0, 6.0)
+    }
+}
+
+impl StreamBuf {
+    /// A buffer for live voice: a ring of `capacity` frames, playing starts once `prebuffer`
+    /// seconds are gathered, and a stall asks for `step` seconds more (never above `limit`) -
+    /// the radio's defaults (1.5 s, 1 s, 6 s) are far too slow for a conversation.
+    pub fn with_buffering(capacity: usize, prebuffer: f32, step: f32, limit: f32) -> Self {
+        let (tx, rx) = spsc::channel(capacity);
         StreamBuf {
             feed: Mutex::new(tx),
-            tap: Mutex::new(Some(StreamInner { frames: rx, rate: 44100, playing: false, prebuffer: 1.5, closed: false, taken: 0, flushed: 0 })),
+            tap: Mutex::new(Some(StreamInner { frames: rx, rate: 44100, playing: false, prebuffer, step, limit, closed: false, taken: 0, flushed: 0 })),
             rate: AtomicU32::new(44100),
             pushed: AtomicU64::new(0),
             taken: AtomicU64::new(0),
@@ -113,9 +125,7 @@ impl Default for StreamBuf {
             meta: Mutex::new((String::new(), String::new())),
         }
     }
-}
 
-impl StreamBuf {
     /// The mixer's end, for the voice that plays it (once).
     pub(crate) fn take_tap(&self) -> Option<StreamInner> {
         self.tap.lock().take()

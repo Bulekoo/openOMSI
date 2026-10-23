@@ -22,7 +22,8 @@ impl VehicleInstance {
             Some(t) => (t.ty.clone(), t.reversed),
             None => (self.ty.clone(), false),
         };
-        let t = TrailerPart::new_ex(
+        let adopted = self.adopt_trailer_trolley(&ty, self.trailers.len());
+        let mut t = TrailerPart::new_ex(
             ty,
             &lead_ty,
             lead_reversed,
@@ -31,6 +32,10 @@ impl VehicleInstance {
             first_axle,
             self.trailers.len(),
         );
+        if adopted {
+            let program = self.ty.program.clone();
+            t.animators = part_animators(&t.ty, &|n| program.var(n).or_else(|| self.var_index.get(&n.to_ascii_lowercase()).copied()));
+        }
         self.trailers.push(t);
     }
 }
@@ -106,6 +111,8 @@ pub struct TrailerPart {
     pub(super) props_plan: PropsPlan,
     /// The meshes' transforms in the modelled pose, for `[smoothskin]` (made when needed).
     pub(super) skin_rest: Vec<Mat4>,
+    /// What `[smoothskin]` needs of each skinned mesh, worked out once (see [`SkinPlan`]).
+    pub(super) skin_plans: SkinPlans,
     /// The part's own `[texttexture]`s, written from the leading vehicle's string
     /// variables (`[scriptshare]`: the rear section of an articulated bus shows the
     /// number and the destination the front's scripts set).
@@ -366,6 +373,7 @@ impl TrailerPart {
             text_textures: Vec::new(),
             axle_ids: AxleVarIds::default(),
             skin_rest: Vec::new(),
+            skin_plans: SkinPlans::default(),
             coupled_at: [true, false],
             runs_itself: super::car_run::uses_place_in_train(&ty),
             run: None,
@@ -407,7 +415,8 @@ impl TrailerPart {
         if self.skin_rest.len() != self.animators.len() {
             self.skin_rest = rest_transforms(&self.animators, n_vars);
         }
-        skin_vertices(&self.ty, i, &self.mesh_transforms, &self.skin_rest)
+        let plan = self.skin_plans.get(&self.ty, i)?;
+        skin_vertices(&self.ty, i, &self.mesh_transforms, &self.skin_rest, plan)
     }
 
     /// Prepare the part's text textures with fonts from `lib`.
@@ -586,6 +595,13 @@ impl TrailerPart {
         let (lo, hi) = longs.fold((f32::MAX, f32::MIN), |(lo, hi), y| (lo.min(y), hi.max(y)));
         if hi - lo > 0.5 {
             return (hi, lo);
+        }
+        // a bogie frame that names no coupling of its own (see `declared_coupling`) stands on the
+        // track by its own middle
+        if is_bogie_frame(&self.ty.def) {
+            // (its own wheelbase: the model's length, not the distance between its couplings)
+            let half = self.ty.model_box().map(|(lo, hi)| (hi.y - lo.y) * 0.5).unwrap_or(0.9).clamp(0.5, 3.0);
+            return (half, -half);
         }
         let front = self.coupling_front.y * turn;
         (front, front - self.length.max(0.5))

@@ -266,7 +266,7 @@ fn free_camera(cx: &mut ViewKeysCx, dt: f32) {
             cam.roll = 0.0;
         }
         // (the keys handed to the bus, #1779: the camera keeps still but for the mouse)
-        let keys_on = !cx.input.camera_keys_off || cx.player.player.is_none() || cx.view.cam.ego;
+        let keys_on = !cx.input.camera_keys_off || cx.player.player.is_none() || cx.view.cam.ego || cx.input.touch.enabled;
         let keys = &cx.input.keys;
         let held = |k: KeyCode| keys_on && keys.contains(&k);
         let mut v = Vec3::ZERO;
@@ -304,7 +304,12 @@ fn free_camera(cx: &mut ViewKeysCx, dt: f32) {
                 cam.position.z = g + 1.7;
             }
         } else {
-            cam.position += (v.normalize_or_zero() * cx.view.cam.speed * boost * dt).as_dvec3();
+            // (a finger on the screen's stick: as far as it is pushed, the harder at the edge,
+            // so that a touch can fly slowly too)
+            let pushed = cx.input.touch.stick_analog();
+            let by_finger = (f * -pushed.y + r * pushed.x).normalize_or_zero() * pushed.length().min(1.0).powi(2);
+            let speed = cx.view.cam.speed;
+            cam.position += ((v.normalize_or_zero() * boost + by_finger) * speed * dt).as_dvec3();
         }
         if held(KeyCode::ArrowLeft) {
             cam.yaw -= 60.0 * dt;

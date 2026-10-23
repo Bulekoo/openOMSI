@@ -140,8 +140,14 @@ pub(crate) fn dropdown_apply(app: &mut App, action: &str) {
         }
         "pick" => {
             if let Some((key, value)) = arg.split_once(' ') {
+                let before = app.settings.mirror_hud;
                 remember_setting(key, value);
                 reload_settings(app);
+                if key == "mirror_hud" && app.settings.mirror_hud != before {
+                    if let Some(p) = app.player.as_ref() {
+                        app.gfx.mirror_hud.apply_setting(p, app.settings.mirror_hud);
+                    }
+                }
             }
         }
         "preset" => {
@@ -250,6 +256,7 @@ pub(super) fn select_options(key: &str) -> Vec<(&'static str, &'static str)> {
     match key {
         "cloud_quality" => vec![("high", "High"), ("low", "Low")],
         "rain_quality" => vec![("high", "High"), ("medium", "Medium"), ("low", "Low")],
+        "vehicle_smoke" => vec![("all", "All vehicles"), ("player", "Player only"), ("off", "Off")],
         "puddles" => vec![("high", "High"), ("low", "Low"), ("off", "Off")],
         "graphics" => vec![("vanilla", "Vanilla (as OMSI 2)"), ("vanilla_plus", "Vanilla+"), ("enhanced", "Enhanced"), ("enhanced_plus", "Enhanced+")],
         "msaa" => vec![("1", "Off"), ("2", "2x MSAA"), ("4", "4x MSAA"), ("8", "8x MSAA")],
@@ -263,6 +270,7 @@ pub(super) fn select_options(key: &str) -> Vec<(&'static str, &'static str)> {
         "min_obj_size" => vec![("0.005", "All"), ("0.013", "Normal"), ("0.02", "Fewer (faster)"), ("0.03", "Few (fastest)")],
         "mirror_size" => vec![("0", "Off"), ("128", "Low (128)"), ("256", "Normal (256)"), ("512", "High (512)"), ("1024", "Very high (1024)")],
         "mirror_refresh" => vec![("off", "None (frozen picture)"), ("eco", "Economical"), ("full", "Full"), ("every", "Every frame (smoothest)")],
+        "mirror_hud" => vec![("0", "Off"), ("2", "Left mirror"), ("1", "Right mirror"), ("3", "Left and right"), ("7", "Left, right and front")],
         "mirror_quality" => vec![("standard", "Standard"), ("enhanced", "As the picture (Enhanced)")],
         "video_memory" => vec![("0", "Automatic"), ("1000", "1 GB"), ("1500", "1.5 GB"), ("2000", "2 GB"), ("3000", "3 GB"), ("4000", "4 GB"), ("6000", "6 GB"), ("8000", "8 GB"), ("12000", "12 GB"), ("16000", "16 GB")],
         "drive_keys" => vec![("omsi", "Custom controls (Controls page)"), ("simple", "W A S D + arrows"), ("wasd", "W A S D only"), ("arrows", "Arrow keys only")],

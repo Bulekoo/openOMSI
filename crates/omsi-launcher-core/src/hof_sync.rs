@@ -1,14 +1,25 @@
 use super::*;
 use anyhow::bail;
+use crate::i18n::{tr, trf};
 
-fn last_stamp() -> &'static std::sync::Mutex<Option<String>> {
-    static STAMP: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
-    &STAMP
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct MapHofOffer {
+    pub map: String,
+    pub files: Vec<String>,
 }
 
-fn last_warnings() -> &'static std::sync::Mutex<Vec<String>> {
-    static WARNINGS: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
-    &WARNINGS
+struct MapHofs {
+    folder: String,
+    map: PathBuf,
+    sources: Vec<PathBuf>,
+}
+
+type Warning = (&'static str, Vec<(&'static str, String)>);
+type Scan = (String, Vec<MapHofOffer>, Vec<Warning>);
+
+fn last_scan() -> &'static std::sync::Mutex<Option<Scan>> {
+    static SCAN: std::sync::Mutex<Option<Scan>> = std::sync::Mutex::new(None);
+    &SCAN
 }
 
 fn writable_content() -> Option<(PathBuf, PathBuf)> {
@@ -67,7 +78,7 @@ fn map_depot_source(map: &Path, name: &str) -> Option<PathBuf> {
 fn copy_to_shared(content: &Path, file_name: &str, bytes: &[u8]) -> Result<Option<String>> {
     let dir = content_case_path(content, "HOFs");
     if !path_stays_in_content(content, &dir) {
-        bail!("the shared HOFs folder is outside the writable content folder");
+        bail!(tr("the shared HOFs folder is outside the writable content folder"));
     }
     std::fs::create_dir_all(&dir)?;
     let dest = content_case_path(content, &format!("HOFs/{file_name}"));
@@ -81,31 +92,18 @@ fn copy_to_shared(content: &Path, file_name: &str, bytes: &[u8]) -> Result<Optio
         let _ = std::fs::remove_file(&dest);
         return Err(e.into());
     }
-    let rel = dest.strip_prefix(content).unwrap_or(&dest).components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/");
-    Ok(Some(rel))
+    Ok(Some(relative(content, &dest)))
 }
 
-pub(super) fn sync_map_hofs() {
-    let Some((content, original)) = writable_content() else { return };
-    if install::jobs().iter().any(|j| j.finished.is_none()) {
-        return;
-    }
-    let mut last = match last_stamp().try_lock() {
-        Ok(last) => last,
-        Err(std::sync::TryLockError::Poisoned(e)) => e.into_inner(),
-        Err(std::sync::TryLockError::WouldBlock) => return,
-    };
-    let stamp = sync_stamp();
-    if last.as_deref() == Some(stamp.as_str()) {
-        return;
-    }
-    omsi_cfg::content_changed();
+fn worded(w: &Warning, text: impl Fn(&str) -> String) -> String {
+    w.1.iter().fold(text(w.0), |s, (k, v)| s.replace(&format!("{{{k}}}"), v))
+}
 
-    let mut shared: Vec<PathBuf> = omsi_cfg::read_dir_merged("HOFs").into_iter().filter(|p| is_hof(p)).collect();
-    let mut copied = 0usize;
-    let mut warnings = Vec::new();
+fn scan(content: &Path, original: &Path, warnings: &mut Vec<Warning>) -> Vec<MapHofs> {
+    let shared: Vec<PathBuf> = omsi_cfg::read_dir_merged("HOFs").into_iter().filter(|p| is_hof(p)).collect();
+    let mut out = Vec::new();
     for (folder, dirs) in merged_folders("maps") {
-        let Some(map) = dirs.into_iter().find(|d| in_content(d) && !(original.starts_with(&content) && d.starts_with(&original)) && omsi_cfg::vfs::is_file(&d.join("global.cfg"))) else { continue };
+        let Some(map) = dirs.into_iter().find(|d| in_content(d) && !(original.starts_with(content) && d.starts_with(original)) && omsi_cfg::vfs::is_file(&d.join("global.cfg"))) else { continue };
         let ailists_path = map.join("ailists.cfg");
         if !omsi_cfg::vfs::is_file(&ailists_path) {
             continue;
@@ -113,82 +111,117 @@ pub(super) fn sync_map_hofs() {
         let ailists = match omsi_map::ailists::AiLists::load(&ailists_path) {
             Ok(ailists) => ailists,
             Err(e) => {
-                warnings.push(format!("{folder}: couldn't read ailists.cfg: {e}"));
+                warnings.push(("{folder}: couldn't read ailists.cfg: {e}", vec![("folder", folder.clone()), ("e", e.to_string())]));
                 continue;
             }
         };
         let mut names: Vec<&str> = ailists.groups.iter().filter_map(|g| g.hof.as_deref()).map(depot_name).filter(|n| !n.is_empty()).collect();
         names.sort_by_key(|n| n.to_ascii_lowercase());
         names.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
-        let mut added = Vec::new();
+        let mut sources = Vec::new();
         for name in names {
             if shared.iter().any(|p| hof_is_called(p, name)) {
                 continue;
             }
-            let Some(source) = map_depot_source(&map, name) else {
-                warnings.push(format!("{folder}: the HOF file '{name}.hof' it needs isn't installed."));
-                continue;
-            };
-            let Some(file_name) = source.file_name().map(|n| n.to_string_lossy().to_string()) else { continue };
-            let copy = omsi_cfg::vfs::read(&source).map_err(anyhow::Error::from).and_then(|bytes| copy_to_shared(&content, &file_name, &bytes));
-            match copy {
-                Ok(Some(rel)) => {
-                    shared.push(content.join(&rel));
-                    added.push(rel);
-                    copied += 1;
-                }
-                Ok(None) => warnings.push(format!("{folder}: HOFs/{file_name} already holds another depot than '{name}'.")),
-                Err(e) => warnings.push(format!("{folder}: couldn't share {file_name} with every bus: {e}")),
+            match map_depot_source(&map, name) {
+                Some(source) if source.file_name().is_some() => sources.push(source),
+                _ => warnings.push(("{folder}: the HOF file '{name}.hof' it needs isn't installed.", vec![("folder", folder.clone()), ("name", name.to_string())])),
             }
         }
-        if !added.is_empty() {
-            mods::attach(&content, &install_unit(&relative(&content, &map)), &added);
+        if !sources.is_empty() {
+            out.push(MapHofs { folder, map, sources });
         }
     }
+    out
+}
 
-    if copied > 0 {
-        log_line(&format!("maps: shared {copied} map HOF file(s) with every bus in {}", content.join("HOFs").display()));
-        omsi_cfg::content_changed();
+fn file_name(p: &Path) -> String {
+    p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
+}
+
+pub(super) fn offers() -> (Vec<MapHofOffer>, Vec<String>) {
+    let Some((content, original)) = writable_content() else { return Default::default() };
+    let mut last = last_scan().lock().unwrap_or_else(|e| e.into_inner());
+    if install::jobs().iter().any(|j| j.finished.is_none()) {
+        return last.as_ref().map(|(_, o, w)| (o.clone(), w.iter().map(|w| worded(w, tr)).collect())).unwrap_or_default();
     }
+    let stamp = sync_stamp();
+    if let Some((_, o, w)) = last.as_ref().filter(|(s, ..)| *s == stamp) {
+        return (o.clone(), w.iter().map(|w| worded(w, tr)).collect());
+    }
+    omsi_cfg::content_changed();
+    let mut warnings = Vec::new();
+    let offers: Vec<MapHofOffer> = scan(&content, &original, &mut warnings).into_iter().map(|m| MapHofOffer { map: m.folder, files: m.sources.iter().map(|p| file_name(p)).collect() }).collect();
     warnings.sort();
     warnings.dedup();
-    for warning in &warnings {
-        log_line(&format!("maps: HOF sync warning: {warning}"));
+    for w in &warnings {
+        log_line(&format!("maps: HOF sync warning: {}", worded(w, str::to_string)));
     }
-    *last_warnings().lock().unwrap_or_else(|e| e.into_inner()) = warnings;
-    *last = (copied == 0).then_some(stamp);
+    let shown = warnings.iter().map(|w| worded(w, tr)).collect();
+    *last = Some((stamp, offers.clone(), warnings));
+    (offers, shown)
+}
+
+pub fn share_map_hofs(map: &str) -> Result<usize> {
+    let Some((content, original)) = writable_content() else {
+        bail!(tr("the writable content folder is the original OMSI folder; HOF files were not copied"));
+    };
+    if install::jobs().iter().any(|j| j.finished.is_none()) {
+        bail!(tr("a mod is being installed; share the HOF files once it is done"));
+    }
+    let Some(found) = scan(&content, &original, &mut Vec::new()).into_iter().find(|m| m.folder.eq_ignore_ascii_case(map)) else { return Ok(0) };
+    let mut added = Vec::new();
+    let mut failures = Vec::new();
+    for source in &found.sources {
+        let name = file_name(source);
+        match omsi_cfg::vfs::read(source).map_err(anyhow::Error::from).and_then(|bytes| copy_to_shared(&content, &name, &bytes)) {
+            Ok(Some(rel)) => added.push(rel),
+            Ok(None) => failures.push(trf("HOFs/{name} already holds another depot", &[("name", &name)])),
+            Err(e) => failures.push(trf("couldn't share {name} with every bus: {e}", &[("name", &name), ("e", &e)])),
+        }
+    }
+    if !added.is_empty() {
+        mods::attach(&content, &install_unit(&relative(&content, &found.map)), &added);
+        log_line(&format!("maps: shared {} HOF file(s) of {map} with every bus in {}", added.len(), content.join("HOFs").display()));
+        omsi_cfg::content_changed();
+    }
+    *last_scan().lock().unwrap_or_else(|e| e.into_inner()) = None;
+    if !failures.is_empty() {
+        bail!(trf("{map}: shared {count}; {failures}", &[("map", &map), ("count", &added.len()), ("failures", &failures.join("; "))]));
+    }
+    Ok(added.len())
 }
 
 pub fn add_shared_hofs(files: &[PathBuf]) -> Result<usize> {
     let Some((content, _)) = writable_content() else {
-        bail!("the writable content folder is the original OMSI folder; HOF files were not copied");
+        bail!(tr("the writable content folder is the original OMSI folder; HOF files were not copied"));
     };
     if files.is_empty() {
-        bail!("no HOF files were selected");
+        bail!(tr("no HOF files were selected"));
     }
     let mut copied = 0usize;
     let mut skipped = 0usize;
     let mut failures = Vec::new();
     for source in files {
         let Some(file_name) = source.file_name().map(|n| n.to_string_lossy().to_string()) else {
-            failures.push(format!("{} has no file name", source.display()));
+            failures.push(trf("{file} has no file name", &[("file", &source.display())]));
             continue;
         };
         if !is_hof(source) {
-            failures.push(format!("{file_name} is not a .hof file"));
+            failures.push(trf("{file_name} is not a .hof file", &[("file_name", &file_name)]));
             continue;
         }
         match std::fs::read(source).map_err(anyhow::Error::from).and_then(|bytes| copy_to_shared(&content, &file_name, &bytes)) {
             Ok(Some(_)) => copied += 1,
             Ok(None) => skipped += 1,
-            Err(e) => failures.push(format!("couldn't add {file_name}: {e}")),
+            Err(e) => failures.push(trf("couldn't add {file_name}: {e}", &[("file_name", &file_name), ("e", &e)])),
         }
     }
     if copied > 0 {
         omsi_cfg::content_changed();
     }
     if !failures.is_empty() {
-        bail!("added {copied} file(s), {skipped} already there; {}", failures.join("; "));
+        bail!(trf("added {copied} file(s), {skipped} already there; {failures}", &[("copied", &copied), ("skipped", &skipped), ("failures", &failures.join("; "))]));
     }
     Ok(copied)
 }
@@ -215,8 +248,4 @@ fn path_stays_in_content(content: &Path, path: &Path) -> bool {
         ancestor = parent;
     }
     std::fs::canonicalize(ancestor).map(|p| p.starts_with(base)).unwrap_or(false)
-}
-
-pub(super) fn warnings() -> Vec<String> {
-    last_warnings().lock().unwrap_or_else(|e| e.into_inner()).clone()
 }

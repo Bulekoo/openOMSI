@@ -58,7 +58,7 @@ crate::app::stage_ctx!(
 /// the snow, the cabin air, the tyres' spray and the sounds of the street.
 pub(super) fn lights(cx: LightsCx, dt: f32, daylight: omsi_sim::Daylight, behind: f32) {
     // the lamps' cones in fog and falling rain or snow, and new light pictures
-    let cone = cx.weather.weather.as_ref().map(|wt| lights::ConeWeather::new(wt.fog.0, daylight.night)).unwrap_or_default();
+    let cone = cx.weather.weather.as_ref().map(|wt| lights::ConeWeather::of(wt, daylight.night)).unwrap_or_default();
     if let Some(r) = cx.gfx.renderer.as_mut() {
         lights::upload_corona_textures(r);
     }
@@ -81,8 +81,17 @@ pub(super) fn lights(cx: LightsCx, dt: f32, daylight: omsi_sim::Daylight, behind
         }
         let vehicles = steps::light_vehicles(cx.player.player.as_ref(), cx.traffic.traffic.as_ref(), &cx.net.remotes);
         let __tc = Instant::now();
-        lights::collect(w, scene, &daylight, cam.position, &vehicles, cone);
+        lights::collect(
+            w, scene, &daylight, cam.position, &vehicles, cone,
+            lights::VehicleSmoke::from_setting(&cx.common.settings.vehicle_smoke),
+            cx.player.player.is_some(),
+        );
         drop(vehicles);
+        if let Some(p) = cx.player.player.as_ref() {
+            if let Some(tv) = p.trolley_view.as_ref() {
+                tv.push_effects(scene, &p.vehicle);
+            }
+        }
         cx.perf.profile.add(crate::profile_keys::ProfKey::LightsCollect, __tc.elapsed().as_secs_f64());
         // the object editor's pick: a magenta glow over it
         if let Some(id) = cx.menus.menus.editor.as_ref().and_then(|e| e.selected) {
@@ -98,6 +107,8 @@ pub(super) fn lights(cx: LightsCx, dt: f32, daylight: omsi_sim::Daylight, behind
                 });
             }
         }
+        // (set below while there is weather; none without)
+        omsi_sim::particles::set_road_water(None);
         if let Some(wt) = &cx.weather.weather {
             let (kind, rate) = precip_of(wt);
             let rain_quality = crate::rain::quality_of(&cx.common.settings.rain_quality);
@@ -121,6 +132,11 @@ pub(super) fn lights(cx: LightsCx, dt: f32, daylight: omsi_sim::Daylight, behind
             // puddles and the wet asphalt the renderer draws (the same wetness:
             // none under snow, OMSI_WETNESS as the picture takes it)
             let wetness = puddles::road_wetness(*cx.weather.wetness, wt.snow);
+            // (the vehicles' own wheel spray goes with the same water: only through puddles -
+            // in snow it keeps the scripts' own slush)
+            if !(wt.snow || wt.snow_on_road || kind == 2) {
+                omsi_sim::particles::set_road_water(Some(puddles::road_water_hook(w, wetness)));
+            }
             if (wetness > 0.0 || !cx.weather.spray.is_empty()) && !omsi_cfg::flags::OMSI_NO_SPRAY.is_set() {
                 let __ts = Instant::now();
                 steps::throw_spray(

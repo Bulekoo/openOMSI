@@ -318,6 +318,11 @@ pub(crate) fn game_info(app: &crate::App) -> Vec<(&'static str, InfoValue)> {
             v.push(("trip_done", Bool(d.trip_done())));
             let bus = app.player.as_ref().map(|p| p.vehicle.position);
             stop_info(&mut v, &trip.stops, d.next_stop, d.at_stop(), bus);
+            if let Some(stop) = trip.stops.get(d.next_stop) {
+                if let Some(distance) = app.menus.navigator.as_ref().and_then(|n| n.next_stop_distance_for(stop.object_id)) {
+                    v.push(("next_stop_distance_nav", Num(distance)));
+                }
+            }
         }
     }
     v
@@ -346,7 +351,7 @@ fn stop_info(v: &mut Vec<(&'static str, InfoValue)>, stops: &[crate::schedule::P
         }
     }
     // the last stop before the next one the trip calls at (passing stations left out)
-    if let Some(s) = stops.iter().take(next).rev().find(|s| s.stops) {
+    if let Some(s) = stops.iter().take(next).rev().find(|s| s.calls()) {
         v.push(("previous_stop", Text(s.name.trim().to_string())));
         v.push(("previous_stop_id", Num(s.object_id as f64)));
         if let Some(m) = distance(s) {
@@ -391,6 +396,32 @@ use crate::plugin_io::{bus as pbus, duty as pduty, world as pworld};
 use omsi_plugin as op;
 
 impl PluginIo for Io<'_> {
+    fn duty_tour(&self) -> Option<omsi_plugin::api::Value> {
+        let app = self.app()?;
+        let d = app.session.duty.as_ref()?;
+        pduty::tour(app, &d.line, &d.tour, true).ok()
+    }
+    fn timetable_tour(&self, line: &str, tour: &str) -> Result<omsi_plugin::api::Value, String> {
+        pduty::tour(self.app().ok_or("no game")?, line, tour, false)
+    }
+
+    fn hof_data(&self) -> Option<omsi_plugin::api::Value> {
+        Some(crate::plugin_io::hof::snapshot(self.veh()?.host.hof.as_deref()?))
+    }
+    fn hof_terminus(&self, identifier: &str) -> Option<omsi_plugin::api::Value> {
+        crate::plugin_io::hof::find_terminus(self.veh()?.host.hof.as_deref()?, identifier)
+    }
+    fn hof_busstop(&self, identifier: &str) -> Option<omsi_plugin::api::Value> {
+        crate::plugin_io::hof::find_busstop(self.veh()?.host.hof.as_deref()?, identifier)
+    }
+    fn data_query(&mut self, query: omsi_plugin::data::DataQuery, args: &[omsi_plugin::data::QueryValue], object: Option<i64>) -> Result<Vec<omsi_plugin::data::QueryValue>, String> {
+        if let Some(id) = object {
+            let object = self.app_mut().ok_or("no game")?.session.scenery.find_mut(id).ok_or("scripted scenery object not loaded")?;
+            let number = object.inst.str_var("number").to_owned();
+            return crate::plugin_io::data::read(&mut object.inst.host, &number, query, args);
+        }
+        crate::plugin_io::data::query(self.veh_mut().ok_or("no player vehicle")?, query, args)
+    }
     fn system(&mut self, name: &str) -> Option<f32> {
         let v = SysVar::from_name(name)?;
         self.veh_mut().map(|veh| veh.host.sys_var(v))
@@ -753,6 +784,9 @@ impl PluginIo for Io<'_> {
     fn duty_end(&mut self) -> bool {
         self.app_mut().is_some_and(pduty::finish)
     }
+    fn duty_set_closed_stops(&mut self, stops: &[String], via: &str) -> bool {
+        self.app_mut().is_some_and(|a| pduty::set_closed_stops(a, stops, via))
+    }
     fn timetable_lines(&self) -> Vec<op::Line> {
         self.app().map(pduty::lines).unwrap_or_default()
     }
@@ -1024,6 +1058,7 @@ mod tests {
             position: (x >= 0.0).then_some(glam::DVec3::new(x, 0.0, 5.0)),
             dir: Default::default(),
             stops,
+            closed: None,
         };
         let stops = vec![stop(11, "A", 0.0, true), stop(12, "B", 100.0, false), stop(13, "C", -1.0, true)];
         let mut v = Vec::new();

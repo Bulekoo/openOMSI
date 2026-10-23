@@ -20,6 +20,9 @@ pub struct Palette {
     pub road_edge: Color,
     pub foot: Color,
     pub area: Color,
+    /// The paint on the roads: lane lines, crossings, arrows; yellow lines.
+    pub lane_paint: Color,
+    pub lane_amber: Color,
     /// Houses: the roof, the wall facing the light and the one turned from it, the shadow.
     pub roof: Color,
     pub roof_edge: Color,
@@ -42,6 +45,8 @@ pub struct Palette {
     pub card_dim: Color,
     pub label: Color,
     pub label_halo: Color,
+    /// The ground's contour lines (the terrain view).
+    pub contour: Color,
 }
 
 const fn hex(v: u32) -> Color {
@@ -60,6 +65,8 @@ pub const LIGHT: Palette = Palette {
     road_edge: hex(0xcfccc4),
     foot: hex(0xe6e3dc),
     area: hex(0xefeef0),
+    lane_paint: hex(0xbcc1ca),
+    lane_amber: hex(0xf0cb62),
     roof: hex(0xfaf9f6),
     roof_edge: hex(0xdcd8d0),
     wall_lit: hex(0xe9e5de),
@@ -78,6 +85,7 @@ pub const LIGHT: Palette = Palette {
     card_dim: hex(0x6e6e73),
     label: hex(0x4a4a4f),
     label_halo: Color::rgba(255, 255, 255, 0.9),
+    contour: Color::rgba(150, 105, 60, 1.0),
 };
 
 pub const DARK: Palette = Palette {
@@ -92,6 +100,8 @@ pub const DARK: Palette = Palette {
     road_edge: hex(0x2b2e33),
     foot: hex(0x45484e),
     area: hex(0x393b40),
+    lane_paint: hex(0x9a9ea7),
+    lane_amber: hex(0xc9a948),
     roof: hex(0x3b3f47),
     roof_edge: hex(0x2c2f35),
     wall_lit: hex(0x363a41),
@@ -110,6 +120,7 @@ pub const DARK: Palette = Palette {
     card_dim: hex(0xa1a1a8),
     label: hex(0xd6d6db),
     label_halo: Color::rgba(20, 20, 22, 0.85),
+    contour: Color::rgba(190, 150, 100, 1.0),
 };
 
 pub fn palette(light: bool) -> &'static Palette {

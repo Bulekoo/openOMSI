@@ -355,7 +355,7 @@ pub fn depot_like(dir: &Path, hints: &[&str]) -> Option<Hof> {
     closest_name(&refs, hints).and_then(|i| Hof::load(&files[i]).ok())
 }
 
-/// The depot file called `name` in the shared `HOFs/` folder or any vehicle folder of any content root (`Vehicles/*/`).
+/// The depot file called `name` in the shared `HOFs/` folder, any map folder (`maps/*/`) or any vehicle folder (`Vehicles/*/`) of any content root.
 ///
 /// A depot file belongs to a map, not to a bus model: it lists the map's termini, stops and
 /// IBIS codes. A mod bus brings only the depot of the map it was made on (the O530 Citaro
@@ -381,9 +381,13 @@ pub fn depot_anywhere(name: &str) -> Option<Hof> {
     if let Some(path) = known {
         return path.and_then(|p| Hof::load(&p).ok());
     }
-    // every vehicle folder once over all roots (depot_in looks at each root's copy)
-    let mut dirs: Vec<PathBuf> = omsi_cfg::read_dir_merged("Vehicles").into_iter().filter(|d| omsi_cfg::vfs::is_dir(d)).collect();
-    dirs.sort_by_key(|d| d.file_name().unwrap_or_default().to_string_lossy().to_ascii_lowercase());
+    let sorted = |folder: &str| {
+        let mut dirs: Vec<PathBuf> = omsi_cfg::read_dir_merged(folder).into_iter().filter(|d| omsi_cfg::vfs::is_dir(d)).collect();
+        dirs.sort_by_key(|d| d.file_name().unwrap_or_default().to_string_lossy().to_ascii_lowercase());
+        dirs
+    };
+    let mut dirs = sorted("maps");
+    dirs.extend(sorted("Vehicles"));
     let h = dirs.iter().find_map(|d| depot_in(d, name));
     found.lock().unwrap_or_else(|e| e.into_inner()).1.insert(key, h.as_ref().map(|h| h.path.clone()));
     h
@@ -469,6 +473,21 @@ mod tests {
 
         omsi_cfg::remove_content_root(&root);
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_depot_kept_in_its_map_folder_is_found() {
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let root = std::env::temp_dir().join(format!("openomsi-map-hof-{stamp}"));
+        let map = root.join("maps/Moulon");
+        std::fs::create_dir_all(&map).unwrap();
+        std::fs::write(map.join(format!("company-{stamp}.hof")), format!("[name]\nCompany {stamp}\n")).unwrap();
+
+        omsi_cfg::add_content_root(root.clone());
+        let found = depot_anywhere(&format!("Company {stamp}")).map(|h| h.path);
+        omsi_cfg::remove_content_root(&root);
+        let _ = std::fs::remove_dir_all(&root);
+        assert_eq!(found, Some(map.join(format!("company-{stamp}.hof"))));
     }
 
     #[test]
@@ -561,4 +580,204 @@ mod tests {
         assert!(h.info_busstop_lists[1].is_empty());
         assert_eq!(h.info_busstop_lists[2], vec!["Hauptbahnhof", "Markt", "Bergerfuerth"]);
     }
+}
+
+/// A timetable's terminus is a stop name, while a HOF often uses a shorter
+/// destination/texture name for the same stop (Berlin 5E: `Spektefeld
+/// Schulzentrum` vs. `Spektefeld`).  Exact matches remain preferred; the
+/// boundary-aware prefix fallback handles those stock abbreviations without
+/// making unrelated destinations match. The name a row goes by (its ident, its stop, the
+/// first line of its sign) counts before another of its lines that reads the same: the
+/// district line of Spandau's Machandelweg reads RUHLEBEN, the sign of U Ruhleben, and
+/// U Ruhleben by its sign text (what a LAN player's bus says it shows) was Machandelweg.
+pub fn terminus_match_score(t: &Terminus, wanted: &str) -> u8 {
+    let wanted = wanted.split_whitespace().collect::<Vec<_>>().join(" ");
+    if wanted.is_empty() {
+        return 0;
+    }
+    let shown = t.strings.iter().position(|s| !s.trim().is_empty());
+    let mut score = 0;
+    for (k, candidate) in std::iter::once(t.texture_id.as_str())
+        .chain(std::iter::once(t.terminus_stop.as_deref().unwrap_or("")))
+        .chain(t.strings.iter().map(String::as_str))
+        .enumerate()
+    {
+        let candidate = candidate.split_whitespace().collect::<Vec<_>>().join(" ");
+        let candidate_lower = candidate.to_lowercase();
+        let wanted_lower = wanted.to_lowercase();
+        if candidate_lower == wanted_lower {
+            score = score.max(if k < 2 || Some(k - 2) == shown { 3 } else { 2 });
+        } else if wanted_lower.starts_with(&(candidate_lower.clone() + " ")) {
+            score = score.max(1);
+        } else if candidate_lower.starts_with(&(wanted_lower + " ")) {
+            score = score.max(1);
+        }
+    }
+    score
+}
+
+/// Every row of the depot file a trip's destination names, in file order: those whose
+/// ident is the name, else those of the best looser match. A depot file may give one
+/// destination a row per route, each with a code of its own (four "ul. Xutorskaya" of
+/// codes 92, 120, 123 and 124, #738).
+pub fn termini_named(hof: &Hof, wanted: &str) -> Vec<usize> {
+    let exact = wanted.trim();
+    let rows: Vec<usize> = (0..hof.termini.len()).filter(|&i| hof.termini[i].texture_id == exact).collect();
+    if !rows.is_empty() {
+        return rows;
+    }
+    let scores: Vec<u8> = hof.termini.iter().map(|t| terminus_match_score(t, wanted)).collect();
+    let best = scores.iter().copied().max().unwrap_or(0);
+    (0..scores.len()).filter(|&i| best > 0 && scores[i] == best).collect()
+}
+
+/// The depot file's terminus a trip of `line` to `terminus` through `stops` ends at, and
+/// the route it takes ([`pick_route`]): of the rows of that name (see [`termini_named`]) the
+/// one the line's route through the trip's stops leads to. Taking the first of them, the
+/// IBIS got the first's code, a route of the line to it or none at all, whichever route
+/// the trip drove (line 39 to "ul. Xutorskaya" typed destination 92, where its route ends
+/// at 120). The first row when no route of the line goes to any of them.
+pub fn trip_terminus(
+    hof: &Hof,
+    line: &str,
+    terminus: &str,
+    stops: &[&str],
+) -> Option<(usize, Option<usize>)> {
+    let rows = termini_named(hof, terminus);
+    let first = *rows.first()?;
+    let mut codes: Vec<i32> = Vec::new();
+    for &i in &rows {
+        if !codes.contains(&hof.termini[i].code) {
+            codes.push(hof.termini[i].code);
+        }
+    }
+    let route = pick_route(hof, &routes_to(hof, line, &codes), stops);
+    let ti = route
+        .map(|r| omsi_cfg::parse_i32(&hof.info_trips[r].route))
+        .and_then(|code| rows.iter().copied().find(|&i| hof.termini[i].code == code))
+        .unwrap_or(first);
+    Some((ti, route))
+}
+
+/// The depot file's routes of `line` to a terminus with one of `codes`, in file order. The
+/// route code is the line's number and two digits: a driver types those, whatever the
+/// route's line string says (Grundorf's 7601 to Krankenhaus has "TML").
+pub fn routes_to(hof: &Hof, line: &str, codes: &[i32]) -> Vec<usize> {
+    let line_digits: String = line
+        .trim()
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
+    let line_number = line_digits.parse::<u32>().ok();
+    hof.info_trips
+        .iter()
+        .enumerate()
+        .filter(|(_, t)| {
+            codes.contains(&omsi_cfg::parse_i32(&t.route))
+                && (t.line.trim().eq_ignore_ascii_case(line.trim())
+                || (!line_digits.is_empty() && t.line.trim() == line_digits)
+                || (line_number.is_some()
+                && t.code.trim().parse::<u32>().ok().map(|c| c / 100) == line_number))
+        })
+        .map(|(i, _)| i)
+        .collect()
+}
+
+/// Which of `routes` a trip through `stops` (the timetable's station names) runs: one
+/// starting at the trip's first stop (the IBIS starts its count there), of those the one
+/// that has most of the trip's stops in the trip's order, then the one as long as the trip
+/// (a short working's route rather than the long one it is part of). Nothing in the
+/// timetable ties a trip to a route of the depot file - a driver picks it by its stops -
+/// and a line often has several routes to one terminus; taking the first whose first stop
+/// was spelt as the timetable spells it typed the wrong one whenever the spellings
+/// differed. None without routes; the first route when no stop matches any.
+pub fn pick_route(hof: &Hof, routes: &[usize], stops: &[&str]) -> Option<usize> {
+    let trip: Vec<(String, Vec<String>)> = stops
+        .iter()
+        .map(|s| (s.trim().to_lowercase(), stop_words(s)))
+        .filter(|(s, _)| !s.is_empty())
+        .collect();
+    let mut best: Option<(usize, (bool, usize, std::cmp::Reverse<usize>))> = None;
+    for &r in routes {
+        let list = hof
+            .info_busstop_lists
+            .get(r)
+            .map(|l| l.as_slice())
+            .unwrap_or(&[]);
+        let names: Vec<Vec<(String, Vec<String>)>> =
+            list.iter().map(|id| ident_names(hof, id)).collect();
+        // the longest common subsequence: a stop missing on either side costs nothing
+        // but itself, and a stop the route lists twice is not
+        // matched past the rest of the trip
+        let mut row = vec![0usize; names.len() + 1];
+        for t in &trip {
+            let mut diag = 0;
+            for (j, n) in names.iter().enumerate() {
+                let up = row[j + 1];
+                row[j + 1] = if same_stop(n, t) { diag + 1 } else { up.max(row[j]) };
+                diag = up;
+            }
+        }
+        let found = row[names.len()];
+        let starts = match (trip.first(), names.first()) {
+            (Some(t), Some(n)) => same_stop(n, t),
+            _ => false,
+        };
+        let score = (
+            starts,
+            found,
+            std::cmp::Reverse(names.len().abs_diff(stops.len())),
+        );
+        if best.as_ref().is_none_or(|(_, b)| score > *b) {
+            best = Some((r, score));
+        }
+    }
+    match best {
+        Some((r, (_, found, _))) if found > 0 => Some(r),
+        _ => routes.first().copied(),
+    }
+}
+
+/// The names a stop of a route's list goes by: its ident (before a `#`) and the strings
+/// the depot file's `[addbusstop]` of that ident gives it, each lowercased and as its
+/// [`stop_words`].
+pub fn ident_names(hof: &Hof, ident: &str) -> Vec<(String, Vec<String>)> {
+    let ident = ident.split('#').next().unwrap_or("").trim();
+    let mut names = vec![ident.to_string()];
+    for b in &hof.bus_stops {
+        if b.ident.trim().eq_ignore_ascii_case(ident) {
+            names.extend(b.strings.iter().map(|s| s.trim().to_string()));
+        }
+    }
+    names
+        .into_iter()
+        .filter(|n| !n.is_empty())
+        .map(|n| (n.to_lowercase(), stop_words(&n)))
+        .collect()
+}
+
+/// One stop of a route (its [`ident_names`]) and a timetable stop (lowercased, and its
+/// [`stop_words`]) are the same: a name equal, one the start of the other, or the same
+/// words.
+pub fn same_stop(names: &[(String, Vec<String>)], stop: &(String, Vec<String>)) -> bool {
+    names.iter().any(|(raw, words)| {
+        !raw.is_empty()
+            && (*raw == stop.0
+            || raw.starts_with(&stop.0)
+            || stop.0.starts_with(raw.as_str())
+            || (!words.is_empty() && *words == stop.1))
+    })
+}
+
+/// A stop name as the set of its words, so that the map's and the depot file's spellings
+/// of one stop meet: in any order ("Nordstadt Bhf", "Bhf Nordstadt"), with any punctuation
+/// ("Bhf. Nordstadt") and without one-letter prefixes ("F_Kirchweg", "Kirchweg").
+pub fn stop_words(name: &str) -> Vec<String> {
+    let mut w: Vec<String> = name
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.chars().count() > 1)
+        .map(|w| w.to_lowercase())
+        .collect();
+    w.sort();
+    w
 }

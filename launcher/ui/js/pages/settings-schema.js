@@ -103,6 +103,7 @@ const graphics = {
         // (only the enhanced modes march volumetric clouds; the vanilla ones are a texture)
         { type: 'select', key: 'cloud_quality', label: 'Cloud quality', options: [['high', 'High'], ['low', 'Low']], when: (s) => enhanced(s) && s.clouds !== false },
         { type: 'select', key: 'rain_quality', label: 'Rain quality', options: [['high', 'High'], ['medium', 'Medium'], ['low', 'Low']] },
+        { type: 'select', key: 'vehicle_smoke', label: 'Vehicle smoke', options: [['all', 'All vehicles'], ['player', 'Player only'], ['off', 'Off']], help: 'Controls the vehicles\' smoke particles, not scenery effects or glowing particles.' },
         // (the wet roads' reflections need the reflection maps on)
         { type: 'select', key: 'puddles', label: 'Puddles', options: [['high', 'High'], ['low', 'Low'], ['off', 'Off']], when: (s) => Number(s.reflections ?? 1) > 0.005 },
         { type: 'toggle', key: 'windy_trees', label: 'Windy trees' },
@@ -127,6 +128,8 @@ const graphics = {
         { type: 'select', key: 'mirror_refresh', label: 'Bus mirror refresh', options: [['off', 'None (frozen picture)'], ['eco', 'Economical'], ['full', 'Full'], ['every', 'Every frame (smoothest)']], heavy: (v, s) => v === 'every' && String(s.mirror_size) !== '0' },
         { type: 'select', key: 'mirror_quality', label: 'Mirror quality', options: [['standard', 'Standard'], ['enhanced', 'As the picture (Enhanced)']], when: enhanced },
         { type: 'toggle', key: 'mirror_hud_every_frame', label: 'Mirror panels every frame' },
+        { type: 'toggle', key: 'mirror_shadows', label: 'Shadows in the mirrors' },
+        { type: 'toggle', key: 'mirror_particles', label: 'Smoke and spray in the mirrors' },
         { type: 'select', key: 'video_memory', label: 'Video memory', options: videoMemory, help: 'Everything the game keeps on the graphics card: textures, models and the picture itself. Automatic is nine tenths of the card.' },
         { type: 'toggle', key: 'texture_compression', label: 'Compress textures on loading' },
         // (off: block formats decoded on loading, for a driver that mishandles them)
@@ -233,6 +236,7 @@ const camera = {
         { type: 'toggle', key: 'driverview_smooth', label: 'Camera glides between viewpoints' },
         { type: 'toggle', key: 'hands_in_cab', label: "Driver's hands in the cab view" },
         { type: 'toggle', key: 'alt_view', label: 'Right mouse button turns the view, Shift+right zooms (off: right zooms as in OMSI, the wheel button turns)' },
+        { type: 'select', key: 'mirror_hud', label: 'Mirror panels on the screen', options: [['0', 'Off'], ['2', 'Left mirror'], ['1', 'Right mirror'], ['3', 'Left and right'], ['7', 'Left, right and front']] },
         { type: 'toggle', key: 'precision_zoom', label: 'Precision mouse zoom (FOV curve instead of the linear way)' },
       ],
     },
@@ -287,7 +291,7 @@ const camera = {
   ],
 };
 
-const vol = (key, label, def) => ({ type: 'slider', key, label, min: 0, max: 1, step: 0.05, def, format: pct, store: r2 });
+const vol = (key, label, def, when, max = 1) => ({ type: 'slider', key, label, min: 0, max, step: 0.05, def, format: pct, store: r2, ...(when ? { when } : {}) });
 
 const sound = {
   id: 'sound',
@@ -307,6 +311,18 @@ const sound = {
         vol('radio_speaker', 'Radio: small speaker', 0),
         vol('radio_hiss', 'Radio: FM hiss', 0),
         vol('radio_dropouts', 'Radio: signal dropouts', 0),
+        // voice chat in multiplayer (off until switched on; the microphone is used with a talk key held)
+        { type: 'section', title: 'Voice chat in multiplayer' },
+        { type: 'toggle', key: 'voice_enabled', label: 'Voice chat', help: 'Hold a talk key to speak: Nearby (V) is heard by players close to you, Radio (B) by everybody in the session. The keys are in Controls. The system asks for the microphone the first time. Nothing is recorded or stored; the microphone is used only while a talk key is held (or always, in the open mode).' },
+        { type: 'select', key: 'voice_mode', label: 'Microphone', options: [['ptt', 'Push to talk'], ['open', 'Open microphone (nearby)']], when: (s) => !!s.voice_enabled },
+        { type: 'slider', key: 'voice_mic_gain', label: 'Microphone gain', min: 0, max: 4, step: 0.1, def: 1, format: pct, store: r1, when: (s) => !!s.voice_enabled },
+        { type: 'slider', key: 'voice_threshold_db', label: 'Open microphone: speech threshold', min: -80, max: -10, step: 1, def: -45, format: (v) => `${v.toFixed(0)} dB`, store: round, when: (s) => !!s.voice_enabled && s.voice_mode === 'open' },
+        vol('voice_volume', 'Voices: volume', 1, (s) => !!s.voice_enabled, 2),
+        vol('voice_volume_nearby', 'Voices: nearby players', 1, (s) => !!s.voice_enabled, 2),
+        vol('voice_volume_radio', 'Voices: radio', 1, (s) => !!s.voice_enabled, 2),
+        { type: 'slider', key: 'voice_range', label: 'Nearby voice range when you host', min: 10, max: 300, step: 5, def: 75, format: (v) => `${v.toFixed(0)} m`, store: round, when: (s) => !!s.voice_enabled },
+        { type: 'toggle', key: 'voice_talker_list', label: 'Show who is talking', when: (s) => !!s.voice_enabled },
+        { type: 'toggle', key: 'voice_all_off', label: "Everybody else's voice chat off", help: 'Single players are muted in the pause menu, under Players.', when: (s) => !!s.voice_enabled },
       ],
     },
     {
@@ -333,6 +349,7 @@ const gameplay = {
         { type: 'select', key: 'character_models', label: 'Character models', options: [['original', 'Original'], ['improved', 'High quality (improved)']], help: 'High quality draws the people with the Microsoft Rocketbox avatars and their living faces, on this computer only: servers and other players keep their own. They are downloaded once (about 310 MB).' },
         { type: 'toggle', key: 'exact_fare', label: 'Passengers pay the exact fare' },
         { type: 'toggle', key: 'pax_bad_driving', label: 'Passengers react to bad driving' },
+        { type: 'toggle', key: 'auto_announce', label: 'Arrival announcements at the stop', help: 'On depot files that keep two recordings per stop (the Chinese maps), the arrival one is played as the bus reaches the stop: the IBIS\'s next stop key, pressed as the driver would' },
         { type: 'slider', key: 'pax_density', label: 'How many passengers', min: 0, max: 2, step: 0.1, def: 1, format: pct, store: r2 },
         { type: 'toggle', key: 'get_up', label: 'Ability to get up (Ctrl+Shift+G)' },
         { type: 'toggle', key: 'full_tank', label: 'Start with a full tank' },
@@ -383,7 +400,6 @@ const general = {
         { type: 'toggle', key: 'machine_translation', label: 'Translate the remaining texts automatically (offline, downloads 620 MB once)' },
         { type: 'toggle', key: 'launcher_rest', label: 'The launcher rests while a game runs (gives the graphics card to the game)' },
         { type: 'toggle', key: 'discord_status', label: 'Discord Rich Presence', help: 'Shows the launcher or your map, bus, line and multiplayer status in Discord.' },
-        { type: 'toggle', key: 'voice_chat', label: 'Voice chat through GreenTeaSpeak (multiplayer)', help: 'Players near you are heard from where they stand, when GreenTeaSpeak runs with the openOMSI plugin and the server names a voice server.' },
         // (larger for those who find the texts hard to read, smaller for more of the picture)
         { type: 'slider', key: 'ui_scale', label: 'Game interface size', min: 0.5, max: 2, step: 0.05, def: 1, format: pct, store: r2 },
         { type: 'toggle', key: 'ui_scale_window', label: 'Interface grows with the window' },
@@ -437,6 +453,6 @@ export const SETTINGS_TABS = [graphics, driving, camera, sound, gameplay, genera
 
 /** The settings a saved graphics profile holds (`GRAPHICS_PROFILE_KEYS`). */
 export const GRAPHICS_PROFILE_KEYS = [
-  'graphics', 'msaa', 'render_scale', 'anisotropy', 'shadow_size', 'ssao', 'shadows', 'shadow_casters', 'detail_textures', 'night_brightness', 'led_glow', 'led_mips', 'shadow_blobs', 'reflections', 'clouds', 'cloud_quality', 'rain_quality', 'puddles', 'windy_trees',
+  'graphics', 'msaa', 'render_scale', 'anisotropy', 'shadow_size', 'ssao', 'shadows', 'shadow_casters', 'detail_textures', 'night_brightness', 'led_glow', 'led_mips', 'shadow_blobs', 'reflections', 'clouds', 'cloud_quality', 'rain_quality', 'vehicle_smoke', 'puddles', 'windy_trees',
   'vsync', 'max_fps', 'view_distance', 'max_obj_dist', 'min_obj_size', 'mirror_size', 'mirror_refresh', 'mirror_quality', 'mirror_hud_every_frame', 'video_memory', 'texture_compression', 'gpu_texture_compression',
 ];

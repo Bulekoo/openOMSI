@@ -4,7 +4,7 @@ cd "$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
 app="${1:-dist/macos/openOMSI.app}"
 out="${2:-out/openOMSI.dmg}"
 tmp=$(mktemp -d)
-trap 'hdiutil detach -force "$tmp/mnt" >/dev/null 2>&1 || true; rm -rf "$tmp"' EXIT
+trap 'hdiutil detach -force "${device:-$tmp/mnt}" >/dev/null 2>&1 || true; rm -rf "$tmp"' EXIT
 mkdir "$tmp/stage" "$tmp/mnt"
 ditto "$app" "$tmp/stage/openOMSI.app"
 ln -s /Applications "$tmp/stage/Applications"
@@ -15,7 +15,10 @@ for try in 1 2 3; do
   [ "$try" = 3 ] && exit 1
   sleep 5
 done
-hdiutil attach -readwrite -noverify -noautoopen -nobrowse -mountpoint "$tmp/mnt" "$tmp/rw.dmg" >/dev/null
+hdiutil attach -readwrite -noverify -noautoopen -nobrowse -mountpoint "$tmp/mnt" "$tmp/rw.dmg" > "$tmp/attached"
+# Keep the device name: a failed eject may remove the mount point before detaching the image.
+device=$(awk '/^\/dev\/disk/ { print $1; exit }' "$tmp/attached")
+[ -n "$device" ] || { echo "No disk device returned by hdiutil attach" >&2; exit 1; }
 osascript - "$tmp/mnt" <<'APPLESCRIPT' || echo "Finder did not lay the window out: the disk image opens with Finder's default view"
 on run argv
   with timeout of 30 seconds
@@ -44,6 +47,20 @@ APPLESCRIPT
 cp assets/icons/app/openomsi.icns "$tmp/mnt/.VolumeIcon.icns"
 xattr -wx com.apple.FinderInfo "0000000000000000040000000000000000000000000000000000000000000000" "$tmp/mnt"
 sync
-hdiutil detach "$tmp/mnt" >/dev/null || { sleep 5; hdiutil detach -force "$tmp/mnt" >/dev/null; }
+# Finder may keep the image busy briefly, even after its mount point disappears.
+if hdiutil detach "$device" >/dev/null || { sleep 5; hdiutil detach -force "$device" >/dev/null; }; then
+  device=
+else
+  hdiutil info > "$tmp/attached-now"
+  if awk -v device="$device" '$1 == device { found=1 } END { exit !found }' "$tmp/attached-now"; then
+    echo "Disk image is still attached after the detach retry" >&2
+    exit 1
+  fi
+  device=
+fi
 mkdir -p "$(dirname "$out")"
-hdiutil convert "$tmp/rw.dmg" -format UDZO -imagekey zlib-level=9 -ov -o "$out" >/dev/null
+for try in 1 2 3; do
+  hdiutil convert "$tmp/rw.dmg" -format UDZO -imagekey zlib-level=9 -ov -o "$out" >/dev/null && break
+  [ "$try" = 3 ] && exit 1
+  sleep 5
+done

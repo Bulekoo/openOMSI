@@ -94,7 +94,7 @@ pub fn apply_safe_mode() {
     for flag in ["OMSI_BASIC_PIPELINES", "OMSI_NO_PLUGINS"] {
         if std::env::var_os(flag).is_none() {
             // SAFETY of the environment: the first thing in `main`, before any other thread
-            std::env::set_var(flag, "1");
+            unsafe { std::env::set_var(flag, "1") };
         }
     }
 }
@@ -143,7 +143,7 @@ pub fn start(kind: Kind) -> bool {
     let _ = std::fs::write(&state, "begun");
     journal::update(|j| j.begin(kind, version, omsi_platform::BUILD, pid));
     // SAFETY of the environment: called first thing in `main`, before any other thread
-    std::env::set_var(STATE_VAR, format!("{pid}:{}", state.display()));
+    unsafe { std::env::set_var(STATE_VAR, format!("{pid}:{}", state.display())) };
     if kind == Kind::Launcher && cfg!(not(target_os = "android")) {
         watch::spawn(pid, &state);
     }

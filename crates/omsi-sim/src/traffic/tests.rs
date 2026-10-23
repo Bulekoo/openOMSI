@@ -459,6 +459,34 @@ fn a_backwards_jump_replays_its_phase_once() {
 }
 
 #[test]
+fn coincident_skips_wait_for_any_of_their_lights() {
+    let p = |s: [i32; 9]| -> Vec<(i32, f32)> { s.into_iter().zip([3.0, 10.0, 3.0, 3.0, 10.0, 3.0, 3.0, 10.0, 3.0]).collect() };
+    for asking in [3, 4] {
+        let mut c = TrafficLightController::from_program(
+            vec![
+                (p([3, 6, 9, 0, 0, 0, 0, 0, 0]), Some(20.0)),
+                (p([6, 6, 6, 6, 6, 9, 0, 0, 0]), None),
+                (p([6, 6, 6, 6, 6, 9, 0, 0, 0]), None),
+                (p([0, 0, 0, 0, 0, 0, 3, 6, 9]), Some(20.0)),
+                (p([0, 0, 0, 0, 0, 0, 3, 6, 9]), None),
+                (p([0, 0, 0, 3, 6, 9, 0, 0, 0]), Some(14.0)),
+            ],
+            Some(48.0),
+            &[],
+            &[[3.0, 32.0, 1.0, 48.0], [4.0, 32.0, 1.0, 48.0], [5.0, 16.0, 1.0, 32.0], [5.0, 0.0, 0.0, 16.0], [5.0, 5.0, 0.0, 16.0], [5.0, 10.0, 0.0, 16.0], [0.0, 13.0, 0.0, 8.0]],
+        );
+        c.start(0.0);
+        c.request[asking] = true;
+        let mut green = false;
+        for _ in 0..600 {
+            c.advance(0.1);
+            green |= c.state(asking) == 6;
+        }
+        assert!(green, "light {asking} asking alone never got its green");
+    }
+}
+
+#[test]
 fn simultaneous_inactive_events_do_not_stall_the_cycle() {
     let mut c = TrafficLightController::from_program(
         vec![(vec![(0, 4.0), (6, 16.0)], None); 2],
@@ -1188,4 +1216,63 @@ fn two_quiet_jumps_at_the_cycle_start_let_the_clock_run_on() {
     day.time = 126.0;
     day.advance(2.0);
     assert!((day.time - 16.0).abs() < 1e-3, "the day clock went on at {:.2} s", day.time);
+}
+
+/// win-4.sco ("Hauptbahnhof 4", #3092): the program as the file has it, lights 0 Main,
+/// 1 Bus, 2 Bus2, 3 Green, 4 Ped, and its thirteen jumps.
+fn win4() -> TrafficLightController {
+    TrafficLightController::from_program(
+        vec![
+            (vec![(3, 2.0), (6, 10.0), (9, 3.0), (0, 7.0), (9, 3.0), (0, 1.0)], None),
+            (vec![(0, 16.0), (6, 6.0), (0, 1.0)], Some(5.0)),
+            (vec![(0, 26.0), (6, 10.0)], Some(40.0)),
+            (vec![(6, 1.0)], Some(6.0)),
+            (vec![(6, 22.0), (0, 1.0)], Some(0.0)),
+        ],
+        Some(37.0),
+        &[],
+        &[
+            [1.0, 12.0, 1.0, 2.0],
+            [2.0, 12.0, 1.0, 2.0],
+            [1.0, 22.0, 1.0, 2.0],
+            [1.0, 22.0, 0.0, 18.0],
+            [2.0, 12.0, 0.0, 22.0],
+            [1.0, 2.0, 0.0, 12.0],
+            [1.0, 7.0, 0.0, 12.0],
+            [2.0, 2.0, 0.0, 22.0],
+            [2.0, 7.0, 0.0, 22.0],
+            [2.0, 12.0, 0.0, 22.0],
+            [2.0, 17.0, 0.0, 22.0],
+            [2.0, 31.0, 0.0, 27.0],
+            [2.0, 35.0, 0.0, 27.0],
+        ],
+    )
+}
+
+#[test]
+fn win4_gives_each_bus_light_its_green_when_it_asks_alone() {
+    // (the second bus light's request jumps to 22 s, where the first one's "nobody asks:
+    // back to 2 s" waits: landing on it is not a second visit, #3092)
+    for asking in [1usize, 2] {
+        let mut c = win4();
+        c.time = 3.0;
+        c.request[asking] = true;
+        let mut green_at = None;
+        for i in 0..400 {
+            c.advance(0.1);
+            if green_at.is_none() && c.state(asking) == 6 {
+                green_at = Some(i as f32 * 0.1);
+            }
+        }
+        let t = green_at.unwrap_or(f32::INFINITY);
+        assert!(t < 40.0, "light {asking} asking alone waited {t} s for its green");
+        assert_ne!(c.state(0), 6, "the main road stays green over a waiting bus (light {asking})");
+    }
+    // with nobody asking the main road rests on its green
+    let mut c = win4();
+    c.time = 3.0;
+    for _ in 0..1800 {
+        c.advance(0.1);
+        assert_eq!(c.state(0), 6, "the main road left its green with nobody asking");
+    }
 }

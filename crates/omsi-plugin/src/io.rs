@@ -12,6 +12,18 @@ use std::path::Path;
 
 /// The game's side of a frame.
 pub trait PluginIo {
+    /// Snapshot of every parsed field of the player's currently loaded HOF.
+    fn hof_data(&self) -> Option<Value> { None }
+    /// First exact identifier match; indices follow the zero-based game getters.
+    fn hof_terminus(&self, _identifier: &str) -> Option<Value> { None }
+    fn hof_busstop(&self, _identifier: &str) -> Option<Value> { None }
+    fn duty_tour(&self) -> Option<Value> { None }
+    fn timetable_tour(&self, _line: &str, _tour: &str) -> Result<Value, String> { Err("timetable unavailable".into()) }
+
+    /// Read game data directly; never invoke the script VM or its callbacks.
+    fn data_query(&mut self, _query: crate::data::DataQuery, _args: &[crate::data::QueryValue], _object: Option<i64>) -> Result<Vec<crate::data::QueryValue>, String> {
+        Err("game data queries unavailable".into())
+    }
     fn system(&mut self, name: &str) -> Option<f32>;
     fn set_system(&mut self, name: &str, v: f32);
     fn has_vehicle(&self) -> bool;
@@ -318,6 +330,11 @@ pub trait PluginIo {
         Err("the game has no timetable".into())
     }
     fn duty_end(&mut self) -> bool {
+        false
+    }
+    /// Close the stops of the duty called `stops` (and open the others), with the way round
+    /// them (`via`, may be empty); false without a duty.
+    fn duty_set_closed_stops(&mut self, _stops: &[String], _via: &str) -> bool {
         false
     }
     fn timetable_lines(&self) -> Vec<Line> {
@@ -748,6 +765,8 @@ pub struct TicketChange {
     pub voice: Option<String>,
     /// A text of the plugin's own kept with the person (empty: none).
     pub tag: Option<String>,
+    /// The amount of money the passenger pays (the plugin may change it, or leave it as the ticket's price).
+    pub payment: Option<f32>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -769,6 +788,8 @@ pub struct Stop {
     pub pos: Option<[f64; 3]>,
     /// False: the bus passes it without stopping.
     pub stops: bool,
+    /// Closed today ([`PluginIo::duty_set_closed_stops`]): the bus does not call there.
+    pub closed: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]

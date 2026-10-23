@@ -6,6 +6,9 @@ use super::*;
 pub struct VehicleRender {
     pub window_wipers: Option<crate::window_wipers::WindowWipers>,
     pub instances: Vec<usize>,
+    /// The instances of the lower levels of detail: they stand where the vehicle's body does
+    /// (no animation) and are drawn while the vehicle is small on the screen.
+    pub far: Vec<usize>,
     /// Materials made for this vehicle alone (its text and script texture slots).
     pub own_materials: Vec<MaterialId>,
     /// The shared set it is drawn with (None for the player's own).
@@ -225,6 +228,7 @@ impl FreeBuilt {
 
 #[derive(Clone)]
 pub struct FreeTex {
+    pub reloads: Arc<crate::FreeTextureReloads>,
     pub var: String,
     /// The original named texture can be used by several stages (a display commonly
     /// names the same black texture as its diffuse and its switched night map).
@@ -536,9 +540,21 @@ pub type VehicleKey = (PathBuf, Option<usize>);
 /// The GPU side of a vehicle type in one paint scheme, shared by its AI copies: meshes and
 /// materials, the slots every copy fills itself, and what the set holds of the shared
 /// textures and meshes (given back when the set is trimmed).
+/// A mesh of a lower level of detail of a vehicle on the GPU: plain materials, drawn in place
+/// of the full model while the vehicle is small on the screen (see `lod_bands`).
+#[derive(Clone)]
+pub struct FarMesh {
+    pub(super) level: usize,
+    pub(super) mesh: MeshId,
+    pub(super) mats: Vec<MaterialId>,
+    pub(super) casts: bool,
+}
+
 #[derive(Clone)]
 pub struct VehicleSet {
     pub(super) meshes: Vec<(MeshId, Vec<MaterialId>)>,
+    /// The meshes of the lower levels of detail (none: the model has one level).
+    pub(super) far: Vec<FarMesh>,
     pub(super) dyn_slots: Vec<DynSlot>,
     pub(super) variants: Vec<VariantSlot>,
     pub(super) textures: Vec<PathBuf>,
@@ -609,6 +625,10 @@ impl VehiclePrefetch {
             let Some(path) = omsi_texture::find_texture(&name, &refs) else {
                 continue;
             };
+            // what its alpha covers, which the upload reads to tell glass from bodywork
+            // (`slot_alpha`): the whole picture decoded for it on the thread that draws was
+            // most of the 0.1 to 1 s a coach's set took there
+            let _ = crate::vehicle_materials::alpha_mask(&path);
             if self.on_gpu.lock().contains_key(&path)
                 || self.ready.lock().textures.contains_key(&path)
             {
@@ -658,7 +678,7 @@ impl VehiclePrefetch {
             {
                 continue;
             }
-            if let Some(d) = vt.mesh_data(i) {
+            if let Some(d) = crate::pane_uv::gpu_mesh(vt, i) {
                 todo.push((key, d));
             }
         }
@@ -692,11 +712,11 @@ pub(super) fn vehicle_texture_names(
     let mut out: Vec<(String, Vec<PathBuf>)> = Vec::new();
     let mut push = |name: String, d: &Vec<PathBuf>| {
         let name = name.trim().to_string();
-        if !name.is_empty() && !name.starts_with("\\S:") && mirror_index(&name).is_none() {
+        if !name.is_empty() && !name.starts_with("\\S:") && !name.starts_with('!') && mirror_index(&name).is_none() {
             out.push((name, d.clone()));
         }
     };
-    for vm in &vt.meshes {
+    for vm in vt.meshes.iter().chain(&vt.lod_meshes) {
         for m in &vm.materials {
             match vt.texchange(&m.texture) {
                 Some(master) => {

@@ -1,13 +1,13 @@
 # Map packages: a pre-built surface under the roads
 
-> **No package is needed any more.** openOMSI reads every map's own picture off its tiles the
+> **A map needs no package.** openOMSI reads every map's own picture off its tiles the
 > first time the map is driven (`omsi_scene::mapgen`, kept in `~/.openomsi/cache/mapgen`): the
 > ground by what it is painted with, water, woods and trees, every paved surface as the splines
 > and objects lay it, rail and tram tracks, and the houses from their models' roofs with their
-> heights. A package as described here still adds what lies **outside** the map's tiles (the
-> real town around a map, rivers and borders); inside the tiles the map's own layers are drawn
-> over it. `OMSI_NO_MAP_CACHE=1` reads the layers again; the example `mapgen_dump` (crate
-> `omsi-scene`) draws them into a picture.
+> heights. A package as described here adds what lies **outside** the map's tiles (the
+> real town around a map, rivers and borders), named streets, regions, icons and lines; inside
+> the tiles the map's own layers are drawn over its surface. `OMSI_NO_MAP_CACHE=1` reads the
+> layers again; the example `mapgen_dump` (crate `omsi-scene`) draws them into a picture.
 
 A map's author (or anyone) can ship a **pre-built** picture of the map next to the map itself. openOMSI
 does not compute, convert or triangulate anything: it opens the package, picks the chunks near the
@@ -20,8 +20,8 @@ geometry pipeline; the game never needs to know where the data came from; any au
 fictional map, any tool) produces the same files.
 
 It follows the precedent of `radio.cfg`: optional files in the map's folder, read only by openOMSI and
-ignored by Omsi.exe, so a map made for both games loses nothing. **A map without the folder looks exactly
-as before.**
+ignored by Omsi.exe, so a map made for both games loses nothing. A map without the folder is drawn from its
+own tiles alone.
 
 ## 1. Location and files
 
@@ -42,7 +42,7 @@ as before.**
 - The folder may lie in the map's own folder or in the same place of another content root: a package for
   a map one does not own goes in the game's content folder (`Maps/<Map>/openomsi-realmap/`), as a mod does,
   so the OMSI 2 installation is never written to. The root with the most priority wins.
-- Other files an author may put in the folder are not read by this version and are ignored.
+- Other files an author may put in the folder are ignored.
 
 ## 2. Manifest
 
@@ -61,6 +61,10 @@ light_water = #9cc3d6
 - `format`: integer. A reader that does not know it ignores the package.
 - `grid`: the author's tile size in metres (section 3). Required, greater than 1.
 - `name`: for people. `credit`: shown on the city map; give it when the data needs attribution.
+- `north`: degrees, clockwise from the map's own up (+Y) to real north (default 0). A map drawn upside down has 180,
+  one turned a little a small number. The compass of the city map points to it, and the player can have real north
+  up (section 11).
+- `terrain_offset`: metres added to the height of every contour line when the game writes it (default 0; section 10).
 - Colours: the game has a **dark** and a **light** look. `water = #rrggbb` colours the dark map and its
   `light_` twin the light one. Keys: `land water river green grass forest sport farm built rail rail_edge
   border`. The layers are semantic, so the game keeps the last word on how they look.
@@ -100,7 +104,8 @@ u32  n_labels  ; n_labels x { u8 kind, u8 rank, u32 name, f32 x, f32 y }   names
 
 - Fill `class`: `0 water, 1 green (parks, gardens), 2 built, 3 grass (grass, meadow, scrub), 4 forest (wood,
   forest), 5 sport (pitches, stadiums), 6 farm`.
-- Line `class`: `0 river, 1 rail, 2 border`, drawn; `3 street` and `4 street with limits`, not drawn (section 8). A
+- Line `class`: `0 river, 1 rail, 2 border`, drawn; `3 street` and `4 street with limits`, not drawn (section 8);
+  `5 contour line` and `6 index contour line` (every fifth), drawn in the terrain view (section 10). A
   river's `width_m` of 5 or more is a river, less a stream. Other classes are skipped, so a later version can add
   more without breaking this one.
 - Triangles are already triangulated; there are no holes to resolve. `name` indexes the string table
@@ -113,8 +118,8 @@ u32  n_labels  ; n_labels x { u8 kind, u8 rank, u32 name, f32 x, f32 y }   names
 At the map's load, in the background step that reads the road network, openOMSI parses the manifest and
 the index of `surface.oms`. The small map (Shift+N) builds the chunks within its radius around the bus;
 the city map (Shift+M) builds all of them once. Both draw the surface **under the roads**, on the map's own
-ground colour, in the dark or light look, and the city map shows the credit. Nothing is computed from any
-other source and nothing is fetched from the network.
+ground colour and under the map's own layers, in the dark or light look, and the city map shows the credit.
+The package is drawn as it is, and nothing is fetched from the network.
 
 Settings (`~/.openomsi/settings.cfg`, the launcher's settings page and the pause menu): `nav_surface`
 (on by default) draws the surface; `nav_light` (off) gives the maps a light look.
@@ -184,12 +189,34 @@ time, days, model, route 1 or 2), and the list of the map's lines with a tick bo
 colour of its own, with its stops; the vehicles that run it (read from the line they show) get a ring in its colour,
 and the card counts them. The route of the trip the player drives is not changed. Without the file there is no button.
 
-## 10. Trying it
+## 10. Relief: contour lines
+
+Contour lines of the ground are lines of `surface.oms` of class 5 (a line every so many metres of height) and
+class 6 (an **index** line, every fifth, drawn stronger): their `width_m` is the **height above sea level in metres**.
+The author's tools make them (from the real terrain, or from the map's own ground), at a spacing that suits the
+land: 1 m on a city, 5 m on hills. Heights are above sea level; `terrain_offset` in the manifest is only for a
+package whose lines are in the editor's own heights.
+
+With contour lines in the package the city map gets a **Terrain** button: the **terrain view** shows only water,
+rivers, rail and the contour lines (the land use is left out so that the lines stand out), with the **height** in
+metres written on the lines: on all of them up close, on the index lines only from further away, never one over
+another. From far away the lines are fainter, so that the streets stand out. Without contour lines there is no
+button, and a reader that does not know classes 5 and 6 skips them.
+
+## 11. Orientation: the compass
+
+The city map has a **compass**, bottom right, whose red tip points to real north (where the package's `north` says it
+lies; without it, the map's own up). A click on it changes how the map is turned: **Map** (as the map is drawn, the
+way openOMSI always showed it), **North** (real north up) or **Heading** (the way the bus faces up, the view turning
+smoothly with it). The street names, the stops, the vehicles, the route and the houses turn with the map, and the
+mouse still drags and zooms where it points.
+
+## 12. Trying it
 
 - **The example in this repository**, `docs/examples/openomsi-realmap/`: a few made-up shapes (a lake, a
-  river, a railway, a border, a park, a wood), three names, a street with a 30 km/h limit, two icons (a stop and a
+  river, a railway, a border, a park, a wood, a hill with its contour lines), three names, a street with a 30 km/h limit, two icons (a stop and a
   station), one region and three lines (two bus lines and a tram), in the tile grid of the tutorial map **Grundorf**,
-  about 3 KB in all, with no data of
+  about 6 KB in all, with no data of
   OMSI 2 or OpenStreetMap. Copy the folder to `Maps/Grundorf/openomsi-realmap/` in the content folder, start
   Grundorf and open the navigator (Shift+N) and the city map (Shift+M): near the start of the map the row under the
   next stop says "Exampleton | Example Street".

@@ -159,6 +159,7 @@ flags! {
     OMSI_BRIDGE_ONLY: Bool, Test, Use, "off", "LAN: forget our own addresses so that only what the rendezvous bridge reports is tried.";
     OMSI_BUDGET_FROM: Text, Test, Use, "-", "Offscreen with OMSI_TEXTURE_MEMORY: x,y[,MB] - the texture budget is met as seen from that point.";
     OMSI_BUILD: Text, Build, Build, "-", "Compile-time (env!): the commit the binary was built from, set by build.rs. Not read at runtime.";
+    OMSI_CABIN_LOG: Bool, Test, Use, "off", "Offscreen --drive: print the cabin air and the film on the windscreen, sides and rear every 20 s.";
     OMSI_CAM_VEHICLE: Text, Test, Use, "-", "Offscreen: x,y,z,yaw,pitch[,fov] - a camera in the bus's own frame.";
     OMSI_CHARACTER_MODELS: Text, Tuning, Use, "settings", "Override the character models for a game session: original (OMSI's people) or improved (the Microsoft Rocketbox avatars, drawn on this computer only).";
     OMSI_CHECK_ENTRIES: Bool, Test, Use, "off", "Map check: is there ground to stand on where a player is put down.";
@@ -220,6 +221,7 @@ flags! {
     OMSI_DEBUG_NAV: Bool, Debug, Use, "off", "Log navigation details (e.g. stops whose tiles are not loaded).";
     OMSI_DEBUG_OBJECTS: Bool, Debug, Use, "off", "Log objects placed outside their tile.";
     OMSI_DEBUG_OBJMAT: Text, Debug, Use, "-", "Log how the material slots of the objects whose file name contains this text are made.";
+    OMSI_DEBUG_PAD: Bool, Debug, Use, "off", "Log every game controller button event: the raw buttons the assignment menu waits for, and the system gamepad ones.";
     OMSI_DEBUG_PARTICLES: Bool, Debug, Use, "off", "Log the smoke particles.";
     OMSI_DEBUG_PASS: Bool, Debug, Use, "off", "Log twice a second why a car standing behind something does not go round it.";
     OMSI_DEBUG_PAX: Bool, Debug, Use, "off", "Log every change of state of the passengers.";
@@ -227,6 +229,7 @@ flags! {
     OMSI_DEBUG_POPULATION: Bool, Debug, Use, "off", "Log where cars appear and vanish relative to the view.";
     OMSI_DEBUG_PROPS: Bool, Debug, Use, "off", "Log the destination-display (matrix) variables.";
     OMSI_DEBUG_PUDDLES: Num, Debug, Use, "0", "Puddle debug view (a number selects it).";
+    OMSI_DEBUG_RAIL: Bool, Switch, Use, "off", "Log a rail vehicle's speed, the drive and brake the scripts ask for and the adhesion, twice a second.";
     OMSI_DEBUG_RAIN: Bool, Debug, Use, "off", "Log the tyres' spray and puddles.";
     OMSI_DEBUG_RASTER: Text, Debug, Use, "-", "x,y: log the ground raster at that point.";
     OMSI_DEBUG_REPEATERS: Bool, Debug, Use, "off", "Log repeater objects whose spline chain disagrees with the map.";
@@ -252,6 +255,7 @@ flags! {
     OMSI_DEBUG_TRAILER: Bool, Debug, Use, "off", "Log a trailer's rest, sag and lift on the ground.";
     OMSI_DEBUG_TRAILERS: Bool, Debug, Use, "off", "Log coupled parts off the level of what pulls them.";
     OMSI_DEBUG_TRIGGERS: Bool, Debug, Use, "off", "Log the variables a mouse trigger changed.";
+    OMSI_DEBUG_TROLLEY: Num, Debug, Use, "off", "Log the trolleybus gear (offscreen: =secs, the interval): voltage, current, controller position, the poles, and every event of the poles (frogs, insulators, dewirings).";
     OMSI_DEBUG_UNLINKED: Bool, Debug, Use, "off", "Log lane ends with an untaken lane start near them.";
     OMSI_DEBUG_UPLOAD: Bool, Debug, Use, "off", "Log slow GPU uploads item by item.";
     OMSI_DEBUG_VARIANTS: Text, Debug, Use, "-", "Log material variants whose variable name contains this text.";
@@ -266,6 +270,7 @@ flags! {
     OMSI_DRIVER_SHIFTER: Text, Test, Use, "-", "Part of a variable or file name: force the shifter the driver's hand uses; off: both hands on the wheel.";
     OMSI_DRIVE_PROFILE: Text, Test, Use, "-", "Offscreen: \"t throttle brake [steer]/...\" piecewise constant pedals (crash/kerb tests).";
     OMSI_DRIVE_V0: Num, Test, Use, "-", "Offscreen: the bus's speed in km/h on the first frame.";
+    OMSI_DUMP_CLASSES: Bool, Debug, Use, "off", "mapgen_dump example: paint the paving by class (road, footway, yard) in telling colours.";
     OMSI_DUMP_CUT: Text, Debug, Use, "-", "Directory: write each tile's road-cut alpha masks as images.";
     OMSI_DUMP_GROUND: Text, Debug, Use, "-", "File: every loaded tile's final terrain and road cut as text.";
     OMSI_DUMP_SCENERY_TEXT: Text, Debug, Use, "-", "Directory: write the scenery objects' text textures as drawn.";
@@ -278,6 +283,9 @@ flags! {
     OMSI_FLEET_AHEAD: Num, Test, Use, "FLEET_AHEAD", "Minutes ahead the timetable fleet is planned (for tests).";
     OMSI_FLEET_IDLE: Num, Test, Use, "FLEET_IDLE", "Seconds a fleet vehicle idles (shortened for tests).";
     OMSI_FOLLOW_CAM: Text, Test, Use, "-", "right,ahead,up,yaw,pitch: a camera in the followed car's frame.";
+    OMSI_FOOT_RUN: Num, Tuning, Use, "3.8", "On foot: the pace of a run (Shift) in m/s.";
+    OMSI_FOOT_WALK: Num, Tuning, Use, "1.4", "On foot: the walking pace in m/s.";
+    OMSI_FORCE_LOD: Bool, Debug, Use, "off", "Draw the lower levels of detail of the AI vehicles at any size (to look at them).";
     OMSI_FORCE_OPAQUE: Bool, Switch, Use, "off", "Draw transmap-masked materials opaque.";
     OMSI_FRAME_ORDER: Bool, Debug, Once, "off", "Log the window's frame and the offscreen run's step as their ordered stages (phase, what each reads and writes, its profile key), once at start.";
     OMSI_FULL_GPU: Bool, Switch, Use, "off", "Keep the requested settings on a small or shared graphics chip, and 8x MSAA with Enhanced+.";
@@ -328,9 +336,11 @@ flags! {
     OMSI_MOBILE: Bool, Test, Use, "off", "The phone layout on a computer (screen cut-outs).";
     OMSI_MUTE: Bool, Test, Use, "off", "Mix everything as usual but play nothing.";
     OMSI_NAV_2D: Bool, Test, Use, "off", "Navigator pictures with flat houses (the nav_3d setting off).";
+    OMSI_NAV_CONTOURS: Bool, Test, Use, "off", "Offscreen: the city map in its terrain view (contour lines and their heights, when the map's package has them).";
     OMSI_NAV_LINES: Text, Test, Use, "-", "Offscreen: open the city map's lines panel on the line with this number (a route, then a departure time, after semicolons: 5;1 or 5;1;14:07, which opens its timetable).";
     OMSI_NAV_MAP: Bool, Test, Use, "off", "Open the navigation map.";
     OMSI_NAV_MAP_MPP: Num, Test, Use, "2.5", "Navigation map zoom in metres per pixel.";
+    OMSI_NAV_ORIENT: Text, Test, Use, "map", "Offscreen: how the city map is turned: map (as it is drawn), north (real north up, where the package says it lies) or heading (the bus's heading up).";
     OMSI_NAV_PROBE: Text, Test, Use, "-", "x,y[,r]: the network lanes that start or end within r of that point.";
     OMSI_NAV_SCHEDULE: Bool, Test, Use, "off", "Navigation map shows the schedule.";
     OMSI_NOZCHECK_BIAS: Bool, Switch, Use, "off", "The old reading of [matl_noZcheck] (A/B).";
@@ -339,11 +349,13 @@ flags! {
     OMSI_NO_AO_REACH: Bool, Switch, Frame, "off", "The depth prepass that only the ambient occlusion needs draws the far scenery too, past the occlusion's reach (A/B).";
     OMSI_NO_ATTACH_FALLBACK: Bool, Switch, Use, "off", "Drop attachments that have no fallback instead of placing them (A/B).";
     OMSI_NO_BC: Bool, Switch, Use, "off", "Upload all textures as RGBA instead of keeping BC compression.";
+    OMSI_NO_BEAM_SHADOWS: Bool, Switch, Use, "off", "Enhanced: the headlamps' and street lamps' beams in fog, rain and snow are not cut by what stands in them (the old picture).";
     OMSI_NO_BEND_CACHE: Bool, Switch, Use, "off", "AI cars look for the bends ahead anew every step (A/B).";
     OMSI_NO_BOUNDS_CACHE: Bool, Switch, Use, "off", "No cache of instance bounds.";
     OMSI_NO_BRIDGE: Bool, Switch, Use, "off", "LAN: leave the internet alone - no rendezvous bridge, no tunnel (tests, LAN parties).";
     OMSI_NO_BUMP: Bool, Switch, Use, "off", "No bump maps.";
     OMSI_NO_BUNDLES: Bool, Switch, Frame, "off", "Record the main pass directly instead of from render bundles.";
+    OMSI_NO_CABIN_SHADOWS: Bool, Switch, Frame, "off", "Enhanced: the lamps of the player's saloon cast no shadows (A/B).";
     OMSI_NO_CLOUDS: Bool, Switch, Use, "off", "No clouds.";
     OMSI_NO_CORONAS: Bool, Switch, Frame, "off", "No light coronas.";
     OMSI_NO_CULL: Bool, Switch, Once, "off", "Draw every mesh from both sides (A/B).";
@@ -356,6 +368,7 @@ flags! {
     OMSI_NO_GROUND_PAINT: Bool, Switch, Use, "off", "No painted ground layers.";
     OMSI_NO_GROUND_SPLINE_BATCHING: Bool, Switch, Use, "off", "No batching of ground splines.";
     OMSI_NO_GUARD: Bool, Switch, Use, "off", "No start guard: a start that crashes or hangs is not healed by an update or by going back to the version before.";
+    OMSI_NO_HARDWARE_ID: Bool, Switch, Once, "off", "LAN: the game sends no hardware identifier (a host can then turn the player away, and cannot ban the machine).";
     OMSI_NO_INTERP: Bool, Switch, Once, "off", "The old way without interpolation, for comparing.";
     OMSI_NO_LAMP_SIGHT: Bool, Switch, Use, "off", "Enhanced by night: every lamp near the line of sight dazzles, hidden or not.";
     OMSI_NO_LAN_MODS: Bool, Switch, Use, "off", "LAN: do not exchange mods.";
@@ -417,6 +430,7 @@ flags! {
     OMSI_PLUGIN_HOST32: Text, Setup, Use, "beside the game", "Path of omsi-plugin-host32.exe.";
     OMSI_POPULATION_SHOTS: Bool, Test, Use, "off", "Offscreen: pictures of the framed population spawns.";
     OMSI_PRESENCE_URL: Text, Setup, Use, "built-in", "Base URL of the presence (\"playing now\") service.";
+    OMSI_PRESENT_MODE: Text, Tuning, Use, "auto", "How frames reach the screen: fifo (vsync), fifo_relaxed, mailbox, immediate or auto. Vsync is `auto` (AutoVsync); a mode the surface lacks falls back to auto.";
     OMSI_PROBE: Text, Test, Use, "-", "x0,y0,x1,y1[,n]: print terrain and road surface heights along a line.";
     OMSI_PROBE_GRID: Text, Test, Use, "-", "x,y,half,step: the wheels' ground on a grid around a point.";
     OMSI_PROFILE: Bool, Debug, Use, "off", "Time per stage of the frame, logged; the session summary comes after --exit-after or when the game is closed.";
@@ -424,6 +438,7 @@ flags! {
     OMSI_PROFILE_JSON: Text, Debug, Use, "-", "With OMSI_PROFILE: the session summary written after --exit-after or when the game is closed (after the 15 s warm-up) as JSON into this file, see scripts/compare-performance.py.";
     OMSI_PUDDLE_F0: Num, Tuning, Use, "0.08", "Puddle reflectance at normal incidence (0.02 to 0.2).";
     OMSI_PUDDLE_THICKNESS: Num, Tuning, Use, "0.12", "Puddle water film thickness.";
+    OMSI_REALISTIC_ROAD: Bool, Switch, Use, "off", "The setting \"Realistic road physics\" on for this run (A/B against the OMSI 2 model: slip-angle tyres, surfaces, road roughness, wind).";
     OMSI_RECORD: Num, Test, Use, "-", "Offscreen --drive: a picture every 1/this second into <out>_frames/ and the run's mixed sound into <out>.wav (films with sound).";
     OMSI_RECORD_FROM: Num, Test, Use, "0", "With OMSI_RECORD: start the film this many seconds into the drive.";
     OMSI_RENDER_CLOCK: Num, Test, Use, "0", "Seconds the animation clock starts on (offscreen pictures).";
@@ -436,6 +451,7 @@ flags! {
     OMSI_ROAD_PHOTO_SLANT: Num, Test, Use, "-", "With OMSI_ROAD_PHOTO: from a driver's eye this far back instead of from above.";
     OMSI_ROOT: Text, Setup, Use, "found", "The OMSI 2 installation folder (also the content root for tests that need real content).";
     OMSI_RT_REFL_HALF: Bool, Switch, Use, "off", "Trace reflections at half size.";
+    OMSI_RUNNER_CHANCE: Num, Tuning, Use, "0.05", "Chance a late passenger runs for a bus standing at a stop (0: never, 1: every bus).";
     OMSI_SAFE_GPU: Num, Setup, Use, "0", "Restarts after a lost graphics device: lighter on the card each time. Set at runtime on Android and by the restart.";
     OMSI_SAFE_MODE: Bool, Setup, Use, "off", "Safe mode, set by the start guard after failed starts: the basic render pipelines and no plugins.";
     OMSI_SCENE_DIGEST: Bool, Test, Use, "off", "Log a hash of the renderer's scene (its instances in order, their places, materials and parameters) before each offscreen picture: two runs whose renderers saw the same calls log the same digests.";
@@ -477,10 +493,16 @@ flags! {
     OMSI_TRAFFIC_ALL_GROUPS: Bool, Switch, Use, "off", "Let restricted AI groups (aircraft, depot fleets) drive everywhere.";
     OMSI_TRAFFIC_STATS: Text, Debug, Use, "-", "CSV: the traffic's flow every minute (standing cars, waits-for cycles, junction entries, red runs, overlaps), a summary at the end.";
     OMSI_TRIGGER_ALL: Bool, Test, Use, "off", "Check: fire every [mouseevent] of the model and compare the variables before and after.";
+    OMSI_TROLLEY_DEAD: Text, Debug, Use, "-", "Section ids of the overhead wire (comma separated) that carry no current, whatever trolley.txt says.";
+    OMSI_TROLLEY_DEAD_AT: Text, Test, Use, "-", "x,y,r;...: the overhead wire the map derives within r metres of each point carries no current (a dead section between two insulators).";
+    OMSI_TROLLEY_FILE: Text, Setup, Use, "-", "The overhead wire description (trolley.txt) to use instead of the map's own.";
+    OMSI_TROLLEY_HANDS: Text, Test, Use, "-", "Offscreen: scripted hands on the poles' ropes, \"from-to:raise|pull:poles\" separated by \";\" (seconds; poles 0, 1 or 01): the player aims at the wire behind the bus.";
+    OMSI_TROLLEY_UP: Bool, Test, Use, "off", "Start with the trolleybus's poles put on the wire by themselves (tests and demos).";
     OMSI_TYRE_SUSPENSION: Bool, Switch, Once, "off", "The old suspension with wheel mass, tyre and bump stops (A/B).";
     OMSI_UI_PREVIEW: Text, Test, Use, "target/ui-preview.png", "Plugin UI preview test: the picture's path.";
     OMSI_UPDATE_URL: Text, Setup, Use, "built-in", "Another release description (URL or file:///...json) for the update check.";
     OMSI_VIDEO_MEMORY: Num, Tuning, Use, "settings", "What the game may hold on the graphics card all together (textures, meshes, render targets), in MB.";
+    OMSI_VOICE_TEST_TONE: Text, Test, Use, "-", "Voice chat: the microphone is a synthetic tone (1 = 440 Hz, or a pitch in Hz) and the device is never opened - tests of the whole chain without a person.";
     OMSI_WARM_FRAMES: Num, Test, Use, "0", "Offscreen: frames drawn before the picture.";
     OMSI_WATCH_VARS: Text, Debug, Use, "-", "a,b: log every change of these variables of the player's bus.";
     OMSI_WETNESS: Num, Test, Use, "weather", "Ground wetness the picture is drawn with.";
@@ -622,16 +644,16 @@ mod tests {
     #[test]
     fn cached_as_env() {
         // the flag reads through `env`'s cache: what `env` saw first is what the flag sees
-        std::env::set_var("OMSI_FLAGS_TEST_PROBE", "2.5");
+        unsafe { std::env::set_var("OMSI_FLAGS_TEST_PROBE", "2.5") };
         let f = Flag::new("OMSI_FLAGS_TEST_PROBE", Ty::Num, Kind::Test, Read::Test, "-", "");
         let f: &'static Flag = Box::leak(Box::new(f));
         assert_eq!(crate::env::var("OMSI_FLAGS_TEST_PROBE").as_deref(), Ok("2.5"));
-        std::env::set_var("OMSI_FLAGS_TEST_PROBE", "7");
+        unsafe { std::env::set_var("OMSI_FLAGS_TEST_PROBE", "7") };
         assert!(f.is_set());
         assert_eq!(f.var(), Some("2.5"));
         assert_eq!(f.parse::<f32>(), Some(2.5));
         assert_eq!(f.parse::<u32>(), None);
         assert_eq!(f.live_var().as_deref(), Ok("7"));
-        std::env::remove_var("OMSI_FLAGS_TEST_PROBE");
+        unsafe { std::env::remove_var("OMSI_FLAGS_TEST_PROBE") };
     }
 }

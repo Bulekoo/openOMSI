@@ -225,12 +225,12 @@ pub(crate) fn draw(ui: &mut Ui, screen: &Screen, on: &Overlays, parts: &[Part], 
             if let Some(c) = cabin {
                 for (i, e) in c.entries.iter().enumerate() {
                     if let Some(p) = point(e.path_point) {
-                        pen.label(part.at(p + Vec3::Z * 0.25), &format!("entry {i}"), PATH);
+                        pen.label(part.at(p + Vec3::Z * 0.25), &format!("{} {i}", omsi_ui::tr("Entry point")), PATH);
                     }
                 }
                 for (i, e) in c.exits.iter().enumerate() {
                     if let Some(p) = point(*e) {
-                        pen.label(part.at(p + Vec3::Z * 0.45), &format!("exit {i}"), PATH);
+                        pen.label(part.at(p + Vec3::Z * 0.45), &format!("{} {i}", omsi_ui::tr("Exit point")), PATH);
                     }
                 }
             }
@@ -247,8 +247,12 @@ pub(crate) fn draw(ui: &mut Ui, screen: &Screen, on: &Overlays, parts: &[Part], 
                         pen.dot(part.at(foot), 3.5, colour);
                         // (the way the seat faces: `[passpos]` rotation, degrees about z)
                         pen.arrow(part, foot + Vec3::Z * 0.05, direction(s.rot, 0.0), 0.4, colour);
-                        let kind = if standing && name == "seat" { "standing" } else { name };
-                        pen.label(part.at(head), &format!("{kind} {i}"), colour);
+                        let kind = match (standing, name) {
+                            (true, "seat") => "Standing position",
+                            (_, "seat") => "Seat position",
+                            _ => "Driver position",
+                        };
+                        pen.label(part.at(head), &format!("{} {i}", omsi_ui::tr(kind)), colour);
                     }
                 }
             }
@@ -256,7 +260,8 @@ pub(crate) fn draw(ui: &mut Ui, screen: &Screen, on: &Overlays, parts: &[Part], 
         if on.on[3] {
             if let Some(bb) = def.bounding_box {
                 pen.cuboid(part, Vec3::new(bb[3], bb[4], bb[5]), Vec3::new(bb[0], bb[1], bb[2]) * 0.5, BOX);
-                pen.label(part.at(Vec3::new(bb[3], bb[4] + bb[1] * 0.5, bb[5] + bb[2] * 0.5)), &format!("[boundingbox] {:.2} x {:.2} x {:.2}", bb[0], bb[1], bb[2]), BOX);
+                let label = format!("{}: {:.2} x {:.2} x {:.2}", omsi_ui::tr("Bounding box"), bb[0], bb[1], bb[2]);
+                pen.label(part.at(Vec3::new(bb[3], bb[4] + bb[1] * 0.5, bb[5] + bb[2] * 0.5)), &label, BOX);
             }
         }
         if on.on[4] {
@@ -268,7 +273,9 @@ pub(crate) fn draw(ui: &mut Ui, screen: &Screen, on: &Overlays, parts: &[Part], 
                 for c in [l, rr] {
                     pen.ring(part, c, Vec3::Y, Vec3::Z, r, AXLE);
                 }
-                pen.label(part.at(rr + Vec3::Z * r), &format!("axle {i}{}  y {:.2}  d {:.2}", if a.driven { " (driven)" } else { "" }, a.long, a.wheel_diameter), AXLE);
+                let driven = if a.driven { format!(" ({})", omsi_ui::tr("driven")) } else { String::new() };
+                let label = format!("{} {i}{driven}  y {:.2}  d {:.2}", omsi_ui::tr("Axle"), a.long, a.wheel_diameter);
+                pen.label(part.at(rr + Vec3::Z * r), &label, AXLE);
             }
         }
         if on.on[5] {
@@ -278,23 +285,28 @@ pub(crate) fn draw(ui: &mut Ui, screen: &Screen, on: &Overlays, parts: &[Part], 
                 let c = if lit > 0.0 { LIGHT } else { LIGHT.alpha(0.4) };
                 pen.dot(part.at(at), 4.0, c);
                 pen.ring(part, at, Vec3::X, Vec3::Y, l.range.clamp(0.05, 3.0), c.alpha(0.35));
-                pen.label(part.at(at), &format!("light {i}: {} = {lit:.2}", l.variable), c);
+                let label = format!("{} {i}: {} = {lit:.2}", omsi_ui::tr("Interior light"), l.variable);
+                pen.label(part.at(at), &label, c);
             }
         }
         if on.on[6] {
             if let Some(c) = cabin {
                 for (list, name) in [(&c.stampers, "stamper"), (&c.ticket_sales, "ticket sale")] {
+                    let name = omsi_ui::tr(name);
                     for (i, s) in list.iter().enumerate() {
                         let at = part.at(Vec3::from(s.pos));
                         pen.dot(at, 4.0, TICKET);
-                        pen.label(at, &format!("{name} {i} (point {})", s.path_point), TICKET);
+                        let point_source = format!("(path point {})", s.path_point);
+                        let point = omsi_ui::tr(&point_source);
+                        pen.label(at, &format!("{name} {i} {point}"), TICKET);
                     }
                 }
                 for (list, name) in [(&c.money_points, "money"), (&c.change_points, "change")] {
                     for (i, s) in list.iter().enumerate() {
                         let at = part.at(Vec3::from(s.pos));
                         pen.dot(at, 3.0, TICKET);
-                        pen.label(at, &format!("{name} {i}"), TICKET);
+                        let point = if name == "money" { "Money point" } else { "Change point" };
+                        pen.label(at, &format!("{} {i}", omsi_ui::tr(point)), TICKET);
                     }
                 }
             }
@@ -305,7 +317,9 @@ pub(crate) fn draw(ui: &mut Ui, screen: &Screen, on: &Overlays, parts: &[Part], 
                 pen.dot(part.at(at), 4.0, MIRROR);
                 // (which way the mirror's face is turned, see `camera_util::mirror_view`)
                 pen.arrow(part, at, direction(m.yaw, m.pitch), 0.35, MIRROR);
-                pen.label(part.at(at), &format!("mirror {i}  fov {:.0}", m.fov), MIRROR);
+                let source = format!("mirror {i}  fov {:.0}", m.fov);
+                let label = omsi_ui::tr(&source);
+                pen.label(part.at(at), &label, MIRROR);
             }
         }
         if on.on[8] && k == 0 {
@@ -315,7 +329,8 @@ pub(crate) fn draw(ui: &mut Ui, screen: &Screen, on: &Overlays, parts: &[Part], 
                 pen.line(part.at(cog - d * s), part.at(cog + d * s), 2.5, COG);
             }
             pen.dot(part.at(cog), 4.0, COG);
-            pen.label(part.at(cog), &format!("centre of gravity {:.2}, {:.2}, {:.2}", cog.x, cog.y, cog.z), COG);
+            let label = format!("{} {:.2}, {:.2}, {:.2}", omsi_ui::tr("Centre of gravity"), cog.x, cog.y, cog.z);
+            pen.label(part.at(cog), &label, COG);
         }
         if on.on[9] {
             for (list, name) in [(&def.cameras_driver, "driver view"), (&def.cameras_pax, "passenger view")] {
@@ -323,7 +338,8 @@ pub(crate) fn draw(ui: &mut Ui, screen: &Screen, on: &Overlays, parts: &[Part], 
                     let at = Vec3::from(cam.pos);
                     pen.dot(part.at(at), 3.5, VIEW);
                     pen.arrow(part, at, direction(cam.yaw, cam.pitch), 0.5, VIEW);
-                    pen.label(part.at(at), &format!("{name} {i}"), VIEW);
+                    let view = omsi_ui::tr(name);
+                    pen.label(part.at(at), &format!("{view} {i}"), VIEW);
                 }
             }
         }

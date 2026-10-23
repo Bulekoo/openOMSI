@@ -8,7 +8,7 @@ import { call } from '../api.js';
 import { Icon } from '../icons.js';
 import { serverJoinProtocol, serverJoinSettings } from '../server-join.js';
 import { Button, Card, Field, Input, Empty, PageHead, Spinner, Tabs, Segmented, Select, Notice, Tag } from '../ui.js';
-import { choose, cached, serverJoined, allowedBus } from '../data.js';
+import { choose, cached, serverJoined, allowedBus, mapName } from '../data.js';
 
 export function MultiplayerPage() {
   const [tab, setTab] = useState('code');
@@ -148,7 +148,7 @@ function HostByCode() {
     call('prepare_tunnel').catch(() => toast(t('Internet preparation could not be started. You can still set up a LAN game.'), 'error'));
   };
   const copy = () => navigator.clipboard.writeText(session.code)
-    .then(() => toast(t('Session code copied'), 'ok'), (e) => toast(e.message, 'error'));
+    .then(() => toast(t('Session code copied'), 'ok'), (e) => toast(t(e.message), 'error'));
   return html`<div class="multiplayer-flow">
     <${Card} body=${false}>
       <${FlowSteps} labels=${['Set up a hosted duty', 'Start the duty', 'Copy code']} current=${session?.code ? 2 : hosting ? 1 : 0} />
@@ -196,11 +196,18 @@ function Servers() {
   const [info, setInfo] = useState({});
   const [address, setAddress] = useState('');
   const [name, setName] = useState('');
-  const ask = (a) => {
-    setInfo((x) => ({ ...x, [a]: { loading: true } }));
+  const asking = useRef(new Set());
+  const shown = useRef(null);
+  shown.current = list;
+  // `quiet`: the answer replaces the last one without "Asking the server..." in between
+  const ask = (a, quiet) => {
+    if (asking.current.has(a)) return;
+    asking.current.add(a);
+    if (!quiet) setInfo((x) => ({ ...x, [a]: { loading: true } }));
     call('server_query', { address: a })
       .then((r) => setInfo((x) => ({ ...x, [a]: { ok: r } })))
-      .catch((e) => setInfo((x) => ({ ...x, [a]: { err: e.message } })));
+      .catch((e) => setInfo((x) => ({ ...x, [a]: { err: e.message } })))
+      .finally(() => asking.current.delete(a));
   };
   useEffect(() => {
     cached('servers', 'servers_get').then((l) => {
@@ -208,11 +215,15 @@ function Servers() {
       setList(l);
       l.forEach((x) => ask(x.address));
     });
+    // asked again every 15 s while the list is open, as the game's own launcher did: the
+    // player counts, the time and the weather stay current
+    const id = setInterval(() => !document.hidden && (shown.current || []).forEach((x) => ask(x.address, true)), 15000);
+    return () => clearInterval(id);
   }, []);
   const save = (l) => {
     setList(l);
     set({ cache: { ...S.cache, servers: l } });
-    call('servers_save', { list: l }).catch((e) => toast(e.message, 'error'));
+    call('servers_save', { list: l }).catch((e) => toast(t(e.message), 'error'));
   };
   const add = () => {
     const a = address.trim();
@@ -223,8 +234,8 @@ function Servers() {
     setName('');
     ask(a);
   };
-  const join = (x) => {
-    const i = info[x.address]?.ok;
+  const join = (x, fresh) => {
+    const i = fresh || info[x.address]?.ok;
     let connection;
     try {
       connection = serverJoinSettings(x.address, x.protocol || 'auto', i);
@@ -239,7 +250,20 @@ function Servers() {
     toast(t('Joined {} - choose your bus and duty, then Start the duty', [x.name || i?.name || x.address]), 'ok');
     set({ page: 'drive' });
   };
+  // a server of the public list: asked first (the list says nothing a launcher joins on), then
+  // kept in the list and joined like any other
+  const joinPublic = async (e) => {
+    try {
+      const i = await call('server_query', { address: e.address });
+      const x = list.find((y) => y.address === e.address) || { name: e.covered ? '' : e.name, address: e.address };
+      if (!list.some((y) => y.address === e.address)) save([...list, x]);
+      join(x, i);
+    } catch (err) {
+      toast(t("Can't reach the server: {err}", { err: err.message }), 'error');
+    }
+  };
   return html`<div class="stack">
+    <${PublicServers} onJoin=${joinPublic} onAdd=${(e) => { if (!list.some((y) => y.address === e.address)) { save([...list, { name: e.covered ? '' : e.name, address: e.address }]); ask(e.address); } }} />
     <${Card} title="Add server">
       <div class="row">
         <div class="grow"><${Field} label="Server address"><${Input} value=${address} placeholder="play.example.org" onInput=${setAddress} onKeyDown=${(e) => e.key === 'Enter' && add()} /></${Field}></div>
@@ -255,13 +279,17 @@ function Servers() {
             const st = info[x.address] || {};
             const i = st.ok;
             const autoLabel = i ? `${t('Auto')} (${serverJoinProtocol(x.address, 'auto', i) === 'udp' ? 'UDP' : 'WS'})` : t('Auto');
+            // the name the player gave it first (one added without a name keeps its address there)
+            const official = x.address === 'openomsi';
+            const own = !official && x.name && x.name !== x.address ? x.name : '';
             return html`<${Card} body=${false}><div class="card-body row" style="align-items:flex-start;gap:14px">
               ${i?.icon ? html`<img src=${i.icon} width="48" height="48" style="border-radius:8px" />` : html`<div class="avatar" style="width:48px;height:48px;border-radius:8px"><${Icon} name="globe" /></div>`}
               <div class="grow stack" style="gap:4px;min-width:0">
-                <div class="row"><b style="font-size:15px">${i?.name || x.name}</b>${i?.password && html`<${Tag}>${t('Password')}</${Tag}>`}</div>
+                <div class="row"><b style="font-size:15px">${own || i?.name || x.name || x.address}</b>${i?.password && html`<${Tag}>${t('Password')}</${Tag}>`}</div>
                 ${st.loading && html`<div class="row muted small"><${Spinner} /> ${t('Asking the server...')}</div>`}
                 ${st.err && html`<div class="small" style="color:var(--danger)">${t("Can't reach the server: {err}", { err: st.err })}</div>`}
-                ${i && html`<div class="muted small">${[i.map, t('{n} of {max} players', { n: i.players, max: i.max_players }), i.time, i.weather].filter(Boolean).join(' - ')}</div>`}
+                ${st.err && !official && html`<div class="muted small selectable">${x.address}</div>`}
+                ${i && html`<div class="muted small">${[i.map && mapName(i.map), t('{n} of {max} players', { n: i.players, max: i.max_players }), i.time, i.weather].filter(Boolean).join(' - ')}</div>`}
                 ${i?.motd && html`<div class="dim small">${i.motd}</div>`}
               </div>
               <div style="width:130px"><${Select} raw value=${x.protocol || 'auto'} options=${[['auto', autoLabel], ['udp', t('UDP')], ['websocket', t('WebSocket')]]} onChange=${(protocol) => save(list.map((y) => y === x ? { ...y, protocol } : y))} /></div>
@@ -271,4 +299,37 @@ function Servers() {
             </div></${Card}>`;
           })}
   </div>`;
+}
+
+/** The public server list: names and messages are checked by the launcher before they are shown (a flagged one is covered); a custom icon only when the launcher's own check cleared it. */
+function PublicServers({ onJoin, onAdd }) {
+  const [state, setState] = useState({ list: null, error: '', loading: false });
+  const load = () => {
+    setState((x) => ({ ...x, loading: true, error: '' }));
+    call('public_servers')
+      .then((list) => setState({ list, error: '', loading: false }))
+      .catch((e) => setState({ list: null, error: e.message, loading: false }));
+  };
+  const { list, error, loading } = state;
+  return html`<${Card} title="Public servers">
+    <div class="stack">
+      <div class="row">
+        <div class="grow muted small">${t('Servers whose owners chose to list them. Names, messages and pictures are checked here before they are shown.')}</div>
+        <${Button} icon="refresh" label=${list ? 'Refresh' : 'Show the public list'} disabled=${loading} onClick=${load} />
+      </div>
+      ${loading && html`<div class="row muted"><${Spinner} /></div>`}
+      ${error && html`<div class="small" style="color:var(--danger)">${t('The public list could not be loaded: {err}', { err: error })}</div>`}
+      ${list && list.length === 0 && html`<${Empty} icon="globe" text="No public servers right now." />`}
+      ${(list || []).map((e) => html`<div class="row" style="align-items:flex-start;gap:14px" key=${e.id}>
+        ${e.icon ? html`<img src=${e.icon} width="40" height="40" style="border-radius:8px" />` : html`<div class="avatar" style="width:40px;height:40px;border-radius:8px"><${Icon} name="globe" /></div>`}
+        <div class="grow stack" style="gap:2px;min-width:0">
+          <b>${e.name}</b>
+          <div class="muted small">${[e.map && mapName(e.map), t('{n} of {max} players', { n: e.players, max: e.max_players }), e.version].filter(Boolean).join(' - ')}</div>
+          ${e.motd && html`<div class="dim small">${e.motd}</div>`}
+        </div>
+        <${Button} small kind="ghost" icon="plus" title="Add to my servers" onClick=${() => onAdd(e)} />
+        <${Button} kind="primary" icon="play" label="Join" onClick=${() => onJoin(e)} />
+      </div>`)}
+    </div>
+  </${Card}>`;
 }

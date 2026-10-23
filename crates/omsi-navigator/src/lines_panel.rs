@@ -46,7 +46,7 @@ pub(super) struct LinesText {
 /// The languages that write a decimal with a comma.
 fn decimal_comma(lang: &str) -> bool {
     let base = lang.split(['-', '_']).next().unwrap_or("");
-    matches!(base, "es" | "ca" | "sv" | "pt" | "fr" | "de" | "nl" | "ru" | "pl" | "uk" | "it" | "cs" | "tr" | "hu" | "be" | "kk" | "id" | "vi")
+    matches!(base, "es" | "ca" | "sv" | "pt" | "fr" | "de" | "nl" | "ru" | "pl" | "uk" | "it" | "cs" | "tr" | "hu" | "be" | "kk" | "id" | "vi" | "ka")
 }
 
 pub(super) fn lines_text() -> LinesText {
@@ -101,9 +101,9 @@ pub(super) enum LinesHit {
     RoutePick(usize),
     /// The timetable in place of the list, and back.
     Sheet,
-    /// A day group (a weekday: 0, 5, 6) and a departure (its time, s).
+    /// A day group (a weekday: 0, 5, 6) and a departure (its time in s and its trip: two departures can leave at the same time).
     Day(usize),
-    Dep(u32),
+    Dep((u32, u16)),
     /// Back from a departure's stops to the departures.
     Back,
     /// Tick every line of the tab on show, or clear them when all are ticked.
@@ -129,10 +129,10 @@ pub struct LinesView {
     /// First row of the list on show.
     pub(super) scroll: f32,
     /// The timetable of the line in focus is on show in place of the list; the day group picked (else today's); the departure picked
-    /// (its time, s); and the list is put at the next departure when it is drawn.
+    /// (its time in s and, once clicked, its trip); and the list is put at the next departure when it is drawn.
     pub(super) sheet: bool,
     pub(super) day: Option<usize>,
-    pub(super) dep: Option<u32>,
+    pub(super) dep: Option<(u32, Option<u16>)>,
     pub(super) jump: bool,
     /// Bumped whenever the choice changes: the ways are drawn again.
     version: u64,
@@ -192,7 +192,7 @@ impl Navigator {
         match h {
             LinesHit::Sheet => (st.sheet, st.dep, st.jump, st.scroll) = (!st.sheet, None, true, 0.0),
             LinesHit::Day(d) => (st.day, st.dep, st.jump, st.scroll) = (Some(d), None, true, 0.0),
-            LinesHit::Dep(t) => (st.dep, st.scroll) = (Some(t), 0.0),
+            LinesHit::Dep((t, trip)) => (st.dep, st.scroll) = (Some((t, Some(trip))), 0.0),
             LinesHit::Back => (st.dep, st.jump, st.scroll) = (None, true, 0.0),
             LinesHit::Stop(id) => {
                 if let Some(p) = self.stop_pos.get(&id) {
@@ -274,10 +274,14 @@ impl Navigator {
                 }
                 if lo.x <= hi.x {
                     let (free_w, free_h) = (((w - 332.0 * s) - 60.0 * s).max(300.0) as f64, (h - 44.0 * s - 60.0 * s).max(200.0) as f64);
-                    let mpp = (((hi.x - lo.x) / free_w).max((hi.y - lo.y) / free_h) * 1.12).clamp(0.25, self.max_mpp());
+                    // (a view turned needs more room: the box of the way turns with it)
+                    let (sn, cs) = self.city.phi.sin_cos();
+                    let mpp = (((hi.x - lo.x) / free_w).max((hi.y - lo.y) / free_h) * 1.12 * (sn.abs() + cs.abs())).clamp(0.25, self.max_mpp());
                     self.city.mpp = mpp;
                     // (the panel takes the right side: the way is centred in what is left)
-                    self.city.center = (lo + hi) * 0.5 + DVec2::new(166.0 * s as f64 * mpp, 0.0);
+                    // (to the right on the screen, wherever that lies on the map)
+                    let off = DVec2::new(166.0 * s as f64 * mpp, 0.0);
+                    self.city.center = (lo + hi) * 0.5 + DVec2::new(off.x * cs, -off.x * sn);
                     self.city.follow = false;
                 }
             }
@@ -315,7 +319,8 @@ impl Navigator {
             (st.sheet, st.jump) = (true, true);
             st.route.insert(i, d.parse().unwrap_or(0));
             if let Some((h, m)) = it.next().and_then(|t| t.split_once(':')) {
-                st.dep = Some(h.parse::<u32>().unwrap_or(0) * 3600 + m.parse::<u32>().unwrap_or(0) * 60);
+                // (a time alone: the first departure that leaves then)
+                st.dep = Some((h.parse::<u32>().unwrap_or(0) * 3600 + m.parse::<u32>().unwrap_or(0) * 60, None));
             }
         }
     }
@@ -351,19 +356,28 @@ impl Navigator {
         on_line
     }
 
-    /// The Lines button left of the close button and its panel left of the column of buttons (`size`: the window's width
-    /// and height and the interface scale; `at`: the pad, the button size, the column's x and the close button).
-    pub(super) fn draw_lines_ui(&mut self, ui: &mut Painter, size: (f32, f32, f32), at: (f32, f32, f32, Rect), on_line: &HashMap<usize, usize>, on_screen: &dyn Fn(DVec3) -> Vec2) {
+    /// The Lines button left of the close button, the Terrain button left of it, the lines panel left of the column of
+    /// buttons and the compass (`size`: the window's width and height and the interface scale; `at`: the pad, the button
+    /// size, the column's x and the close button).
+    pub(super) fn draw_top_controls(&mut self, ui: &mut Painter, size: (f32, f32, f32), at: (f32, f32, f32, Rect), on_line: &HashMap<usize, usize>, on_screen: &dyn Fn(DVec3) -> Vec2) {
         let ((w, h, s), (pad, bs, bx, close)) = (size, at);
-        let lt = lines_text();
-        self.draw_lines_button(ui, pad, bs, close.x - 8.0 * s, s, &lt);
-        if self.city.lines.open && self.surface.as_ref().is_some_and(|sf| !sf.lines().is_empty()) {
-            // (a departure picked: the time at each stop, on the map)
-            if let (true, Some(sf), Some(i)) = (self.city.lines.sheet, self.surface.clone(), self.city.lines.focus) {
-                self.sheet_labels(ui, &sf, i, s, on_screen, (w, h));
+        // (a map without lines: no texts are looked up and no Lines button or panel is made; the next button goes where it would be)
+        let mut right = close.x - 8.0 * s;
+        if self.surface.as_ref().is_some_and(|sf| !sf.lines().is_empty()) {
+            let lt = lines_text();
+            right = self.draw_lines_button(ui, pad, bs, right, s, &lt);
+            if self.city.lines.open {
+                // (a departure picked: the time at each stop, on the map)
+                if let (true, Some(sf), Some(i)) = (self.city.lines.sheet, self.surface.clone(), self.city.lines.focus) {
+                    self.sheet_labels(ui, &sf, i, s, on_screen, (w, h));
+                }
+                self.lines_panel(ui, w, h, s, close.bottom() + 12.0 * s, bx - 12.0 * s, &lt, on_line);
             }
-            self.lines_panel(ui, w, h, s, close.bottom() + 12.0 * s, bx - 12.0 * s, &lt, on_line);
         }
+        self.draw_terrain_button(ui, pad, bs, right, s);
+        // (the panel's left edge, when it is open: the compass keeps to the left of it)
+        let panel_left = (self.city.lines.open && self.surface.as_ref().is_some_and(|sf| !sf.lines().is_empty())).then(|| bx - 12.0 * s - (332.0 * s).min(w * 0.42));
+        self.draw_compass(ui, w, h, s, panel_left);
     }
 
     /// The Lines button, only where the package has lines: `bs` high at `y`, its right edge at `right`; returns the new `right`.
@@ -418,7 +432,8 @@ impl Navigator {
         if let Some(i) = focus {
             let l = &lines[i];
             // (the button is there while the timetable is being read; if the line has none after all it goes)
-            if self.line_times().is_none_or(|t| t.line(&l.number).is_some()) {
+            // (nothing is read for it: until the timetable has been read, by pressing the button, every line has one)
+            if self.line_times_read().is_none_or(|t| t.line(&l.number).is_some()) {
                 let tw = self.fonts.width(lt.timetable.as_str(), 11.5 * s, Weight::Bold) + 40.0 * s;
                 let rr = Rect::new(x0 + pw - pad - tw, top + 8.0 * s, tw, 22.0 * s);
                 ui.rounded(rr, 4.0 * s, if self.city.lines.sheet { Color::rgba(60, 98, 156, 1.0) } else { Color::rgba(40, 46, 56, 1.0) });
@@ -436,7 +451,7 @@ impl Navigator {
             ui.text(&mut self.atlas, &self.fonts, &itin, 11.5 * s, Weight::Medium, Vec2::new(x0 + pad + 4.0 * s, top + 68.0 * s), Align::Left, TEXT_DIM);
             // length, stops, trip time
             let colw = (pw - 2.0 * pad) / 3.0;
-            let stats = [(lt.length.as_str(), format!("{} km", num(r.km, 1))), (lt.stops.as_str(), format!("{}", r.stops_n)), (lt.trip.as_str(), format!("{} {}", r.minutes, lt.minutes.as_str()))];
+            let stats = [(lt.length.as_str(), format!("{} {}", num(r.km, 1), omsi_ui::tr("km"))), (lt.stops.as_str(), format!("{}", r.stops_n)), (lt.trip.as_str(), format!("{} {}", r.minutes, lt.minutes.as_str()))];
             for (k, (label, value)) in stats.iter().enumerate() {
                 let sx = x0 + pad + 4.0 * s + colw * k as f32;
                 ui.text(&mut self.atlas, &self.fonts, &self.fonts.fit(label, 10.0 * s, Weight::Medium, colw - 6.0 * s), 10.0 * s, Weight::Medium, Vec2::new(sx, top + 92.0 * s), Align::Left, TEXT_DIM);

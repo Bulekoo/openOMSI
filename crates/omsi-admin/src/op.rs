@@ -29,6 +29,36 @@ impl Target {
     }
 }
 
+/// Whose list a hardware ban goes on: this session's, or the owner's ("all my sessions", see
+/// `omsi-lan`'s `bans`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BanScope {
+    Session,
+    Owner,
+}
+
+impl BanScope {
+    pub fn name(self) -> &'static str {
+        match self {
+            BanScope::Session => "session",
+            BanScope::Owner => "all",
+        }
+    }
+
+    /// `session` or `all` (`owner` is the same).
+    pub fn parse(s: &str) -> Option<BanScope> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "session" | "this" => Some(BanScope::Session),
+            "all" | "owner" => Some(BanScope::Owner),
+            _ => None,
+        }
+    }
+}
+
+/// The longest a hardware ban with an end lasts (a year).
+pub const MAX_BAN_HOURS: u32 = 24 * 366;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum WeatherOp {
     /// The next installed weather.
@@ -52,6 +82,11 @@ pub enum Op {
     /// Sent away and kept out for the rest of this server run (by the game's nonce and the
     /// address it came from: no identity that outlives the run, see SERVER.md).
     Ban { target: Target, reason: Option<String> },
+    /// The player's machine kept out of this session or of all the owner's sessions, for
+    /// `hours` (None: until lifted); the player is sent away at once.
+    HwBan { target: Target, reason: Option<String>, scope: BanScope, hours: Option<u32> },
+    /// A hardware ban lifted (its id from the bans' list).
+    Unban(String),
     /// A chat line to everybody.
     Say(String),
     /// A word for one player only.
@@ -114,7 +149,9 @@ impl Op {
     /// What the operation needs.
     pub fn perm(&self) -> Perm {
         match self {
-            Op::Kick { .. } | Op::Ban { .. } | Op::Say(_) | Op::Tell { .. } => Perm::Moderate,
+            // (the owner's list is the owner's: an admin's; a moderator bans for the session)
+            Op::HwBan { scope: BanScope::Owner, .. } | Op::Unban(_) => Perm::World,
+            Op::Kick { .. } | Op::Ban { .. } | Op::HwBan { .. } | Op::Say(_) | Op::Tell { .. } => Perm::Moderate,
             Op::Clock(_) | Op::Shift(_) | Op::Speed(_) | Op::Weather(_) | Op::Traffic(_) | Op::PassengerDensity(_) => Perm::World,
         }
     }
@@ -124,6 +161,8 @@ impl Op {
         match self {
             Op::Kick { .. } => "kick",
             Op::Ban { .. } => "ban",
+            Op::HwBan { .. } => "hwban",
+            Op::Unban(_) => "unban",
             Op::Say(_) => "say",
             Op::Tell { .. } => "tell",
             Op::Clock(_) => "clock",
@@ -137,7 +176,7 @@ impl Op {
 
     pub fn target(&self) -> Option<Target> {
         match self {
-            Op::Kick { target, .. } | Op::Ban { target, .. } | Op::Tell { target, .. } => Some(*target),
+            Op::Kick { target, .. } | Op::Ban { target, .. } | Op::HwBan { target, .. } | Op::Tell { target, .. } => Some(*target),
             _ => None,
         }
     }
@@ -148,6 +187,8 @@ impl Op {
         match self {
             Op::Kick { target, reason } => format!("send away player {}{}", target.id, why(reason)),
             Op::Ban { target, reason } => format!("send away player {} for this run{}", target.id, why(reason)),
+            Op::HwBan { target, reason, scope, hours } => format!("ban player {}'s machine ({}{}){}", target.id, if *scope == BanScope::Owner { "all sessions" } else { "this session" }, hours.map(|h| format!(", {h} h")).unwrap_or_default(), why(reason)),
+            Op::Unban(id) => format!("lift ban {id}"),
             Op::Say(t) => format!("say: {t}"),
             Op::Tell { target, text } => format!("tell player {}: {text}", target.id),
             Op::Clock(s) => format!("clock {:02}:{:02}", (*s as i64) / 3600, (*s as i64) / 60 % 60),
@@ -192,6 +233,18 @@ impl Op {
         Ok(match verb {
             "kick" => Op::Kick { target: target()?, reason: text("reason", MAX_REASON) },
             "ban" => Op::Ban { target: target()?, reason: text("reason", MAX_REASON) },
+            "hwban" => {
+                let scope = match v.get("scope").and_then(Value::as_str) {
+                    None => BanScope::Session,
+                    Some(w) => BanScope::parse(w).ok_or("\"scope\": \"session\" or \"all\"")?,
+                };
+                let hours = match v.get("hours") {
+                    None | Some(Value::Null) => None,
+                    Some(h) => Some(h.as_u64().filter(|h| (1..=MAX_BAN_HOURS as u64).contains(h)).ok_or_else(|| format!("\"hours\": from 1 to {MAX_BAN_HOURS}"))? as u32),
+                };
+                Op::HwBan { target: target()?, reason: text("reason", MAX_REASON), scope, hours }
+            }
+            "unban" => Op::Unban(v.get("id").and_then(Value::as_str).map(|i| i.trim().to_string()).filter(|i| !i.is_empty() && i.len() <= 16 && i.bytes().all(|b| b.is_ascii_hexdigit())).ok_or("\"id\": the ban's id (from the bans' list)")?),
             "say" => Op::Say(text("text", MAX_TEXT).ok_or("\"text\": nothing to say")?),
             "tell" => Op::Tell { target: target()?, text: text("text", MAX_TEXT).ok_or("\"text\": nothing to say")? },
             "clock" => {
@@ -304,6 +357,23 @@ mod tests {
             json!({"op": "promote", "role": "admin"}),
             json!({"no": "op"}),
         ] {
+            assert!(op(bad.clone()).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_hardware_ban_and_its_lifting_read_and_need_the_admin_for_the_owners_list() {
+        let t = Target { id: 3, conn: 17 };
+        let op = |v: Value| Op::from_json(&v, 120);
+        let ban = op(json!({"op": "hwban", "target": {"id": 3, "conn": 17}, "reason": "spam", "scope": "all", "hours": 24})).unwrap();
+        assert_eq!(ban, Op::HwBan { target: t, reason: Some("spam".into()), scope: BanScope::Owner, hours: Some(24) });
+        assert_eq!(ban.perm(), Perm::World);
+        let mine = op(json!({"op": "hwban", "target": {"id": 3, "conn": 17}})).unwrap();
+        assert_eq!(mine, Op::HwBan { target: t, reason: None, scope: BanScope::Session, hours: None });
+        assert_eq!(mine.perm(), Perm::Moderate);
+        assert_eq!(op(json!({"op": "unban", "id": "0badf00d"})), Ok(Op::Unban("0badf00d".into())));
+        assert_eq!(Op::Unban("0badf00d".into()).perm(), Perm::World);
+        for bad in [json!({"op": "unban"}), json!({"op": "unban", "id": "x y"}), json!({"op": "unban", "id": "; kick 3"}), json!({"op": "hwban", "target": {"id": 3, "conn": 1}, "scope": "world"}), json!({"op": "hwban", "target": {"id": 3, "conn": 1}, "hours": 0}), json!({"op": "hwban", "target": {"id": 3, "conn": 1}, "hours": 99999})] {
             assert!(op(bad.clone()).is_err(), "{bad}");
         }
     }

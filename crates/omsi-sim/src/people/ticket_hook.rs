@@ -58,6 +58,8 @@ pub struct TicketChange {
     pub voice: Option<String>,
     /// A text of the plugin's own, kept with the passenger (empty: none).
     pub tag: Option<String>,
+    /// The price the passenger pays at the desk (the plugin may change it, or leave it as is)
+    pub payment: Option<f32>,
 }
 
 impl TicketChange {
@@ -73,6 +75,8 @@ pub struct PluginTicket {
     pub name: Option<String>,
     /// The voice line said at the desk instead of `Ticket_<n>_<k>`.
     pub voice: Option<String>,
+    /// The price the passenger pays at the desk (the plugin may change it, or leave it as is)
+    pub payment: Option<f32>,
     /// The plugin that changed the ticket: its name and `Pax::price` are asked for.
     pub by: Option<String>,
     /// A text of the plugin's own, kept with the passenger (a new ticket keeps it).
@@ -80,7 +84,7 @@ pub struct PluginTicket {
 }
 
 /// A passenger nobody changed.
-static NO_PLUGIN: PluginTicket = PluginTicket { name: None, voice: None, by: None, tag: None };
+static NO_PLUGIN: PluginTicket = PluginTicket { name: None, voice: None, payment: None, by: None, tag: None };
 
 impl Pax {
     /// What a plugin made of the ticket (nothing for most passengers).
@@ -117,7 +121,7 @@ impl PeopleSim {
         p.price = price;
         p.ticket_hold = None;
         if let Some(pl) = p.plugin.as_deref_mut() {
-            (pl.name, pl.voice, pl.by) = (None, None, None);
+            (pl.name, pl.voice, pl.by, pl.payment) = (None, None, None, None);
         }
         p.tidy_plugin();
         if player_bus {
@@ -227,39 +231,53 @@ impl PeopleSim {
         let walk = self.boarding.eq_ignore_ascii_case("walk");
         let age = self.people[i].age;
         let Some(p) = self.pax(i) else { return Err("not a passenger") };
+        if c.payment.is_some_and(|v| !v.is_finite() || v < 0.0) { return Err("invalid payment") }
         let mut ticket = c.ticket;
         let mut pick = false;
-        if c.changes_ticket() {
+        let changes_ticket = c.changes_ticket();
+        let changes_payment = c.payment.is_some();
+        // (they decide on their way to the door: `new_ticket`)
+        let outside = p.inside.is_none() && p.task == Task::WalkingToBus;
+        let at_desk_yet = p.inside.is_some() && p.task == Task::InBusToPlace && p.ticket == TICKET_BUY && p.sub < 4;
+
+        // The ticket and payment can only be changed for the player's bus,
+        // while the passenger is boarding or on the way to the cash desk.
+        if changes_ticket || changes_payment {
             if p.bus != Some(BusId::Player) {
                 return Err("not a passenger of the player's bus");
             }
-            // (they decide on their way to the door: `new_ticket`)
-            let outside = p.inside.is_none() && p.task == Task::WalkingToBus;
-            let at_desk_yet = p.inside.is_some() && p.task == Task::InBusToPlace && p.ticket == TICKET_BUY && p.sub < 4;
+            // Paying only makes sense for somebody buying a ticket.
+            // Use the requested kind when the plugin changes it in this call.
+            if changes_payment && c.kind.unwrap_or(p.ticket) != TICKET_BUY {
+                return Err("payment requires a ticket purchase");
+            }
+
             if !outside && !at_desk_yet {
                 return Err(if p.inside.is_some() { "already asked for the ticket" } else { "not boarding the bus yet" });
             }
-            if let Some(kind) = c.kind.filter(|k| *k != p.ticket) {
-                if !outside {
-                    return Err("already in the bus");
+            if changes_ticket {
+                if let Some(kind) = c.kind.filter(|k| *k != p.ticket) {
+                    if !outside {
+                        return Err("already in the bus");
+                    }
+                    match kind {
+                        TICKET_BUY if !has_sale || walk => return Err("the bus sells no tickets"),
+                        TICKET_STAMP if !has_stamper => return Err("the bus has no validator"),
+                        TICKET_NONE | TICKET_STAMP | TICKET_BUY => {}
+                        _ => return Err("no such kind"),
+                    }
                 }
-                match kind {
-                    TICKET_BUY if !has_sale || walk => return Err("the bus sells no tickets"),
-                    TICKET_STAMP if !has_stamper => return Err("the bus has no validator"),
-                    TICKET_NONE | TICKET_STAMP | TICKET_BUY => {}
-                    _ => return Err("no such kind"),
+                if c.ticket.is_some_and(|t| t as usize > pack_len) {
+                    return Err("no such ticket");
                 }
-            }
-            if c.ticket.is_some_and(|t| t as usize > pack_len) {
-                return Err("no such ticket");
-            }
-            // a buyer without a ticket of the pack would wait at the desk for a ticket the
-            // driver cannot give
-            if c.kind.unwrap_or(p.ticket) == TICKET_BUY {
-                if c.ticket == Some(0) {
-                    return Err("a buyer needs a ticket of the pack (from 1)");
+                // a buyer without a ticket of the pack would wait at the desk for a ticket the
+                // driver cannot give
+                if c.kind.unwrap_or(p.ticket) == TICKET_BUY {
+                    if c.ticket == Some(0) {
+                        return Err("a buyer needs a ticket of the pack (from 1)");
+                    }
+                    pick = ticket.unwrap_or(p.ticket_id) == 0;
                 }
-                pick = ticket.unwrap_or(p.ticket_id) == 0;
             }
         }
         if pick {
@@ -270,7 +288,7 @@ impl PeopleSim {
         }
         let pack_price = ticket.map(|t| self.pack_ticket(t).1);
         let p = self.pax_mut(i).unwrap();
-        if c.changes_ticket() {
+        if changes_ticket {
             if let Some(k) = c.kind {
                 p.ticket = k;
             }
@@ -293,6 +311,9 @@ impl PeopleSim {
                 pl.voice = text(v);
             }
             pl.by = text(by);
+        }
+        if let Some(payment) = c.payment {
+            p.plugin_mut().payment = Some(payment);
         }
         if let Some(t) = &c.tag {
             p.plugin_mut().tag = text(t);

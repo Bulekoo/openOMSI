@@ -186,6 +186,15 @@ pub(crate) struct Photo {
     pub metered: Option<exposure::Metered>,
     /// Where the focus was set by a click (shares of the window), shown a while.
     pub focus_mark: Option<(f32, f32, f32)>,
+    /// On a phone: the settings sheet is open (else only the camera's own buttons show), the
+    /// finger's rise or sink (-1 .. 1) and whether the camera is moved fast, and where the
+    /// sheet was drawn last (physical pixels: x, y, width, height) for the fingers.
+    pub touch_panel: bool,
+    pub touch_z: f32,
+    pub touch_fast: bool,
+    pub panel_rect: Option<[f32; 4]>,
+    /// The stick on the screen: right, forward (-1 .. 1).
+    pub touch_move: glam::Vec2,
 }
 
 impl Photo {
@@ -222,6 +231,11 @@ impl Photo {
             scene_ev: 12.0,
             metered: None,
             focus_mark: None,
+            touch_panel: false,
+            touch_z: 0.0,
+            touch_fast: false,
+            panel_rect: None,
+            touch_move: glam::Vec2::ZERO,
         }
     }
 
@@ -307,7 +321,8 @@ impl Photo {
         let down = k(KeyCode::ControlLeft) || k(KeyCode::ControlRight) || k(KeyCode::KeyC) || k(KeyCode::KeyQ);
         let mut m = Vec3::new(axis(k(KeyCode::KeyD), k(KeyCode::KeyA)), axis(k(KeyCode::KeyW), k(KeyCode::KeyS)), axis(up, down));
         m += self.pad.moves();
-        let fast = if k(KeyCode::ShiftLeft) || k(KeyCode::ShiftRight) { 4.0 } else if k(KeyCode::AltLeft) || k(KeyCode::AltRight) { 0.25 } else { 1.0 };
+        m += Vec3::new(self.touch_move.x, self.touch_move.y, self.touch_z);
+        let fast = if k(KeyCode::ShiftLeft) || k(KeyCode::ShiftRight) || self.touch_fast { 4.0 } else if k(KeyCode::AltLeft) || k(KeyCode::AltRight) { 0.25 } else { 1.0 };
         // the arrows and the right stick turn the view; Z and X roll it
         let turn = 70.0 * dt * (self.cam.fov_deg / 60.0).clamp(0.15, 1.5);
         let (lx, ly) = (axis(k(KeyCode::ArrowRight), k(KeyCode::ArrowLeft)) + self.pad.look[0], axis(k(KeyCode::ArrowDown), k(KeyCode::ArrowUp)) + self.pad.look[1]);
@@ -657,6 +672,7 @@ pub(crate) fn photo(mut cx: PhotoCx, dt: f32) {
     }
     let world = cx.world.world.clone();
     let Some(ph) = cx.ui.photo.as_mut() else { return };
+    ph.touch_move = if cx.input.touch.enabled { let s = cx.input.touch.stick_analog(); glam::Vec2::new(s.x, -s.y) } else { glam::Vec2::ZERO };
     ph.fly(dt.min(0.1), |x, y| world.as_ref().and_then(|w| w.ground_height(x, y)));
     if let Some(n) = ph.note.as_mut() {
         n.1 -= dt;

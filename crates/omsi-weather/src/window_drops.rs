@@ -8,6 +8,27 @@ const RAIN_LIMIT: usize = LIMIT - 4; // leave room for runoff from the wiper ban
 const MAP: usize = 512;
 const TRAIL: usize = 4;
 const BAND: usize = 32;
+// Enlarge the visible footprint without changing the water volume, pinning or runoff.
+// Millimetre-sized caps otherwise fade into subpixel specks from the driver's seat (#3019).
+// The enlargement follows the rain: a drizzle's drops are small beads, a downpour's are the
+// full size (#3076).
+const DROP_SCALE: f32 = 2.0;
+const DRIZZLE_SCALE: f32 = 1.2;
+/// The widest a drop is drawn (m) before the scale, and how much wider a heavy rain's are.
+const DROP_CAP: f32 = 0.0022;
+const HEAVY_CAP: f32 = 0.7;
+
+fn smooth(lo: f32, hi: f32, x: f32) -> f32 {
+    let t = ((x - lo) / (hi - lo)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// How drops are drawn at a rain rate (0 .. 1 and more with the air stream): their
+/// enlargement and their widest radius.
+fn look(rain: f32) -> [f32; 2] {
+    let r = rain.clamp(0.0, 1.0);
+    [DRIZZLE_SCALE + (DROP_SCALE - DRIZZLE_SCALE) * smooth(0.1, 0.8, r), DROP_CAP * (1.0 + HEAVY_CAP * smooth(0.5, 1.0, r))]
+}
 
 #[derive(Clone)]
 pub struct Drop {
@@ -36,6 +57,10 @@ impl Drop {
         self.radius
     }
 
+    fn paint_radius(&self, look: [f32; 2]) -> f32 {
+        self.radius().min(look[1]) * look[0]
+    }
+
     pub fn displace(&mut self, pos: Vec2, velocity: Vec2) {
         self.pos = pos;
         self.previous = pos;
@@ -57,6 +82,8 @@ pub struct Drops {
 }
 
 pub struct Canvas {
+    /// The drops' enlargement and widest radius (see `look`).
+    look: [f32; 2],
     size: Vec2,
     dirty: Vec<usize>,
     bands: [[u16; 2]; MAP / BAND],
@@ -80,7 +107,8 @@ impl Drops {
             canvas: Canvas::new(size),
         };
         // Match an already wet script state without making all the drops the same age.
-        for _ in 0..((wet * size.element_product() * 60.0) as usize).min(RAIN_LIMIT) {
+        // Larger visible caps need fewer collectors to obstruct the view.
+        for _ in 0..((wet * size.element_product() * 30.0) as usize).min(RAIN_LIMIT) {
             let pos = Vec2::new(this.random(), this.random()) * size;
             let water = 0.4 + this.random().powi(3) * 14.0;
             this.drops.push(Drop::new(pos, water));
@@ -135,17 +163,19 @@ impl Drops {
     ) {
         let steps = (dt / (1.0 / 60.0)).ceil().max(1.0) as usize;
         let step = dt / steps as f32;
+        self.canvas.look = look(rain);
         for drop in &mut self.drops {
             drop.previous = drop.pos;
         }
         for _ in 0..steps {
-            self.arrivals += step * rain * self.size.element_product() * 24.0;
+            self.arrivals += step * rain * self.size.element_product() * 12.0;
             while self.arrivals >= 1.0 {
                 self.arrivals -= 1.0;
                 let pos = Vec2::new(self.random(), self.random()) * self.size;
                 // Freshly wiped glass needs time to collect visible drops again.
                 if self.drops.len() < RAIN_LIMIT && wetness(pos) > 0.06 {
-                    let water = 0.12 + self.random() * 0.5;
+                    // (raindrops are bigger the harder it rains)
+                    let water = (0.12 + self.random() * 0.5) * (1.0 + 1.5 * rain.clamp(0.0, 1.0));
                     self.drops.push(Drop::new(pos, water));
                 }
             }
@@ -155,7 +185,8 @@ impl Drops {
                 let outward = (drop.pos.x / self.size.x * 2.0 - 1.0) * spread;
                 let force = gravity + (air + Vec2::new(outward, 0.0)) / r;
                 let strength = force.length();
-                let pinning = 1.7 / (r * r);
+                // (a downpour's impacts shake the drops loose: the heavier, the less they hold)
+                let pinning = 1.7 / (r * r) * (1.0 - 0.3 * smooth(0.3, 1.0, rain));
                 let drive = force.normalize_or_zero() * (strength - pinning).max(0.0) * 0.4;
                 drop.velocity = (drop.velocity + drive * step) / (1.0 + step * 4.0);
                 let previous = drop.pos;
@@ -252,11 +283,11 @@ impl Canvas {
         for pixel in image.rgba.chunks_exact_mut(4) {
             pixel[..2].fill(128);
         }
-        Self { size, dirty: Vec::with_capacity(MAP * MAP / 8), bands: [[u16::MAX, 0]; MAP / BAND], image }
+        Self { look: [DROP_SCALE, DROP_CAP], size, dirty: Vec::with_capacity(MAP * MAP / 8), bands: [[u16::MAX, 0]; MAP / BAND], image }
     }
 
     pub fn take(&mut self) -> Canvas {
-        let empty = Self { size: self.size, dirty: Vec::new(), bands: [[u16::MAX, 0]; MAP / BAND], image: omsi_texture::Image { width: 0, height: 0, rgba: Vec::new(), has_alpha: true } };
+        let empty = Self { look: self.look, size: self.size, dirty: Vec::new(), bands: [[u16::MAX, 0]; MAP / BAND], image: omsi_texture::Image { width: 0, height: 0, rgba: Vec::new(), has_alpha: true } };
         std::mem::replace(self, empty)
     }
 
@@ -288,7 +319,7 @@ impl Canvas {
         self.dirty.clear();
         for drop in drops {
             let pos = drop.pos;
-            let radius = drop.radius().min(0.0022);
+            let radius = drop.paint_radius(self.look);
             let tail = drop.tail;
             // A short, narrowing filament is distinct from the rounded moving head.
             if drop.velocity.length_squared() > 0.0001 {
@@ -388,7 +419,7 @@ mod tests {
         }
         for i in 0..drops.drops.len() {
             let drop = &drops.drops[i];
-            let (pos, radius, tail) = (drop.pos, drop.radius().min(0.0022), drop.tail);
+            let (pos, radius, tail) = (drop.pos, drop.paint_radius(drops.canvas.look), drop.tail);
             if drop.velocity.length_squared() > 0.0001 {
                 let mut start = pos;
                 for (k, &end) in tail.iter().enumerate() {
@@ -440,6 +471,41 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn visible_caps_cover_more_glass_without_changing_their_water() {
+        let drop = Drop::new(Vec2::splat(0.5), 8.0);
+        let mut physical = Canvas::new(Vec2::ONE);
+        physical.stamp(drop.pos, drop.pos, drop.radius(), false);
+        let mut visible = Canvas::new(Vec2::ONE);
+        visible.paint(std::slice::from_ref(&drop));
+        let coverage = |canvas: &Canvas| {
+            canvas
+                .image
+                .rgba
+                .chunks_exact(4)
+                .map(|p| p[3] as u32)
+                .sum::<u32>()
+        };
+        assert!(coverage(&visible) > coverage(&physical) * 3);
+        assert_eq!(drop.water, 8.0);
+        assert!((drop.radius() - 0.002).abs() < 1e-6);
+        // Wiping the last drop also removes its enlarged footprint.
+        assert!(visible.paint(&[]));
+        assert!(visible.image.rgba.chunks_exact(4).all(|p| p[3] == 0));
+        assert!(!visible.paint(&[]));
+    }
+
+    #[test]
+    fn larger_caps_use_fewer_collectors_and_still_rewet_the_pane() {
+        assert_eq!(Drops::new(Vec2::ONE, 1.0, 7).drops.len(), 30);
+        let mut drops = Drops::new(Vec2::ONE, 0.0, 7);
+        drops.advance(1.0, 1.0, Vec2::ZERO, Vec2::ZERO, 0.0, |_| 1.0);
+        assert!((10..=12).contains(&drops.drops.len()));
+        let mut wiped = Drops::new(Vec2::ONE, 0.0, 7);
+        wiped.advance(1.0, 1.0, Vec2::ZERO, Vec2::ZERO, 0.0, |_| -0.04);
+        assert!(wiped.drops.is_empty());
     }
 
     #[test]

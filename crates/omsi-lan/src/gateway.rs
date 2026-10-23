@@ -154,12 +154,18 @@ pub fn open_public_gateway(session: &LanSession, info: omsi_net::ws::ServerInfo,
 /// offers only those): `only` when a server's list says, else every bus installed here -
 /// read in the background (it takes a moment over all content folders).
 /// `installed` lists every bus installed here (called on the thread, only when `only` is empty).
-/// A dedicated server (`SERVER_VEHICLES` is set) that takes its players' buses
-/// (`mods::upload`) and has no list offers any bus: none is published, so the launcher
-/// limits nobody to the buses installed on the server.
+/// A host that takes its players' buses (`mods::upload`) and has no list offers any bus:
+/// none is published, so the launcher limits nobody to the buses installed on the host. A
+/// dedicated server (`SERVER_VEHICLES` is set) takes them as its server.cfg says, read
+/// before this; a player's game hosting a session as `a_hosting_game_takes_uploads` says
+/// (`game::share_mods` switches it on only after this).
 pub fn publish_vehicles(only: Vec<String>, installed: impl FnOnce() -> Vec<String> + Send + 'static) {
-    if only.is_empty() && crate::server_cfg::SERVER_VEHICLES.get().is_some() && crate::mods::upload::accepting() {
-        log::info!("LAN: any bus is offered to joining players (the server takes the ones it lacks)");
+    let takes = match crate::server_cfg::SERVER_VEHICLES.get() {
+        Some(_) => crate::mods::upload::accepting(),
+        None => crate::mods::upload::a_hosting_game_takes_uploads(),
+    };
+    if only.is_empty() && takes {
+        log::info!("LAN: any bus is offered to joining players (the host takes the ones it lacks)");
         return;
     }
     let _ = std::thread::Builder::new().name("vehicle list".into()).spawn(move || {
@@ -288,6 +294,10 @@ pub fn offers(offered: &std::collections::HashSet<String>, bus: &str) -> bool {
 }
 
 /// The port of the WebSocket gateway this game opened.
+pub fn web_port() -> Option<u16> {
+    port_of_gateway()
+}
+
 fn port_of_gateway() -> Option<u16> {
     WS_PATH.lock().ok()?.as_ref()?.gateway.as_ref().map(|g| g.addr.port())
 }
@@ -305,6 +315,25 @@ pub fn update_server_info(players: usize, time: &str, weather: &str) {
             }
         }
     }
+}
+
+/// The public server list's challenge, on the status page (`ServerInfo::list_challenge`).
+pub fn set_list_challenge(challenge: &str) {
+    if let Ok(w) = WS_PATH.lock() {
+        if let Some(g) = w.as_ref().and_then(|w| w.gateway.as_ref()) {
+            if let Ok(mut i) = g.info.lock() {
+                i.list_challenge = challenge.to_string();
+            }
+        }
+    }
+}
+
+/// What the status page says now (players, map, name ...): a copy.
+pub fn server_info_now() -> Option<omsi_net::ws::ServerInfo> {
+    let w = WS_PATH.lock().ok()?;
+    let g = w.as_ref()?.gateway.as_ref()?;
+    let i = g.info.lock().ok()?.clone();
+    Some(i)
 }
 
 /// A server run: its shared world now, for `GET /status`.

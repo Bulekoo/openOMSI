@@ -56,7 +56,7 @@ impl App {
             let (trip, k) = d.trip_for_ibis();
             p.ibis_to_stop(trip, k);
         }
-        self.service_msg = Some((format!("Stop skipped: {name}"), 3.0));
+        self.service_msg = Some((omsi_ui::i18n::tr_fill("Stop skipped: {name}", &[("{name}", &name)]), 3.0));
     }
 
     #[cfg(windows)]
@@ -76,7 +76,7 @@ impl App {
                     }
                     Err(e) => {
                         log::error!("OpenXR could not restart: {e:#}");
-                        self.service_msg = Some((format!("{}: {e}", omsi_ui::tr("Could not start VR")), 5.0));
+                        self.service_msg = Some((omsi_ui::i18n::tr_fill_words("Could not start VR ({e})", &[("{e}", &e)]), 5.0));
                     }
                 }
             }
@@ -290,7 +290,8 @@ impl App {
                     let n = *c + 1;
                     // (the camera left keeps its look, the one taken finds its own again)
                     self.sync_view_look();
-                    self.service_msg = Some((format!("{} camera {n} of {count}", if pax { "Passenger" } else { "Driver" }), 2.0));
+                    let message = format!("{} camera {n} of {count}", if pax { "Passenger" } else { "Driver" });
+                    self.service_msg = Some((omsi_ui::tr(&message).into_owned(), 2.0));
                 }
             }
             // OMSI's quick menu from a key that is no Shift, Ctrl or Alt (a tap of one of
@@ -350,7 +351,7 @@ impl App {
             if !p.shift_gate_to(to) {
                 return false;
             }
-            self.service_msg = Some((format!("Gear {}", match to { 0 => "N".to_string(), -1 => "R".to_string(), n => n.to_string() }), 1.5));
+            self.service_msg = Some((omsi_ui::i18n::tr_fill("Gear {gear}", &[("{gear}", &match to { 0 => "N".to_string(), -1 => "R".to_string(), n => n.to_string() })]), 1.5));
             return true;
         }
         let Some(n) = names.iter().find(|n| p.vehicle.ty.program.trigger(n).is_some()) else {
@@ -424,7 +425,7 @@ impl App {
         let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         let path = dir.join(format!("omsi_{secs}.png"));
         if !cfg!(target_os = "android") {
-            self.service_msg = Some((format!("Screenshot: {}", path.display()), 4.0));
+            self.service_msg = Some((omsi_ui::i18n::tr_fill("Screenshot: {path}", &[("{path}", &path.display().to_string())]), 4.0));
         }
         self.perf.shot = Some((path, false));
     }
@@ -473,5 +474,20 @@ mod gear_lever_tests {
         // a lever moved by every gate is not the gear
         let own = program("lever_moved\nmy_gear\n", "{trigger:kw_s_1}\n1 (S.L.lever_moved)\n1 (S.L.my_gear)\n{end}\n{trigger:kw_s_2}\n1 (S.L.lever_moved)\n2 (S.L.my_gear)\n{end}\n");
         assert_eq!(super::gate_gear_var(&own).as_deref(), Some("my_gear"));
+    }
+}
+
+#[cfg(test)]
+mod camera_notice_tests {
+    #[test]
+    fn camera_switch_notices_are_translated_with_their_numbers() {
+        crate::with_test_language("ZHT", || {
+            for (source, expected) in [
+                ("Driver camera 10 of 10", "駕駛員視角 10／10"),
+                ("Passenger camera 2 of 4", "乘客視角 2／4"),
+            ] {
+                assert_eq!(omsi_ui::tr(source), expected);
+            }
+        });
     }
 }

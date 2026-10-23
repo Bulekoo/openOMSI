@@ -111,7 +111,7 @@ pub(crate) fn fatal_dialog(title: &str, text: &str) {
     #[cfg(windows)]
     {
         #[link(name = "user32")]
-        extern "system" {
+        unsafe extern "system" {
             fn MessageBoxW(hwnd: *mut core::ffi::c_void, text: *const u16, caption: *const u16, kind: u32) -> i32;
         }
         let wide = |s: &str| s.encode_utf16().chain(std::iter::once(0)).collect::<Vec<u16>>();
@@ -478,7 +478,7 @@ const BUILD_STACK: usize = 32 << 20;
 fn as_urgent_as_the_main_thread() {
     #[cfg(target_os = "macos")]
     {
-        extern "C" {
+        unsafe extern "C" {
             fn pthread_set_qos_class_self_np(qos_class: u32, relative_priority: i32) -> i32;
         }
         const QOS_CLASS_USER_INTERACTIVE: u32 = 0x21;
@@ -812,7 +812,7 @@ pub(crate) fn restart_with_allocator_settings() {
 /// the file stayed empty.
 #[cfg(windows)]
 pub(crate) fn attach_parent_console() {
-    extern "system" {
+    unsafe extern "system" {
         fn AttachConsole(process: u32) -> i32;
         fn GetStdHandle(which: u32) -> isize;
         fn GetFileType(file: isize) -> u32;

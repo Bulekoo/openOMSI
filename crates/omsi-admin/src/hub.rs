@@ -159,10 +159,28 @@ pub struct ServerState {
     pub buses: usize,
 }
 
+/// A hardware ban as the admins see it: no identifier, which is nobody's business.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct BanView {
+    pub id: String,
+    /// The name the player had (no proof of who).
+    pub name: String,
+    pub reason: String,
+    pub by: String,
+    /// Seconds since 1970.
+    pub at: u64,
+    /// When it ends (None: never).
+    pub until: Option<u64>,
+    /// `session` or `all`.
+    pub scope: String,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Snapshot {
     pub server: ServerState,
     pub players: Vec<Player>,
+    /// The hardware bans that hold.
+    pub bans: Vec<BanView>,
     /// When it was published (None: never yet).
     pub at: Option<Instant>,
 }
