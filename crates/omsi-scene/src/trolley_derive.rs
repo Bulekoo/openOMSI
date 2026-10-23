@@ -118,7 +118,7 @@ pub fn split_t_junctions(spans: &mut Vec<(f64, Vec<[f64; 3]>)>) {
         for end in 0..2u8 {
             let p = if end == 0 { pts[0] } else { *pts.last().unwrap() };
             let (cx, cy) = cell(p[0], p[1]);
-            let lone = !(-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (cx + dx, cy + dy))).filter_map(|c| ends.get(&c)).flatten().any(|(j, q)| *j != i && (q[0] - p[0]).hypot(q[1] - p[1]) <= join);
+            let lone = !(-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (cx + dx, cy + dy))).filter_map(|c| ends.get(&c)).flatten().any(|(j, q)| *j != i && (q[0] - p[0]).hypot(q[1] - p[1]).hypot(q[2] - p[2]) <= join);
             if !lone {
                 continue;
             }
@@ -136,11 +136,12 @@ pub fn split_t_junctions(spans: &mut Vec<(f64, Vec<[f64; 3]>)>) {
                 }
                 let t = (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2).clamp(0.0, 1.0);
                 let (x, y) = (a[0] + t * dx, a[1] + t * dy);
-                let d = (p[0] - x).hypot(p[1] - y);
+                let z = a[2] + t * (b[2] - a[2]);
+                let d = (p[0] - x).hypot(p[1] - y).hypot(p[2] - z);
                 let at = cum[j][k] + t * l2.sqrt();
                 let total = *cum[j].last().unwrap();
                 if d <= join && at > MARGIN && total - at > MARGIN && best.is_none_or(|b| d < b.0) {
-                    best = Some((d, j, k, at, [x, y, a[2] + t * (b[2] - a[2])]));
+                    best = Some((d, j, k, at, [x, y, z]));
                 }
             }
             if let Some((_, j, k, at, q)) = best {
@@ -161,7 +162,7 @@ pub fn split_t_junctions(spans: &mut Vec<(f64, Vec<[f64; 3]>)>) {
         }
         accepted.insert(j, kept);
     }
-    let kept_cuts: std::collections::HashSet<[u64; 2]> = accepted.values().flatten().map(|c| [c.2[0].to_bits(), c.2[1].to_bits()]).collect();
+    let kept_cuts: std::collections::HashSet<[u64; 3]> = accepted.values().flatten().map(|c| [c.2[0].to_bits(), c.2[1].to_bits(), c.2[2].to_bits()]).collect();
     let mut tails: Vec<(f64, Vec<[f64; 3]>)> = Vec::new();
     for (j, list) in &accepted {
         let spacing = spans[*j].0;
@@ -180,7 +181,7 @@ pub fn split_t_junctions(spans: &mut Vec<(f64, Vec<[f64; 3]>)>) {
         // (only the branches whose cut was kept: its end is within the join distance of the cut)
         let b = &mut spans[i].1;
         let e = if end == 0 { b[0] } else { *b.last().unwrap() };
-        if (e[0] - q[0]).hypot(e[1] - q[1]) <= join && kept_cuts.contains(&[q[0].to_bits(), q[1].to_bits()]) {
+        if (e[0] - q[0]).hypot(e[1] - q[1]).hypot(e[2] - q[2]) <= join && kept_cuts.contains(&[q[0].to_bits(), q[1].to_bits(), q[2].to_bits()]) {
             if end == 0 { b[0] = q } else { *b.last_mut().unwrap() = q }
         }
     }
@@ -259,7 +260,7 @@ pub fn derive_text(root: &Path, tiles: &[(i32, i32, PathBuf)], chrono_dirs: &[Pa
             .filter_map(|c| grid.get(&c))
             .flatten()
             .copied()
-            .filter(|j| (ends[*j][0] - ends[i][0]).hypot(ends[*j][1] - ends[i][1]) <= join)
+            .filter(|j| (ends[*j][0] - ends[i][0]).hypot(ends[*j][1] - ends[i][1]).hypot(ends[*j][2] - ends[i][2]) <= join)
             .collect();
         for j in &near {
             used[*j] = true;
@@ -335,5 +336,29 @@ mod tests {
             let e = spans[b].1[0];
             assert!(spans.iter().enumerate().any(|(n, s)| n != b && (s.1[0] == e || *s.1.last().unwrap() == e)), "branch {b}");
         }
+    }
+
+    #[test]
+    fn wires_on_different_levels_do_not_make_a_junction() {
+        let mut spans = vec![
+            (0.52, vec![[0.0, 0.0, 5.0], [100.0, 0.0, 5.0]]),
+            (0.52, vec![[50.0, 0.3, 8.0], [60.0, 5.0, 8.0]]),
+        ];
+        let original = spans.clone();
+        split_t_junctions(&mut spans);
+        assert_eq!(spans, original, "a crossing above the wire must not be snapped down");
+    }
+
+    #[test]
+    fn an_end_above_a_real_branch_does_not_hide_the_junction() {
+        let mut spans = vec![
+            (0.52, vec![[0.0, 0.0, 5.0], [100.0, 0.0, 5.0]]),
+            (0.52, vec![[50.0, 0.3, 5.0], [60.0, 5.0, 5.0]]),
+            (0.52, vec![[50.0, 0.5, 8.0], [60.0, 5.0, 8.0]]),
+        ];
+        split_t_junctions(&mut spans);
+        assert_eq!(spans.len(), 4);
+        assert_eq!(spans[1].1[0], [50.0, 0.0, 5.0]);
+        assert_eq!(spans[2].1[0], [50.0, 0.5, 8.0]);
     }
 }
