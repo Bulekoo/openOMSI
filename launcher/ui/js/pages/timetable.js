@@ -52,6 +52,17 @@ function repeatTour(tours, base, every, until) {
 }
 
 const tt = () => S.tt;
+/** The trip pointed at in a list is drawn on the map after the pointer has rested on it a moment:
+ * sweeping down a long list asks the game for no route at all. */
+let previewTimer = 0;
+const previewLater = (name) => {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(() => up({ preview: name }), 150);
+};
+const previewOff = () => {
+  clearTimeout(previewTimer);
+  if (tt().preview) up({ preview: null });
+};
 const up = (patch) => set({ tt: { ...S.tt, ...patch } });
 const same = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
 const byName = (a, b) => a.toLowerCase().localeCompare(b.toLowerCase());
@@ -409,11 +420,11 @@ function TripPicker({ s, ix, line, tour }) {
   const found = all.filter((x) => !lq || `${x.name} ${x.line} ${x.terminus} ${x.stops.map((id) => stopName(ix, id)).join(' ')}`.toLowerCase().includes(lq)).slice(0, 60);
   return html`<div class="tte-pick">
     <${Search} value=${q} onInput=${setQ} autofocus placeholder="Trip, line or a stop it calls at..." />
-    <div class="pick-list tte-pick-list" onPointerLeave=${() => up({ preview: null })}>
+    <div class="pick-list tte-pick-list" onPointerLeave=${previewOff}>
       ${found.length === 0 && html`<p class="muted small" style="padding:8px">${t('No trip matches.')}</p>`}
       ${found.map((x) => {
         const [from, to] = ends(ix, x);
-        return html`<button type="button" class="tour-row" onPointerEnter=${() => up({ preview: x.name })} onClick=${() => addTripTo(line, tour, x.name)}>
+        return html`<button type="button" class="tour-row" onPointerEnter=${() => previewLater(x.name)} onClick=${() => addTripTo(line, tour, x.name)}>
           <span class="row"><span class="grow ellipsis">${from} <span class="muted">→</span> ${to}</span>${x.line && html`<span class="line-badge">${x.line}</span>`}</span>
           <span class="sub ellipsis">${x.name} - ${t('{n} stops', { n: x.stops.length })}${x.minutes ? ` - ${Math.round(x.minutes)} min` : ''}</span>
         </button>`;
@@ -498,10 +509,10 @@ function StopCard({ s, ix, id, line, tour, close }) {
     <div class="row"><b class="grow ellipsis">${stopName(ix, id)}${ix.calls.get(id)?.find((x) => x.line) ? html` <span class="muted small">→ ${ix.calls.get(id).find((x) => x.line).terminus}</span>` : ''}</b>${ix.depots.has(id) && html`<span class="tag">${t('Depot')}</span>`}<${Button} small kind="ghost" icon="x" title="Close" onClick=${close} /></div>
     <div class="row wrap"><${Button} small icon="route" label="Start a new trip here" onClick=${() => startBuild(line, id)} /></div>
     <div class="section-title" style="margin:6px 0 4px">${trips.length ? t('{n} trips call here', { n: trips.length }) : t('No trip calls here yet')}</div>
-    <div class="tte-stop-list" onPointerLeave=${() => up({ preview: null })}>
+    <div class="tte-stop-list" onPointerLeave=${previewOff}>
       ${trips.slice(0, 40).map((x) => {
         const [from, to] = ends(ix, x);
-        return html`<div class="tte-stop-trip" onPointerEnter=${() => up({ preview: x.name })}>
+        return html`<div class="tte-stop-trip" onPointerEnter=${() => previewLater(x.name)}>
           ${x.line ? html`<span class="line-badge">${x.line}</span>` : html`<span class="muted small">${t('Depot run')}</span>`}
           <span class="grow ellipsis" title=${x.name}>${from} <span class="muted">→</span> ${to}</span>
           ${tour && html`<${Button} small icon="plus" title="Add this trip to the tour" onClick=${() => addTripTo(line, tour, x.name)} />`}

@@ -11,7 +11,8 @@ const COPY_MARK: &str = ".openomsi-ttdata-copy";
 /// reset can take them away again.
 const NEW_TRIPS: &str = ".openomsi-new-trips";
 const PARTIAL: &str = "TTData.openomsi-partial";
-const NOT_IN_NAMES: [char; 9] = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
+// (the quote is written as its code, so that a tool reading the file's string literals keeps in step)
+const NOT_IN_NAMES: [char; 9] = ['/', '\\', ':', '*', '?', '\u{22}', '<', '>', '|'];
 
 static WRITING: Mutex<()> = Mutex::new(());
 
@@ -220,18 +221,18 @@ fn write_trip(place: &Place, e: TripNew) -> Result<String, String> {
         return Err(core::i18n::tr("not a file name"));
     }
     if e.stops.len() < 2 {
-        return Err(core::i18n::tr("a trip needs at least two stops"));
+        return Err(core::i18n::tr("A trip needs two stops at least."));
     }
     let data = TimetableData::load(&place.map_dir);
     if data.trips.iter().any(|t| t.name.eq_ignore_ascii_case(&name)) {
-        return Err(core::i18n::tr("a trip named {name} is there already").replace("{name}", &name));
+        return Err(core::i18n::trf("A trip named {name} is there already", &[("name", &name)]));
     }
     let name_of = |id: i64| data.bus_stops.iter().find(|b| b.object_id == id).map(|b| b.name.trim().to_string());
     let mut metres = 0.0;
     for w in e.stops.windows(2) {
         let Some(link) = data.stn_links.iter().find(|l| l.from_id == w[0] && l.to_id == w[1]) else {
             let (a, b) = (name_of(w[0]).unwrap_or_else(|| w[0].to_string()), name_of(w[1]).unwrap_or_else(|| w[1].to_string()));
-            return Err(core::i18n::tr("the map has no way from {a} to {b}").replace("{a}", &a).replace("{b}", &b));
+            return Err(core::i18n::trf("The map has no way from {a} to {b}", &[("a", &a), ("b", &b)]));
         };
         metres += link.length;
     }
@@ -245,14 +246,11 @@ fn write_trip(place: &Place, e: TripNew) -> Result<String, String> {
         ..Default::default()
     };
     let original = omsi_cfg::resolve_path(&place.map_dir, "TTData");
-    let dir = if place.ours(&original) && omsi_cfg::vfs::archive_of(&original).is_none() {
-        let tracked = original.join(NEW_TRIPS);
-        let mut list = std::fs::read_to_string(&tracked).unwrap_or_default();
-        if !original.join(COPY_MARK).is_file() {
-            list.push_str(&format!("{name}.ttp\n"));
-            std::fs::write(&tracked, list).map_err(err)?;
-        }
-        original
+    // (a map of the content folder itself is written in place: the trip is noted for the reset
+    // once it is written, so that the reset never takes away a file the editor did not make)
+    let in_place = place.ours(&original) && omsi_cfg::vfs::archive_of(&original).is_none();
+    let dir = if in_place {
+        original.clone()
     } else {
         let dir = place.copy_dir();
         if place.original(&dir) {
@@ -268,9 +266,16 @@ fn write_trip(place: &Place, e: TripNew) -> Result<String, String> {
         return Err(core::i18n::tr("it would be written into the OMSI 2 folder"));
     }
     if target.exists() {
-        return Err(core::i18n::tr("a trip named {name} is there already").replace("{name}", &name));
+        return Err(core::i18n::trf("A trip named {name} is there already", &[("name", &name)]));
     }
     trip.save(&target).map_err(|e| core::i18n::tr(&err(e)))?;
+    if in_place && !dir.join(COPY_MARK).is_file() {
+        let tracked = dir.join(NEW_TRIPS);
+        let mut list = std::fs::read_to_string(&tracked).unwrap_or_default();
+        list.push_str(&format!("{name}.ttp
+"));
+        std::fs::write(&tracked, list).map_err(err)?;
+    }
     Ok(name)
 }
 
@@ -652,5 +657,20 @@ mod tests {
         assert!(tt.join("Mine.ttp").is_file());
         assert_eq!(reset_in(&p).unwrap()["restored"], json!(1));
         assert!(!tt.join("Mine.ttp").exists() && !tt.join(NEW_TRIPS).exists());
+    }
+
+    #[test]
+    fn a_trip_that_could_not_be_written_is_not_taken_away_by_the_reset() {
+        let d = dirs("newtripfail");
+        let map = map_at(&d.content);
+        stops_and_links(&map);
+        let p = place(&d, &map);
+        // a file of that name is there that the timetable does not list (it is no trip file)
+        let tt = map.join("TTData");
+        std::fs::create_dir_all(tt.join("Theirs.ttp")).unwrap();
+        assert!(write_trip(&p, new_trip("Theirs", &[101, 102])).is_err());
+        assert!(!tt.join(NEW_TRIPS).exists());
+        reset_in(&p).unwrap();
+        assert!(tt.join("Theirs.ttp").is_dir());
     }
 }
