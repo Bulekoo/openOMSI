@@ -609,6 +609,9 @@ mod tests {
         tours(&mut sim, &[(78_000.0 - 86_400.0, "4", None), (6_900.0, "5", None)]);
         sim.times[0][0].duration = 5.0 * 3600.0;
         sim.departures[0].yesterday = true;
+        // `tours` uses today's calendar mask, but this departure belongs to yesterday.
+        sim.departures[0].mask = sim.yesterday_bits.0 | sim.yesterday_bits.1;
+        assert!(sim.runs(0), "the fixture's night tour must run on yesterday's calendar");
         sim.queue_due(&world, &mut traffic, 7_200.0, 20.0 * 60.0);
         assert_eq!(sim.pending.iter().copied().collect::<Vec<_>>(), [0, 1]);
     }
