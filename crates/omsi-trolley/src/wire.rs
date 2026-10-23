@@ -391,6 +391,12 @@ impl WireNet {
             if pts.len() < 2 {
                 continue;
             }
+            // a piece shorter than the joining distance would join its own two ends and
+            // collapse; the wire closes over it as it is (its neighbours' ends are within JOIN)
+            let polyline: f64 = pts.windows(2).map(|w| w[0].distance(w[1])).sum();
+            if pts[0].distance(*pts.last().unwrap()) <= JOIN && polyline < 2.0 * JOIN {
+                continue;
+            }
             let mut cum = vec![0.0];
             for w in pts.windows(2) {
                 cum.push(cum.last().unwrap() + w[0].distance(w[1]));
@@ -990,6 +996,23 @@ mod tests {
              [trolley_span]\nsection 1\np 50 0 5.5\np 70 6 5.5\np 90 20 5.5\n\
              [trolley_switch]\npos 50 0 5.5\nmode power\ntrigger 8\nsense 10\n",
         )
+    }
+
+    /// A 0.8 m piece beside the frog (shorter than the joining distance) is closed over, not
+    /// joined to itself: the frog still has its three ends and the straight way runs through.
+    #[test]
+    fn a_stub_shorter_than_the_join_distance_does_not_break_the_frog() {
+        let n = WireNet::parse(
+            "[trolley_section]\nid 1\nlive 1\n\
+             [trolley_span]\nsection 1\np 0 0 5.5\np 25 0 5.5\np 50 0 5.5\n\
+             [trolley_span]\nsection 1\np 50 0 5.5\np 50.8 0 5.5\n\
+             [trolley_span]\nsection 1\np 50.8 0 5.5\np 75 0 5.5\np 100 0 5.5\n\
+             [trolley_span]\nsection 1\np 50 0 5.5\np 70 6 5.5\np 90 20 5.5\n\
+             [trolley_switch]\npos 50 0 5.5\nmode fixed\n",
+        );
+        assert_eq!(n.spans.len(), 3, "the stub is dropped");
+        assert_eq!(n.switches.len(), 1);
+        assert!(n.spans.iter().all(|s| s.len() > 1.0));
     }
 
     #[test]

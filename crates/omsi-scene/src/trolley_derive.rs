@@ -81,62 +81,122 @@ pub fn wire_spans(root: &Path, tiles: &[(i32, i32, PathBuf)], chrono_dirs: &[Pat
 /// A branch drawn from the middle of another wire (its end lies on that span, not at its end)
 /// is a frog too: the span it leaves is cut there, and the branch's end moved onto the cut, so
 /// three ends meet. Authors lay a junction either way.
+///
+/// One pass: the ends in a grid, the segments in a grid, every lone end looked up in its own
+/// cell, the cuts of a span applied from its far end backwards.
 pub fn split_t_junctions(spans: &mut Vec<(f64, Vec<[f64; 3]>)>) {
     let join = omsi_trolley::JOIN;
-    // a split needs room for a joint on both sides, and a branch that is not just alongside
+    // a cut needs room for a joint on both sides, or it leaves a stub
     const MARGIN: f64 = 2.0;
-    for _ in 0..2000 {
-        let mut found: Option<(usize, u8, usize, usize, [f64; 3])> = None;
-        'ends: for i in 0..spans.len() {
-            for end in 0..2u8 {
-                let p = if end == 0 { spans[i].1[0] } else { *spans[i].1.last().unwrap() };
-                let near_end = spans.iter().enumerate().any(|(j, (_, q))| {
-                    j != i && ((q[0][0] - p[0]).hypot(q[0][1] - p[1]) <= join || { let l = q.last().unwrap(); (l[0] - p[0]).hypot(l[1] - p[1]) <= join })
-                });
-                if near_end {
-                    continue;
-                }
-                for (j, (_, q)) in spans.iter().enumerate() {
-                    if j == i {
-                        continue;
-                    }
-                    let mut run = 0.0;
-                    let total: f64 = q.windows(2).map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1])).sum();
-                    for (k, w) in q.windows(2).enumerate() {
-                        let (dx, dy) = (w[1][0] - w[0][0], w[1][1] - w[0][1]);
-                        let l2 = dx * dx + dy * dy;
-                        let seg = l2.sqrt();
-                        if l2 > 1e-9 {
-                            let t = (((p[0] - w[0][0]) * dx + (p[1] - w[0][1]) * dy) / l2).clamp(0.0, 1.0);
-                            let (x, y) = (w[0][0] + t * dx, w[0][1] + t * dy);
-                            let at = run + t * seg;
-                            if (p[0] - x).hypot(p[1] - y) <= join && at > MARGIN && total - at > MARGIN {
-                                found = Some((i, end, j, k, [x, y, w[0][2] + t * (w[1][2] - w[0][2])]));
-                                break 'ends;
-                            }
-                        }
-                        run += seg;
-                    }
+    const CELL: f64 = 8.0;
+    let cell = |x: f64, y: f64| ((x / CELL).floor() as i64, (y / CELL).floor() as i64);
+    let mut ends: HashMap<(i64, i64), Vec<(usize, [f64; 3])>> = HashMap::new();
+    for (i, (_, pts)) in spans.iter().enumerate() {
+        for p in [pts[0], *pts.last().unwrap()] {
+            ends.entry(cell(p[0], p[1])).or_default().push((i, p));
+        }
+    }
+    let mut segs: HashMap<(i64, i64), Vec<(usize, usize)>> = HashMap::new();
+    let mut cum: Vec<Vec<f64>> = Vec::with_capacity(spans.len());
+    for (j, (_, pts)) in spans.iter().enumerate() {
+        let mut c = vec![0.0];
+        for (k, w) in pts.windows(2).enumerate() {
+            c.push(c[k] + (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]));
+            let (c0, c1) = (cell(w[0][0].min(w[1][0]) - join, w[0][1].min(w[1][1]) - join), cell(w[0][0].max(w[1][0]) + join, w[0][1].max(w[1][1]) + join));
+            for cx in c0.0..=c1.0 {
+                for cy in c0.1..=c1.1 {
+                    segs.entry((cx, cy)).or_default().push((j, k));
                 }
             }
         }
-        let Some((i, end, j, k, q)) = found else { return };
-        let (spacing, pts) = spans[j].clone();
-        let mut first: Vec<[f64; 3]> = pts[..=k].to_vec();
-        first.push(q);
-        let mut second: Vec<[f64; 3]> = vec![q];
-        second.extend_from_slice(&pts[k + 1..]);
-        spans[j] = (spacing, first);
-        spans.push((spacing, second));
-        // (the branch's end onto the cut, its height that of the wire it joins)
+        cum.push(c);
+    }
+    // (span, segment, arc length of the cut, the cut point) per span; the branch ends to move
+    let mut cuts: HashMap<usize, Vec<(usize, f64, [f64; 3])>> = HashMap::new();
+    let mut moves: Vec<(usize, u8, [f64; 3])> = Vec::new();
+    for (i, (_, pts)) in spans.iter().enumerate() {
+        for end in 0..2u8 {
+            let p = if end == 0 { pts[0] } else { *pts.last().unwrap() };
+            let (cx, cy) = cell(p[0], p[1]);
+            let lone = !(-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (cx + dx, cy + dy))).filter_map(|c| ends.get(&c)).flatten().any(|(j, q)| *j != i && (q[0] - p[0]).hypot(q[1] - p[1]) <= join);
+            if !lone {
+                continue;
+            }
+            let mut best: Option<(f64, usize, usize, f64, [f64; 3])> = None;
+            for (j, k) in segs.get(&(cx, cy)).into_iter().flatten().copied() {
+                if j == i {
+                    continue;
+                }
+                let q = &spans[j].1;
+                let (a, b) = (q[k], q[k + 1]);
+                let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+                let l2 = dx * dx + dy * dy;
+                if l2 < 1e-9 {
+                    continue;
+                }
+                let t = (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2).clamp(0.0, 1.0);
+                let (x, y) = (a[0] + t * dx, a[1] + t * dy);
+                let d = (p[0] - x).hypot(p[1] - y);
+                let at = cum[j][k] + t * l2.sqrt();
+                let total = *cum[j].last().unwrap();
+                if d <= join && at > MARGIN && total - at > MARGIN && best.is_none_or(|b| d < b.0) {
+                    best = Some((d, j, k, at, [x, y, a[2] + t * (b[2] - a[2])]));
+                }
+            }
+            if let Some((_, j, k, at, q)) = best {
+                cuts.entry(j).or_default().push((k, at, q));
+                moves.push((i, end, q));
+            }
+        }
+    }
+    // (a cut within MARGIN of another on its span is left out, and its branch stays loose)
+    let mut accepted: HashMap<usize, Vec<(usize, f64, [f64; 3])>> = HashMap::new();
+    for (j, mut list) in cuts {
+        list.sort_by(|a, b| a.1.total_cmp(&b.1));
+        let mut kept: Vec<(usize, f64, [f64; 3])> = Vec::new();
+        for c in list {
+            if kept.last().is_none_or(|l| c.1 - l.1 >= MARGIN) {
+                kept.push(c);
+            }
+        }
+        accepted.insert(j, kept);
+    }
+    let kept_cuts: std::collections::HashSet<[u64; 2]> = accepted.values().flatten().map(|c| [c.2[0].to_bits(), c.2[1].to_bits()]).collect();
+    let mut tails: Vec<(f64, Vec<[f64; 3]>)> = Vec::new();
+    for (j, list) in &accepted {
+        let spacing = spans[*j].0;
+        let mut cur = std::mem::take(&mut spans[*j].1);
+        for (k, _, q) in list.iter().rev() {
+            let mut tail = vec![*q];
+            tail.extend_from_slice(&cur[k + 1..]);
+            cur.truncate(k + 1);
+            cur.push(*q);
+            tails.push((spacing, tail));
+        }
+        spans[*j].1 = cur;
+    }
+    spans.extend(tails);
+    for (i, end, q) in moves {
+        // (only the branches whose cut was kept: its end is within the join distance of the cut)
         let b = &mut spans[i].1;
-        if end == 0 { b[0] = q } else { *b.last_mut().unwrap() = q }
+        let e = if end == 0 { b[0] } else { *b.last().unwrap() };
+        if (e[0] - q[0]).hypot(e[1] - q[1]) <= join && kept_cuts.contains(&[q[0].to_bits(), q[1].to_bits()]) {
+            if end == 0 { b[0] = q } else { *b.last_mut().unwrap() = q }
+        }
     }
 }
 
 /// The same as the `trolley.txt` text that says it.
 pub fn derive_text(root: &Path, tiles: &[(i32, i32, PathBuf)], chrono_dirs: &[PathBuf]) -> Option<String> {
     let mut spans = wire_spans(root, tiles, chrono_dirs);
+    // (a piece shorter than the joining distance would join its own two ends: the wire
+    // closes over it as it is)
+    let join = omsi_trolley::JOIN;
+    spans.retain(|(_, pts)| {
+        let (a, b) = (pts[0], pts[pts.len() - 1]);
+        let len: f64 = pts.windows(2).map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1])).sum();
+        !((a[0] - b[0]).hypot(a[1] - b[1]) <= join && len < 2.0 * join)
+    });
     split_t_junctions(&mut spans);
     if spans.is_empty() {
         return None;
@@ -254,5 +314,26 @@ mod tests {
         let mut alone = vec![(0.52, (0..=10).map(|k| [k as f64 * 10.0, 0.0, 5.0]).collect::<Vec<_>>()), (0.52, vec![[0.5, 0.5, 5.0], [10.0, 5.0, 5.0]])];
         split_t_junctions(&mut alone);
         assert_eq!(alone.len(), 2);
+    }
+
+    #[test]
+    fn several_branches_on_one_wire_are_all_cut_in_one_pass() {
+        let straight: Vec<[f64; 3]> = (0..=20).map(|k| [k as f64 * 10.0, 0.0, 5.0]).collect();
+        let mut spans = vec![
+            (0.52, straight),
+            (0.52, vec![[50.0, 0.3, 5.0], [60.0, 4.0, 5.0]]),
+            (0.52, vec![[120.0, -0.4, 5.0], [130.0, -5.0, 5.0]]),
+            (0.52, vec![[150.2, 0.2, 5.0], [160.0, 6.0, 5.0]]),
+        ];
+        split_t_junctions(&mut spans);
+        // the long wire in four pieces, every piece starting where the last ended
+        assert_eq!(spans.len(), 7);
+        let long: Vec<&Vec<[f64; 3]>> = spans.iter().filter(|s| s.1.len() > 2 || s.1[0][0] == s.1[1][0] - 10.0).map(|s| &s.1).collect();
+        assert!(long.len() >= 4);
+        // the branches start exactly on a cut
+        for b in 1..4 {
+            let e = spans[b].1[0];
+            assert!(spans.iter().enumerate().any(|(n, s)| n != b && (s.1[0] == e || *s.1.last().unwrap() == e)), "branch {b}");
+        }
     }
 }
