@@ -10,6 +10,32 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 
 - **LAN protocol 15**: a game of this version cannot join a session of an older one, nor the
   other way round (the AI traffic goes as a table, see below). Update the game on both sides.
+- **Every light casts a shadow** (Enhanced and Enhanced+): the lamps' shadow maps were four, now
+  there are forty-four, tiles of an eighth of the far shadow map's width (256 texels at the
+  default 2048) in six rows under it - only where the picture is an Enhanced one, so Vanilla and
+  Vanilla+ need no more than the far map itself - and smaller where the graphics card's textures are too low
+  for them. Twenty are the world's: the street lamps, floodlights and platform lights lighting
+  the view most keep their map while they stay among the strongest, and a lamp new to the set
+  takes a free one (six a frame at most). Eight look along the road from the headlamps of the
+  player's bus and of the cars in front of the camera (a car behind it that drives away has none),
+  a pair of lamps sharing a map, taken for a place to half a metre so that a car driving by draws
+  it every few frames, not every one; the car's own parts cast nothing into it. Sixteen are the
+  lamps of the player's saloon: they hang over the seats in the bus's own frame, so that the maps
+  hold still while the bus drives. They hold what stands still in the bus - the seats, the rails,
+  the panels, a shut door; the wheels, the steering wheel, a swinging door, the driver and the
+  passengers are left out until they have stood still for half a second - so that driving the
+  SD77 at night draws none of them again (a tile with a tree in the wind in it is drawn every
+  third frame, on its own turn). A handrail, a seat or a stanchion shades the floor, the seats
+  and the panels behind it - also where the model's light maps (`[matl_lightmap]`) lift a surface
+  to its texture's colour, which now stops where the lamps' light does not reach. The lamps name
+  their tile in their record, no more a search through four, and the beams in fog, rain and snow
+  of every lamp with a tile (the point lamps' too, not only the headlamps') are cut by it.
+  `OMSI_NO_CABIN_SHADOWS=1` leaves the saloon's lamps without shadows; `OMSI_DEBUG_DRAWS=1` logs
+  the tiles drawn each frame. A free camera high over the street chooses the lamps by their
+  distance along the ground, as the lamps round it are the ones that light what it sees.
+- **Mirrors drawn as the Enhanced picture show the sun's shadows too** (Graphics: Mirror quality:
+  *As the picture (Enhanced)*, which stays opt-in, *Standard* the default): they used to need
+  *Shadows in the mirrors* as well. They look up the window's shadow maps, no pass of their own.
 - **Shadows in the headlamps' beams** (Enhanced): the light the fog, rain or snow scatters
   from a headlamp or a street lamp's beam is cut where a pole, a car or a wall stands in
   the beam, as the sun's shafts are cut by the shadow maps: the beam looks up the lamp's
@@ -215,7 +241,7 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 
 ### Fixes
 
-- **Enhanced is twice as light in daylight**: since 0.2.42 the AI cars were lent headlamp beams
+- **A much lighter Enhanced frame by day**: since 0.2.42 the AI cars were lent headlamp beams
   whenever their lights were on, and in a grey winter noon (cars' lights on, no street lamp lit)
   those twelve cars' beams cost 13 ms of a 25 ms frame on an M4 - any light at all in the
   scene makes every pixel look through the lamp grid and has the weather's fog work the lamps'
@@ -235,6 +261,15 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   meshes and textures built on the frame it appeared on - 120 to 300 ms; it is tried again
   once the vehicle is read ahead. A parallel loop's caller sleeps while it waits for the items
   a helper has started instead of spinning.
+- Enhanced: no more snow, or any ground, glowing orange from a small light far away. The ground took
+  the map's baked lamp pools on top of the lamps themselves, three times over, through walls and
+  roofs and with a tail sixteen radii long: the snow of a courtyard behind a building lit by the
+  depot's floodlights glowed yellow at night, and so did the ground round a lamp whose pool ended
+  long before. The ground is lit by the lamps alone now, with their shadows (Vanilla and
+  Vanilla+ keep OMSI's baked light maps). The floodlights and the canopies of petrol stations
+  (declared 10 to 20 m, held to 15 m and dimmed to a fifth as if they were a building's window
+  glow) are lights as declared in the Enhanced picture, with a light of their own beside the held
+  one the plain pictures keep.
 - Review of the round: `hwban 3 session é` (a multi-byte last character of a duration) no longer
   stops a dedicated server; the hardware bans are given to every session a game hosts, not only
   the first of a run; the host passes voice frames only to players that have voice chat on
