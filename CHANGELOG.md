@@ -540,6 +540,15 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   500 MB was dropped. A texture memory set before (and OMSI's `texmemlimit`) was a texture
   budget and is not carried over: the video memory starts on Automatic. After a lost graphics
   device the safer settings take two thirds of what the card holds, not a fixed 800 MB.
+- **The frame rate no longer collapses after half an hour on DirectX 12 and Vulkan:** the game
+  kept its own total under the video memory setting while the card filled up anyway - the room
+  wgpu's allocator keeps free in its 128-256 MB blocks was left out of the bound, and a block
+  goes back to the driver only once it is empty. Far textures made smaller left holes, the
+  textures coming back needed bigger ones, so new blocks opened: on a 12 GB card set to 6 GB the
+  driver held 11.5 GB after 18 minutes (5.7 GB of it holes), the card paged, 10 fps. The holes
+  now count against the bound, so textures come back only into room the card really has, and
+  every card gets the allocator's small blocks (8-64 MB), which empty and go back to the driver
+  ([#2295](https://github.com/openOMSI-org/openOMSI/issues/2295)).
 - **Rain on the windows costs less:** the drops on the cab's panes are painted beside the
   frame instead of while it waits, and only the rows that changed go to the graphics card (12
   panes sent a megabyte each, 30 times a second). In heavy rain in the cab, on a Radeon 680M,
