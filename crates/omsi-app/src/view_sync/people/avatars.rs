@@ -320,8 +320,10 @@ impl Warm {
         }
         let Some(f) = self.figures.as_mut() else { return };
         for (path, pictures) in f.out.lock().drain(..) {
-            f.given.push(path.clone());
-            self.prepared.entry(path).or_insert(pictures);
+            if let hashbrown::hash_map::Entry::Vacant(entry) = self.prepared.entry(path.clone()) {
+                f.given.push(path);
+                entry.insert(pictures);
+            }
         }
     }
 }
