@@ -453,7 +453,7 @@ export async function start(extra) {
     pollNow();
     return r;
   } catch (e) {
-    toast(e.message, 'error');
+    toast(t(e.message), 'error');
     return null;
   }
 }
@@ -478,7 +478,7 @@ export async function installMod(path) {
     toast(t('Installing {name}…', { name: path.split(/[\\/]/).pop() }));
     pollNow();
   } catch (e) {
-    toast(e.message, 'error');
+    toast(t(e.message), 'error');
   }
 }
 
