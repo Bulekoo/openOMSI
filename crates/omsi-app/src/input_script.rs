@@ -573,6 +573,19 @@ impl App {
                         }
                     }
 
+                KeyCode::KeyP if shift_chord =>
+                    {
+                        // Shift+P: a rail vehicle's pantograph up or down (the key a tram
+                        // whose pantograph is a bus script's "door" has no other key for)
+                        if let Some(p) = self.player.as_mut() {
+                            let msg = match p.vehicle.toggle_pantograph() {
+                                Some(true) => "Raising the pantograph ...",
+                                Some(false) => "Lowering the pantograph ...",
+                                None => "This vehicle has no pantograph switch",
+                            };
+                            self.service_msg = Some((msg.to_string(), 4.0));
+                        }
+                    }
                 KeyCode::KeyR if shift_chord =>
                     {
                         // Shift+R: the next internet radio station (see radio.rs)
