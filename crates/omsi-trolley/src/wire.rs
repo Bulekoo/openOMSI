@@ -133,6 +133,11 @@ pub struct SwitchDef {
     pub mode: SwitchMode,
     /// The contact plate lies this far before the frog on the toe span (m).
     pub trigger: f32,
+    /// Where the contact plate lies: a span, the length along it, and the end of that span the
+    /// frog lies towards. It is `trigger` metres before the frog along the way in, over short
+    /// spans and plain joints too (a junction cut into short spans has its plate on the span
+    /// before the toe).
+    pub plate: (u32, f64, u8),
     /// The current that counts as power on (A).
     pub sense_amps: f32,
     pub invert: bool,
@@ -176,8 +181,9 @@ impl std::fmt::Debug for WireNet {
 }
 
 const CELL: f64 = 32.0;
-/// Ends closer than this are one node (m).
-const JOIN: f64 = 0.25;
+/// Ends closer than this are one node (m). Map authors draw the three wires of a junction
+/// up to a metre apart; the wire's own joints are exact.
+pub const JOIN: f64 = 1.2;
 /// The default dead stretch where two sections meet (m).
 pub const DEFAULT_INSULATOR: f32 = 0.8;
 
@@ -433,6 +439,31 @@ impl WireNet {
                 self.spans[si].ends[end as usize] = ni as u32;
             }
         }
+        // ends drawn up to JOIN apart meet in one point, so a shoe does not jump as it crosses
+        let mut touched: Vec<usize> = Vec::new();
+        for n in nodes.iter_mut() {
+            if n.ends.len() < 2 {
+                continue;
+            }
+            let pt = |e: &(u32, u8)| {
+                let s = &self.spans[e.0 as usize];
+                if e.1 == 0 { s.pts[0] } else { *s.pts.last().unwrap() }
+            };
+            let c = n.ends.iter().map(pt).sum::<DVec3>() / n.ends.len() as f64;
+            n.pos = c;
+            for (si, end) in &n.ends {
+                let s = &mut self.spans[*si as usize];
+                if *end == 0 { s.pts[0] = c } else { *s.pts.last_mut().unwrap() = c }
+                touched.push(*si as usize);
+            }
+        }
+        touched.sort_unstable();
+        touched.dedup();
+        for si in touched {
+            let s = &mut self.spans[si];
+            s.cum = std::iter::once(0.0).chain(s.pts.windows(2).scan(0.0, |a, w| { *a += w[0].distance(w[1]); Some(*a) })).collect();
+            s.mit = mitres(&s.pts);
+        }
         // where two sections meet there is a dead stretch, unless an insulator says how long
         for n in nodes.iter_mut() {
             let first = n.ends.first().map(|e| self.spans[e.0 as usize].section);
@@ -473,6 +504,7 @@ impl WireNet {
                 branch: ends[b_i],
                 mode: r.mode,
                 trigger: r.trigger,
+                plate: self.plate_for(ends[toe_i], r.trigger as f64),
                 sense_amps: r.sense,
                 invert: r.invert,
                 branch_right,
@@ -481,6 +513,35 @@ impl WireNet {
             self.nodes[ni].switch = Some(self.switches.len() as u32);
             self.switches.push(sw);
         }
+    }
+
+    /// The contact plate `trigger` metres before a frog, walking back from the toe over plain
+    /// joints (two spans meeting). Where the way back ends first, the plate lies just inside
+    /// the last span's far end.
+    fn plate_for(&self, toe: (u32, u8), trigger: f64) -> (u32, f64, u8) {
+        let mut near = toe;
+        let mut left = trigger;
+        for _ in 0..64 {
+            let sp = &self.spans[near.0 as usize];
+            let len = sp.len();
+            if left <= len {
+                return (near.0, if near.1 == 0 { left } else { len - left }, near.1);
+            }
+            left -= len;
+            let far = 1 - near.1;
+            let n = &self.nodes[sp.ends[far as usize] as usize];
+            match n.ends.as_slice() {
+                [a, b] => {
+                    let next = if *a == (near.0, far) { *b } else { *a };
+                    near = next;
+                }
+                _ => {
+                    let inset = 0.3f64.min(len * 0.5);
+                    return (near.0, if far == 0 { inset } else { len - inset }, near.1);
+                }
+            }
+        }
+        (near.0, 0.0, near.1)
     }
 
     /// Where spans meet, the wires of all of them leave the joint from the same place: the
