@@ -61,7 +61,7 @@ impl App {
             self.settings.metar_station=code.clone();
             crate::game_lists::remember_setting("metar_station",&code);
             self.session.metar_rx=None; self.session.metar_once=false; self.session.metar_next=0.0;
-            self.service_msg=Some((format!("METAR source: {code}"),3.0));
+            self.service_msg=Some((omsi_ui::i18n::tr_fill("METAR source: {code}", &[("{code}", &code)]),3.0));
         }else if !code.is_empty(){self.service_msg=Some(("ICAO must be exactly 4 letters".into(),3.0));}
         self.refresh_list();
     }
@@ -200,7 +200,7 @@ impl App {
             let n = |a: usize| c[a..a + 2].parse::<i64>().unwrap_or(0);
             let (h, m, sec) = (n(0), n(2), n(4));
             if h > 23 || m > 59 || sec > 59 {
-                self.service_msg = Some((format!("{:02}:{:02}:{:02} is no time of day", h, m, sec), 3.0));
+                self.service_msg = Some((omsi_ui::i18n::tr_fill("Not a time of day: {time}", &[("{time}", &format!("{:02}:{:02}:{:02}", h, m, sec))]), 3.0));
             } else if self.net.lan.as_ref().is_some_and(|l| l.role == omsi_net::Role::Client) {
                 self.service_msg = Some(("In a LAN session the host sets the clock".into(), 3.0));
             } else if self.real_time_locked() {
@@ -209,7 +209,7 @@ impl App {
                 let t = self.clock.time;
                 let day_start = t - t.rem_euclid(86400.0);
                 self.shift_clock(day_start + (h * 3600 + m * 60 + sec) as f64 - t);
-                self.service_msg = Some((format!("Clock: {:02}:{:02}:{:02}", h, m, sec), 3.0));
+                self.service_msg = Some((omsi_ui::i18n::tr_fill("Clock: {time}", &[("{time}", &format!("{:02}:{:02}:{:02}", h, m, sec))]), 3.0));
             }
         }
         self.refresh_list();
