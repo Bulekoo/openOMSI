@@ -999,7 +999,9 @@ fn legacy_trolley(model: &omsi_model::Model, meshes: &[VehicleMesh], boxes: &[(V
                     continue;
                 }
                 Some(var)
-            } else if (md.visible_any.is_empty() && md.animations.is_empty()) || file_named(&md.file, POLE_NAMES) {
+            } else if file_named(&md.file, POLE_NAMES) {
+                // Geometry alone also matches long interior lights and roof rails.
+                // Without a pole control variable, require a pole-named mesh.
                 None
             } else {
                 continue;
@@ -1128,6 +1130,8 @@ mod legacy_trolley_tests {
     fn static_raised_pole_meshes_become_poles() {
         let mut model = omsi_model::Model::default();
         model.meshes = vec![Default::default(); 4];
+        model.meshes[1].file = "pole_left.o3d".into();
+        model.meshes[2].file = "pole_right.o3d".into();
         let meshes: Vec<VehicleMesh> = (0..4).map(mesh).collect();
         let boxes = [
             (Vec3::new(-1.2, -5.8, 2.8), Vec3::new(1.2, 6.0, 3.0)),
@@ -1145,8 +1149,47 @@ mod legacy_trolley_tests {
         assert!(legacy.switches.is_empty());
         assert_eq!(legacy.mesh_defs, vec![1, 2]);
         assert!(legacy_trolley(&model, &meshes, &boxes, &program, bus, false).poles.is_empty());
-        model.meshes[2].animations.push(Default::default());
+        model.meshes[2].file = "roof_rail.o3d".into();
         assert!(legacy_trolley(&model, &meshes, &boxes, &program, bus, true).poles.is_empty());
+    }
+
+    #[test]
+    fn static_interior_meshes_do_not_identify_a_trolleybus() {
+        let mut model = omsi_model::Model::default();
+        model.meshes = ["interior_left.o3d", "interior_right.o3d"]
+            .into_iter()
+            .map(|file| omsi_model::MeshDef { file: file.into(), ..Default::default() })
+            .collect();
+        let meshes: Vec<VehicleMesh> = (0..2).map(mesh).collect();
+        let boxes = [
+            (Vec3::new(-0.75, -5.67, 2.49), Vec3::new(-0.43, 4.38, 4.45)),
+            (Vec3::new(0.43, -5.67, 2.49), Vec3::new(0.75, 4.25, 4.45)),
+        ];
+        let program = omsi_script::Program::default();
+        let bus = Path::new("/nonexistent/bus.bus");
+        let def = legacy_trolley(&model, &meshes, &boxes, &program, bus, true);
+        assert!(def.is_empty(), "interior geometry alone must not enable trolley traction");
+        take_model_poles(&mut model, &meshes, &boxes, &def);
+        assert!(model.meshes.iter().all(|md| md.animations.is_empty() && md.visible_any.is_empty()));
+    }
+
+    #[test]
+    fn pole_control_variables_still_identify_unnamed_meshes() {
+        let mut model = omsi_model::Model::default();
+        let names = ["cp_SHTANGALEV", "cp_SHTANGAPRAV"];
+        let mut program = omsi_script::Program::default();
+        for name in names {
+            program.declare_var(name);
+            model.meshes.push(omsi_model::MeshDef { visible: Some((name.into(), 1.0)), ..Default::default() });
+        }
+        let meshes: Vec<VehicleMesh> = (0..2).map(mesh).collect();
+        let boxes = [
+            (Vec3::new(-0.34, -6.26, 3.17), Vec3::new(-0.11, 0.27, 5.35)),
+            (Vec3::new(0.11, -6.26, 3.17), Vec3::new(0.34, 0.27, 5.35)),
+        ];
+        let def = legacy_trolley(&model, &meshes, &boxes, &program, Path::new("/nonexistent/b.bus"), false);
+        assert_eq!(def.poles.len(), 2);
+        assert_eq!(def.legacy.unwrap().switches, names);
     }
 
     #[test]
