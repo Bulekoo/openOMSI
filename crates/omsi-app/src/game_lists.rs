@@ -993,8 +993,18 @@ pub(crate) fn run_move(app: &mut App, kind: &ListKind, action: &str, mv: Move) -
         }
         ListKind::Vehicle(_) => {
             if matches!(mv, Move::Next) {
-                app.page_action(verb);
-                return None;
+                match verb {
+                    "custom_number_edit" => {
+                        if app.menus.menu_edit_number { app.apply_number_edit(); } else { app.start_number_edit(); }
+                    }
+                    "custom_ident_edit" => {
+                        if app.menus.menu_edit_ident { app.apply_ident_edit(); } else { app.start_ident_edit(); }
+                    }
+                    _ => {
+                        app.page_action(verb);
+                        return None
+                    },
+                }
             }
             Some(kind.clone())
         }
@@ -1157,20 +1167,34 @@ pub(crate) fn run_move(app: &mut App, kind: &ListKind, action: &str, mv: Move) -
         }
         ListKind::Numbers => {
             if let (Some((n, reg)), Some(p)) = (arg.split_once('\u{1}'), app.player.as_mut()) {
-                let v = &mut p.vehicle;
-                if let Some(i) = v.ty.program.str_var("number") {
-                    v.state.str_vars[i as usize] = n.to_string();
-                }
-                if !reg.is_empty() {
-                    if let Some(i) = v.ty.program.str_var("ident") {
-                        v.state.str_vars[i as usize] = reg.to_string();
-                    }
-                }
+                set_identity_to_player_vehicle(p, n, Some(reg));
                 app.service_msg = Some((omsi_ui::i18n::tr_fill("Fleet number {n}", &[("{n}", &n)]), 3.0));
             }
             None
         }
     }
+}
+
+/// Updates the fleet number and license plate of the player vehicle
+/// If `number` or `ident` is empty, leaves it unchanged; if `ident` is None, automatically
+/// generates a plate based on the number.
+pub(crate) fn set_identity_to_player_vehicle(p: &mut crate::player::Player, number: &str, ident: Option<&str>) {
+    let v = &mut p.vehicle;
+    if !number.is_empty() {
+        if let Some(i) = v.ty.program.str_var("number") {
+            v.state.str_vars[i as usize] = number.to_string();
+        }
+    }
+    let ident = match ident {
+        Some(id) => id,
+        None => &v.ty.def.chosen_plate_of_number(&v.number()),
+    };
+    if !ident.is_empty() {
+        if let Some(i) = v.ty.program.str_var("ident") {
+            v.state.str_vars[i as usize] = ident.to_string();
+        }
+    }
+
 }
 
 // the settings windows (options, vehicle, world), one concern a file

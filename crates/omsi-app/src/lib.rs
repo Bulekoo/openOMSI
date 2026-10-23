@@ -733,6 +733,8 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             loading: Default::default(),
             menu_edit: None,
             menu_edit_icao: false,
+            menu_edit_number: false,
+            menu_edit_ident: false,
             menu_edit_search: false,
             menu_search: String::new(),
             swap_pending: false,
