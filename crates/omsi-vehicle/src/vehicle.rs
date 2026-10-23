@@ -131,6 +131,17 @@ pub struct Vehicle {
     pub control_cable_back: Vec<ControlCable>,
     pub rowdy_factor: Option<(f32, f32)>,
     pub boogies: Option<f32>,
+    /// `[rail_class]` (an openOMSI extension): `tram`, `metro` or `train`, when the file's
+    /// shape does not tell.
+    pub rail_class: Option<String>,
+    /// `[pantograph_var]` / `[pantograph_trigger]` (openOMSI keywords): the script variable that
+    /// says the pantograph is raised (1) or down (0), and the mouse-event trigger that toggles it.
+    /// Without them a rail vehicle's pantograph is found by its mesh (see the game's
+    /// `detect_pantograph`).
+    pub pantograph_var: Option<String>,
+    pub pantograph_trigger: Option<String>,
+    /// The game found `pantograph_var` from the model; the file did not declare it.
+    pub pantograph_detected: bool,
     pub sinus: Option<[f32; 4]>,
     pub rail_body_osc: Option<[f32; 7]>,
     pub contact_shoes: Vec<[f32; 6]>,
@@ -274,6 +285,11 @@ impl Vehicle {
     /// Rails are what the file says they are: a `[boogies]`, a `[contact_shoe]` or a
     /// `[rail_body_osc]` (`rail_drive::is_rail` reads the same three; a rail car has all of
     /// a bogie, and Omsi.exe's `[type] 2` marks the same vehicles).
+    /// The vehicle's mass in kg: a `[mass]` under 100 is tonnes (as every `.bus` of OMSI 2 has it).
+    pub fn mass_kg(&self) -> f32 {
+        if self.mass < 100.0 { self.mass * 1000.0 } else { self.mass }
+    }
+
     pub fn is_rail(&self) -> bool {
         matches!(self.kind, VehicleKind::Other(2))
             || self.boogies.is_some()
@@ -348,6 +364,9 @@ impl Vehicle {
                 "view_ticketselling" => v.view_ticketselling = Some(v.cameras_driver.len().saturating_sub(1)),
                 "set_camera_std" => v.camera_std = r.usize(),
                 "set_camera_outside_center" => v.camera_outside_center = r.f32s::<3>(),
+                "rail_class" => v.rail_class = Some(r.str().to_string()),
+                "pantograph_var" => v.pantograph_var = Some(r.str().to_string()),
+                "pantograph_trigger" => v.pantograph_trigger = Some(r.str().to_string()),
                 "mass" => v.mass = r.f32(),
                 "momentofintertia" => v.moment_of_inertia = r.f32s::<3>(),
                 "boundingbox" => {
