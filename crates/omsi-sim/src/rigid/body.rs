@@ -244,43 +244,10 @@ impl RigidBody {
             let rot = self.orientation;
             let up = rot.mul_vec3(Vec3::Z);
             let mut force = Vec3::new(0.0, 0.0, -9.81 * self.mass);
-            // the air: drag and side force from the vehicle's own size, the air's density and
-            // the wind (see `realism::air_force`). Without it a bus rolling downhill without
-            // its brakes ran on to any speed, and no gale ever moved one
-            let inv = rot.inverse();
-            let mut torque = Vec3::ZERO; // body frame
-            if self.realistic {
-                // (every OMSI 2 bus already has its still-air drag in its brake script - bremse.osc
-                // adds 9.5 m2 x cw 0.8 x 0.6 v2 to every wheel's brake force - so only what the weather
-                // changes is added here: the wind and an air that is not 1.2 kg/m3)
-                let (f, t) = realism::wind_force(&self.aero, self.air_density, inv.mul_vec3(self.velocity), inv.mul_vec3(self.wind));
-                force += rot.mul_vec3(f);
-                torque = t;
-            } else {
-                let v = self.velocity;
-                let area = (self.mass / 2200.0).clamp(2.0, 8.5);
-                force -= v * v.length() * (0.5 * 1.2 * 0.6 * area);
-            }
-            // where on the road's unevenness the body stands (a reversing bus retraces it)
-            let body_fwd_now = rot.mul_vec3(Vec3::Y);
-            let ds = self.velocity.dot(body_fwd_now) as f64 * h as f64;
-            self.road_s += ds;
-            for w in self.wheels.iter_mut() {
-                w.surface_mix = (w.surface_mix + ds.abs() as f32).min(1.0);
-                if w.surface != w.surface_now {
-                    (w.surface_was, w.surface_now, w.surface_mix) = (w.surface_now, w.surface, 0.0);
-                }
-                if !self.realistic {
-                    (w.mu_scale, w.rough) = (1.0, 0.0);
-                    continue;
-                }
-                w.mu_scale = realism::grip_scale(w.surface_now, self.wetness);
-                // the road under each tyre, eased from the old surface's over a metre
-                let side = (w.attach.x > 0.0) as u8;
-                let at = self.road_s + w.attach.y as f64;
-                let now = realism::roughness(w.surface_now, at, side);
-                w.rough = if w.surface_mix < 1.0 { realism::roughness(w.surface_was, at, side) * (1.0 - w.surface_mix) + now * w.surface_mix } else { now };
-            }
+            // the air and the road under the tyres (see `air_and_road`)
+            let (air_force, air_torque) = self.air_and_road(rot, h);
+            force += air_force;
+            let mut torque = air_torque; // body frame
             // Every driven wheel of the train takes its share of `M_Wheel`. A body without
             // driven wheels of its own (a pusher's front section) was pushed by nothing: the
             // count was clamped to one and the torque went to wheels that do not drive.
@@ -541,6 +508,46 @@ impl RigidBody {
         }
         self.accel_body = accel_sum / substeps as f32;
         self.settle(drive_torque, brake);
+    }
+
+    /// What the air does to the body this substep (world force, body-frame torque) and where the
+    /// tyres stand on the road's unevenness and its surfaces (see `realism`). Without it a bus
+    /// rolling downhill without its brakes ran on to any speed, and no gale ever moved one.
+    fn air_and_road(&mut self, rot: Quat, h: f32) -> (Vec3, Vec3) {
+        let inv = rot.inverse();
+        let (mut force, mut torque) = (Vec3::ZERO, Vec3::ZERO);
+        if self.realistic {
+            // (every OMSI 2 bus already has its still-air drag in its brake script - bremse.osc
+            // adds 9.5 m2 x cw 0.8 x 0.6 v2 to every wheel's brake force - so only what the weather
+            // changes is added here: the wind and an air that is not 1.2 kg/m3)
+            let (f, t) = realism::wind_force(&self.aero, self.air_density, inv.mul_vec3(self.velocity), inv.mul_vec3(self.wind));
+            force = rot.mul_vec3(f);
+            torque = t;
+        } else {
+            let v = self.velocity;
+            let area = (self.mass / 2200.0).clamp(2.0, 8.5);
+            force = -v * v.length() * (0.5 * 1.2 * 0.6 * area);
+        }
+        // where on the road's unevenness the body stands (a reversing bus retraces it)
+        let ds = self.velocity.dot(rot.mul_vec3(Vec3::Y)) as f64 * h as f64;
+        self.road_s += ds;
+        for w in self.wheels.iter_mut() {
+            w.surface_mix = (w.surface_mix + ds.abs() as f32).min(1.0);
+            if w.surface != w.surface_now {
+                (w.surface_was, w.surface_now, w.surface_mix) = (w.surface_now, w.surface, 0.0);
+            }
+            if !self.realistic {
+                (w.mu_scale, w.rough) = (1.0, 0.0);
+                continue;
+            }
+            w.mu_scale = realism::grip_scale(w.surface_now, self.wetness);
+            // the road under each tyre, eased from the old surface's over a metre
+            let side = (w.attach.x > 0.0) as u8;
+            let at = self.road_s + w.attach.y as f64;
+            let now = realism::roughness(w.surface_now, at, side);
+            w.rough = if w.surface_mix < 1.0 { realism::roughness(w.surface_was, at, side) * (1.0 - w.surface_mix) + now * w.surface_mix } else { now };
+        }
+        (force, torque)
     }
 
     /// Point every axle at the centre of the turn the steering asks for.
