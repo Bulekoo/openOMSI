@@ -86,6 +86,9 @@ pub(crate) struct PostUniform {
     pub(crate) b: [f32; 4],
     pub(crate) c: [f32; 4],
     pub(crate) d: [f32; 4],
+    /// x how much of a metered shortfall (a picture darker than the light model expects: a
+    /// tunnel, a dark cab) the eye makes up, the rest as post.wgsl's `c.x` does for a surplus
+    pub(crate) e: [f32; 4],
 }
 
 /// The enhanced lighting (enhanced_common.wgsl `Enhanced`).
@@ -121,6 +124,16 @@ pub(crate) struct EnhancedUniform {
     pub(crate) moon_light: [f32; 4],
     /// `Lighting::condensation`
     pub(crate) condensation: [f32; 4],
+    /// x the cumulus layer's base, y its top (m over the ground), z the altocumulus cover,
+    /// w the storm's activity
+    pub(crate) layers: [f32; 4],
+    /// The lightning of this frame: x the light it throws on a surface facing it (1 = 10 000
+    /// lux), yz towards it (horizontal unit vector), w its elevation (rad)
+    pub(crate) flash: [f32; 4],
+    /// xyz towards the flash (unit vector), w how bright its channel is
+    pub(crate) flash2: [f32; 4],
+    /// x a number the channel's shape is drawn from
+    pub(crate) flash3: [f32; 4],
 }
 
 #[repr(C)]
@@ -138,4 +151,11 @@ pub(crate) struct SsaoUniform {
     /// xy: the projection's off-centre shift (0 for the window's own symmetric frustum;
     /// a headset eye or a triple screen's side panel has one)
     pub(crate) shift: [f32; 4],
+    /// x the wide occlusion's reach (m), y its strength (0 = off), z the bounced light's
+    /// gain (0 = off), w the largest radiance a bounce is taken from
+    pub(crate) wide: [f32; 4],
+    /// From a view-space point to the last frame's clip space (the bounced light's history),
+    /// and in x whether that picture can be read (see `bounce_history`).
+    pub(crate) reproj: [[f32; 4]; 4],
+    pub(crate) history: [f32; 4],
 }

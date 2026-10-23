@@ -160,6 +160,7 @@ flags! {
     OMSI_BUDGET_FROM: Text, Test, Use, "-", "Offscreen with OMSI_TEXTURE_MEMORY: x,y[,MB] - the texture budget is met as seen from that point.";
     OMSI_BUILD: Text, Build, Build, "-", "Compile-time (env!): the commit the binary was built from, set by build.rs. Not read at runtime.";
     OMSI_CABIN_LOG: Bool, Test, Use, "off", "Offscreen --drive: print the cabin air and the film on the windscreen, sides and rear every 20 s.";
+    OMSI_CAM_SWEEP: Text, Test, Use, "-", "yaw[,jump]: the offscreen warm frames come from a camera turning yaw degrees a frame and ending in the picture's pose; with a jump (m), from a place that far to the side (a cut). For checking what reads the last frame.";
     OMSI_CAM_VEHICLE: Text, Test, Use, "-", "Offscreen: x,y,z,yaw,pitch[,fov] - a camera in the bus's own frame.";
     OMSI_CHARACTER_MODELS: Text, Tuning, Use, "settings", "Override the character models for a game session: original (OMSI's people) or improved (the Microsoft Rocketbox avatars, drawn on this computer only).";
     OMSI_CHECK_ENTRIES: Bool, Test, Use, "off", "Map check: is there ground to stand on where a player is put down.";
@@ -465,6 +466,7 @@ flags! {
     OMSI_SKIP_PIPE: Text, Test, Frame, "-", "Pipeline kinds to leave out of the main pass (comma-separated numbers).";
     OMSI_SKY_CUBE_EVERY_FRAME: Bool, Switch, Frame, "off", "Enhanced: redraw a slice of the sky cube every frame again, not at most 60 a second (A/B).";
     OMSI_SPOT_SELECT: Num, Test, Use, "-", "Turn on spotlight n (headlight pictures).";
+    OMSI_STORM: Text, Tuning, Use, "-", "activity[,azimuth]: a thunderstorm of this activity (0..1) over the place whatever the weather; with an azimuth (degrees, 0 east, 90 north) the flash stands frozen there at its first stroke (for checks).";
     OMSI_SURFACE_BIAS: Num, Tuning, Use, "-24", "Depth bias of road surfaces.";
     OMSI_SURFACE_FLUSH: Num, Tuning, Once, "0.12", "Height in metres under which a surface counts as flush with the road.";
     OMSI_SUSP_TRACE: Text, Debug, Use, "-", "Offscreen CSV: body height and each wheel's travel and load every frame.";
@@ -507,6 +509,7 @@ flags! {
     OMSI_WATCH_VARS: Text, Debug, Use, "-", "a,b: log every change of these variables of the player's bus.";
     OMSI_WETNESS: Num, Test, Use, "weather", "Ground wetness the picture is drawn with.";
     OMSI_WHEEL_TRACE: Bool, Debug, Use, "off", "Log the deepest a drawn tyre goes into the road, once a second.";
+    OMSI_WIDE_AO: Text, Tuning, Use, "-", "reach,strength,gain,max: the street-scale occlusion of the sky and the bounced light (m, 0..1, 0..1, radiance).";
     OMSI_WINDY_TREES: Text, Tuning, Use, "settings", "0 or 1: trees in the wind off or on (A/B renders).";
     OMSI_WINE: Text, Setup, Use, "PATH", "The Wine binary for Windows plugins.";
     OMSI_ZFIGHT_PROBE: Num, Debug, Once, "-", "Z-fighting check: the draw order's depth steps within an object from a hash (1) or its reverse (2); offscreen pictures of both differ where an object's surfaces lie in one plane.";

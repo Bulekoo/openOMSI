@@ -90,8 +90,12 @@ fn pixel_ray(at: vec2<f32>) -> vec4<f32> {
 @group(0) @binding(7) var t_shadow_far: texture_depth_2d;
 const SHAFT_DEPTH_RANGE: f32 = 2199.0;
 const SHAFT_STEPS: u32 = 16u;
-// how far the shafts are followed (the near cascade's reach, a little less)
-const SHAFT_REACH: f32 = 180.0;
+// how far the shafts are followed in the dense steps (the near cascade's reach, a little less)
+const SHAFT_NEAR: f32 = 180.0;
+// and, past it, in a few sparse ones to the far map's reach (the beams of a misty avenue, or
+// a low sun between the blocks, reach farther than the first hundred metres)
+const SHAFT_FAR_STEPS: u32 = 4u;
+const SHAFT_REACH: f32 = 420.0;
 
 // Whether the sun reaches a point in the air (1) or a house or a crown stands between (0).
 fn sun_reaches(x: vec3<f32>) -> f32 {
@@ -123,8 +127,10 @@ fn sun_shafts(c: vec3<f32>, d: vec3<f32>, len: f32, jitter: f32) -> vec3<f32> {
     if (camera.shadow.x < 0.5 || s.z <= 0.0 || max(e_sun.r, e_sun.g) < 1e-4) {
         return vec3<f32>(0.0);
     }
-    let end = min(len, SHAFT_REACH);
+    let end = min(len, SHAFT_NEAR);
     let dt = end / f32(SHAFT_STEPS);
+    let far_len = max(min(len, SHAFT_REACH) - SHAFT_NEAR, 0.0);
+    let dt_far = far_len / f32(SHAFT_FAR_STEPS);
     let cos_t = dot(s, d);
     let p_fog = hg_phase(cos_t, 0.55) * 0.9;
     let p_air = hg_phase(cos_t, 0.7);
@@ -136,8 +142,13 @@ fn sun_shafts(c: vec3<f32>, d: vec3<f32>, len: f32, jitter: f32) -> vec3<f32> {
         return vec3<f32>(0.0);
     }
     var shade = vec3<f32>(0.0);
-    for (var i = 0u; i < SHAFT_STEPS; i = i + 1u) {
-        let t = (f32(i) + jitter) * dt;
+    for (var i = 0u; i < SHAFT_STEPS + SHAFT_FAR_STEPS; i = i + 1u) {
+        let far = i >= SHAFT_STEPS;
+        if (far && far_len <= 0.0) {
+            break;
+        }
+        let t = select((f32(i) + jitter) * dt, SHAFT_NEAR + (f32(i - SHAFT_STEPS) + jitter) * dt_far, far);
+        let w = select(dt, dt_far, far);
         let x = c + d * t;
         let lit = sun_reaches(x);
         if (lit >= 0.999) {
@@ -147,7 +158,7 @@ fn sun_shafts(c: vec3<f32>, d: vec3<f32>, len: f32, jitter: f32) -> vec3<f32> {
         let s_fog = enh.fog.x * exp(-enh.fog.y * h);
         let s_air = enh.fog.w * exp(-h / 1500.0);
         let tau = layer_depth(enh.fog.x, enh.fog.y, h0, h, t) + layer_depth(enh.fog.w, 1.0 / 1500.0, h0, h, t);
-        shade = shade + vec3<f32>((1.0 - lit) * (s_fog * p_fog + s_air * p_air) * exp(-tau) * dt);
+        shade = shade + vec3<f32>((1.0 - lit) * (s_fog * p_fog + s_air * p_air) * exp(-tau) * w);
     }
     return -shade * e_sun;
 }

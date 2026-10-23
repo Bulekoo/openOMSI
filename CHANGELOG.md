@@ -102,6 +102,47 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 - The bus preview of the launcher draws two pictures ahead while it turns, the JPEG is made on
   its own thread, and a turning bus is drawn smaller on a phone (the picture at rest is sharp),
   so the preview keeps up with the screen instead of about 20 pictures a second.
+
+**Weather and light (Enhanced)**
+
+- The eye adapts the way an eye does: a picture much darker than the light model expects
+  (a dark cab, an underpass) is made up for over some three seconds - five-sixths of it,
+  across six stops, where a bright surplus (snow, the sun in view) still only darkens the
+  picture a little - and a dazzle on coming out passes in about a second. This is for the
+  day: through the dusk it gives way to the old gentle metering, so the blue hour and the
+  twilight of a summer night are not shown brighter than the sun under the horizon makes
+  them (a white night comes only where the sun stays a few degrees below it). The
+  Enhanced+ picture takes the same metering.
+- The sky's occlusion by houses, trees and hills is worked out on the street's scale (18 m),
+  not only the first two metres: a narrow street or the shade under a crown is darker than a
+  square, and the surfaces round a point light it with what they send back (the last
+  frame's picture, colour included: a sunlit wall lights the one across the street, lit
+  windows light the street at night). The light is read where the surface was in the last
+  frame's picture, so it follows a turning head and a moving bus, and not at all after a
+  cut (another view, a jump) or where a surface was hidden then; the cab's own dashboard
+  and pillars do not shade the street. It is the Enhanced picture's with the AO on: the
+  other pipelines pay nothing for it (two-channel targets, no history picture, the old
+  blur). A lamp or a lit sign among the surfaces does not stand in the picture as a bright
+  square. The `street_light` setting (Graphics: Street light: Auto, On, Off) switches it.
+  It is off by default; On enables it, and Auto enables it except on a small or shared
+  graphics chip. The optimiser turns it off when the
+  GPU is the limit. `OMSI_WIDE_AO=reach,strength,gain,max` tunes it.
+- The physical weather model keeps the water of the grey deck (its optical depth, a thin
+  stratus to a raining nimbostratus), so a rainy or winter day is as bright or as dark as
+  its cloud is thick. It also gives the cumulus layer its own base (the condensation level)
+  and depth (a shallow sheet under a high, towers in moist rising air), altocumulus, and
+  thunderstorms.
+- A thunderstorm has lightning: flashes of several strokes light the clouds from inside and
+  the street with a cold light, a cloud-to-ground stroke draws its crooked channel, and the
+  thunder is heard after the distance's delay, from the flash's direction. The flashes are
+  worked out for every pipeline from the day's seed (a replay of a day repeats them), so the
+  thunder of a storm is there without the Enhanced picture. `OMSI_STORM=activity[,azimuth]`
+  shows one.
+- The sun's shafts between houses and trees are followed up to 420 m: the first 180 m in
+  the same steps as before, the rest in a few wider ones.
+- The cumulus layer's height follows the ground under the player, so a map in the hills
+  keeps its clouds.
+
 **Navigator and city map**
 
 - The navigator and the city map draw every map in the style of Apple Maps, from the map

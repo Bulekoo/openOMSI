@@ -148,9 +148,10 @@ pub(crate) fn scene_shader_text(gl: bool) -> String {
         .replace("textureSample(t_trans, s_tile, uv)", &clamped("t_trans"))
         .replace("textureSample(t_night, s_tile, uv)", &clamped("t_night"))
         .replace("ao = ao_at(in.clip.xy, in.world);", "ao = 1.0;")
+        .replace("let ag = ao_gi_at(in.clip.xy, in.world);", "let ag = vec4<f32>(1.0, 0.0, 0.0, 0.0);")
         .replace("rt_at(in.clip.xy, in.world)", "vec4<f32>(1.0, 0.0, -1.0, 0.0)");
     debug_assert!(!out.contains("s_tile, uv)"));
-    debug_assert!(!out.contains("ao_at(in.") && !out.contains("rt_at(in."));
+    debug_assert!(!out.contains("ao_at(in.") && !out.contains("ao_gi_at(in.") && !out.contains("rt_at(in."));
     out
 }
 

@@ -53,13 +53,14 @@ mod tests {
     /// standing between other vehicles' lamps and what lies behind it, and clear vehicle
     /// lamps taking coverage from their active night map, and #3019's larger rain caps, and the tracked panes' snow laid out in the film mesh's own
     /// metres, and the lamps' shadow maps by the tile their record names and the saloon's visibility term
-    /// with the ground no longer lit by the tile light map).
+    /// with the ground no longer lit by the tile light map, and the street-scale
+    /// occlusion, the bounced light and the lightning's light).
     /// (with Unix line ends: a Windows checkout may turn the parts' into CRLF, as it did the
     /// single files', and the 0.2.31 release's Windows test failed on that alone)
     #[test]
     fn assembled_shaders_are_the_old_files() {
         let (scene, enhanced) = (super::SCENE.replace("\r\n", "\n"), super::ENHANCED.replace("\r\n", "\n"));
-        assert_eq!((scene.len(), fnv1a(&scene)), (127_064, 0x5258_0f7e_2b60_fc94));
-        assert_eq!((enhanced.len(), fnv1a(&enhanced)), (91_447, 0xa5b4_2e35_ecb8_33c8));
+        assert_eq!((scene.len(), fnv1a(&scene)), (129_213, 0xb635_89c2_5c0d_859a));
+        assert_eq!((enhanced.len(), fnv1a(&enhanced)), (91_777, 0x1500_898a_3423_0f71));
     }
 }

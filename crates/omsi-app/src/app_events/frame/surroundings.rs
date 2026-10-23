@@ -202,6 +202,12 @@ pub(super) fn lights(cx: LightsCx, dt: f32, daylight: omsi_sim::Daylight, behind
                     s.volume = cx.common.settings.vol_ambient;
                     let people = cx.people.humans.as_ref().map(|h| h.people.iter().filter(|p| (p.position - cam.position).length() < 40.0).count() as u32).unwrap_or(0);
                     let open = cx.player.player.as_ref().and_then(|p| p.vehicle.var("Snd_OutsideVol")).unwrap_or(0.0);
+                    // the flashes the picture showed: their thunder comes at the speed of sound
+                    if let Some(r) = cx.gfx.renderer.as_mut() {
+                        for (delay, distance, dir) in r.take_strikes() {
+                            s.thunder(delay, distance, dir, cam.position);
+                        }
+                    }
                     s.update(
                         a,
                         crate::soundscape::Moment {

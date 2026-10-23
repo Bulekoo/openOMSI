@@ -150,7 +150,7 @@ impl Renderer {
         let prepass_reach = if depth_wanted || env.no_ao_reach { f32::MAX } else { AO_PREPASS_REACH };
         // (only the bind group is made again, by `upload_draw_list`: dropping the instance
         // buffers for it wrote every instance's entries again at each render-scale step)
-        if prepass_on && self.ensure_ao(width, height) {
+        if prepass_on && self.ensure_ao(width, height, crate::lighting::bounce_wanted(ao_on, enhanced_frame, self.street_light())) {
             // a new AO texture: the camera bind group must point at it
             scene.camera_bind_group = None;
             self.targets.hdr_targets.clear();
@@ -245,6 +245,17 @@ impl Renderer {
             .projection
             .map(|p| p * Mat4::look_to_rh((camera.position - ro).as_vec3(), camera.forward(), camera.up()))
             .unwrap_or_else(|| camera.view_proj(aspect, ro));
+        // the last frame's picture for the bounced light, found again under this frame's view
+        if lead_view {
+            let size = (f.width, f.height);
+            self.tone.bounce_reproj = if crate::lighting::bounce_wanted(ao_on, enhanced, self.street_light()) {
+                let view = Mat4::look_to_rh(cam_rel, camera.forward(), camera.up());
+                crate::lighting::bounce_history(self.tone.bounce_prev, view, ro, size, cam_rel, camera.forward(), f.dt)
+            } else {
+                (Mat4::ZERO.to_cols_array_2d(), 0.0)
+            };
+            self.tone.bounce_prev = crate::lighting::bounce_wanted(ao_on, enhanced, self.street_light()).then_some((vp_mat, ro, size, cam_rel, camera.forward()));
+        }
         // where the tile light maps lie, relative to the render origin
         {
             let (lx, ly, side) = self.lights.lm_place.get();
@@ -437,6 +448,12 @@ impl Renderer {
             if f.env.debug_sky && changed {
                 log::info!("sky glow from the lamps: {raw:.3} (taken {:.3})", step.exp());
             }
+        }
+        // the lightning goes on for every pipeline (the sound follows it); only the Enhanced one draws it
+        if lead_view {
+            self.tone.lightning.seed_once(lighting.day_seed);
+            let storm = crate::lighting::forced_storm().map_or(lighting.storm, |f| f.0).clamp(0.0, 1.0);
+            self.tone.flash = self.tone.lightning.step(storm, f.dt);
         }
         let probe_redraw = enhanced
             && (lead_view || self.sky.sky_state.is_none())
