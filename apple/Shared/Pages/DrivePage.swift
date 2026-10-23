@@ -583,6 +583,7 @@ struct TimeCard: View {
             Field("Weather", help: weatherHelp) {
                 SelectField(options: weatherOptions, selection: weatherValue, onChange: pickWeather)
             }
+            CabinTemperatureOption()
             if c.weather.hasPrefix("metar:") {
                 Field("Airport") { AirportField(code: WeatherChoice.metar(c)) }
             }
@@ -663,6 +664,19 @@ struct TimeCard: View {
         f.locale = Locale(identifier: "en_US_POSIX")
         f.isLenient = false
         if let d = f.date(from: date.trimmingCharacters(in: .whitespaces)) { store.act("date", ["date": f.string(from: d)]) } else { date = store.choice.date }
+    }
+}
+
+struct CabinTemperatureOption: View {
+    @Environment(LauncherStore.self) private var store
+
+    var body: some View {
+        let temperature = store.setting("units")?.string == "us" ? "72°F" : "22°C"
+        VStack(alignment: .leading, spacing: 4) {
+            ToggleRow(label: "Start with a comfortable cabin temperature", help: LocalizedStringKey(tr("Sets the cabin to {temperature} when starting a drive.", ["temperature": temperature])), isOn: store.choice.comfortable_cabin_on_start) {
+                store.act("flag", ["name": "comfortable_cabin_on_start", "on": $0])
+            }
+        }
     }
 }
 
