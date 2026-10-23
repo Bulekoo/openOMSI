@@ -106,11 +106,7 @@ fn plain(label: &str) -> (&str, bool) {
 
 pub(crate) fn draw(sh: &mut Shell, v: &PauseView) {
     let size = sh.ui.size;
-    if v.list.is_some() {
-        if let Some(category) = v.rail_open.and_then(navigation::Category::of) {
-            sh.pause_category = category;
-        }
-    }
+    // Keep the originating category while its list is open, including Quick actions.
     let sidebar = size.x >= 700.0;
     let left = if sidebar { RAIL_W } else { 0.0 };
     let page = Rect::new(left, 0.0, (size.x - left).max(0.0), size.y);
@@ -272,6 +268,7 @@ fn settings_rows(sh: &mut Shell, v: &PauseView, list: &ListView, body: Rect, anc
     let mut sel_y = None;
     let mut dd_anchor = None;
     let dd_row = list.dropdown.as_ref().map(|d| d.row);
+    let any_hover = sh.ui.hover(body);
     sh.ui.scroll_area(&key, body, &mut |ui, view| {
         let gap = 20.0;
         let cw = ((view.w - 8.0 - gap * (cols - 1) as f32) / cols as f32).max(0.0);
@@ -295,7 +292,7 @@ fn settings_rows(sh: &mut Shell, v: &PauseView, list: &ListView, body: Rect, anc
                         ui.p().rect(Rect::new(inner.x, y - 2.0, inner.w, 1.0), Color::rgba(255, 255, 255, 0.045));
                     }
                     let r = Rect::new(inner.x - 8.0, y, inner.w + 16.0, rh - 4.0);
-                    let kbd = v.kbd && k == list.sel;
+                    let kbd = v.kbd && !any_hover && k == list.sel;
                     if kbd { sel_y = Some((y - view.y, rh)); }
                     if let Some(action) = settings_row(ui, k, label, r, kbd, dd_row == Some(k), &mut dd_anchor) { acts.push(action); }
                 }
