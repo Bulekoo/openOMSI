@@ -3747,6 +3747,7 @@ dependencies = [
  "omsi-map",
  "omsi-net",
  "omsi-sim",
+ "omsi-timetable",
  "omsi-weather",
  "serde",
  "serde_json",
