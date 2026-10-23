@@ -219,12 +219,16 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   whenever their lights were on, and in a grey winter noon (cars' lights on, no street lamp lit)
   those twelve cars' beams cost 13 ms of a 25 ms frame on an M4 - any light at all in the
   scene makes every pixel look through the lamp grid and has the weather's fog work the lamps'
-  air light out. They are lent only while it is dark enough (the darkness is 0.12 or more) for
-  them to show; the night picture is as before. 27.4 ms -> 13.0 ms of GPU a frame in that
-  place.
+  air light out. They are lent only while the scene is dark enough for them to show (the sun's
+  height and the weather's gloom, the larger, is 0.12 or more): in a grey or rainy day the three
+  nearest cars within 60 m, in the dark the twelve within 200 m as before. In a clear day, 27.4
+  ms -> 13.0 ms of GPU a frame; in a heavy grey snow day 27.6 ms -> 19 ms; the night picture is
+  as before.
 - **AI cars and buses are drawn with their model's lower levels of detail** (`[LOD]`, as
   Omsi.exe picks them by the vehicle's size on the screen, and as the scenery's levels are):
-  only the first level was loaded, so each AI vehicle was all its meshes at any distance.
+  only the first level was loaded, so each AI vehicle was all its meshes at any distance. A
+  model with interior lamps, displays, switched textures or a lit or animated lower level (a bus,
+  a tram) keeps its full meshes.
   `OMSI_FORCE_LOD=1` draws the lower levels at any size, for a look at them.
 - **Timetable buses no longer stall the frame when they appear**: a departure whose vehicle was
   not on the graphics card yet (the clock set far ahead, a type nothing read ahead) had its

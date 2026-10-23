@@ -31,6 +31,36 @@ pub(super) fn lod_bands(model: &omsi_model::Model, present: &[usize]) -> Vec<(us
     lod_bands_of(&mins, present)
 }
 
+/// Whether the lower levels may stand in for the full model of `vt`: the plain meshes of a
+/// lower level have no switched texture, interior lamp, display, animation or night map of
+/// their own, so a model that has lit windows, a destination display or a switched look (a bus,
+/// a tram) keeps its full meshes, and so does one whose lower level is itself lit (a lit window
+/// must not go dark at the size the level takes over). A car's own lamp glows are coronas, which
+/// the full model's night maps only add to: the car's lower level does without them.
+pub(super) fn lods_misfit(vt: &omsi_sim::VehicleType) -> Option<&'static str> {
+    let unswitched = |o: &omsi_model::MaterialDef| o.change.is_none() && !o.item;
+    let unlit = |o: &omsi_model::MaterialDef| o.nightmap.is_none() && o.lightmap.is_none() && o.lightmaps.is_empty();
+    // (a number plate's text texture is no display: nobody reads it from this far)
+    if !vt.model.interior_lights.is_empty() {
+        Some("interior lamps")
+    } else if !vt.model.script_textures.is_empty() {
+        Some("script textures (displays)")
+    } else if !vt.texchanges.is_empty() {
+        Some("switched textures")
+    } else if !vt.meshes.iter().all(|m| m.overrides.iter().all(unswitched)) {
+        Some("switched materials")
+    } else if !vt.lod_meshes.iter().all(|m| m.overrides.iter().all(|o| unswitched(o) && unlit(o))) {
+        Some("a lit or switched lower level")
+    } else if !vt.lod_meshes.iter().all(|m| {
+        let d = &vt.model.meshes[m.def_index];
+        d.animations.is_empty() && d.anim_parent.is_none() && d.visible.is_none() && d.visible_any.is_empty()
+    }) {
+        Some("an animated or conditional lower level")
+    } else {
+        None
+    }
+}
+
 /// The levels with meshes: the full model's and those of `far`.
 pub(super) fn levels_present(far: &[FarMesh]) -> Vec<usize> {
     let mut levels: Vec<usize> = std::iter::once(0).chain(far.iter().map(|f| f.level)).collect();
@@ -53,11 +83,23 @@ impl World {
     ) -> Vec<FarMesh> {
         let vt = up.vt;
         let mut far = Vec::new();
-        for (k, vm) in vt.lod_meshes.iter().enumerate() {
-            if skip {
-                break;
+        // (the player's own bus never draws a lower level, nor does a model they would dim)
+        if skip || up.player {
+            return far;
+        }
+        if let Some(why) = lods_misfit(vt).filter(|_| !vt.lod_meshes.is_empty()) {
+            if omsi_cfg::flags::OMSI_PROFILE.is_set() {
+                log::info!("  vehicle set {}: its lower levels of detail are not used ({why})", vt.def.path.file_name().unwrap_or_default().to_string_lossy());
             }
+            return far;
+        }
+        for (k, vm) in vt.lod_meshes.iter().enumerate() {
             let def = &vt.model.meshes[vm.def_index];
+            // (a mesh drawn only from some views: an AI car is seen from outside, as the full
+            // model's - `view_events`)
+            if def.viewpoint != 0 && def.viewpoint & 4 == 0 {
+                continue;
+            }
             let mats: Vec<MaterialId> = vm
                 .materials
                 .iter()
