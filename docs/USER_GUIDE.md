@@ -538,7 +538,7 @@ belong to Vanilla and Vanilla+. The maps are drawn once and kept while nothing i
 moves (a tile with a tree in the wind in it every third frame), and they take memory only in
 the Enhanced modes: about 8 MB at the default shadow size 2048, 33 MB at 4096. *Mirror
 quality* (Graphics) *As the picture* draws the mirrors of an Enhanced picture with its light, sky
-and shadows, *Standard* with the plain light, which costs a weak card less.
+and sun shadows, *Standard* (the default) with the plain light, which costs a weak card less.
 `OMSI_NO_CABIN_SHADOWS=1` leaves the saloon's lamps without shadows for an A/B.
 
 `graphics=enhanced_plus` (Enhanced+ in the launcher, `--enhanced-plus`) is Enhanced with

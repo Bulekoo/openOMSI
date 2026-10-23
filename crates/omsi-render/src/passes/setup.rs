@@ -100,13 +100,12 @@ impl Renderer {
         };
         let aspect = self.texture_aspect.unwrap_or(width as f32 / height.max(1) as f32);
         let cam_rel = (camera.position - ro).as_vec3();
-        // The mirrors are drawn as the picture is (the settings' `mirror_quality=enhanced`,
-        // `RenderOptions::mirror_enhanced`, the default) or with the plain shading in
-        // Enhanced: a mirror has no depth prepass (sized for the window), so every layer of its
-        // picture runs the enhanced shader - 12.7 ms of GPU time for one 256-pixel mirror
-        // against 5.8 ms for the whole window on a weak card; plainly shaded it is 0.6 ms. The
-        // player who needs the frames takes the plain mirrors (`mirror_quality=standard`);
-        // `OMSI_MIRROR_ENHANCED=1` draws them as the picture whatever the setting.
+        // The mirrors are drawn with the plain shading even in Enhanced: a mirror has no depth
+        // prepass (sized for the window), so every layer of its picture runs the enhanced shader
+        // - 12.7 ms of GPU time for one 256-pixel mirror against 5.8 ms for the whole window on a
+        // weak card; plainly shaded it is 0.6 ms, and a mirror's small picture shows no
+        // difference worth that - unless the player asks for it (`mirror_quality=enhanced`,
+        // `RenderOptions::mirror_enhanced`) or `OMSI_MIRROR_ENHANCED=1`.
         // The headset's eyes are the real picture as much as the window is (#784: VR showed
         // the plain graphics with Enhanced on); the first eye is the one that moves the
         // exposure, the sky cube and the frame clock on, as the window does without VR.

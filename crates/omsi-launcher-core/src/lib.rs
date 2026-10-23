@@ -2124,7 +2124,7 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
     v["vr_head_smoothing_ms"] = json!(0);
     v["vr_mirror_rate"] = json!(16);
     v["mirror_refresh"] = json!("full");
-    v["mirror_quality"] = json!("enhanced");
+    v["mirror_quality"] = json!("standard");
     v["vr_desktop_mirror"] = json!(true);
     v["discord_status"] = json!(true);
     // iPhone, iPad, Mac: the cross-platform launcher (this one, drawn by the game) instead of the
@@ -2688,7 +2688,7 @@ pub fn settings_to_text(v: &Value, old: Option<&str>) -> String {
     text.push_str(&format!("vehicle_smoke={}\n", vehicle_smoke(v.get("vehicle_smoke").and_then(|x| x.as_str()).unwrap_or("all"))));
     text.push_str(&format!("puddles={}\n", puddles(v.get("puddles").and_then(|x| x.as_str()).unwrap_or("high"))));
     text.push_str(&format!("mirror_refresh={}\n", mirror_refresh(v.get("mirror_refresh").and_then(|x| x.as_str()).unwrap_or("full"))));
-    text.push_str(&format!("mirror_quality={}\n", mirror_quality(v.get("mirror_quality").and_then(|x| x.as_str()).unwrap_or("enhanced"))));
+    text.push_str(&format!("mirror_quality={}\n", mirror_quality(v.get("mirror_quality").and_then(|x| x.as_str()).unwrap_or("standard"))));
     text.push_str(&format!("look_sens={}\nlook_smoothing_ms={}\nsteer_look_angle={}\nsteer_look_response={}\nhead_idle={}\nhead_idle_pace={}\ntime_sync={}\nmetar_sync={}\nmetar_station={}\n", f("look_sens", 1.0).clamp(0.1, 2.0), f("look_smoothing_ms", 0.0).clamp(0.0, 200.0), f("steer_look_angle", 30.0).clamp(0.0, 60.0), f("steer_look_response", 0.25).clamp(0.05, 1.0), f("head_idle", 0.0).clamp(0.0, 1.0), f("head_idle_pace", 1.0).clamp(0.5, 2.0), b("time_sync", false), b("metar_sync", false), v.get("metar_station").and_then(|x| x.as_str()).unwrap_or("").chars().filter(|c| c.is_ascii_alphabetic()).take(4).collect::<String>().to_ascii_uppercase()));
     text.push_str(&format!("pad_steer_smooth={}\n", f("pad_steer_smooth", 120.0).clamp(0.0, 300.0)));
     let triple_fov = f("triple_fov_deg", 0.0);

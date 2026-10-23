@@ -33,11 +33,9 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   `OMSI_NO_CABIN_SHADOWS=1` leaves the saloon's lamps without shadows; `OMSI_DEBUG_DRAWS=1` logs
   the tiles drawn each frame. A free camera high over the street chooses the lamps by their
   distance along the ground, as the lamps round it are the ones that light what it sees.
-- **The mirrors of an Enhanced picture are drawn as the picture is** by default: the setting
-  `mirror_quality` (Graphics: Mirror quality) starts as *As the picture (Enhanced)*, and they show
-  the sun's shadows with it. A mirror of 512 pixels costs about 3 ms of the GPU when it is drawn
-  (at most 30 times a second together); a weak card takes *Standard*, the plain light, which was
-  the default before (a settings file that has it saved keeps it).
+- **Mirrors drawn as the Enhanced picture show the sun's shadows too** (Graphics: Mirror quality:
+  *As the picture (Enhanced)*, which stays opt-in, *Standard* the default): they used to need
+  *Shadows in the mirrors* as well. They look up the window's shadow maps, no pass of their own.
 - **Shadows in the headlamps' beams** (Enhanced): the light the fog, rain or snow scatters
   from a headlamp or a street lamp's beam is cut where a pole, a car or a wall stands in
   the beam, as the sun's shafts are cut by the shadow maps: the beam looks up the lamp's
