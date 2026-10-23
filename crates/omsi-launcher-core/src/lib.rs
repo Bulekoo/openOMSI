@@ -1421,6 +1421,8 @@ pub struct TripInfo {
 
 #[derive(Serialize, Clone, Debug)]
 pub struct TourInfo {
+    /// Selection identity within a line; the displayed number may repeat on other days.
+    pub id: String,
     pub number: String,
     pub ai_group: String,
     pub first: f64,
@@ -1444,6 +1446,18 @@ pub struct LineInfo {
     /// termini where no trip has two stops).
     pub termini: Vec<String>,
     pub tours: Vec<TourInfo>,
+}
+
+impl LineInfo {
+    /// Older saved choices contain just the tour number. Prefer today's variant when
+    /// upgrading those choices, while exact IDs keep an explicit other-day selection.
+    pub fn tour(&self, selection: &str) -> Option<&TourInfo> {
+        self.tours
+            .iter()
+            .find(|t| t.id == selection)
+            .or_else(|| self.tours.iter().find(|t| t.number == selection && t.runs))
+            .or_else(|| self.tours.iter().find(|t| t.number == selection))
+    }
 }
 
 /// The date the game starts on without `--date` (its clock's default, day 150 of 1989), and
@@ -1549,7 +1563,7 @@ fn lines_on(map_dir: &Path, date: &str) -> Result<Vec<LineInfo>> {
         // every short working and depot run, listed one after another, read as all its stops)
         let mut ends: Option<(usize, String, String)> = None;
         let mut tours = Vec::new();
-        for t in &l.tours {
+        for (index, t) in l.tours.iter().enumerate() {
             let mask = t.extra.trim().parse::<i32>().unwrap_or(1023);
             let runs_on = |c: i32| {
                 let day = if calendar.is_holiday(c) { 1 << 7 } else { 1 << weekday(c) };
@@ -1610,7 +1624,8 @@ fn lines_on(map_dir: &Path, date: &str) -> Result<Vec<LineInfo>> {
             }
             let first = trips.first().map(|t| t.departure).unwrap_or(0.0);
             let last = trips.last().map(|t| t.arrival).unwrap_or(0.0);
-            tours.push(TourInfo { number: t.number.clone(), ai_group: t.ai_group.clone(), first, last, days: days_of(mask), runs, next_run, trips });
+            let id = serde_json::to_string(&(index, &t.number, &t.ai_group, &t.extra))?;
+            tours.push(TourInfo { id, number: t.number.clone(), ai_group: t.ai_group.clone(), first, last, days: days_of(mask), runs, next_run, trips });
         }
         tours.sort_by(|a, b| a.first.total_cmp(&b.first));
         if let Some((_, first, last)) = ends {

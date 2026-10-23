@@ -77,7 +77,7 @@ fn pause_nested_rows_keep_original_mouse_action_indices() {
     let v = nested_view(&rail, &rows, false);
     let mut sh = Shell::new();
     sh.begin(1440.0, 900.0, 1.0, 1.0 / 60.0);
-    sh.ui.input.mouse = Vec2::new(350.0, 270.0);
+    sh.ui.input.mouse = Vec2::new(350.0, 245.0);
     sh.ui.input.pressed = true;
     sh.ui.input.released = true;
     settings_rows(&mut sh, &v, v.list.as_ref().unwrap(), Rect::new(300.0, 180.0, 800.0, 600.0), &mut None);
@@ -85,7 +85,7 @@ fn pause_nested_rows_keep_original_mouse_action_indices() {
 }
 
 #[test]
-fn pause_nested_large_controls_draw_on_narrow_windows() {
+fn pause_nested_controls_draw_on_narrow_windows() {
     let label = "Refuel\u{1f}a\u{1f}Refuel\u{1f}Fills the tank of the current vehicle";
     for width in [120.0, 200.0, 440.0] {
         let mut sh = Shell::new();
@@ -142,4 +142,31 @@ fn pause_nested_write_preview() {
         image::save_buffer(out.join(format!("{name}.png")), &pixels, w, h, image::ColorType::Rgba8).unwrap();
         println!("preview: {}", out.join(format!("{name}.png")).display());
     }
+}
+
+#[test]
+fn pause_settings_keep_main_row_density() {
+    assert_eq!(LIST_ROW, 40.0);
+    assert_eq!(row_h("item", "Name\u{1f}a"), ROW + 4.0);
+    assert_eq!(row_h("item", "Name\u{1f}a\u{1f}Value\u{1f}Description"), 52.0);
+    assert_eq!(row_h(crate::game_lists::HEADING, "Group"), 34.0);
+}
+
+#[test]
+fn pause_settings_mouse_hover_suppresses_keyboard_highlight() {
+    let render = |kbd, mouse| {
+        let rows = fixture(false);
+        let rail = Vec::new();
+        let mut v = nested_view(&rail, &rows, false);
+        v.kbd = kbd;
+        let mut sh = Shell::new();
+        sh.begin(1366.0, 768.0, 1.0, 1.0 / 60.0);
+        sh.ui.input.mouse = mouse;
+        settings_rows(&mut sh, &v, v.list.as_ref().unwrap(), Rect::new(300.0, 180.0, 800.0, 500.0), &mut None);
+        sh.finish();
+        sh.drawn.unwrap().verts
+    };
+    let hovered = Vec2::new(350.0, 330.0);
+    assert!(render(true, hovered) == render(false, hovered), "mouse hover must suppress keyboard focus");
+    assert!(render(true, Vec2::ZERO) != render(false, Vec2::ZERO), "keyboard focus must remain visible without hover");
 }

@@ -10,6 +10,32 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 
 - **LAN protocol 15**: a game of this version cannot join a session of an older one, nor the
   other way round (the AI traffic goes as a table, see below). Update the game on both sides.
+- **Every light casts a shadow** (Enhanced and Enhanced+): the lamps' shadow maps were four, now
+  there are forty-four, tiles of an eighth of the far shadow map's width (256 texels at the
+  default 2048) in six rows under it - only where the picture is an Enhanced one, so Vanilla and
+  Vanilla+ need no more than the far map itself - and smaller where the graphics card's textures are too low
+  for them. Twenty are the world's: the street lamps, floodlights and platform lights lighting
+  the view most keep their map while they stay among the strongest, and a lamp new to the set
+  takes a free one (six a frame at most). Eight look along the road from the headlamps of the
+  player's bus and of the cars in front of the camera (a car behind it that drives away has none),
+  a pair of lamps sharing a map, taken for a place to half a metre so that a car driving by draws
+  it every few frames, not every one; the car's own parts cast nothing into it. Sixteen are the
+  lamps of the player's saloon: they hang over the seats in the bus's own frame, so that the maps
+  hold still while the bus drives. They hold what stands still in the bus - the seats, the rails,
+  the panels, a shut door; the wheels, the steering wheel, a swinging door, the driver and the
+  passengers are left out until they have stood still for half a second - so that driving the
+  SD77 at night draws none of them again (a tile with a tree in the wind in it is drawn every
+  third frame, on its own turn). A handrail, a seat or a stanchion shades the floor, the seats
+  and the panels behind it - also where the model's light maps (`[matl_lightmap]`) lift a surface
+  to its texture's colour, which now stops where the lamps' light does not reach. The lamps name
+  their tile in their record, no more a search through four, and the beams in fog, rain and snow
+  of every lamp with a tile (the point lamps' too, not only the headlamps') are cut by it.
+  `OMSI_NO_CABIN_SHADOWS=1` leaves the saloon's lamps without shadows; `OMSI_DEBUG_DRAWS=1` logs
+  the tiles drawn each frame. A free camera high over the street chooses the lamps by their
+  distance along the ground, as the lamps round it are the ones that light what it sees.
+- **Mirrors drawn as the Enhanced picture show the sun's shadows too** (Graphics: Mirror quality:
+  *As the picture (Enhanced)*, which stays opt-in, *Standard* the default): they used to need
+  *Shadows in the mirrors* as well. They look up the window's shadow maps, no pass of their own.
 - **Shadows in the headlamps' beams** (Enhanced): the light the fog, rain or snow scatters
   from a headlamp or a street lamp's beam is cut where a pole, a car or a wall stands in
   the beam, as the sun's shafts are cut by the shadow maps: the beam looks up the lamp's
@@ -213,8 +239,81 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   go; the roads are drawn in a few strokes instead of one per road. Around the map's tiles
   the land has the map's own green, no more grey that looked as if it were still loading.
 
+**Trams, metros and trains** ([docs/RAIL.md](docs/RAIL.md))
+
+- Rail vehicles have a class (tram, metro, train), from `[rail_class]` in their file or from
+  what it declares (a `[contact_shoe]` is a metro, a car over 45 t a train), and rail lanes
+  a track kind (street or railway, third rail, tunnel, speed), from a map's new
+  `openomsi-rail.cfg`, from the names of its spline profiles (`tram_*`, `metro_*`, `rail_*`)
+  or from where the track lies. A road vehicle is never taken for a rail one.
+- A rail vehicle moves by the forces of railway engineering instead of the road tyres of a bus
+  and a made-up pull: running, air and curve resistance, the grade under it, wheel-rail
+  adhesion (less on wet rails, leaves, snow and ice), drive and brakes limited by it - the
+  driven wheels spin, the braked ones slide - and a tram's magnetic track brake. A vehicle
+  scripted for the AI only is driven by the pedals with the typical performance of its class.
+- **Pantographs.** A rail vehicle with a pantograph moves only with it raised. The game finds
+  it from `[pantograph_var]` / `[pantograph_trigger]` in the vehicle's file or, for a mod
+  without them, from its pantograph meshes and the variable they turn on (the Tatra T6B5's is
+  `door_0`, which is then no longer a door: no door key, no boarding, no "door open while
+  driving" penalty). Shift+P raises and lowers it.
+- **Bogie frames of mods** (the Tatra T6B5's `_trail.bus`: no `[boogies]`, one axle, one coupling
+  named) hang by their origin on the coupling of the car they belong to, as the mod is made for
+  OMSI 2, and stand on the track by their own wheelbase: they stood two to three metres out
+  of place, both under the middle of the car.
+- Cars of a train no longer jump back and forth by a few centimetres in bends: a part just
+  behind the vehicle was placed from the last 10 cm sample of the track behind it, a part just
+  ahead from the track itself.
+- The speed limit of a rail lane is brought down to what its curve allows (a tram loop, the
+  diverging branch of a turnout).
+
+**Road vehicles' physics** (new setting **Realistic road physics**, off by default; Esc menu, Settings)
+
+- With it on the weather's wind leans and pushes a bus and a denser or thinner air changes the
+  drag (the vehicle's scripts already have their still-air drag on the brakes, so only the
+  difference is added); grip and rolling resistance depend on what each tyre rolls on, wet or
+  dry (cobbles, dirt, grass, gravel, snow), rolling resistance also rises with speed and load;
+  and the road is as uneven as ISO 8608 says its surface is, which shakes a bus on cobbles,
+  gravel and the joints of a concrete-slab road (#3069).
+- **Tyres hold across by slip angle**, as real tyres do, instead of OMSI's rule that the body
+  follows its wheels exactly until the grip is passed: the contact patch lags behind the wheel
+  and pulls back by the cornering stiffness, up to the grip shared with the longitudinal force
+  by the friction ellipse. A bus follows its wheels at walking pace, turns in over 0.15-0.2 s at
+  50 km/h, understeers a little at 80 km/h (yaw rate 0.92-0.98 of the geometry's), loses its hold
+  across on a locked or spinning wheel. `cargo run -p omsi-sim --example handling -- <file.bus>...
+  --kmh 50 [--realistic]` compares the two models; `OMSI_REALISTIC_ROAD=1` turns it on for one run.
+
 ### Fixes
 
+- With the new setting **Realistic road physics** on, road damage shakes a vehicle again: cobbles, gravel, dirt, grass, snow and the joints of a concrete-slab road lift each tyre by what ISO 8608 gives such a road, where only the map's geometry did before ([#3069](https://github.com/openOMSI-org/openOMSI/issues/3069)).
+- **A much lighter Enhanced frame by day**: since 0.2.42 the AI cars were lent headlamp beams
+  whenever their lights were on, and in a grey winter noon (cars' lights on, no street lamp lit)
+  those twelve cars' beams cost 13 ms of a 25 ms frame on an M4 - any light at all in the
+  scene makes every pixel look through the lamp grid and has the weather's fog work the lamps'
+  air light out. They are lent only while the scene is dark enough for them to show (the sun's
+  height and the weather's gloom, the larger, is 0.12 or more): in a grey or rainy day the three
+  nearest cars within 60 m, in the dark the twelve within 200 m as before. In a clear day, 27.4
+  ms -> 13.0 ms of GPU a frame; in a heavy grey snow day 27.6 ms -> 19 ms; the night picture is
+  as before.
+- **AI cars and buses are drawn with their model's lower levels of detail** (`[LOD]`, as
+  Omsi.exe picks them by the vehicle's size on the screen, and as the scenery's levels are):
+  only the first level was loaded, so each AI vehicle was all its meshes at any distance. A
+  model with interior lamps, displays, switched textures or a lit or animated lower level (a bus,
+  a tram) keeps its full meshes.
+  `OMSI_FORCE_LOD=1` draws the lower levels at any size, for a look at them.
+- **Timetable buses no longer stall the frame when they appear**: a departure whose vehicle was
+  not on the graphics card yet (the clock set far ahead, a type nothing read ahead) had its
+  meshes and textures built on the frame it appeared on - 120 to 300 ms; it is tried again
+  once the vehicle is read ahead. A parallel loop's caller sleeps while it waits for the items
+  a helper has started instead of spinning.
+- Enhanced: no more snow, or any ground, glowing orange from a small light far away. The ground took
+  the map's baked lamp pools on top of the lamps themselves, three times over, through walls and
+  roofs and with a tail sixteen radii long: the snow of a courtyard behind a building lit by the
+  depot's floodlights glowed yellow at night, and so did the ground round a lamp whose pool ended
+  long before. The ground is lit by the lamps alone now, with their shadows (Vanilla and
+  Vanilla+ keep OMSI's baked light maps). The floodlights and the canopies of petrol stations
+  (declared 10 to 20 m, held to 15 m and dimmed to a fifth as if they were a building's window
+  glow) are lights as declared in the Enhanced picture, with a light of their own beside the held
+  one the plain pictures keep.
 - Review of the round: `hwban 3 session é` (a multi-byte last character of a duration) no longer
   stops a dedicated server; the hardware bans are given to every session a game hosts, not only
   the first of a run; the host passes voice frames only to players that have voice chat on

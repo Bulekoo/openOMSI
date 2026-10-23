@@ -107,6 +107,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_DUMP_SCENERY_TEXT` | text | - | use | scene | Directory: write the scenery objects' text textures as drawn. |
 | `OMSI_DUMP_SCRIPTTEX` | text | - | use | app | Directory: write the player's bus's script (display) textures. |
 | `OMSI_ENV_PHOTO` | num | 1 | use | render | 0 leaves the environment photo out of the debug views. |
+| `OMSI_FORCE_LOD` | bool | off | use | scene | Draw the lower levels of detail of the AI vehicles at any size (to look at them). |
 | `OMSI_FRAME_ORDER` | bool | off | once | app | Log the window's frame and the offscreen run's step as their ordered stages (phase, what each reads and writes, its profile key), once at start. |
 | `OMSI_GPU_TIMERS` | bool | off | use | render | Measure GPU time per pass with timestamp queries. |
 | `OMSI_GPU_TIMERS_RAW` | bool | off | use | render | With OMSI_GPU_TIMERS: the passes in the order the GPU finished them. |
@@ -251,6 +252,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_BASIC_PIPELINES` | bool | off | once | guard, render | Use the reduced (basic) render pipelines, as after a driver failed to build the full ones. |
 | `OMSI_CROSSING_DEFORM` | bool | off | use | scene | Apply the crossings' ground deformation again (A/B; Omsi.exe does not). |
 | `OMSI_CUT_PLAIN` | bool | off | use | scene | Road-cut textures uploaded without GPU-made mipmaps. |
+| `OMSI_DEBUG_RAIL` | bool | off | use | sim | Log a rail vehicle's speed, the drive and brake the scripts ask for and the adhesion, twice a second. |
 | `OMSI_FIXED_SCALE` | bool | off | use | app | Keep the render scale fixed (no dynamic resolution). |
 | `OMSI_FORCE_OPAQUE` | bool | off | use | scene | Draw transmap-masked materials opaque. |
 | `OMSI_FULL_GPU` | bool | off | use | render | Keep the requested settings on a small or shared graphics chip, and 8x MSAA with Enhanced+. |
@@ -277,6 +279,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_NO_BRIDGE` | bool | off | use | lan, net | LAN: leave the internet alone - no rendezvous bridge, no tunnel (tests, LAN parties). |
 | `OMSI_NO_BUMP` | bool | off | use | scene | No bump maps. |
 | `OMSI_NO_BUNDLES` | bool | off | frame | render | Record the main pass directly instead of from render bundles. |
+| `OMSI_NO_CABIN_SHADOWS` | bool | off | frame | render | Enhanced: the lamps of the player's saloon cast no shadows (A/B). |
 | `OMSI_NO_CLOUDS` | bool | off | use | app | No clouds. |
 | `OMSI_NO_CORONAS` | bool | off | frame | render | No light coronas. |
 | `OMSI_NO_CULL` | bool | off | once | render | Draw every mesh from both sides (A/B). |
@@ -330,6 +333,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_NO_VAR_SYNC` | bool | off | use | lan | LAN: no variable sync. |
 | `OMSI_NO_WHEEL_SLIP` | bool | off | use | sim | Every wheel grips, as before wheels turned on their own (A/B). |
 | `OMSI_OLD_WORLD_GRID` | bool | off | use | map | Maps with world coordinates take the one tile size of 371.9 m (comparison). |
+| `OMSI_REALISTIC_ROAD` | bool | off | use | sim | The setting "Realistic road physics" on for this run (A/B against the OMSI 2 model: slip-angle tyres, surfaces, road roughness, wind). |
 | `OMSI_REPAIR_BODY_DEPTH` | bool | off | use | scene | The old guess for [matl_alpha] 2 vehicle bodies (A/B). |
 | `OMSI_ROAD_CUT` | bool | off | once | geometry | Take the ground away under every road surface (Omsi.exe does not). |
 | `OMSI_RT_REFL_HALF` | bool | off | use | render | Trace reflections at half size. |

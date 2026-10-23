@@ -1,6 +1,7 @@
 use super::*;
 use crate::app_impl::MenuLine;
-use crate::shell::pause::{Summary, draw};
+use crate::shell::pause::{ListView, Summary, draw};
+use crate::ui::MenuKind;
 
 fn menu() -> Vec<MenuLine> {
     [
@@ -131,7 +132,7 @@ fn pause_navigation_write_preview() {
         draw(&mut sh, &v);
         sh.finish();
         let pixels = sh.picture_for_shot(&renderer, w, h).expect("drawn screens");
-        assert_eq!(pixels[(((h / 2) * w + w - 2) * 4 + 3) as usize], 255, "{name}: content background must be opaque");
+        assert!(pixels[(((h / 2) * w + w - 2) * 4 + 3) as usize] < 255, "{name}: home background must retain the veil");
         image::save_buffer(out.join(format!("{name}.png")), &pixels, w, h, image::ColorType::Rgba8).unwrap();
         println!("preview: {}", out.join(format!("{name}.png")).display());
     }
@@ -184,4 +185,29 @@ fn pause_navigation_enlarged_quit_dispatches_original_action() {
     let mut sh = Shell::new();
     click(&mut sh, &view(&rail), Vec2::new(110.0, 815.0));
     assert_eq!(sh.actions, [Action::Choose(rail.len() - 1)]);
+}
+
+#[test]
+fn pause_navigation_open_list_preserves_origin_category() {
+    let rail = menu();
+    for origin in [Category::Home, Category::Settings, Category::Driving] {
+        for target in ["camera", "duty"] {
+            let mut sh = Shell::new();
+            sh.pause_category = origin;
+            let mut v = view(&rail);
+            v.rail_open = Some(target);
+            v.list = Some(ListView {
+                kind: MenuKind::Options, head: None, tabs: None,
+                items: vec![("back", "Back")], sel: 0, preview: None,
+                pane_first: None, dropdown: None, key: target.into(),
+            });
+            sh.begin(1366.0, 768.0, 1.0, 1.0 / 60.0);
+            draw(&mut sh, &v);
+            assert_eq!(sh.pause_category, origin, "opening {target}");
+            v.list = None;
+            v.rail_open = None;
+            draw(&mut sh, &v);
+            assert_eq!(sh.pause_category, origin, "returning from {target}");
+        }
+    }
 }

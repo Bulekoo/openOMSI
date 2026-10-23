@@ -422,6 +422,60 @@ mod tests {
         ScheduleSim::new(&world.path, &world, &crate::SimClock::default())
     }
 
+    #[test]
+    fn same_number_tours_use_the_variant_operating_today() {
+        let mut sim = schedule();
+        let world = EmptyWorld {
+            path: PathBuf::new(),
+            ai: Default::default(),
+            positions: Default::default(),
+        };
+        sim.data.trips = ["MWF", "TuTh"]
+            .into_iter()
+            .map(|name| omsi_timetable::Trip {
+                name: name.into(),
+                line: "5".into(),
+                stations: vec![42],
+                ..Default::default()
+            })
+            .collect();
+        sim.times = vec![
+            vec![TripTimes {
+                stations: vec![(0.0, 0.0)],
+                stops: vec![true],
+                duration: 600.0,
+                ..Default::default()
+            }];
+            2
+        ];
+        sim.data.lines = vec![omsi_timetable::Line {
+            name: "5".into(),
+            tours: [("MWF", 789), ("TuTh", 778)]
+                .into_iter()
+                .map(|(trip, mask)| omsi_timetable::Tour {
+                    number: "1".into(),
+                    extra: mask.to_string(),
+                    trips: vec![omsi_timetable::TourTrip {
+                        trip: trip.into(),
+                        profile: 0,
+                        departure: 360.0,
+                    }],
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        }];
+        for (day, expected) in [(1, "MWF"), (2, "TuTh")] {
+            sim.day_bits = (day, 256);
+            let duty = sim.player_duty(&world, "5", "1", 0.0, None, true).unwrap();
+            assert_eq!(duty.trips[0].name, expected);
+            assert_eq!(duty.tour, "1");
+        }
+        // The stop preview follows the same variant as the launched duty.
+        sim.data.lines[0].tours[1].trips[0].departure = 420.0;
+        assert_eq!(sim.tour_stops("5", "1")[0].3, 420.0 * 60.0);
+    }
+
     /// A trip without a line of its own shows none, as in Omsi.exe: Gerolstein's service
     /// trips in `Diensttafeln.ttl` read "Diensttafeln" on the boards and the AI buses.
     #[test]

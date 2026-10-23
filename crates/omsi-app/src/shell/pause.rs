@@ -1,5 +1,5 @@
 //! The pause menu as a page of the launcher: the launcher's rail on the left with the
-//! menu's lines as its pages, an opaque content area beside it, and a list or settings
+//! menu's lines as its pages, the picture of the game beside it, and a list or settings
 //! window opened from the rail shown as a launcher page right of it - a title, the tabs as
 //! the launcher's segmented bar, the rows in panels of two columns with the launcher's
 //! fields, switches and sliders.
@@ -11,6 +11,7 @@
 pub(crate) mod navigation;
 mod navigation_ui;
 
+use std::borrow::Cow;
 use glam::Vec2;
 use omsi_ui::paint::Align;
 use omsi_ui::{Color, Rect, Weight};
@@ -20,12 +21,14 @@ use omsi_ui::theme::*;
 use omsi_ui::kit::{id_of, ButtonKind, Ui};
 use crate::ui::{DropdownView, MenuKind, Preview};
 
-/// All pause pages use the launcher's solid background for legibility.
+/// The solid background behind a list or settings window.
 const PAGE: Color = BG;
+/// Keep the paused game visible behind the category home pages.
+const HOME_VEIL: Color = Color([BG.0[0], BG.0[1], BG.0[2], 0.72]);
 /// Compact margins for the existing settings and list pages.
 const NARROW: f32 = 560.0;
 /// A list's row.
-const LIST_ROW: f32 = 52.0;
+const LIST_ROW: f32 = 40.0;
 
 /// An open list or settings window, as the game has it.
 pub(crate) struct ListView<'a> {
@@ -106,16 +109,12 @@ fn plain(label: &str) -> (&str, bool) {
 
 pub(crate) fn draw(sh: &mut Shell, v: &PauseView) {
     let size = sh.ui.size;
-    if v.list.is_some() {
-        if let Some(category) = v.rail_open.and_then(navigation::Category::of) {
-            sh.pause_category = category;
-        }
-    }
-    let sidebar = size.x >= 700.0;
+    // Drawing a submenu must not change the category that opened it.
+    let sidebar = size.x >= if v.list.is_some() { NARROW } else { 700.0 };
     let left = if sidebar { RAIL_W } else { 0.0 };
     let page = Rect::new(left, 0.0, (size.x - left).max(0.0), size.y);
     sh.ui.solid(page);
-    sh.ui.p().rect(page, PAGE);
+    sh.ui.p().rect(page, if v.list.is_some() { PAGE } else { HOME_VEIL });
     if let Some(list) = v.list.as_ref() {
         list_page(sh, v, list, page);
     } else {
@@ -134,23 +133,22 @@ fn tabs(ui: &mut Ui, at: Vec2, titles: &[String], chosen: usize, max_w: f32) -> 
     let mut row = 0;
     let mut out = None;
     for (i, t) in titles.iter().enumerate() {
-        let w = ui.width(&omsi_ui::tr(t), 18.0, Weight::Medium) + 28.0;
+        let w = ui.width(&omsi_ui::tr(t), 14.0, Weight::Medium) + 4.0;
         if x + w > at.x + max_w && x > at.x {
             x = at.x;
             row += 1;
         }
-        let r = Rect::new(x, at.y + row as f32 * 48.0, w, 48.0);
+        let r = Rect::new(x, at.y + row as f32 * 38.0, w, 38.0);
         let (h, _, clicked) = ui.interact(id_of(&format!("pause-tab-{i}")), r);
         let on = i == chosen;
-        ui.p().rounded(r.inset(2.0), 7.0, if on { ACCENT.alpha(0.12) } else if h { SURFACE_2 } else { Color::CLEAR });
-        ui.text_in(t, r, 18.0, Weight::Medium, if on || h { INK } else { INK_MUTED }, Align::Center);
+        ui.text_in(t, r, 14.0, Weight::Medium, if on || h { INK } else { INK_MUTED }, Align::Center);
         if on {
             ui.p().rect(Rect::new(r.x, r.bottom() - 2.0, r.w, 2.0), ACCENT);
         }
         if clicked && !on {
             out = Some(i);
         }
-        x += w + 8.0;
+        x += w + 22.0;
     }
     (out, row + 1)
 }
@@ -172,19 +170,19 @@ fn list_page(sh: &mut Shell, v: &PauseView, list: &ListView, page: Rect) {
         });
     }
     let tx = area.x + 46.0;
-    sh.ui.text(&title, Vec2::new(tx, area.y + 30.0), 34.0, Weight::Bold, INK, Align::Left);
+    sh.ui.text(&title, Vec2::new(tx, area.y + 26.0), 26.0, Weight::Bold, INK, Align::Left);
     let sub = if sub.is_empty() { list_hint(list.kind) } else { sub };
     if !sub.is_empty() {
-        sh.ui.text_in(&sub, Rect::new(tx, area.y + 48.0, area.w - 46.0, 26.0), 16.0, Weight::Regular, INK_MUTED, Align::Left);
+        sh.ui.text_in(&sub, Rect::new(tx, area.y + 36.0, area.w - 46.0, 20.0), 13.0, Weight::Regular, INK_MUTED, Align::Left);
     }
-    let mut body = Rect::new(area.x, area.y + 92.0, area.w, (area.h - 92.0).max(40.0));
+    let mut body = Rect::new(area.x, area.y + 70.0, area.w, (area.h - 70.0).max(40.0));
     // the pages of a settings window: the launcher's tabs
     if let Some((titles, at)) = list.tabs.as_ref().filter(|(t, _)| t.len() > 1) {
         let (picked, rows) = tabs(&mut sh.ui, Vec2::new(body.x, body.y - 6.0), titles, *at, body.w);
         if let Some(tab) = picked {
             sh.actions.push(Action::Side(tab));
         }
-        let below = body.y - 6.0 + 48.0 * rows as f32 + 20.0;
+        let below = body.y - 6.0 + 38.0 * rows as f32 + 20.0;
         body = Rect::new(body.x, below, body.w, (body.bottom() - below).max(40.0));
     }
     // an open drop-down takes the mouse where it lies (the rows under it do not answer)
@@ -243,12 +241,12 @@ fn parse_row(label: &str) -> Row<'_> {
 /// How high a row of a settings window is: two lines when it has a description.
 fn row_h(id: &str, label: &str) -> f32 {
     if id == crate::game_lists::HEADING {
-        return 46.0;
+        return 34.0;
     }
     if parse_row(label).desc.is_empty() {
-        64.0
+        ROW + 4.0
     } else {
-        84.0
+        52.0
     }
 }
 
@@ -256,57 +254,76 @@ fn row_h(id: &str, label: &str) -> f32 {
 /// the page is wide enough, the headings of the list as the panels' section titles.
 fn settings_rows(sh: &mut Shell, v: &PauseView, list: &ListView, body: Rect, anchor: &mut Option<Rect>) {
     let items = &list.items;
-    let groups = settings_groups(items, list.tabs.is_none());
-    let two = body.w >= 1260.0 && groups.len() > 1;
-    let heights: Vec<f32> = groups.iter().map(|rows| rows.iter().map(|&k| row_h(items[k].0, items[k].1)).sum::<f32>() + 32.0).collect();
-    let total: f32 = heights.iter().sum();
-    let split = if two {
-        (1..groups.len()).min_by(|&a, &b| {
-            let distance = |n: usize| (heights[..n].iter().sum::<f32>() - total * 0.5).abs();
-            distance(a).total_cmp(&distance(b))
-        }).unwrap_or(groups.len())
-    } else { groups.len() };
-    let cols = if two { 2 } else { 1 };
+    // The groups retain original indices; the settings layout stays unchanged.
+    let shown: Vec<usize> = settings_groups(items, list.tabs.is_none()).into_iter().flatten().collect();
+    let two = body.w >= 900.0 && shown.len() > 6;
+    // (split where the heights balance, at a heading if one is near)
+    let total: f32 = shown.iter().map(|&k| row_h(items[k].0, items[k].1)).sum();
+    let mut split = shown.len();
+    if two {
+        let mut acc = 0.0;
+        for (n, &k) in shown.iter().enumerate() {
+            if acc >= total * 0.5 {
+                split = n;
+                // (a heading ends up first in the right column, not last in the left)
+                if n > 0 && items[shown[n - 1]].0 == crate::game_lists::HEADING {
+                    split = n - 1;
+                }
+                break;
+            }
+            acc += row_h(items[k].0, items[k].1);
+        }
+    }
+    let cols: Vec<&[usize]> = if two { vec![&shown[..split], &shown[split..]] } else { vec![&shown[..]] };
+    let any_hover = sh.ui.hover(body);
     let key = format!("pause-list-{}", list.key);
-    let mut acts = Vec::new();
-    let mut sel_y = None;
-    let mut dd_anchor = None;
+    let mut acts: Vec<Action> = Vec::new();
+    let mut sel_y: Option<(f32, f32)> = None;
+    let mut dd_anchor: Option<Rect> = None;
     let dd_row = list.dropdown.as_ref().map(|d| d.row);
     sh.ui.scroll_area(&key, body, &mut |ui, view| {
-        let gap = 20.0;
-        let cw = ((view.w - 8.0 - gap * (cols - 1) as f32) / cols as f32).max(0.0);
-        let mut offsets = [0.0f32; 2];
-        for (group, rows) in groups.iter().enumerate() {
-            let col = usize::from(two && group >= split);
-            let x = view.x + col as f32 * (cw + gap);
-            let top = view.y + offsets[col];
-            let panel = Rect::new(x, top, cw, heights[group]);
+        let gap = GAP * 2.0;
+        let cw = if cols.len() == 2 { (view.w - 8.0 - gap) / 2.0 } else { (view.w - 8.0).min(760.0) };
+        let mut tallest = 0.0f32;
+        for (c, rows) in cols.iter().enumerate() {
+            let x = view.x + c as f32 * (cw + gap);
+            let h: f32 = rows.iter().map(|&k| row_h(items[k].0, items[k].1)).sum::<f32>() + 28.0;
+            let panel = Rect::new(x, view.y, cw, h.max(60.0));
             ui.panel(panel);
-            let inner = Rect::new(x + 20.0, top + 16.0, (cw - 40.0).max(0.0), heights[group] - 32.0);
+            let inner = Rect::new(x + 18.0, view.y + 14.0, cw - 36.0, h - 28.0);
             let mut y = inner.y;
-            for (at, &k) in rows.iter().enumerate() {
+            for &k in rows.iter() {
                 let (id, label) = items[k];
                 let rh = row_h(id, label);
                 if id == crate::game_lists::HEADING {
-                    ui.text_in(parse_row(label).name, Rect::new(inner.x, y + 4.0, inner.w, 32.0), 20.0, Weight::Bold, INK, Align::Left);
-                    ui.p().rounded(Rect::new(inner.x, y + 39.0, 28.0, 2.0), 1.0, ACCENT);
-                } else {
-                    if at > 0 && items[rows[at - 1]].0 != crate::game_lists::HEADING {
-                        ui.p().rect(Rect::new(inner.x, y - 2.0, inner.w, 1.0), Color::rgba(255, 255, 255, 0.045));
-                    }
-                    let r = Rect::new(inner.x - 8.0, y, inner.w + 16.0, rh - 4.0);
-                    let kbd = v.kbd && k == list.sel;
-                    if kbd { sel_y = Some((y - view.y, rh)); }
-                    if let Some(action) = settings_row(ui, k, label, r, kbd, dd_row == Some(k), &mut dd_anchor) { acts.push(action); }
+                    // (a group's title as the launcher's card title)
+                    let t = parse_row(label).name;
+                    ui.text_in(t, Rect::new(inner.x, y + 4.0, inner.w, 28.0), 15.0, Weight::Bold, INK, Align::Left);
+                    y += rh;
+                    continue;
+                }
+                // a light line between the rows, as between the launcher's
+                if rows.first() != Some(&k) && items.get(k.wrapping_sub(1)).is_some_and(|(pid, _)| *pid != crate::game_lists::HEADING) {
+                    ui.p().rect(Rect::new(inner.x, y - 2.0, inner.w, 1.0), Color::rgba(255, 255, 255, 0.045));
+                }
+                let r = Rect::new(inner.x - 8.0, y, inner.w + 16.0, rh - 4.0);
+                let kbd = v.kbd && !any_hover && k == list.sel;
+                if kbd {
+                    sel_y = Some((y - view.y, rh));
+                }
+                if let Some(a) = settings_row(ui, k, label, r, kbd, dd_row == Some(k), &mut dd_anchor) {
+                    acts.push(a);
                 }
                 y += rh;
             }
-            offsets[col] += heights[group] + gap;
+            tallest = tallest.max(h);
         }
-        offsets.into_iter().fold(0.0f32, f32::max)
+        tallest + 8.0
     });
     if let Some((y, h)) = sel_y {
-        if sh.last_sel != Some((id_of(&key), list.sel)) { sh.ui.scroll_to(&key, y, h, body.h); }
+        if sh.last_sel != Some((id_of(&key), list.sel)) {
+            sh.ui.scroll_to(&key, y, h, body.h);
+        }
     }
     sh.last_sel = Some((id_of(&key), list.sel));
     *anchor = dd_anchor;
@@ -339,21 +356,20 @@ fn settings_row(ui: &mut Ui, k: usize, label: &str, r: Rect, kbd: bool, dd_open:
         ui.p().rounded(Rect::new(r.x, r.y + 8.0, 2.0, r.h - 16.0), 1.0, ACCENT);
     }
     let lx = r.x + 8.0;
-    let ctl_w = (r.w * 0.38).clamp(96.0, 320.0).min((r.w - 48.0).max(0.0));
-    let ctl = Rect::new(r.right() - 8.0 - ctl_w, r.center().y - 22.0, ctl_w, 44.0);
+    let ctl_w = (r.w * 0.5).min(300.0);
+    let ctl = Rect::new(r.right() - 8.0 - ctl_w, r.center().y - 17.0, ctl_w, 34.0);
     let name_w = match row.kind {
-        "s" => r.w - 80.0,
-        "i" => r.w * 0.38,
+        "s" | "i" => r.w - 80.0,
         _ => ctl.x - lx - 12.0,
     };
     let ink = TEXT_SOFT.mix(TEXT, t);
     if row.desc.is_empty() {
-        ui.text_in(row.name, Rect::new(lx, r.y, name_w, r.h), 17.0, Weight::Regular, ink, Align::Left);
+        ui.text_in(row.name, Rect::new(lx, r.y, name_w, r.h), 13.0, Weight::Regular, ink, Align::Left);
     } else {
-        ui.text_in(row.name, Rect::new(lx, r.y + 10.0, name_w, 25.0), 17.0, Weight::Medium, ink, Align::Left);
-        ui.text_in(row.desc, Rect::new(lx, r.y + 42.0, name_w, 24.0), 14.0, Weight::Regular, TEXT_DIM, Align::Left);
+        ui.text_in(row.name, Rect::new(lx, r.y + 6.0, name_w, 20.0), 13.0, Weight::Medium, ink, Align::Left);
+        ui.text_in(row.desc, Rect::new(lx, r.y + 25.0, name_w, 17.0), 11.5, Weight::Regular, TEXT_DIM, Align::Left);
         // (cut short by a narrow column: the whole of it under the mouse)
-        if ui.width(row.desc, 14.0, Weight::Regular) > name_w {
+        if ui.width(row.desc, 11.5, Weight::Regular) > name_w {
             ui.tooltip(Rect::new(lx, r.y, name_w, r.h), row.desc);
         }
     }
@@ -376,7 +392,7 @@ fn settings_row(ui: &mut Ui, k: usize, label: &str, r: Rect, kbd: bool, dd_open:
         // a stepper: the value between the two arrows of a field
         "c" => {
             ui.p().rounded(ctl, 6.0, SURFACE_2);
-            ui.text_in(row.value, ctl.pad(36.0, 0.0), 17.0, Weight::Regular, INK, Align::Center);
+            ui.text_in(row.value, ctl.pad(36.0, 0.0), 13.0, Weight::Regular, INK, Align::Center);
             let left = Rect::new(ctl.x, ctl.y, 34.0, ctl.h);
             let right = Rect::new(ctl.right() - 34.0, ctl.y, 34.0, ctl.h);
             let mut out = None;
@@ -400,7 +416,7 @@ fn settings_row(ui: &mut Ui, k: usize, label: &str, r: Rect, kbd: bool, dd_open:
             ui.p().rounded(ctl, 6.0, SURFACE_2.mix(SURFACE_3, a));
             // (without a value it opens a list of its own: a way on, not a drop-down)
             let text = if row.value.is_empty() { omsi_ui::tr("Change").into_owned() } else { row.value.to_string() };
-            ui.text_in(&text, Rect::new(ctl.x + 12.0, ctl.y, ctl.w - 40.0, ctl.h), 17.0, Weight::Regular, if row.value.is_empty() { TEXT_SOFT.mix(TEXT, a) } else { TEXT }, Align::Left);
+            ui.text_in(&text, Rect::new(ctl.x + 12.0, ctl.y, ctl.w - 40.0, ctl.h), 13.0, Weight::Regular, if row.value.is_empty() { TEXT_SOFT.mix(TEXT, a) } else { TEXT }, Align::Left);
             let icon = match (row.value.is_empty(), dd_open) {
                 (true, _) => "chevron_right",
                 (false, true) => "expand_less",
@@ -414,24 +430,22 @@ fn settings_row(ui: &mut Ui, k: usize, label: &str, r: Rect, kbd: bool, dd_open:
         }
         // information only
         "i" => {
-            ui.text_in(row.value, Rect::new(r.x + r.w * 0.4, r.y, r.w * 0.6 - 8.0, r.h), 17.0, Weight::Medium, TEXT, Align::Right);
+            ui.text_in(row.value, Rect::new(r.x + r.w * 0.4, r.y, r.w * 0.6 - 8.0, r.h), 13.0, Weight::Medium, TEXT, Align::Right);
             None
         }
         // a value being typed
         "E" => {
             ui.p().rounded(ctl, 6.0, SURFACE_3);
             let caret = if (ui.time * 2.0) as i64 % 2 == 0 { "|" } else { "" };
-            ui.text_in(&format!("{}{caret}", row.value), Rect::new(ctl.x + 12.0, ctl.y, ctl.w - 24.0, ctl.h), 17.0, Weight::Medium, TEXT, Align::Left);
+            ui.text_in(&format!("{}{caret}", row.value), Rect::new(ctl.x + 12.0, ctl.y, ctl.w - 24.0, ctl.h), 13.0, Weight::Medium, TEXT, Align::Left);
             None
         }
         // a button with its text as the value
         _ => {
             let text = if row.value.is_empty() { omsi_ui::tr("Open").into_owned() } else { row.value.to_string() };
-            let bw = (ui.width(&text, 17.0, Weight::Medium) + 36.0).max(96.0).min(ctl_w);
+            let bw = (ui.width(&text, 13.0, Weight::Medium) + 36.0).max(96.0).min(ctl_w);
             let b = Rect::new(r.right() - 8.0 - bw, ctl.y, bw, ctl.h);
-            let (hovered, _, pressed) = ui.interact(id_of(&format!("pause-bt-{k}-{}", row.name)), b);
-            ui.p().rounded(b, 7.0, if hovered { SURFACE_3 } else { SURFACE_2 });
-            ui.text_in(&text, b, 17.0, Weight::Medium, INK, Align::Center);
+            let pressed = ui.button(&format!("pause-bt-{k}-{}", row.name), b, &text, None, ButtonKind::Normal);
             let (_, _, clicked) = ui.interact(id, Rect::new(r.x, r.y, b.x - r.x - 6.0, r.h));
             (pressed || clicked).then_some(Action::Choose(k))
         }
@@ -440,7 +454,7 @@ fn settings_row(ui: &mut Ui, k: usize, label: &str, r: Rect, kbd: bool, dd_open:
 
 /// Where the open drop-down's list lies under (or over) its field `a`.
 fn dropdown_rect(a: Rect, n: usize, size: Vec2) -> Rect {
-    let h = (n as f32 * 44.0 + 8.0).min(300.0);
+    let h = (n as f32 * 34.0 + 8.0).min(300.0);
     let below = size.y - a.bottom() - 12.0;
     let y = if below >= h || below >= a.y - 12.0 { a.bottom() + 4.0 } else { a.y - 4.0 - h };
     Rect::new(a.x, y, a.w, h.min(below.max(a.y - 12.0)))
@@ -454,7 +468,7 @@ fn dropdown(sh: &mut Shell, d: &DropdownView, a: Rect, kbd: bool) {
     ui.push_clip(Rect::new(0.0, 0.0, ui.size.x, ui.size.y), 0.0);
     ui.p().rounded(rr.inset(-2.0), 10.0, Color::rgba(0, 0, 0, 0.35));
     ui.p().rounded(rr, 8.0, SURFACE_2);
-    let row = 44.0;
+    let row = 34.0;
     let id = id_of("pause-dropdown");
     let content = d.items.len() as f32 * row + 8.0;
     let max = (content - rr.h).max(0.0);
@@ -487,7 +501,7 @@ fn dropdown(sh: &mut Shell, d: &DropdownView, a: Rect, kbd: bool) {
         } else if h || (kbd && d.sel == i) {
             ui.p().rounded(cell, 5.0, SURFACE_3.alpha(0.6));
         }
-        ui.text_in(item, Rect::new(cell.x + 10.0, cell.y, cell.w - 36.0, cell.h), 17.0, Weight::Regular, TEXT, Align::Left);
+        ui.text_in(item, Rect::new(cell.x + 10.0, cell.y, cell.w - 36.0, cell.h), 13.0, Weight::Regular, TEXT, Align::Left);
         if clicked {
             picked = Some(i);
         }
@@ -526,7 +540,7 @@ fn list_rows(sh: &mut Shell, v: &PauseView, list: &ListView, r: Rect, keep_marke
     let back_txt = omsi_ui::tr("Back").into_owned();
     let shown: Vec<usize> = (0..items.len()).filter(|&k| !(items[k].0 == "back" && plain(items[k].1).0 == back_txt)).collect();
     // (a list of codes and names - the destinations - in two columns)
-    let code_w = shown.iter().filter_map(|&k| code_and_name(items[k].1)).map(|(c, _)| sh.ui.width(c, 17.0, Weight::Medium)).fold(0.0f32, f32::max);
+    let code_w = shown.iter().filter_map(|&k| code_and_name(items[k].1)).map(|(c, _)| sh.ui.width(c, 13.0, Weight::Medium)).fold(0.0f32, f32::max);
     let any_hover = sh.ui.hover(r);
     let key = format!("pause-list-{}", list.key);
     let mut acts = Vec::new();
@@ -557,23 +571,23 @@ fn list_rows(sh: &mut Shell, v: &PauseView, list: &ListView, r: Rect, keep_marke
                 let field = row.inset(2.0);
                 ui.p().rounded(field, 6.0, SURFACE_2);
                 ui.icon("search", Vec2::new(field.x + 16.0, cy), 16.0, TEXT_DIM);
-                ui.text_in(label, Rect::new(field.x + 34.0, field.y, field.w - 44.0, field.h), 17.0, Weight::Regular, TEXT_SOFT, Align::Left);
+                ui.text_in(label, Rect::new(field.x + 34.0, field.y, field.w - 44.0, field.h), 13.0, Weight::Regular, TEXT_SOFT, Align::Left);
             } else if let Some((name, info)) = label.strip_prefix(line_pre.as_str()).and_then(|rest| rest.rsplit_once("  (")).map(|(n, t)| (n, t.trim_end_matches(')'))) {
                 // a line of the timetable: its number on a sign, as a line sign on a bus
-                let sw = (ui.width(name, 18.0, Weight::Bold) + 22.0).max(48.0);
+                let sw = (ui.width(name, 14.0, Weight::Bold) + 22.0).max(48.0);
                 let sign = Rect::new(row.x + 10.0, cy - 13.0, sw, 26.0);
                 ui.p().rounded(sign, 6.0, ACCENT.mix(Color::rgba(150, 104, 30, 1.0), if marked || h { 0.0 } else { 0.3 }));
-                ui.text_in(name, sign, 18.0, Weight::Bold, Color::rgba(18, 14, 8, 1.0), Align::Center);
-                ui.text_in(info, Rect::new(sign.right() + 12.0, row.y, row.right() - sign.right() - 40.0, row.h), 17.0, Weight::Regular, ink, Align::Left);
+                ui.text_in(name, sign, 14.0, Weight::Bold, Color::rgba(18, 14, 8, 1.0), Align::Center);
+                ui.text_in(info, Rect::new(sign.right() + 12.0, row.y, row.right() - sign.right() - 40.0, row.h), 13.0, Weight::Regular, ink, Align::Left);
                 ui.icon("chevron_right", Vec2::new(row.right() - 16.0, cy), 16.0, TEXT_DIM);
             } else if let Some((code, name)) = code_and_name(label).filter(|_| code_w > 0.0) {
-                ui.text_in(code, Rect::new(row.x + 12.0, row.y, code_w, row.h), 17.0, Weight::Medium, ACCENT, Align::Right);
-                ui.text_in(name, Rect::new(row.x + 24.0 + code_w, row.y, row.w - code_w - 36.0, row.h), 17.0, Weight::Regular, ink, Align::Left);
+                ui.text_in(code, Rect::new(row.x + 12.0, row.y, code_w, row.h), 13.0, Weight::Medium, ACCENT, Align::Right);
+                ui.text_in(name, Rect::new(row.x + 24.0 + code_w, row.y, row.w - code_w - 36.0, row.h), 13.0, Weight::Regular, ink, Align::Left);
             } else {
                 let (text, more) = plain(label);
                 // (a row of a settings list kind without its own window: its value at the right)
                 let row_parts = parse_row(text);
-                ui.text_in(row_parts.name, Rect::new(row.x + 12.0, row.y, row.w - 60.0, row.h), 17.0, Weight::Regular, ink, Align::Left);
+                ui.text_in(row_parts.name, Rect::new(row.x + 12.0, row.y, row.w - 60.0, row.h), 13.0, Weight::Regular, ink, Align::Left);
                 if !row_parts.value.is_empty() && row_parts.kind != "a" {
                     ui.text_in(row_parts.value, Rect::new(row.x + row.w * 0.5, row.y, row.w * 0.5 - 36.0, row.h), 12.5, Weight::Medium, TEXT_DIM, Align::Right);
                 }
