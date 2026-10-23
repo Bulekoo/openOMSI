@@ -29,7 +29,8 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   other pipelines pay nothing for it (two-channel targets, no history picture, the old
   blur). A lamp or a lit sign among the surfaces does not stand in the picture as a bright
   square. The `street_light` setting (Graphics: Street light: Auto, On, Off) switches it:
-  Auto is on except on a small or shared graphics chip; the optimiser turns it off when the
+  It is off by default; On enables it, and Auto enables it except on a small or shared
+  graphics chip. The optimiser turns it off when the
   GPU is the limit. `OMSI_WIDE_AO=reach,strength,gain,max` tunes it.
 - The physical weather model keeps the water of the grey deck (its optical depth, a thin
   stratus to a raining nimbostratus), so a rainy or winter day is as bright or as dark as
