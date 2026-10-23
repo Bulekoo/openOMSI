@@ -229,6 +229,7 @@ flags! {
     OMSI_DEBUG_POPULATION: Bool, Debug, Use, "off", "Log where cars appear and vanish relative to the view.";
     OMSI_DEBUG_PROPS: Bool, Debug, Use, "off", "Log the destination-display (matrix) variables.";
     OMSI_DEBUG_PUDDLES: Num, Debug, Use, "0", "Puddle debug view (a number selects it).";
+    OMSI_DEBUG_RAIL: Bool, Switch, Use, "off", "Log a rail vehicle's speed, the drive and brake the scripts ask for and the adhesion, twice a second.";
     OMSI_DEBUG_RAIN: Bool, Debug, Use, "off", "Log the tyres' spray and puddles.";
     OMSI_DEBUG_RASTER: Text, Debug, Use, "-", "x,y: log the ground raster at that point.";
     OMSI_DEBUG_REPEATERS: Bool, Debug, Use, "off", "Log repeater objects whose spline chain disagrees with the map.";
@@ -437,6 +438,7 @@ flags! {
     OMSI_PROFILE_JSON: Text, Debug, Use, "-", "With OMSI_PROFILE and --exit-after: the exit summary (after the 15 s warm-up) as JSON into this file, see scripts/compare-performance.py.";
     OMSI_PUDDLE_F0: Num, Tuning, Use, "0.08", "Puddle reflectance at normal incidence (0.02 to 0.2).";
     OMSI_PUDDLE_THICKNESS: Num, Tuning, Use, "0.12", "Puddle water film thickness.";
+    OMSI_REALISTIC_ROAD: Bool, Switch, Use, "off", "The setting \"Realistic road physics\" on for this run (A/B against the OMSI 2 model: slip-angle tyres, surfaces, road roughness, wind).";
     OMSI_RECORD: Num, Test, Use, "-", "Offscreen --drive: a picture every 1/this second into <out>_frames/ and the run's mixed sound into <out>.wav (films with sound).";
     OMSI_RECORD_FROM: Num, Test, Use, "0", "With OMSI_RECORD: start the film this many seconds into the drive.";
     OMSI_RENDER_CLOCK: Num, Test, Use, "0", "Seconds the animation clock starts on (offscreen pictures).";

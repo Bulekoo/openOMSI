@@ -239,8 +239,52 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   go; the roads are drawn in a few strokes instead of one per road. Around the map's tiles
   the land has the map's own green, no more grey that looked as if it were still loading.
 
+**Trams, metros and trains** ([docs/RAIL.md](docs/RAIL.md))
+
+- Rail vehicles have a class (tram, metro, train), from `[rail_class]` in their file or from
+  what it declares (a `[contact_shoe]` is a metro, a car over 45 t a train), and rail lanes
+  a track kind (street or railway, third rail, tunnel, speed), from a map's new
+  `openomsi-rail.cfg`, from the names of its spline profiles (`tram_*`, `metro_*`, `rail_*`)
+  or from where the track lies. A road vehicle is never taken for a rail one.
+- A rail vehicle moves by the forces of railway engineering instead of the road tyres of a bus
+  and a made-up pull: running, air and curve resistance, the grade under it, wheel-rail
+  adhesion (less on wet rails, leaves, snow and ice), drive and brakes limited by it - the
+  driven wheels spin, the braked ones slide - and a tram's magnetic track brake. A vehicle
+  scripted for the AI only is driven by the pedals with the typical performance of its class.
+- **Pantographs.** A rail vehicle with a pantograph moves only with it raised. The game finds
+  it from `[pantograph_var]` / `[pantograph_trigger]` in the vehicle's file or, for a mod
+  without them, from its pantograph meshes and the variable they turn on (the Tatra T6B5's is
+  `door_0`, which is then no longer a door: no door key, no boarding, no "door open while
+  driving" penalty). Shift+P raises and lowers it.
+- **Bogie frames of mods** (the Tatra T6B5's `_trail.bus`: no `[boogies]`, one axle, one coupling
+  named) hang by their origin on the coupling of the car they belong to, as the mod is made for
+  OMSI 2, and stand on the track by their own wheelbase: they stood two to three metres out
+  of place, both under the middle of the car.
+- Cars of a train no longer jump back and forth by a few centimetres in bends: a part just
+  behind the vehicle was placed from the last 10 cm sample of the track behind it, a part just
+  ahead from the track itself.
+- The speed limit of a rail lane is brought down to what its curve allows (a tram loop, the
+  diverging branch of a turnout).
+
+**Road vehicles' physics** (new setting **Realistic road physics**, off by default; Esc menu, Settings)
+
+- With it on the weather's wind leans and pushes a bus and a denser or thinner air changes the
+  drag (the vehicle's scripts already have their still-air drag on the brakes, so only the
+  difference is added); grip and rolling resistance depend on what each tyre rolls on, wet or
+  dry (cobbles, dirt, grass, gravel, snow), rolling resistance also rises with speed and load;
+  and the road is as uneven as ISO 8608 says its surface is, which shakes a bus on cobbles,
+  gravel and the joints of a concrete-slab road (#3069).
+- **Tyres hold across by slip angle**, as real tyres do, instead of OMSI's rule that the body
+  follows its wheels exactly until the grip is passed: the contact patch lags behind the wheel
+  and pulls back by the cornering stiffness, up to the grip shared with the longitudinal force
+  by the friction ellipse. A bus follows its wheels at walking pace, turns in over 0.15-0.2 s at
+  50 km/h, understeers a little at 80 km/h (yaw rate 0.92-0.98 of the geometry's), loses its hold
+  across on a locked or spinning wheel. `cargo run -p omsi-sim --example handling -- <file.bus>...
+  --kmh 50 [--realistic]` compares the two models; `OMSI_REALISTIC_ROAD=1` turns it on for one run.
+
 ### Fixes
 
+- With the new setting **Realistic road physics** on, road damage shakes a vehicle again: cobbles, gravel, dirt, grass, snow and the joints of a concrete-slab road lift each tyre by what ISO 8608 gives such a road, where only the map's geometry did before ([#3069](https://github.com/openOMSI-org/openOMSI/issues/3069)).
 - **A much lighter Enhanced frame by day**: since 0.2.42 the AI cars were lent headlamp beams
   whenever their lights were on, and in a grey winter noon (cars' lights on, no street lamp lit)
   those twelve cars' beams cost 13 ms of a 25 ms frame on an M4 - any light at all in the
