@@ -3,7 +3,6 @@ use super::*;
 
 mod lods;
 mod night_coverage;
-use lods::lod_bands;
 use night_coverage::{load_night, night_coverage, static_diffuse};
 
 impl World {

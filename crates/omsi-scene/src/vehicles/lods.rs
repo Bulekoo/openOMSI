@@ -12,15 +12,31 @@ pub(super) const FAR_MESH_KEY: usize = 1 << 20;
 /// first level, in the order the model lists them, whose least size the object reaches, else
 /// the last one whatever its own (Omsi.exe 0x5ef860, as the scenery's levels, see
 /// `type_gpu_lods`): a level is drawn from its least size (the last from 0) up to the least of
-/// the sizes listed before it.
-pub(super) fn lod_bands(model: &omsi_model::Model) -> Vec<(f32, f32)> {
-    let mins: Vec<f32> = model.lods.iter().map(|l| l.min_size).collect();
-    (0..mins.len())
+/// the sizes listed before it. `mins` are the least sizes of the model's levels, `present` the
+/// levels (ascending) that have meshes on the card: a level whose meshes would not load is
+/// left out, and the bands of the others still meet - the vehicle never has a size at which
+/// nothing is drawn.
+pub(super) fn lod_bands_of(mins: &[f32], present: &[usize]) -> Vec<(usize, (f32, f32))> {
+    let kept: Vec<f32> = present.iter().map(|&l| mins.get(l).copied().unwrap_or(0.0)).collect();
+    (0..kept.len())
         .map(|i| {
-            let lo = if i + 1 == mins.len() { 0.0 } else { mins[i] };
-            (lo, mins[..i].iter().copied().fold(f32::MAX, f32::min))
+            let lo = if i + 1 == kept.len() { 0.0 } else { kept[i] };
+            (present[i], (lo, kept[..i].iter().copied().fold(f32::MAX, f32::min)))
         })
         .collect()
+}
+
+pub(super) fn lod_bands(model: &omsi_model::Model, present: &[usize]) -> Vec<(usize, (f32, f32))> {
+    let mins: Vec<f32> = model.lods.iter().map(|l| l.min_size).collect();
+    lod_bands_of(&mins, present)
+}
+
+/// The levels with meshes: the full model's and those of `far`.
+pub(super) fn levels_present(far: &[FarMesh]) -> Vec<usize> {
+    let mut levels: Vec<usize> = std::iter::once(0).chain(far.iter().map(|f| f.level)).collect();
+    levels.sort_unstable();
+    levels.dedup();
+    levels
 }
 
 impl World {
@@ -68,7 +84,7 @@ impl World {
             far.push(FarMesh { level: def.lod, mesh: id, mats, casts: def.shadow });
         }
         if omsi_cfg::flags::OMSI_PROFILE.is_set() && !vt.lod_meshes.is_empty() {
-            log::info!("  vehicle set {}: {} meshes of {} lower levels of detail ({:?})", vt.def.path.file_name().unwrap_or_default().to_string_lossy(), far.len(), vt.model.lods.len().saturating_sub(1), lod_bands(&vt.model));
+            log::info!("  vehicle set {}: {} meshes of {} lower levels of detail ({:?})", vt.def.path.file_name().unwrap_or_default().to_string_lossy(), far.len(), vt.model.lods.len().saturating_sub(1), lod_bands(&vt.model, &levels_present(&far)));
         }
         far
     }
@@ -90,21 +106,22 @@ impl World {
         on: bool,
         gpu: &mut GpuCache,
     ) -> Vec<usize> {
-        let mut bands = lod_bands(&vt.model);
+        let present = levels_present(&set.far);
+        let mut bands = lod_bands(&vt.model, &present);
         // (OMSI_FORCE_LOD=1, to look at the lower levels: they are drawn at any size)
         if omsi_cfg::flags::OMSI_FORCE_LOD.is_set() && bands.len() > 1 {
-            bands = std::iter::once((f32::MAX * 0.5, f32::MAX)).chain(bands.iter().skip(1).map(|_| (0.0, f32::MAX))).collect();
+            bands = bands.iter().enumerate().map(|(k, b)| (b.0, if k == 0 { (f32::MAX * 0.5, f32::MAX) } else { (0.0, f32::MAX) })).collect();
         }
         let mut far = Vec::new();
         if on && !set.far.is_empty() && bands.len() > 1 {
             for &inst in instances {
                 if scene.instances.get(inst).is_some_and(|x| !x.blob) {
-                    renderer.set_lod_range(scene, inst, bands[0].0, bands[0].1);
+                    renderer.set_lod_range(scene, inst, bands[0].1 .0, bands[0].1 .1);
                 }
             }
             renderer.begin_shared_object(scene, (&vt.def.path, "far"));
             for f in &set.far {
-                let (lo, hi) = bands.get(f.level).copied().unwrap_or((0.0, f32::MAX));
+                let (lo, hi) = bands.iter().find(|b| b.0 == f.level).map_or((0.0, f32::MAX), |b| b.1);
                 let i = renderer.add_instance(scene, f.mesh, DVec3::ZERO, Mat4::IDENTITY, f.mats.clone());
                 renderer.set_omsi_caster(scene, i, f.casts);
                 renderer.set_roof(scene, i, vt.def.bounding_box.map(|b| b[5] + b[2] * 0.5));
@@ -142,4 +159,34 @@ impl World {
         mat
     }
 
+}
+
+#[cfg(test)]
+mod tests {
+    use super::lod_bands_of;
+
+    /// A level whose meshes did not load is left out and the others' bands still meet.
+    #[test]
+    fn a_missing_middle_level_leaves_no_gap() {
+        // three levels, 0.1 / 0.05 / 0 - the middle one has no meshes
+        let bands = lod_bands_of(&[0.1, 0.05, 0.0], &[0, 2]);
+        assert_eq!(bands, vec![(0, (0.1, f32::MAX)), (2, (0.0, 0.1))]);
+        // with all three: 0.1.., 0.05..0.1, 0..0.05
+        let all = lod_bands_of(&[0.1, 0.05, 0.0], &[0, 1, 2]);
+        assert_eq!(all, vec![(0, (0.1, f32::MAX)), (1, (0.05, 0.1)), (2, (0.0, 0.05))]);
+        // a last level left out: the one before it takes the sizes down to 0
+        assert_eq!(lod_bands_of(&[0.1, 0.05, 0.0], &[0, 1]), vec![(0, (0.1, f32::MAX)), (1, (0.0, 0.1))]);
+    }
+
+    /// Every size is drawn by exactly one level of those present.
+    #[test]
+    fn every_size_has_a_level() {
+        for present in [vec![0, 2], vec![0, 1], vec![0, 1, 2], vec![0]] {
+            let bands = lod_bands_of(&[0.1, 0.05, 0.0], &present);
+            for size in [0.0f32, 0.01, 0.049, 0.05, 0.07, 0.099, 0.1, 0.5, 1.0e9] {
+                let hits = bands.iter().filter(|b| size >= b.1 .0 && size < b.1 .1).count();
+                assert!(hits >= 1, "{present:?}: size {size} drawn by none");
+            }
+        }
+    }
 }
