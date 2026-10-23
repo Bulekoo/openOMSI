@@ -16,6 +16,7 @@ pub mod mods;
 pub mod optimise;
 mod hof_sync;
 mod file_dialog;
+pub mod i18n;
 
 pub use file_dialog::{pick_file, pick_folder, pick_hofs, pick_mod};
 pub use hof_sync::{add_shared_hofs, share_map_hofs, MapHofOffer};
@@ -341,15 +342,14 @@ fn root() -> Result<PathBuf> {
     let c = load_config();
     let r = PathBuf::from(&c.root);
     if c.root.trim().is_empty() {
-        return Err(anyhow!("no OMSI 2 folder configured (set it under Setup)"));
+        return Err(anyhow!(i18n::tr("no OMSI 2 folder configured (set it under Setup)")));
     }
     let missing = omsi_cfg::missing_original_essentials(&r);
     if !missing.is_empty() {
-        return Err(anyhow!(
-            "{} is not a complete OMSI 2 installation (missing: {}); choose the original game's folder under Setup",
-            r.display(),
-            missing.join(", ")
-        ));
+        return Err(anyhow!(i18n::trf(
+            "{folder} is not a complete OMSI 2 installation (missing: {missing}); choose the original game's folder under Setup",
+            &[("folder", &r.display()), ("missing", &missing.join(", "))]
+        )));
     }
     Ok(r)
 }
@@ -551,7 +551,7 @@ pub struct ModsStatus {
 /// and .rar are always unpacked),
 /// "extract" or "inplace".
 pub fn start_install(src: &Path, mode: &str) -> Result<install::Progress> {
-    let content = content_dir().ok_or_else(|| anyhow!("no game binary configured, so no content folder"))?;
+    let content = content_dir().ok_or_else(|| anyhow!(i18n::tr("no game binary configured, so no content folder")))?;
     if !src.exists() {
         return Err(anyhow!("{} does not exist", src.display()));
     }
@@ -562,13 +562,13 @@ pub fn start_install(src: &Path, mode: &str) -> Result<install::Progress> {
 
 /// How big the mod at `src` is unpacked, what is free, and whether it can be used in place.
 pub fn inspect_mod(src: &Path) -> Result<install::SourceInfo> {
-    let content = content_dir().ok_or_else(|| anyhow!("no game binary configured, so no content folder"))?;
+    let content = content_dir().ok_or_else(|| anyhow!(i18n::tr("no game binary configured, so no content folder")))?;
     install::inspect(&content, root().ok().as_deref(), src)
 }
 
 /// Install the mod at `src` and wait for it (the terminal), printing the progress.
 pub fn install_mod_blocking(src: &Path, mode: &str, cancel_after_ms: Option<u64>) -> Result<install::Progress> {
-    let content = content_dir().ok_or_else(|| anyhow!("no game binary configured, so no content folder"))?;
+    let content = content_dir().ok_or_else(|| anyhow!(i18n::tr("no game binary configured, so no content folder")))?;
     Ok(install::run_blocking(content, root().ok(), src.to_path_buf(), install::InstallMode::parse(mode), cancel_after_ms.map(std::time::Duration::from_millis), true))
 }
 
@@ -689,7 +689,7 @@ pub fn install_inbox_blocking() -> Vec<install::Progress> {
 }
 
 pub fn mods_status() -> Result<ModsStatus> {
-    let content = content_dir().ok_or_else(|| anyhow!("no game binary configured, so no content folder"))?;
+    let content = content_dir().ok_or_else(|| anyhow!(i18n::tr("no game binary configured, so no content folder")))?;
     let cleaned = install::cleanup_stale(&data_dir(), Some(&content));
     let (hof_offers, hof_warnings) = hof_sync::offers();
     let folders = omsi_cfg::CONTENT_FOLDERS
@@ -723,13 +723,13 @@ pub fn mods_status() -> Result<ModsStatus> {
 
 /// Switch the mod `id` of the content folder off or on (see `mods::set_enabled`); its name.
 pub fn mod_set_enabled(id: &str, on: bool) -> Result<String> {
-    let content = content_dir().ok_or_else(|| anyhow!("no game binary configured, so no content folder"))?;
+    let content = content_dir().ok_or_else(|| anyhow!(i18n::tr("no game binary configured, so no content folder")))?;
     mods::set_enabled(&content, id, on)
 }
 
 /// Delete the mod `id` of the content folder (see `mods::remove`); its name.
 pub fn mod_remove(id: &str) -> Result<String> {
-    let content = content_dir().ok_or_else(|| anyhow!("no game binary configured, so no content folder"))?;
+    let content = content_dir().ok_or_else(|| anyhow!(i18n::tr("no game binary configured, so no content folder")))?;
     mods::remove(&content, id)
 }
 
@@ -1493,7 +1493,7 @@ pub struct RoadPiece {
 pub fn trip_path(map: &str, date: &str, trip: &str) -> Result<TripPath> {
     let map_dir = resolve_content(map)?.parent().map(|p| p.to_path_buf()).context("map folder")?;
     let date = if date.trim().is_empty() { DEFAULT_DATE } else { date.trim() };
-    let code = omsi_map::date_code(date).with_context(|| format!("'{date}' is not a date (YYYY-MM-DD)"))?;
+    let code = omsi_map::date_code(date).with_context(|| i18n::trf("'{date}' is not a date (YYYY-MM-DD)", &[("date", &date)]))?;
     let chrono = omsi_map::active_chrono_dirs(&map_dir, code);
     let off = omsi_map::chrono_deactivated_lines(&chrono);
     let data = omsi_timetable::TimetableData::load_with_chrono(&map_dir, &chrono, &off);
@@ -1547,7 +1547,7 @@ pub fn list_lines(map: &str, date: &str) -> Result<Vec<LineInfo>> {
 
 fn lines_on(map_dir: &Path, date: &str) -> Result<Vec<LineInfo>> {
     let date = if date.trim().is_empty() { DEFAULT_DATE } else { date.trim() };
-    let code = omsi_map::date_code(date).with_context(|| format!("'{date}' is not a date (YYYY-MM-DD)"))?;
+    let code = omsi_map::date_code(date).with_context(|| i18n::trf("'{date}' is not a date (YYYY-MM-DD)", &[("date", &date)]))?;
     let chrono = omsi_map::active_chrono_dirs(map_dir, code);
     let off = omsi_map::chrono_deactivated_lines(&chrono);
     let data = omsi_timetable::TimetableData::load_with_chrono(map_dir, &chrono, &off);
@@ -1602,7 +1602,7 @@ fn lines_on(map_dir: &Path, date: &str) -> Result<Vec<LineInfo>> {
                         .find(|b| b.object_id == *id)
                         .map(|b| b.name.trim().to_string())
                         .or_else(|| legacy.iter().find(|x| x.0 == *id).map(|x| x.1.clone()).filter(|n| !n.is_empty()))
-                        .unwrap_or_else(|| format!("stop {id}"));
+                        .unwrap_or_else(|| i18n::trf("stop {id}", &[("id", &id)]));
                     stops.push(StopInfo { name, arr: t_at, dep: if i == 0 { departure } else { t_at } });
                     if i < lens.len() {
                         acc += lens[i];
@@ -1672,7 +1672,7 @@ pub fn ibis_info(bus: &str, hof_name: &str, line: &str, terminus: &str, stops: &
     let hof = omsi_vehicle::hof::depot_in(dir, hof_name)
         .or_else(|| omsi_vehicle::hof::depot_anywhere(hof_name))
         .or_else(|| omsi_vehicle::hof::depot_files(dir).iter().find_map(|f| omsi_vehicle::Hof::load(f).ok()))
-        .context("no depot file next to the bus")?;
+        .with_context(|| i18n::tr("no depot file next to the bus"))?;
     let hof = &hof;
     let line_digits: String = line.chars().take_while(|c| c.is_ascii_digit()).collect();
     let mut routes = Vec::new();
@@ -1798,7 +1798,7 @@ pub fn get_profile(name: &str) -> Result<Profile> {
     let root = root()?;
     let name = name.trim();
     if name.is_empty() {
-        return Err(anyhow!("a profile needs a name"));
+        return Err(anyhow!(i18n::tr("a profile needs a name")));
     }
     let file = driver_read_path(&root, name);
     let driver = omsi_content::driver::Driver::load(&file).ok();
@@ -1823,7 +1823,7 @@ pub fn create_profile(name: &str, sex: &str) -> Result<Profile> {
     let root = root()?;
     let name = name.trim();
     if name.is_empty() || name.contains(['/', '\\', ':']) {
-        return Err(anyhow!("the name must be a plain file name"));
+        return Err(anyhow!(i18n::tr("the name must be a plain file name")));
     }
     let file = driver_write_path(&root, name);
     if let Some(dir) = file.parent() {
@@ -1870,14 +1870,14 @@ fn delete_profile_sessions(dir: &Path, name: &str) -> Result<()> {
 pub fn delete_profile(name: &str) -> Result<()> {
     let name = name.trim();
     if name.is_empty() || name.contains(['/', '\\', ':']) {
-        return Err(anyhow!("the name must be a plain file name"));
+        return Err(anyhow!(i18n::tr("the name must be a plain file name")));
     }
     let root = root()?;
     let file = driver_write_path(&root, name);
     if file.exists() {
         std::fs::remove_file(&file)?;
     } else if root.join("Drivers").join(format!("{}.odr", name.trim())).exists() {
-        return Err(anyhow!("'{}' belongs to the original OMSI 2 installation, which is not changed", name.trim()));
+        return Err(anyhow!(i18n::trf("'{name}' belongs to the original OMSI 2 installation, which is not changed", &[("name", &name.trim())])));
     }
     delete_profile_sessions(&data_dir().join("sessions"), name)
 }
@@ -2186,6 +2186,8 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
     // stop, as in OMSI; #1773)
     v["ai_wait_timed_stops_only"] = json!(false);
     v["pax_bad_driving"] = json!(true);
+    // the arrival half of the stops of a depot file that keeps two recordings per stop
+    v["auto_announce"] = json!(false);
     // OMSI's own options
     for (k, d) in [("maintenance", json!(0)), ("ai_unsched_factor", json!(100)), ("standing_chance", json!(5)), ("ai_max_scheduled", json!(0)), ("ai_max_parked", json!(0)), ("ai_max_humans", json!(200)), ("use_real_time", json!(false)), ("use_real_date", json!(false)), ("use_real_year", json!(false)), ("collision_vehicles", json!(true)), ("collision_objects", json!(true)), ("collision_pedestrians", json!(true)), ("head_movement", json!(true)), ("driverview_smooth", json!(true)), ("hands_in_cab", json!(false)), ("alt_view", json!(true)), ("precision_zoom", json!(false))] {
         v[k] = d;
@@ -2324,7 +2326,7 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
             "perf_overlay" => v[&k] = json!(perf_overlay_mode(val)),
             "sim_thread" => v[&k] = json!(b(val)),
             "mirror_hud" => v[&k] = json!(val.trim().parse::<u8>().map(|x| x.min(7)).unwrap_or(0)),
-            "windy_trees" | "mirror_hud_every_frame" | "mirror_shadows" | "mirror_particles" | "ai_wait_timed_stops_only" | "pax_bad_driving" | "ambient" => v[&k] = json!(b(val)),
+            "windy_trees" | "mirror_hud_every_frame" | "mirror_shadows" | "mirror_particles" | "ai_wait_timed_stops_only" | "pax_bad_driving" | "auto_announce" | "ambient" => v[&k] = json!(b(val)),
             "time_speed" => v[&k] = json!(val.trim_start_matches(['x', 'X']).parse::<f64>().map(|x| x.clamp(1.0, 30.0)).map(|x| if x.fract() == 0.0 { format!("{}", x as i64) } else { x.to_string() }).unwrap_or_else(|_| "1".into())),
             "language" => v[&k] = json!(language_code(val)),
             "graphics" | "renderer" => graphics = Some(graphics_mode(val)),
@@ -2721,6 +2723,7 @@ pub fn settings_to_text(v: &Value, old: Option<&str>) -> String {
     text.push_str(&format!("ai_wait_timed_stops_only={}\n", b("ai_wait_timed_stops_only", false)));
     text.push_str(&format!("trip_summary={}\nfull_tank={}\n", b("trip_summary", true), b("full_tank", true)));
     text.push_str(&format!("pax_bad_driving={}\n", b("pax_bad_driving", true)));
+    text.push_str(&format!("auto_announce={}\n", b("auto_announce", false)));
     text.push_str(&format!("triple_left_angle_deg={}\ntriple_right_angle_deg={}\ntriple_eye_height_mm={}\n", f("triple_left_angle_deg", 45.0).clamp(0.0, 90.0), f("triple_right_angle_deg", 45.0).clamp(0.0, 90.0), f("triple_eye_height_mm", 0.0).clamp(-500.0, 500.0)));
     text.push_str(&format!("photo_mode={}\n", if v.get("photo_mode").and_then(|x| x.as_str()) == Some("advanced") { "advanced" } else { "simple" }));
     text.push_str(&format!("passenger_animation={}\n", if v.get("passenger_animation").and_then(|x| x.as_str()) == Some("enhanced") { "enhanced" } else { "original" }));
@@ -3147,8 +3150,8 @@ pub fn launch(d: &Duty) -> Result<Launched> {
 /// What a LAN join field means (or what is wrong with it), and the sessions hosted here.
 pub fn check_join(text: &str) -> Value {
     match omsi_net::describe_join(text) {
-        Ok(d) => json!({ "ok": true, "text": d, "local": instances::local_hosts() }),
-        Err(e) => json!({ "ok": false, "text": e, "local": instances::local_hosts() }),
+        Ok(d) => json!({ "ok": true, "text": i18n::tr(&d), "local": instances::local_hosts() }),
+        Err(e) => json!({ "ok": false, "text": i18n::tr(&e), "local": instances::local_hosts() }),
     }
 }
 

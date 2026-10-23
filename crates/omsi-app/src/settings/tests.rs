@@ -388,3 +388,19 @@ fn vehicle_smoke_setting_round_trips_through_game_and_launcher() {
     assert_eq!(Settings::from_text("vehicle_smoke=PLAYER_ONLY\n").vehicle_smoke, "player");
 }
 
+
+/// The arrival announcements of the maps that keep two recordings per stop: off out of the
+/// box, and kept through the launcher's writer (the game's Gameplay page turns it on).
+#[test]
+fn arrival_announcements_are_off_at_first_and_kept() {
+    assert!(!Settings::default().auto_announce);
+    assert!(!Settings::from_text("version=4\n").auto_announce);
+    assert!(Settings::from_text("auto_announce=1\n").auto_announce);
+    let mut launcher = omsi_launcher_lib::settings_from_text(None);
+    assert_eq!(launcher["auto_announce"], false);
+    launcher["auto_announce"] = serde_json::json!(true);
+    let saved = omsi_launcher_lib::settings_to_text(&launcher, None);
+    assert!(Settings::from_text(&saved).auto_announce, "{saved}");
+    let on = Settings { auto_announce: true, ..Default::default() };
+    assert_eq!(Settings::from_text(&on.to_text()), on);
+}

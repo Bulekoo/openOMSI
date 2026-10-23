@@ -416,6 +416,7 @@ pub(super) fn toggle_now(app: &App, id: &str) -> Option<bool> {
         "nav_arrows" => app.menus.navigator.as_ref().map_or(s.nav_arrows, |n| n.arrows),
         "exact_fare" => s.exact_fare,
         "pax_bad_driving" => s.pax_bad_driving,
+        "auto_announce" => s.auto_announce,
         "collision_pedestrians" => s.collision_pedestrians,
         "ssao" => s.ssao,
         "detail_textures" => s.detail_textures,
@@ -681,6 +682,10 @@ pub(super) fn toggle_set(app: &mut App, id: &str, on: bool) -> Option<(&'static 
         "pax_bad_driving" => {
             app.settings.pax_bad_driving = on;
             Some(("pax_bad_driving", bit))
+        }
+        "auto_announce" => {
+            app.settings.auto_announce = on;
+            Some(("auto_announce", bit))
         }
         "collision_pedestrians" => {
             app.settings.collision_pedestrians = on;

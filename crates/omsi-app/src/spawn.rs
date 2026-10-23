@@ -650,6 +650,7 @@ fn new_player(vehicle: omsi_sim::VehicleInstance, render: scene::VehicleRender, 
         blinker_cancel: crate::settings::Settings::load().blinker_cancel,
         trolley_view: None,
         trolley_sound: Default::default(),
+        announce: crate::auto_announce::AutoAnnounce::new(),
     }
 }
 
