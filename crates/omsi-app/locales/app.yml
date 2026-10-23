@@ -16161,7 +16161,7 @@ _version: 2
   ja: "行路を終了"
   zh: "结束行程"
   hi: "टूर समाप्त करें"
-  zh-tw: "結束行程"
+  zh-tw: "結束更次"
   sv: "Avsluta omloppet"
   sr: "Završite obilazak"
   ka: "რეისის დასრულება"
@@ -17091,14 +17091,14 @@ _version: 2
   ja: "系統と行路..."
   zh: "线路与行程..."
   hi: "लाइन और टूर..."
-  zh-tw: "路線與班次..."
+  zh-tw: "路線與更次..."
   sv: "Linje och omlopp..."
   sr: "Linija i obilazak..."
   ka: "ხაზი და რეისი..."
 
 "Line and tour":
   ca: "Línia i torn"
-  zh-tw: "路線與班次"
+  zh-tw: "路線與更次"
   pt: "Linha e escala"
   pt-pt: "Linha e escala"
   ru: "Маршрут и выход"
@@ -24968,7 +24968,7 @@ _version: 2
   ja: "運行をクリックすると、その運行から勤務を始めます。"
   zh: "点击一趟行程，从那里开始该班次。"
   hi: "ड्यूटी वहीं से शुरू करने के लिए किसी ट्रिप पर क्लिक करें।"
-  zh-tw: "點選一趟行程，從那裡開始該班次。"
+  zh-tw: "點選一個班次，從該班次開始執行更次。"
   ko: "운행을 클릭하면 그 운행부터 근무를 시작합니다."
   th: "คลิกเที่ยวเพื่อเริ่มกะจากเที่ยวนั้น"
   vi: "Nhấp vào một chuyến để bắt đầu ca từ chuyến đó."
@@ -25173,7 +25173,7 @@ _version: 2
   zh: "将当前画质保存为预设方案"
   pl: "Zapisz bieżące ustawienia grafiki jako profil"
   fr: "Enregistrer les graphismes actuels comme profil"
-  zh-tw: "將目前圖形儲存為設定檔"
+  zh-tw: "將目前圖像設定儲存為設定檔"
   nl: "Huidige grafische instellingen als profiel opslaan"
   sv: "Spara nuvarande grafik som profil"
   de: "Aktuelles Grafikprofil speichern"
@@ -25220,7 +25220,7 @@ _version: 2
   zh: "动态转向(高速时按键转向变慢,OMSI 的 redSteerSpd)"
   pl: "Dynamiczne kierowanie (wolniejsze klawisze przy prędkości, redSteerSpd z OMSI)"
   fr: "Direction dynamique (touches plus lentes en vitesse, redSteerSpd d'OMSI)"
-  zh-tw: "動態轉向（速度較慢的按鍵，OMSI 的 redSteerSpd）"
+  zh-tw: "動態轉向（高速時減慢按鍵轉向，OMSI 的 redSteerSpd）"
   nl: "Dynamisch sturen (tragere toetsen bij hogere snelheid, OMSI's redSteerSpd)"
   sv: "Dynamisk styrning (långsammare tangenter vid hög fart, OMSI:s redSteerSpd)"
   de: "Dynamische Lenkung (langsameres Lenken bei Geschwindigkeit, redSteerSpd von OMSI)"
@@ -25300,7 +25300,7 @@ _version: 2
   zh: "时间流速(多人游戏中或实时同步时不可用)"
   pl: "Prędkość czasu (niedostępna w multiplayer ani przy synchronizacji z czasem rzeczywistym)"
   fr: "Vitesse du temps (sauf en multijoueur ou avec la synchro en temps réel)"
-  zh-tw: "時間速度（不在多人遊戲或即時同步中可用）"
+  zh-tw: "時間速度（多人遊戲或啟用即時同步時無法調整）"
   nl: "Tijdsnelheid (niet in multiplayer of bij realtime synchronisatie)"
   sv: "Tidshastighet (inte i flerspelarläge eller med tidssynkronisering)"
   de: "Zeitmultiplikator (nicht im Mehrspieler oder mit Echzeit-Synchronisation)"
@@ -25692,7 +25692,7 @@ _version: 2
   zh: "开始班次"
   pl: "Rozpocznij kurs"
   fr: "Commencer la course"
-  zh-tw: "開始旅程"
+  zh-tw: "開始班次"
   nl: "Rit starten"
   sv: "Starta tur"
   sr: "Započnite putovanje"
@@ -25964,7 +25964,7 @@ _version: 2
   zh: "显示所有站点的列表(仅在进行行程时)"
   pl: "Wyświetla listę wszystkich przystanków (tylko gdy brygada jest aktywna)"
   fr: "Affiche la liste de tous les arrêts (seulement pendant un service)"
-  zh-tw: "顯示所有站點的清單（僅當遊覽處於活動狀態時）"
+  zh-tw: "顯示所有站點的清單（僅限執行更次時）"
   nl: "Toont alle haltes (alleen tijdens een actieve rit)"
   sv: "Visar en lista över alla hållplatser (endast med aktivt omlopp)"
   sr: "Prikazuje listu svih stanica (samo kada je obilazak aktivan)"
@@ -26106,7 +26106,7 @@ _version: 2
   zh: "保留 LED 遮罩的 mipmap 链(远处更平滑)。"
   pl: "Zachowuje łańcuch mipmap masek LED (gładszy obraz z daleka)."
   fr: "Garde la chaîne de mipmaps des masques LED (plus lisse de loin)."
-  zh-tw: "保持 LED 面罩的 mip 鏈（從遠處看更平滑）。"
+  zh-tw: "保留 LED 遮罩的 mipmap 層級（從遠處看更平滑）。"
   nl: "Behoud de mipmapniveaus van LED-maskers (vloeiender vanop afstand)."
   sv: "Behåll LED-maskernas mip-kedja (mjukare på avstånd)."
   sr: "Držite mip lanac LED maski (glađi sa udaljenosti)."
@@ -26343,7 +26343,7 @@ _version: 2
   zh: "视角随转向转动"
   pl: "Widok obraca się ze skrętem kierownicy"
   fr: "La vue suit la direction"
-  zh-tw: "透過轉向查看轉彎"
+  zh-tw: "視角隨轉向轉動"
   nl: "Beeld draait mee met het stuur"
   sv: "Vyn vrids med styrningen"
   sr: "Pogled na okrete sa upravljanjem"
@@ -26583,7 +26583,7 @@ _version: 2
   zh: "将座椅恢复到车辆设定的位置。"
   pl: "Przywraca siedzenie do położenia zdefiniowanego przez pojazd."
   fr: "Remet le siège à la position du véhicule."
-  zh-tw: "將座椅靠背放在車輛有的位置。"
+  zh-tw: "將座椅位置與視角恢復為此車輛的預設值。"
   nl: "Zet de stoel terug op de standaardpositie van het voertuig."
   sv: "Återställ sätet till fordonets ursprungliga position."
   sr: "Vratite sedište tamo gde ga ima vozilo."
@@ -26663,7 +26663,7 @@ _version: 2
   zh: "高速时转向按键作用变慢"
   pl: "Klawisze kierowania działają wolniej przy prędkości"
   fr: "Les touches de direction agissent plus lentement en vitesse"
-  zh-tw: "加速時轉向鍵動作變慢"
+  zh-tw: "車速較高時，按鍵轉向速度會減慢"
   nl: "Stuurtoetsen reageren trager bij hogere snelheid"
   sv: "Styrtangenterna verkar långsammare vid hög fart"
   sr: "Tasteri upravljača deluju sporije pri brzini"
@@ -26823,7 +26823,7 @@ _version: 2
   zh: "在本机上翻译尚无译文的文本"
   pl: "Tłumaczy na tym komputerze teksty, których nikt jeszcze nie przetłumaczył"
   fr: "Traduit sur cette machine les textes que personne n'a traduits"
-  zh-tw: "在這台機器上沒有翻譯過的文本"
+  zh-tw: "在本機翻譯尚無譯文的文字"
   nl: "Vertaalt onvertaalde teksten lokaal op deze computer"
   sv: "Översätter texter som ingen har översatt, på denna dator"
   sr: "Prevodi tekstove koje niko nije preveo na ovoj mašini"
@@ -26903,7 +26903,7 @@ _version: 2
   zh: "显示车辆无法移动的原因、应找的零钱以及某项服务做了什么"
   pl: "Dlaczego pojazd nie rusza, należna reszta, co zrobiła obsługa serwisowa"
   fr: "Pourquoi le véhicule n'avance pas, la monnaie à rendre, ce qu'a fait un service"
-  zh-tw: "為什麼車輛不動、應更換、服務做了什麼"
+  zh-tw: "車輛無法行駛的原因、應找零金額及車輛服務的結果"
   nl: "Waarom het voertuig niet rijdt, verschuldigd wisselgeld en uitgevoerde handelingen"
   sv: "Varför fordonet inte rör sig, växel att ge tillbaka och resultatet av service"
   sr: "Zašto se vozilo ne pomera, promena zbog, šta je uradio servis"
@@ -26967,7 +26967,7 @@ _version: 2
   zh: "接管世界中停放的另外一辆车"
   pl: "Przejmij kierownicę innego pojazdu stojącego w świecie"
   fr: "Prendre le volant d'un autre véhicule présent dans le monde"
-  zh-tw: "抓住世界上另一輛車的方向盤"
+  zh-tw: "接手駕駛場景中的另一輛車"
   nl: "Neem het stuur over van een ander voertuig in de wereld"
   sv: "Ta över ratten i ett annat fordon som står i världen"
   sr: "Sedite za volan drugog vozila koje stoji na svetu"
@@ -28269,7 +28269,7 @@ _version: 2
   ca: "Mapa i servei"
   de: "Karte & Dienst"
   zh: "地图与任务"
-  zh-tw: "地圖設定"
+  zh-tw: "地圖與更次"
   pl: "Mapa i służba"
   fr: "Carte et service"
   pt: "Mapa e escala"
@@ -28299,7 +28299,7 @@ _version: 2
   ca: "Amaga el full de ruta (en triar un torn torna a aparèixer)"
   de: "Fahrplan weglegen (eine Tour holt ihn zurück)"
   zh: "收起路书（选一个班次会再打开）"
-  zh-tw: "收起路書（選一個班次會再打開）"
+  zh-tw: "收起路書（選擇更次後會再次顯示）"
   pl: "Schowaj książkę drogową (wybranie brygady przywraca ją)"
   fr: "Ranger la feuille de route (choisir un service la fait revenir)"
   pt: "Ocultar o itinerário (escolher uma escala o exibe novamente)"
@@ -28314,7 +28314,7 @@ _version: 2
   ca: "El full de ruta: els trajectes del torn triat i les seves parades"
   de: "Der Fahrplan: die Fahrten der gewählten Tour und ihre Haltestellen"
   zh: "路书：所选班次的每一趟车和它停靠的站"
-  zh-tw: "路書：所選班次的每一趟車和它停靠的站"
+  zh-tw: "路書：所選更次的班次及各班次的停靠站"
   pl: "Książka drogowa: kursy wybranej brygady i przystanki, na których się zatrzymują"
   fr: "La feuille de route : les courses du service choisi et leurs arrêts"
   pt: "O itinerário: as viagens da escala escolhida e as paradas em que passam"
@@ -28430,7 +28430,7 @@ _version: 2
   sr: "Filtriraj obilaske: broj, ruta, stanica..."
   ka: "რეისების ფილტრი: ნომერი, მარშრუტი, გაჩერება..."
 "Ended tours":
-  zh-tw: "已結束的班次"
+  zh-tw: "已結束的更次"
   ca: "Torns acabats"
   fr: "Services terminés"
   de: "Beendete Umläufe"
@@ -28489,7 +28489,7 @@ _version: 2
   it: "a corsa"
   nl: "per rit"
   zh: "每班次"
-  zh-tw: "一次旅行"
+  zh-tw: "一個班次"
   pt: "uma viagem"
   pt-pt: "uma viagem"
   sv: "en tur"
@@ -29337,7 +29337,7 @@ _version: 2
 "Enter any 4-letter ICAO station.":
   es: "Introduce cualquier estación ICAO de 4 letras."
   ca: "Introdueix qualsevol estació ICAO de 4 lletres."
-  zh-tw: "輸入任 4 個字母的 ICAO 電台。"
+  zh-tw: "輸入氣象站的四字母 ICAO 代碼。"
   fr: "Saisissez n'importe quel code OACI à 4 lettres."
   pt: "Digite qualquer estação ICAO de 4 letras."
   pt-pt: "Introduza qualquer estação ICAO de 4 letras."
@@ -29562,7 +29562,7 @@ _version: 2
 "Fetch the selected station again without waiting for the next automatic update.":
   es: "Vuelve a consultar la estación seleccionada sin esperar a la siguiente actualización automática."
   ca: "Torna a consultar l'estació seleccionada sense esperar la propera actualització automàtica."
-  zh-tw: "再次取得所選電台，無需等待下一次自動更新。"
+  zh-tw: "立即重新取得所選氣象站的報告，無需等待下一次自動更新。"
   fr: "Interroger à nouveau la station choisie sans attendre la prochaine mise à jour automatique."
   pt: "Consultar novamente a estação selecionada sem esperar pela próxima atualização automática."
   pt-pt: "Consultar novamente a estação selecionada sem esperar pela próxima atualização automática."
@@ -29872,7 +29872,7 @@ _version: 2
 "Load the selected station once without enabling continuous METAR sync.":
   es: "Carga la estación seleccionada una vez sin activar la sincronización METAR continua."
   ca: "Consulta l'estació seleccionada un cop sense activar la sincronització METAR contínua."
-  zh-tw: "載入所選電台一次，無需啟用連續 METAR 同步。"
+  zh-tw: "僅載入一次所選氣象站的報告，不啟用持續 METAR 同步。"
   fr: "Charger la station sélectionnée une fois sans activer la synchronisation METAR continue."
   pt: "Carregar a estação selecionada uma vez sem ativar a sincronização METAR contínua."
   pt-pt: "Carregar a estação selecionada uma vez sem ativar a sincronização METAR contínua."
@@ -30820,7 +30820,7 @@ _version: 2
   es: "Elige el turno"
   ca: "Tria el torn"
   fr: "Choisir le service"
-  zh-tw: "選擇班次"
+  zh-tw: "選擇更次"
   pt: "Escolha a escala"
   pt-pt: "Escolha a escala"
   zh: "选择班次"
@@ -32254,7 +32254,7 @@ _version: 2
   ka: "დისპეჩერმა რეისი უკან წაიღო: თავისუფალი მართვა"
 
 "End of the duty: the tour's last trip is done":
-  zh-tw: "勤務結束：此車次的最後一程已完成"
+  zh-tw: "更次結束：最後一個班次已完成"
   es: "Fin del servicio: se ha completado el último trayecto del turno"
   fr: "Fin du service : la dernière course est terminée"
   sv: "Tjänsten är slut: omloppets sista tur är klar"
@@ -33789,7 +33789,7 @@ _version: 2
   ka: "სადგომი მუხრუჭი ჩართულია  ({k} ხსნის)"
 
 "The tour starts at {}: the clock was moved from {from} to {}":
-  zh-tw: "車次於 {} 開始：時間已從 {from} 調整至 {}"
+  zh-tw: "更次於 {} 開始：時間已從 {from} 調整至 {}"
   es: "El turno empieza a las {}: el reloj ha pasado de {from} a {}"
   fr: "Le service commence à {} : l'horloge est passée de {from} à {}"
   sv: "Omloppet startar vid {}: klockan flyttades från {from} till {}"
@@ -34540,7 +34540,7 @@ _version: 2
   ja: "運行と出発する停留所を選んでください。"
   zh: "选择班次和起始站点。"
   hi: "एक टूर और शुरू करने का स्टॉप चुनें।"
-  zh-tw: "選擇班次和起始站點。"
+  zh-tw: "選擇更次和起始站點。"
   ko: "운행과 출발 정류장을 선택하세요."
   th: "เลือกรอบและป้ายที่จะเริ่ม"
   vi: "Chọn ca chạy và điểm dừng bắt đầu."
@@ -40496,7 +40496,7 @@ _version: 2
 
 "This tour does not run within a year of the chosen date.":
   es: "Este turno no circula durante el año posterior a la fecha elegida."
-  zh-tw: "此班次在所選日期起一年內不會行駛。"
+  zh-tw: "此更次在所選日期起一年內不會行駛。"
   de: "Dieser Umlauf fährt innerhalb eines Jahres ab dem Datum nicht."
   ru: "Этот выход не работает в течение года от выбранной даты."
   sv: "Det här omloppet körs inte inom ett år från valt datum."
@@ -52819,7 +52819,7 @@ _version: 2
 
 "No tour has a trip still to come that matches.":
   es: "Ningún turno tiene un trayecto pendiente que coincida."
-  zh-tw: "沒有符合條件且仍有未出發行程的班次。"
+  zh-tw: "沒有符合條件且仍有待發班次的更次。"
   pt: "Nenhuma escala tem uma viagem futura correspondente."
   ca: "Cap torn amb trajectes pendents coincideix."
   fr: "Aucun service n'a de voyage à venir qui correspond."
@@ -52831,7 +52831,7 @@ _version: 2
 
 "No tour left at this time: show the ended tours, or start earlier.":
   es: "No quedan turnos a esta hora: muestra los que ya han terminado o empieza antes."
-  zh-tw: "此時間已無可用班次：顯示已結束班次，或提早開始。"
+  zh-tw: "此時間已無可用更次：顯示已結束的更次，或提早開始。"
   pt: "Não há mais escalas neste horário: mostre as encerradas ou comece mais cedo."
   ca: "No queden torns a aquesta hora: mostra els acabats o comença abans."
   fr: "Plus aucun service à cette heure : affichez les services terminés ou commencez plus tôt."
@@ -52939,7 +52939,7 @@ _version: 2
 
 "Tours of this line on the chosen day":
   es: "Turnos de esta línea en el día elegido"
-  zh-tw: "此路線在所選日期的班次"
+  zh-tw: "此路線在所選日期的更次"
   pt: "Escalas desta linha no dia escolhido"
   ca: "Torns d'aquesta línia el dia triat"
   fr: "Services de cette ligne le jour choisi"
@@ -54789,7 +54789,7 @@ _version: 2
   nl: "Bussen die de dienstregeling deze omloop geeft:"
   tr: "Tarifenin bu sefere verdiği otobüsler:"
   ja: "時刻表がこの運用に割り当てるバス:"
-  zh-tw: "時刻表為此班次安排的公車："
+  zh-tw: "時刻表為此更次安排的公車："
   ko: "시간표가 이 운행에 배정하는 버스:"
   th: "รถบัสที่ตารางเวลากำหนดให้รอบนี้:"
   vi: "Xe buýt mà lịch trình giao cho ca này:"
@@ -65639,7 +65639,7 @@ _version: 2
   pt-pt: "A atribuição de tecla não foi guardada: {e}"
   ka: "კლავიშის მინიჭება ვერ შეინახა: {e}"
 "Kneeling: C (or Space) stands up again":
-  zh-tw: "車身跪降中：再次按 C（或空白鍵）即可升起"
+  zh-tw: "已蹲下：再次按 C（或空白鍵）即可起身"
   fr: "Accroupi : C (ou Espace) pour se relever"
   sr: "Čučite: C (ili Space) da ustanete"
   ru: "Приседание: C (или пробел) поднимает обратно"
@@ -65649,7 +65649,7 @@ _version: 2
   pt-pt: "Ajoelhado: C (ou Espaço) para se levantar"
   ka: "ჩაცუცქული: წამოსადგომად დააჭირეთ C-ს (ან Space-ს)"
 "Kneeling: the button again stands up":
-  zh-tw: "車身跪降中：再次按下該按鈕即可升起"
+  zh-tw: "已蹲下：再次按下該按鈕即可起身"
   fr: "Accroupi : le même bouton pour se relever"
   sr: "Čučite: ponovo pritisnite dugme da ustanete"
   ru: "Приседание: та же кнопка поднимает обратно"
@@ -67672,6 +67672,7 @@ _version: 2
   pt-pt: "Regulação da temperatura do aquecimento"
   ka: "გათბობის რეგულატორი: ტემპერატურა"
   sr: "Podešavanje temperature grejanja"
+  zh-tw: "暖氣溫度調節"
 
 "Heating control footwell":
   pt: "Controle de aquecimento da área dos pés"
@@ -67682,6 +67683,7 @@ _version: 2
   pt-pt: "Regulação do aquecimento da zona dos pés"
   ka: "გათბობის რეგულატორი: ფეხების ზონა"
   sr: "Grejanje prostora za noge"
+  zh-tw: "腳部暖氣調節"
 
 "Mirror heating on/off":
   pt: "Aquecimento dos espelhos: ligar/desligar"
@@ -67692,6 +67694,7 @@ _version: 2
   pt-pt: "Aquecimento dos espelhos: ligar/desligar"
   ka: "სარკის გათბობა ჩართ./გამორთ."
   sr: "Grejanje retrovizora: uključite/isključite"
+  zh-tw: "後視鏡加熱開／關"
 
 "Lift down switch on/off":
   pt: "Interruptor de descida do elevador: ligar/desligar"
@@ -67702,6 +67705,7 @@ _version: 2
   pt-pt: "Interruptor de rebaixamento: ligar/desligar"
   ka: "ძარის დაწევის გადამრთველი ჩართ./გამორთ."
   sr: "Prekidač za spuštanje podizne platforme: uključite/isključite"
+  zh-tw: "升降台下降開關開／關"
 
 "Driver's door":
   pt: "Porta do motorista"
@@ -67712,6 +67716,7 @@ _version: 2
   pt-pt: "Porta do condutor"
   ka: "მძღოლის კარი"
   sr: "Vrata vozača"
+  zh-tw: "駕駛室門"
 
 "Left driver's door":
   pt: "Porta esquerda do motorista"
@@ -67722,6 +67727,7 @@ _version: 2
   pt-pt: "Porta esquerda do condutor"
   ka: "მძღოლის მარცხენა კარი"
   sr: "Leva vrata vozača"
+  zh-tw: "左側駕駛室門"
 
 "Right driver's door":
   pt: "Porta direita do motorista"
@@ -67732,6 +67738,7 @@ _version: 2
   pt-pt: "Porta direita do condutor"
   ka: "მძღოლის მარჯვენა კარი"
   sr: "Desna vrata vozača"
+  zh-tw: "右側駕駛室門"
 
 "Ignition key":
   pt: "Chave de ignição"
@@ -67742,6 +67749,7 @@ _version: 2
   pt-pt: "Chave de ignição"
   ka: "ანთების გასაღები"
   sr: "Ključ za pokretanje motora"
+  zh-tw: "點火鑰匙"
 
 "Door lock":
   pt: "Trava da porta"
@@ -67752,6 +67760,7 @@ _version: 2
   pt-pt: "Bloqueio da porta"
   ka: "კარის საკეტი"
   sr: "Brava na vratima"
+  zh-tw: "門鎖"
 
 "Parking Brake On/Off":
   pt: "Freio de estacionamento: ligar/desligar"
@@ -67762,6 +67771,7 @@ _version: 2
   pt-pt: "Travão de estacionamento: ligar/desligar"
   ka: "სადგომი მუხრუჭი ჩართ./გამორთ."
   sr: "Parkirna kočnica: uključite/isključite"
+  zh-tw: "手煞車開／關"
 
 "Parking Brake Set":
   pt: "Acionar freio de estacionamento"
@@ -67772,6 +67782,7 @@ _version: 2
   pt-pt: "Acionar travão de estacionamento"
   ka: "სადგომი მუხრუჭის ჩართვა"
   sr: "Zategnite parkirnu kočnicu"
+  zh-tw: "拉起手煞車"
 
 "Parking Brake Release":
   pt: "Liberar freio de estacionamento"
@@ -67782,6 +67793,7 @@ _version: 2
   pt-pt: "Soltar travão de estacionamento"
   ka: "სადგომი მუხრუჭის მოხსნა"
   sr: "Otpustite parkirnu kočnicu"
+  zh-tw: "解除手煞車"
 
 "Electricity On/Off":
   pt: "Alimentação elétrica: ligar/desligar"
@@ -67792,6 +67804,7 @@ _version: 2
   pt-pt: "Eletricidade: ligar/desligar"
   ka: "ელექტროენერგია ჩართ./გამორთ."
   sr: "Električno napajanje: uključite/isključite"
+  zh-tw: "電源開／關"
 
 "Front Door, 1st Wing Open/Close":
   pt: "Porta dianteira, primeira folha: abrir/fechar"
@@ -67802,6 +67815,7 @@ _version: 2
   pt-pt: "Porta dianteira, 1.ª folha: abrir/fechar"
   ka: "წინა კარი, 1-ლი ფრთა გაღება/დახურვა"
   sr: "Prednja vrata, prvo krilo: otvorite/zatvorite"
+  zh-tw: "前門第一扇門開／關"
 
 "Front Door, 2nd Wing Open/Close":
   pt: "Porta dianteira, segunda folha: abrir/fechar"
@@ -67812,6 +67826,7 @@ _version: 2
   pt-pt: "Porta dianteira, 2.ª folha: abrir/fechar"
   ka: "წინა კარი, მე-2 ფრთა გაღება/დახურვა"
   sr: "Prednja vrata, drugo krilo: otvorite/zatvorite"
+  zh-tw: "前門第二扇門開／關"
 
 "Stop Request Button":
   pt: "Botão de solicitação de parada"
@@ -67822,6 +67837,7 @@ _version: 2
   pt-pt: "Botão de pedido de paragem"
   ka: "გაჩერების მოთხოვნის ღილაკი"
   sr: "Dugme za najavu zaustavljanja"
+  zh-tw: "下車鈴按鈕"
 
 "Buggy Request Button":
   pt: "Botão de solicitação para carrinho de bebê"
@@ -67832,6 +67848,7 @@ _version: 2
   pt-pt: "Botão de pedido para carrinho de bebé"
   ka: "ეტლის მოთხოვნის ღილაკი"
   sr: "Dugme za najavu ulaska sa dečjim kolicima"
+  zh-tw: "嬰兒車上下車請求按鈕"
 
 "Buggy Switch (Open Rear Door Manually)":
   pt: "Interruptor para carrinho de bebê (abrir porta traseira manualmente)"
@@ -67842,6 +67859,7 @@ _version: 2
   pt-pt: "Interruptor de carrinho de bebé (abrir a porta traseira manualmente)"
   ka: "ეტლის გადამრთველი (უკანა კარის ხელით გაღება)"
   sr: "Prekidač za ručno otvaranje zadnjih vrata za putnike sa dečjim kolicima"
+  zh-tw: "嬰兒車開關（手動開啟後門）"
 
 "Cabin Light Lower Deck On/Off":
   pt: "Iluminação do andar inferior: ligar/desligar"
@@ -67852,6 +67870,7 @@ _version: 2
   pt-pt: "Luz do piso inferior: ligar/desligar"
   ka: "ქვედა სართულის სალონის განათება ჩართ./გამორთ."
   sr: "Svetlo u donjem delu autobusa: uključite/isključite"
+  zh-tw: "下層車廂燈開／關"
 
 "Cabin Light Upper Deck On/Off":
   pt: "Iluminação do andar superior: ligar/desligar"
@@ -67862,6 +67881,7 @@ _version: 2
   pt-pt: "Luz do piso superior: ligar/desligar"
   ka: "ზედა სართულის სალონის განათება ჩართ./გამორთ."
   sr: "Svetlo u gornjem delu autobusa: uključite/isključite"
+  zh-tw: "上層車廂燈開／關"
 
 "Cabin Light Lower Deck, First on the Right On/Off":
   pt: "Primeira luz à direita do andar inferior: ligar/desligar"
@@ -67872,6 +67892,7 @@ _version: 2
   pt-pt: "Luz do piso inferior, primeira à direita: ligar/desligar"
   ka: "ქვედა სართულის სალონის განათება, პირველი მარჯვნივ ჩართ./გამორთ."
   sr: "Prvo svetlo zdesna u donjem delu autobusa: uključite/isključite"
+  zh-tw: "下層車廂右側第一盞燈開／關"
 
 "Driver's Light On/Off":
   pt: "Luz do motorista: ligar/desligar"
@@ -67882,6 +67903,7 @@ _version: 2
   pt-pt: "Luz do condutor: ligar/desligar"
   ka: "მძღოლის განათება ჩართ./გამორთ."
   sr: "Osvetljenje za vozača: uključite/isključite"
+  zh-tw: "駕駛室燈開／關"
 
 "Driving Slip Regulation System On/Off":
   pt: "Controle de tração: ligar/desligar"
@@ -67892,6 +67914,7 @@ _version: 2
   pt-pt: "Controlo de tração: ligar/desligar"
   ka: "მოცურების საწინააღმდეგო სისტემა ჩართ./გამორთ."
   sr: "Sistem protiv proklizavanja: uključite/isključite"
+  zh-tw: "驅動防滑系統開／關"
 
 "Dimmed Headlights On/Off":
   pt: "Farol baixo: ligar/desligar"
@@ -67902,6 +67925,7 @@ _version: 2
   pt-pt: "Médios: ligar/desligar"
   ka: "ახლო ფარები ჩართ./გამორთ."
   sr: "Oborena svetla: uključite/isključite"
+  zh-tw: "近光燈開／關"
 
 "Full Beam On/Off / Flash Light":
   pt: "Farol alto: ligar/desligar / lampejar"
@@ -67912,6 +67936,7 @@ _version: 2
   pt-pt: "Máximos: ligar/desligar / sinal de luzes"
   ka: "შორი ფარები ჩართ./გამორთ. / ფარებით სიგნალი"
   sr: "Duga svetla: uključite/isključite / ablendujte"
+  zh-tw: "遠光燈開／關／閃燈"
 
 "Engine On/Off":
   pt: "Motor: ligar/desligar"
@@ -67922,6 +67947,7 @@ _version: 2
   pt-pt: "Motor: ligar/desligar"
   ka: "ძრავა ჩართ./გამორთ."
   sr: "Motor: pokrenite/ugasite"
+  zh-tw: "引擎開／關"
 
 "Engine Shut Down":
   pt: "Desligar motor"
@@ -67932,6 +67958,7 @@ _version: 2
   pt-pt: "Desligar o motor"
   ka: "ძრავის გამორთვა"
   sr: "Ugasite motor"
+  zh-tw: "關閉引擎"
 
 "Engine Cooling On/Off":
   pt: "Arrefecimento do motor: ligar/desligar"
@@ -67942,6 +67969,7 @@ _version: 2
   pt-pt: "Arrefecimento do motor: ligar/desligar"
   ka: "ძრავის გაგრილება ჩართ./გამორთ."
   sr: "Hlađenje motora: uključite/isključite"
+  zh-tw: "引擎冷卻開／關"
 
 "Heater Blower On/Off":
   pt: "Ventilador do aquecedor: ligar/desligar"
@@ -67952,6 +67980,7 @@ _version: 2
   pt-pt: "Ventilador do aquecimento: ligar/desligar"
   ka: "გამათბობლის ვენტილატორი ჩართ./გამორთ."
   sr: "Ventilator grejanja: uključite/isključite"
+  zh-tw: "暖氣風機開／關"
 
 "Microphone Switch (Announcements)":
   pt: "Interruptor do microfone (anúncios)"
@@ -67962,6 +67991,7 @@ _version: 2
   pt-pt: "Interruptor do microfone (anúncios)"
   ka: "მიკროფონის გადამრთველი (განცხადებები)"
   sr: "Prekidač mikrofona (najave)"
+  zh-tw: "麥克風開關（廣播）"
 
 "Parking Light On/Off":
   pt: "Luz de posição: ligar/desligar"
@@ -67972,6 +68002,7 @@ _version: 2
   pt-pt: "Mínimos: ligar/desligar"
   ka: "გაბარიტები ჩართ./გამორთ."
   sr: "Poziciona svetla: uključite/isključite"
+  zh-tw: "位置燈開／關"
 
 "Park Heating On/Off":
   pt: "Aquecedor auxiliar: ligar/desligar"
@@ -67982,6 +68013,7 @@ _version: 2
   pt-pt: "Aquecimento auxiliar: ligar/desligar"
   ka: "ავტონომიური გამათბობელი ჩართ./გამორთ."
   sr: "Grejanje autobusa dok je parkiran: uključite/isključite"
+  zh-tw: "駐車暖氣開／關"
 
 "Rear Fog Light On/Off":
   pt: "Luz de neblina traseira: ligar/desligar"
@@ -67992,6 +68024,7 @@ _version: 2
   pt-pt: "Farol de nevoeiro traseiro: ligar/desligar"
   ka: "უკანა ნისლის ფარი ჩართ./გამორთ."
   sr: "Zadnje svetlo za maglu: uključite/isključite"
+  zh-tw: "後霧燈開／關"
 
 "Retarder Direct Mode On/Off":
   pt: "Modo direto do retardador: ligar/desligar"
@@ -68002,6 +68035,7 @@ _version: 2
   pt-pt: "Modo direto do retardador: ligar/desligar"
   ka: "რეტარდერის პირდაპირი რეჟიმი ჩართ./გამორთ."
   sr: "Direktni režim retardera: uključite/isključite"
+  zh-tw: "緩速器直接模式開／關"
 
 "Retarder On/Off":
   pt: "Retardador: ligar/desligar"
@@ -68012,6 +68046,7 @@ _version: 2
   pt-pt: "Retardador: ligar/desligar"
   ka: "რეტარდერი ჩართ./გამორთ."
   sr: "Retarder: uključite/isključite"
+  zh-tw: "緩速器開／關"
 
 "Station Brake & Door Release On/Off":
   pt: "Freio de parada e liberação das portas: ligar/desligar"
@@ -68022,6 +68057,7 @@ _version: 2
   pt-pt: "Travão de paragem e libertação das portas: ligar/desligar"
   ka: "გაჩერების მუხრუჭი და კარის განბლოკვა ჩართ./გამორთ."
   sr: "Stajališna kočnica i otključavanje vrata: uključite/isključite"
+  zh-tw: "停站煞車與車門解鎖開／關"
 
 "Only Station Brake (20h switch) On/Off":
   pt: "Freio de parada (interruptor 20h): ligar/desligar"
@@ -68032,6 +68068,7 @@ _version: 2
   pt-pt: "Só travão de paragem (interruptor 20h): ligar/desligar"
   ka: "მხოლოდ გაჩერების მუხრუჭი (20h გადამრთველი) ჩართ./გამორთ."
   sr: "Samo kočnica za stajalište (prekidač 20h): uključite/isključite"
+  zh-tw: "僅停站煞車（20h 開關）開／關"
 
 "Warning Lights On/Off":
   pt: "Pisca-alerta: ligar/desligar"
@@ -68042,6 +68079,7 @@ _version: 2
   pt-pt: "Luzes de emergência: ligar/desligar"
   ka: "საავარიო სიგნალი ჩართ./გამორთ."
   sr: "Upozoravajuća svetla: uključite/isključite"
+  zh-tw: "危險警告燈開／關"
 
 "Set Blinker Left":
   pt: "Acionar seta esquerda"
@@ -68052,6 +68090,7 @@ _version: 2
   pt-pt: "Pisca para a esquerda"
   ka: "მარცხენა მოხვევის მაჩვენებლის ჩართვა"
   sr: "Uključite levi pokazivač pravca"
+  zh-tw: "開啟左方向燈"
 
 "Set Blinker Right":
   pt: "Acionar seta direita"
@@ -68062,6 +68101,7 @@ _version: 2
   pt-pt: "Pisca para a direita"
   ka: "მარჯვენა მოხვევის მაჩვენებლის ჩართვა"
   sr: "Uključite desni pokazivač pravca"
+  zh-tw: "開啟右方向燈"
 
 "Set Blinker Off":
   pt: "Desligar setas"
@@ -68072,6 +68112,7 @@ _version: 2
   pt-pt: "Desligar pisca"
   ka: "მოხვევის მაჩვენებლის გამორთვა"
   sr: "Isključite pokazivače pravca"
+  zh-tw: "關閉方向燈"
 
 "Blinker Left via Off":
   pt: "Seta esquerda passando pela posição desligada"
@@ -68082,6 +68123,7 @@ _version: 2
   pt-pt: "Pisca esquerdo (via desligado)"
   ka: "მარცხენა მოხვევის მაჩვენებელი გამორთვის გავლით"
   sr: "Levi pokazivač pravca, preko isključenog položaja"
+  zh-tw: "左方向燈／關閉"
 
 "Blinker Right via Off":
   pt: "Seta direita passando pela posição desligada"
@@ -68092,6 +68134,7 @@ _version: 2
   pt-pt: "Pisca direito (via desligado)"
   ka: "მარჯვენა მოხვევის მაჩვენებელი გამორთვის გავლით"
   sr: "Desni pokazivač pravca, preko isključenog položaja"
+  zh-tw: "右方向燈／關閉"
 
 "Steering Left":
   pt: "Virar à esquerda"
@@ -68102,6 +68145,7 @@ _version: 2
   pt-pt: "Virar à esquerda"
   ka: "საჭე მარცხნივ"
   sr: "Skretanje ulevo"
+  zh-tw: "向左轉向"
 
 "Steering Right":
   pt: "Virar à direita"
@@ -68112,6 +68156,7 @@ _version: 2
   pt-pt: "Virar à direita"
   ka: "საჭე მარჯვნივ"
   sr: "Skretanje udesno"
+  zh-tw: "向右轉向"
 
 "Steering Neutral":
   pt: "Centralizar direção"
@@ -68122,6 +68167,7 @@ _version: 2
   pt-pt: "Direção ao centro"
   ka: "საჭე ნეიტრალურად"
   sr: "Postavite upravljač u neutralni položaj"
+  zh-tw: "方向盤回正"
 
 "Throttle Boost/Brake release":
   pt: "Reforço do acelerador / liberar freio"
@@ -68132,6 +68178,7 @@ _version: 2
   pt-pt: "Reforço do acelerador / soltar o travão"
   ka: "აქსელერატორის გაძლიერება/მუხრუჭის მოხსნა"
   sr: "Pojačajte gas / otpustite kočnicu"
+  zh-tw: "全油門／解除煞車"
 
 "Give Ticket":
   pt: "Entregar bilhete"
@@ -68142,6 +68189,7 @@ _version: 2
   pt-pt: "Entregar bilhete"
   ka: "ბილეთის მიცემა"
   sr: "Izdajte kartu"
+  zh-tw: "交出票券"
 
 "Give Change":
   pt: "Entregar troco"
@@ -68152,6 +68200,7 @@ _version: 2
   pt-pt: "Entregar troco"
   ka: "ხურდის მიცემა"
   sr: "Vratite kusur"
+  zh-tw: "找零"
 
 "Take the change":
   pt: "Pegar troco"
@@ -68162,6 +68211,7 @@ _version: 2
   pt-pt: "Recolher o troco"
   ka: "ხურდის აღება"
   sr: "Uzmite kusur"
+  zh-tw: "取走找零"
 
 "Wiper On/Off":
   pt: "Limpador do para-brisa: ligar/desligar"
@@ -68172,6 +68222,7 @@ _version: 2
   pt-pt: "Limpa-para-brisas: ligar/desligar"
   ka: "საწმენდი ჩართ./გამორთ."
   sr: "Brisači: uključite/isključite"
+  zh-tw: "雨刷開／關"
 
 "Wiper Fast On/Off":
   pt: "Limpador rápido: ligar/desligar"
@@ -68182,6 +68233,7 @@ _version: 2
   pt-pt: "Limpa-para-brisas rápido: ligar/desligar"
   ka: "საწმენდი სწრაფად ჩართ./გამორთ."
   sr: "Brzi brisači: uključite/isključite"
+  zh-tw: "高速雨刷開／關"
 
 "Wiper Intermittent On/Off":
   pt: "Limpador intermitente: ligar/desligar"
@@ -68192,6 +68244,7 @@ _version: 2
   pt-pt: "Limpa-para-brisas intermitente: ligar/desligar"
   ka: "საწმენდი წყვეტილად ჩართ./გამორთ."
   sr: "Brisači sa intervalnim radom: uključite/isključite"
+  zh-tw: "間歇雨刷開／關"
 
 "Wiper: Washer":
   pt: "Limpador: lavador do para-brisa"
@@ -68202,6 +68255,7 @@ _version: 2
   pt-pt: "Limpa-para-brisas: esguicho"
   ka: "საწმენდი: მინის რეცხვა"
   sr: "Brisači: uključite pranje vetrobranskog stakla"
+  zh-tw: "雨刷清洗器"
 
 "Cassette Recorder Play":
   pt: "Reproduzir fita"
@@ -68212,6 +68266,7 @@ _version: 2
   pt-pt: "Leitor de cassetes: reproduzir"
   ka: "კასეტური მაგნიტოფონი: დაკვრა"
   sr: "Pustite kasetu"
+  zh-tw: "播放卡式錄音帶"
 
 "Cassette Recorder Stop":
   pt: "Parar fita"
@@ -68222,6 +68277,7 @@ _version: 2
   pt-pt: "Leitor de cassetes: parar"
   ka: "კასეტური მაგნიტოფონი: გაჩერება"
   sr: "Zaustavite kasetu"
+  zh-tw: "停止卡式錄音帶"
 
 "Release Curtain":
   pt: "Soltar cortina"
@@ -68232,6 +68288,7 @@ _version: 2
   pt-pt: "Soltar a cortina"
   ka: "მზის ფარდის დაშვება"
   sr: "Otpustite zavesu"
+  zh-tw: "放下遮陽簾"
 
 "Move Rollsign To Next Notch":
   pt: "Avançar letreiro de lona uma posição"
@@ -68242,6 +68299,7 @@ _version: 2
   pt-pt: "Mover o letreiro de rolo para a posição seguinte"
   ka: "მარშრუტის ტაბლოს გადაწევა შემდეგ პოზიციაზე"
   sr: "Pomerite rolo-displej za jedno polje unapred"
+  zh-tw: "捲簾式路牌移至下一格"
 
 "Move Rollsign To Previous Notch":
   pt: "Recuar letreiro de lona uma posição"
@@ -68252,6 +68310,7 @@ _version: 2
   pt-pt: "Mover o letreiro de rolo para a posição anterior"
   ka: "მარშრუტის ტაბლოს გადაწევა წინა პოზიციაზე"
   sr: "Pomerite rolo-displej za jedno polje unazad"
+  zh-tw: "捲簾式路牌移至上一格"
 
 "Wind Rollsign Down":
   pt: "Rolar letreiro de lona para baixo"
@@ -68262,6 +68321,7 @@ _version: 2
   pt-pt: "Enrolar o letreiro de rolo para baixo"
   ka: "მარშრუტის ტაბლოს დახვევა ქვემოთ"
   sr: "Pomerite rolo-displej nadole"
+  zh-tw: "向下轉動捲簾式路牌"
 
 "Wind Rollsign Up":
   pt: "Rolar letreiro de lona para cima"
@@ -68272,6 +68332,7 @@ _version: 2
   pt-pt: "Enrolar o letreiro de rolo para cima"
   ka: "მარშრუტის ტაბლოს დახვევა ზემოთ"
   sr: "Pomerite rolo-displej nagore"
+  zh-tw: "向上轉動捲簾式路牌"
 
 "Select Terminus Rollsign":
   pt: "Selecionar destino do letreiro de lona"
@@ -68282,6 +68343,7 @@ _version: 2
   pt-pt: "Selecionar o destino no letreiro de rolo"
   ka: "საბოლოო გაჩერების ტაბლოს არჩევა"
   sr: "Izaberite krajnje odredište na rolo-displeju"
+  zh-tw: "選擇終點捲簾式路牌"
 
 "IBIS: Back":
   pt: "IBIS: voltar"
@@ -68292,6 +68354,7 @@ _version: 2
   pt-pt: "IBIS: voltar"
   ka: "IBIS: უკან"
   sr: "IBIS: nazad"
+  zh-tw: "IBIS：上一項"
 
 "IBIS: Delete":
   pt: "IBIS: apagar"
@@ -68302,6 +68365,7 @@ _version: 2
   pt-pt: "IBIS: apagar"
   ka: "IBIS: წაშლა"
   sr: "IBIS: obrišite"
+  zh-tw: "IBIS：刪除"
 
 "IBIS: Enter":
   pt: "IBIS: confirmar"
@@ -68312,6 +68376,7 @@ _version: 2
   pt-pt: "IBIS: confirmar"
   ka: "IBIS: შეყვანა"
   sr: "IBIS: potvrdite"
+  zh-tw: "IBIS：確認"
 
 "IBIS: Forward":
   pt: "IBIS: avançar"
@@ -68322,6 +68387,7 @@ _version: 2
   pt-pt: "IBIS: avançar"
   ka: "IBIS: წინ"
   sr: "IBIS: napred"
+  zh-tw: "IBIS：下一項"
 
 "IBIS: Forward (Mute)":
   pt: "IBIS: avançar (sem anúncio)"
@@ -68332,6 +68398,7 @@ _version: 2
   pt-pt: "IBIS: avançar (sem anúncio)"
   ka: "IBIS: წინ (უხმოდ)"
   sr: "IBIS: sledeće (bez zvučnog signala)"
+  zh-tw: "IBIS：下一項（靜音）"
 
 "IBIS: Line/Course":
   pt: "IBIS: linha / serviço"
@@ -68342,6 +68409,7 @@ _version: 2
   pt-pt: "IBIS: linha / serviço"
   ka: "IBIS: ხაზი/კურსი"
   sr: "IBIS: linija/vožnja"
+  zh-tw: "IBIS：路線／車務編號"
 
 "IBIS: Route":
   pt: "IBIS: itinerário"
@@ -68352,6 +68420,7 @@ _version: 2
   pt-pt: "IBIS: percurso"
   ka: "IBIS: მარშრუტი"
   sr: "IBIS: trasa"
+  zh-tw: "IBIS：行駛路徑"
 
 "IBIS: Terminus":
   pt: "IBIS: destino final"
@@ -68362,6 +68431,7 @@ _version: 2
   pt-pt: "IBIS: terminal"
   ka: "IBIS: საბოლოო გაჩერება"
   sr: "IBIS: krajnje odredište"
+  zh-tw: "IBIS：終點站"
 
 "Ticket Printer: Cancel":
   pt: "Impressora de bilhetes: cancelar"
@@ -68372,6 +68442,7 @@ _version: 2
   pt-pt: "Impressora de bilhetes: cancelar"
   ka: "ბილეთის პრინტერი: გაუქმება"
   sr: "Štampač karata: otkažite"
+  zh-tw: "售票機：取消"
 
 "Ticket Printer: Enter":
   pt: "Impressora de bilhetes: confirmar"
@@ -68382,6 +68453,7 @@ _version: 2
   pt-pt: "Impressora de bilhetes: confirmar"
   ka: "ბილეთის პრინტერი: შეყვანა"
   sr: "Štampač karata: potvrdite"
+  zh-tw: "售票機：確認"
 
 "Manuel Gearbox: Reverse Gear":
   pt: "Câmbio manual: marcha à ré"
@@ -68392,6 +68464,7 @@ _version: 2
   pt-pt: "Caixa manual: marcha-atrás"
   ka: "მექანიკური კოლოფი: უკანა სვლა"
   sr: "Ručni menjač: brzina za vožnju unazad"
+  zh-tw: "手排變速箱：倒檔"
 
 "Manuel Gearbox: No Gear":
   pt: "Câmbio manual: ponto morto"
@@ -68402,6 +68475,7 @@ _version: 2
   pt-pt: "Caixa manual: ponto morto"
   ka: "მექანიკური კოლოფი: ნეიტრალი"
   sr: "Ručni menjač: neutralni položaj"
+  zh-tw: "手排變速箱：空檔"
 
 "Manuel Gearbox: Next Gear":
   pt: "Câmbio manual: próxima marcha"
@@ -68412,6 +68486,7 @@ _version: 2
   pt-pt: "Caixa manual: mudança seguinte"
   ka: "მექანიკური კოლოფი: შემდეგი გადაცემა"
   sr: "Ručni menjač: sledeća brzina"
+  zh-tw: "手排變速箱：升檔"
 
 "Manuel Gearbox: Prev. Gear":
   pt: "Câmbio manual: marcha anterior"
@@ -68422,6 +68497,7 @@ _version: 2
   pt-pt: "Caixa manual: mudança anterior"
   ka: "მექანიკური კოლოფი: წინა გადაცემა"
   sr: "Ručni menjač: prethodna brzina"
+  zh-tw: "手排變速箱：降檔"
 
 "Switch Steering Visible/Invisible":
   pt: "Mostrar / ocultar volante"
@@ -68432,6 +68508,7 @@ _version: 2
   pt-pt: "Mostrar / ocultar o volante"
   ka: "საჭის ჩვენება/დამალვა"
   sr: "Prikažite/sakrijte volan"
+  zh-tw: "顯示／隱藏方向盤"
 
 "Automatic Gearbox: 1":
   pt: "Câmbio automático: 1"
@@ -68442,6 +68519,7 @@ _version: 2
   pt-pt: "Caixa automática: 1"
   ka: "ავტომატური კოლოფი: 1"
   sr: "Automatski menjač: 1"
+  zh-tw: "自動變速箱：1 檔"
 
 "Automatic Gearbox: 2":
   pt: "Câmbio automático: 2"
@@ -68452,6 +68530,7 @@ _version: 2
   pt-pt: "Caixa automática: 2"
   ka: "ავტომატური კოლოფი: 2"
   sr: "Automatski menjač: 2"
+  zh-tw: "自動變速箱：2 檔"
 
 "Automatic Gearbox: D":
   pt: "Câmbio automático: D"
@@ -68462,6 +68541,7 @@ _version: 2
   pt-pt: "Caixa automática: D"
   ka: "ავტომატური კოლოფი: D"
   sr: "Automatski menjač: D"
+  zh-tw: "自動變速箱：D 檔"
 
 "Automatic Gearbox: N":
   pt: "Câmbio automático: N"
@@ -68472,6 +68552,7 @@ _version: 2
   pt-pt: "Caixa automática: N"
   ka: "ავტომატური კოლოფი: N"
   sr: "Automatski menjač: N"
+  zh-tw: "自動變速箱：N 檔"
 
 "Automatic Gearbox: R":
   pt: "Câmbio automático: R"
@@ -68482,6 +68563,7 @@ _version: 2
   pt-pt: "Caixa automática: R"
   ka: "ავტომატური კოლოფი: R"
   sr: "Automatski menjač: R"
+  zh-tw: "自動變速箱：R 檔"
 
 "Manuel Gearbox: 1st Gear":
   pt: "Câmbio manual: 1ª marcha"
@@ -68492,6 +68574,7 @@ _version: 2
   pt-pt: "Caixa manual: 1.ª mudança"
   ka: "მექანიკური კოლოფი: 1-ლი გადაცემა"
   sr: "Ručni menjač: 1. brzina"
+  zh-tw: "手排變速箱：1 檔"
 
 "Manual Gearbox: 1st Gear (only while gamectrler button is pressed)":
   pt: "Câmbio manual: 1ª marcha (enquanto o botão do controle estiver pressionado)"
@@ -68502,6 +68585,7 @@ _version: 2
   pt-pt: "Caixa manual: 1.ª mudança (só enquanto o botão do comando estiver premido)"
   ka: "მექანიკური კოლოფი: 1-ლი გადაცემა (მხოლოდ gamectrler ღილაკის დაჭერისას)"
   sr: "Ručni menjač: 1. brzina (samo dok je dugme na kontroleru pritisnuto)"
+  zh-tw: "手排變速箱：1 檔（僅在按住遊戲控制器按鈕時）"
 
 "Manuel Gearbox: 2nd Gear":
   pt: "Câmbio manual: 2ª marcha"
@@ -68512,6 +68596,7 @@ _version: 2
   pt-pt: "Caixa manual: 2.ª mudança"
   ka: "მექანიკური კოლოფი: მე-2 გადაცემა"
   sr: "Ručni menjač: 2. brzina"
+  zh-tw: "手排變速箱：2 檔"
 
 "Manual Gearbox: 2nd Gear (only while gamectrler button is pressed)":
   pt: "Câmbio manual: 2ª marcha (enquanto o botão do controle estiver pressionado)"
@@ -68522,6 +68607,7 @@ _version: 2
   pt-pt: "Caixa manual: 2.ª mudança (só enquanto o botão do comando estiver premido)"
   ka: "მექანიკური კოლოფი: მე-2 გადაცემა (მხოლოდ gamectrler ღილაკის დაჭერისას)"
   sr: "Ručni menjač: 2. brzina (samo dok je dugme na kontroleru pritisnuto)"
+  zh-tw: "手排變速箱：2 檔（僅在按住遊戲控制器按鈕時）"
 
 "Manuel Gearbox: 3rd Gear":
   pt: "Câmbio manual: 3ª marcha"
@@ -68532,6 +68618,7 @@ _version: 2
   pt-pt: "Caixa manual: 3.ª mudança"
   ka: "მექანიკური კოლოფი: მე-3 გადაცემა"
   sr: "Ručni menjač: 3. brzina"
+  zh-tw: "手排變速箱：3 檔"
 
 "Manual Gearbox: 3rd Gear (only while gamectrler button is pressed)":
   pt: "Câmbio manual: 3ª marcha (enquanto o botão do controle estiver pressionado)"
@@ -68542,6 +68629,7 @@ _version: 2
   pt-pt: "Caixa manual: 3.ª mudança (só enquanto o botão do comando estiver premido)"
   ka: "მექანიკური კოლოფი: მე-3 გადაცემა (მხოლოდ gamectrler ღილაკის დაჭერისას)"
   sr: "Ručni menjač: 3. brzina (samo dok je dugme na kontroleru pritisnuto)"
+  zh-tw: "手排變速箱：3 檔（僅在按住遊戲控制器按鈕時）"
 
 "Manuel Gearbox: 4th Gear":
   pt: "Câmbio manual: 4ª marcha"
@@ -68552,6 +68640,7 @@ _version: 2
   pt-pt: "Caixa manual: 4.ª mudança"
   ka: "მექანიკური კოლოფი: მე-4 გადაცემა"
   sr: "Ručni menjač: 4. brzina"
+  zh-tw: "手排變速箱：4 檔"
 
 "Manual Gearbox: 4th Gear (only while gamectrler button is pressed)":
   pt: "Câmbio manual: 4ª marcha (enquanto o botão do controle estiver pressionado)"
@@ -68562,6 +68651,7 @@ _version: 2
   pt-pt: "Caixa manual: 4.ª mudança (só enquanto o botão do comando estiver premido)"
   ka: "მექანიკური კოლოფი: მე-4 გადაცემა (მხოლოდ gamectrler ღილაკის დაჭერისას)"
   sr: "Ručni menjač: 4. brzina (samo dok je dugme na kontroleru pritisnuto)"
+  zh-tw: "手排變速箱：4 檔（僅在按住遊戲控制器按鈕時）"
 
 "Manuel Gearbox: 5th Gear":
   pt: "Câmbio manual: 5ª marcha"
@@ -68572,6 +68662,7 @@ _version: 2
   pt-pt: "Caixa manual: 5.ª mudança"
   ka: "მექანიკური კოლოფი: მე-5 გადაცემა"
   sr: "Ručni menjač: 5. brzina"
+  zh-tw: "手排變速箱：5 檔"
 
 "Manual Gearbox: 5th Gear (only while gamectrler button is pressed)":
   pt: "Câmbio manual: 5ª marcha (enquanto o botão do controle estiver pressionado)"
@@ -68582,6 +68673,7 @@ _version: 2
   pt-pt: "Caixa manual: 5.ª mudança (só enquanto o botão do comando estiver premido)"
   ka: "მექანიკური კოლოფი: მე-5 გადაცემა (მხოლოდ gamectrler ღილაკის დაჭერისას)"
   sr: "Ručni menjač: 5. brzina (samo dok je dugme na kontroleru pritisnuto)"
+  zh-tw: "手排變速箱：5 檔（僅在按住遊戲控制器按鈕時）"
 
 "Manuel Gearbox: 6th Gear":
   pt: "Câmbio manual: 6ª marcha"
@@ -68592,6 +68684,7 @@ _version: 2
   pt-pt: "Caixa manual: 6.ª mudança"
   ka: "მექანიკური კოლოფი: მე-6 გადაცემა"
   sr: "Ručni menjač: 6. brzina"
+  zh-tw: "手排變速箱：6 檔"
 
 "Manual Gearbox: 6th Gear (only while gamectrler button is pressed)":
   pt: "Câmbio manual: 6ª marcha (enquanto o botão do controle estiver pressionado)"
@@ -68602,6 +68695,7 @@ _version: 2
   pt-pt: "Caixa manual: 6.ª mudança (só enquanto o botão do comando estiver premido)"
   ka: "მექანიკური კოლოფი: მე-6 გადაცემა (მხოლოდ gamectrler ღილაკის დაჭერისას)"
   sr: "Ručni menjač: 6. brzina (samo dok je dugme na kontroleru pritisnuto)"
+  zh-tw: "手排變速箱：6 檔（僅在按住遊戲控制器按鈕時）"
 
 "Manual Gearbox: Reverse Gear (only while gamectrler button is pressed)":
   pt: "Câmbio manual: marcha à ré (enquanto o botão do controle estiver pressionado)"
@@ -68612,6 +68706,7 @@ _version: 2
   pt-pt: "Caixa manual: marcha-atrás (só enquanto o botão do comando estiver premido)"
   ka: "მექანიკური კოლოფი: უკანა სვლა (მხოლოდ gamectrler ღილაკის დაჭერისას)"
   sr: "Ručni menjač: hod unazad (samo dok je dugme na kontroleru pritisnuto)"
+  zh-tw: "手排變速箱：倒檔（僅在按住遊戲控制器按鈕時）"
 
 "IBIS: 0":
   pt: "IBIS: 0"
@@ -68622,6 +68717,7 @@ _version: 2
   pt-pt: "IBIS: 0"
   ka: "IBIS: 0"
   sr: "IBIS: 0"
+  zh-tw: "IBIS：0"
 
 "IBIS: 1":
   pt: "IBIS: 1"
@@ -68632,6 +68728,7 @@ _version: 2
   pt-pt: "IBIS: 1"
   ka: "IBIS: 1"
   sr: "IBIS: 1"
+  zh-tw: "IBIS：1"
 
 "IBIS: 2":
   pt: "IBIS: 2"
@@ -68642,6 +68739,7 @@ _version: 2
   pt-pt: "IBIS: 2"
   ka: "IBIS: 2"
   sr: "IBIS: 2"
+  zh-tw: "IBIS：2"
 
 "IBIS: 3":
   pt: "IBIS: 3"
@@ -68652,6 +68750,7 @@ _version: 2
   pt-pt: "IBIS: 3"
   ka: "IBIS: 3"
   sr: "IBIS: 3"
+  zh-tw: "IBIS：3"
 
 "IBIS: 4":
   pt: "IBIS: 4"
@@ -68662,6 +68761,7 @@ _version: 2
   pt-pt: "IBIS: 4"
   ka: "IBIS: 4"
   sr: "IBIS: 4"
+  zh-tw: "IBIS：4"
 
 "IBIS: 5":
   pt: "IBIS: 5"
@@ -68672,6 +68772,7 @@ _version: 2
   pt-pt: "IBIS: 5"
   ka: "IBIS: 5"
   sr: "IBIS: 5"
+  zh-tw: "IBIS：5"
 
 "IBIS: 6":
   pt: "IBIS: 6"
@@ -68682,6 +68783,7 @@ _version: 2
   pt-pt: "IBIS: 6"
   ka: "IBIS: 6"
   sr: "IBIS: 6"
+  zh-tw: "IBIS：6"
 
 "IBIS: 7":
   pt: "IBIS: 7"
@@ -68692,6 +68794,7 @@ _version: 2
   pt-pt: "IBIS: 7"
   ka: "IBIS: 7"
   sr: "IBIS: 7"
+  zh-tw: "IBIS：7"
 
 "IBIS: 8":
   pt: "IBIS: 8"
@@ -68702,6 +68805,7 @@ _version: 2
   pt-pt: "IBIS: 8"
   ka: "IBIS: 8"
   sr: "IBIS: 8"
+  zh-tw: "IBIS：8"
 
 "IBIS: 9":
   pt: "IBIS: 9"
@@ -68712,6 +68816,7 @@ _version: 2
   pt-pt: "IBIS: 9"
   ka: "IBIS: 9"
   sr: "IBIS: 9"
+  zh-tw: "IBIS：9"
 
 "Ticket Printer: Select Ticket 1":
   pt: "Impressora de bilhetes: selecionar bilhete 1"
@@ -68722,6 +68827,7 @@ _version: 2
   pt-pt: "Impressora de bilhetes: selecionar bilhete 1"
   ka: "ბილეთის პრინტერი: ბილეთი 1-ის არჩევა"
   sr: "Štampač karata: izaberite kartu 1"
+  zh-tw: "售票機：選擇第 1 種車票"
 
 "Ticket Printer: Select Ticket 2":
   pt: "Impressora de bilhetes: selecionar bilhete 2"
@@ -68732,6 +68838,7 @@ _version: 2
   pt-pt: "Impressora de bilhetes: selecionar bilhete 2"
   ka: "ბილეთის პრინტერი: ბილეთი 2-ის არჩევა"
   sr: "Štampač karata: izaberite kartu 2"
+  zh-tw: "售票機：選擇第 2 種車票"
 
 "Ticket Printer: Select Ticket 3":
   pt: "Impressora de bilhetes: selecionar bilhete 3"
@@ -68742,6 +68849,7 @@ _version: 2
   pt-pt: "Impressora de bilhetes: selecionar bilhete 3"
   ka: "ბილეთის პრინტერი: ბილეთი 3-ის არჩევა"
   sr: "Štampač karata: izaberite kartu 3"
+  zh-tw: "售票機：選擇第 3 種車票"
 
 "Ticket Printer: Select Ticket 4":
   pt: "Impressora de bilhetes: selecionar bilhete 4"
@@ -68752,6 +68860,7 @@ _version: 2
   pt-pt: "Impressora de bilhetes: selecionar bilhete 4"
   ka: "ბილეთის პრინტერი: ბილეთი 4-ის არჩევა"
   sr: "Štampač karata: izaberite kartu 4"
+  zh-tw: "售票機：選擇第 4 種車票"
 
 "Ticket Printer: Select Ticket 5":
   pt: "Impressora de bilhetes: selecionar bilhete 5"
@@ -68762,6 +68871,7 @@ _version: 2
   pt-pt: "Impressora de bilhetes: selecionar bilhete 5"
   ka: "ბილეთის პრინტერი: ბილეთი 5-ის არჩევა"
   sr: "Štampač karata: izaberite kartu 5"
+  zh-tw: "售票機：選擇第 5 種車票"
 
 "Select Line Rollsign 1":
   pt: "Selecionar linha do letreiro de lona 1"
@@ -68772,6 +68882,7 @@ _version: 2
   pt-pt: "Selecionar linha no letreiro de rolo 1"
   ka: "ხაზის ტაბლო 1-ის არჩევა"
   sr: "Izaberite liniju na rolo-displeju 1"
+  zh-tw: "選擇第 1 個路線捲簾式路牌"
 
 "Select Line Rollsign 2":
   pt: "Selecionar linha do letreiro de lona 2"
@@ -68782,6 +68893,7 @@ _version: 2
   pt-pt: "Selecionar linha no letreiro de rolo 2"
   ka: "ხაზის ტაბლო 2-ის არჩევა"
   sr: "Izaberite liniju na rolo-displeju 2"
+  zh-tw: "選擇第 2 個路線捲簾式路牌"
 
 "Select Line Rollsign 3":
   pt: "Selecionar linha do letreiro de lona 3"
@@ -68792,6 +68904,7 @@ _version: 2
   pt-pt: "Selecionar linha no letreiro de rolo 3"
   ka: "ხაზის ტაბლო 3-ის არჩევა"
   sr: "Izaberite liniju na rolo-displeju 3"
+  zh-tw: "選擇第 3 個路線捲簾式路牌"
 
 "Cashdesk: give 0.05":
   pt: "Mesa de cobrança: entregar 0,05"
@@ -68802,6 +68915,7 @@ _version: 2
   pt-pt: "Caixa: entregar 0,05"
   ka: "სალარო: მიცემა 0.05"
   sr: "Blagajna: dajte 0,05"
+  zh-tw: "錢箱：找零 0.05"
 
 "Cashdesk: give 0.10":
   pt: "Mesa de cobrança: entregar 0,10"
@@ -68812,6 +68926,7 @@ _version: 2
   pt-pt: "Caixa: entregar 0,10"
   ka: "სალარო: მიცემა 0.10"
   sr: "Blagajna: dajte 0,10"
+  zh-tw: "錢箱：找零 0.10"
 
 "Cashdesk: give 0.15":
   pt: "Mesa de cobrança: entregar 0,15"
@@ -68822,6 +68937,7 @@ _version: 2
   pt-pt: "Caixa: entregar 0,15"
   ka: "სალარო: მიცემა 0.15"
   sr: "Blagajna: dajte 0,15"
+  zh-tw: "錢箱：找零 0.15"
 
 "Cashdesk: give 0.30":
   pt: "Mesa de cobrança: entregar 0,30"
@@ -68832,6 +68948,7 @@ _version: 2
   pt-pt: "Caixa: entregar 0,30"
   ka: "სალარო: მიცემა 0.30"
   sr: "Blagajna: dajte 0,30"
+  zh-tw: "錢箱：找零 0.30"
 
 "Cashdesk: give 0.50":
   pt: "Mesa de cobrança: entregar 0,50"
@@ -68842,6 +68959,7 @@ _version: 2
   pt-pt: "Caixa: entregar 0,50"
   ka: "სალარო: მიცემა 0.50"
   sr: "Blagajna: dajte 0,50"
+  zh-tw: "錢箱：找零 0.50"
 
 "Cashdesk: give 1.00":
   pt: "Mesa de cobrança: entregar 1,00"
@@ -68852,6 +68970,7 @@ _version: 2
   pt-pt: "Caixa: entregar 1,00"
   ka: "სალარო: მიცემა 1.00"
   sr: "Blagajna: dajte 1,00"
+  zh-tw: "錢箱：找零 1.00"
 
 "Cashdesk: give 1.50":
   pt: "Mesa de cobrança: entregar 1,50"
@@ -68862,6 +68981,7 @@ _version: 2
   pt-pt: "Caixa: entregar 1,50"
   ka: "სალარო: მიცემა 1.50"
   sr: "Blagajna: dajte 1,50"
+  zh-tw: "錢箱：找零 1.50"
 
 "Cashdesk: give 2.00":
   pt: "Mesa de cobrança: entregar 2,00"
@@ -68872,6 +68992,7 @@ _version: 2
   pt-pt: "Caixa: entregar 2,00"
   ka: "სალარო: მიცემა 2.00"
   sr: "Blagajna: dajte 2,00"
+  zh-tw: "錢箱：找零 2.00"
 
 "Cashdesk: give 4.00":
   pt: "Mesa de cobrança: entregar 4,00"
@@ -68882,6 +69003,7 @@ _version: 2
   pt-pt: "Caixa: entregar 4,00"
   ka: "სალარო: მიცემა 4.00"
   sr: "Blagajna: dajte 4,00"
+  zh-tw: "錢箱：找零 4.00"
 
 "Cashdesk: give 5.00":
   pt: "Mesa de cobrança: entregar 5,00"
@@ -68892,6 +69014,7 @@ _version: 2
   pt-pt: "Caixa: entregar 5,00"
   ka: "სალარო: მიცემა 5.00"
   sr: "Blagajna: dajte 5,00"
+  zh-tw: "錢箱：找零 5.00"
 
 "Cashdesk: give 8.00":
   pt: "Mesa de cobrança: entregar 8,00"
@@ -68902,6 +69025,7 @@ _version: 2
   pt-pt: "Caixa: entregar 8,00"
   ka: "სალარო: მიცემა 8.00"
   sr: "Blagajna: dajte 8,00"
+  zh-tw: "錢箱：找零 8.00"
 
 "Cashdesk: give 15.00":
   pt: "Mesa de cobrança: entregar 15,00"
@@ -68912,6 +69036,7 @@ _version: 2
   pt-pt: "Caixa: entregar 15,00"
   ka: "სალარო: მიცემა 15.00"
   sr: "Blagajna: dajte 15,00"
+  zh-tw: "錢箱：找零 15.00"
 
 "SD83: Rollsign Line Start":
   pt: "SD83: iniciar letreiro de linha"
@@ -68922,6 +69047,7 @@ _version: 2
   pt-pt: "SD83: iniciar letreiro de linha"
   ka: "SD83: ხაზის ტაბლო, დაწყება"
   sr: "SD83: pokrenite rolo-displej za izbor linije"
+  zh-tw: "SD83：啟動路線捲簾式路牌"
 
 "SD83: Rollsign Line Select 100s +":
   pt: "SD83: aumentar centenas do letreiro de linha"
@@ -68932,6 +69058,7 @@ _version: 2
   pt-pt: "SD83: letreiro de linha, centenas +"
   ka: "SD83: ხაზის ტაბლო, ასეულების არჩევა +"
   sr: "SD83: povećajte stotine na rolo-displeju za izbor linije"
+  zh-tw: "SD83：路線捲簾式路牌百位加一"
 
 "SD83: Rollsign Line Select 100s -":
   pt: "SD83: diminuir centenas do letreiro de linha"
@@ -68942,6 +69069,7 @@ _version: 2
   pt-pt: "SD83: letreiro de linha, centenas -"
   ka: "SD83: ხაზის ტაბლო, ასეულების არჩევა -"
   sr: "SD83: smanjite stotine na rolo-displeju za izbor linije"
+  zh-tw: "SD83：路線捲簾式路牌百位減一"
 
 "SD83: Rollsign Line Select 10s +":
   pt: "SD83: aumentar dezenas do letreiro de linha"
@@ -68952,6 +69080,7 @@ _version: 2
   pt-pt: "SD83: letreiro de linha, dezenas +"
   ka: "SD83: ხაზის ტაბლო, ათეულების არჩევა +"
   sr: "SD83: povećajte desetice na rolo-displeju za izbor linije"
+  zh-tw: "SD83：路線捲簾式路牌十位加一"
 
 "SD83: Rollsign Line Select 10s -":
   pt: "SD83: diminuir dezenas do letreiro de linha"
@@ -68962,6 +69091,7 @@ _version: 2
   pt-pt: "SD83: letreiro de linha, dezenas -"
   ka: "SD83: ხაზის ტაბლო, ათეულების არჩევა -"
   sr: "SD83: smanjite desetice na rolo-displeju za izbor linije"
+  zh-tw: "SD83：路線捲簾式路牌十位減一"
 
 "SD83: Rollsign Line Select 1s +":
   pt: "SD83: aumentar unidades do letreiro de linha"
@@ -68972,6 +69102,7 @@ _version: 2
   pt-pt: "SD83: letreiro de linha, unidades +"
   ka: "SD83: ხაზის ტაბლო, ერთეულების არჩევა +"
   sr: "SD83: povećajte jedinice na rolo-displeju za izbor linije"
+  zh-tw: "SD83：路線捲簾式路牌個位加一"
 
 "SD83: Rollsign Line Select 1s -":
   pt: "SD83: diminuir unidades do letreiro de linha"
@@ -68982,6 +69113,7 @@ _version: 2
   pt-pt: "SD83: letreiro de linha, unidades -"
   ka: "SD83: ხაზის ტაბლო, ერთეულების არჩევა -"
   sr: "SD83: smanjite jedinice na rolo-displeju za izbor linije"
+  zh-tw: "SD83：路線捲簾式路牌個位減一"
 
 "SD83: Rollsign Terminus Start":
   pt: "SD83: iniciar letreiro de destino final"
@@ -68992,6 +69124,7 @@ _version: 2
   pt-pt: "SD83: iniciar letreiro de destino"
   ka: "SD83: საბოლოო გაჩერების ტაბლო, დაწყება"
   sr: "SD83: pokrenite rolo-displej za izbor krajnjeg odredišta"
+  zh-tw: "SD83：啟動終點捲簾式路牌"
 
 "SD83: Rollsign Terminus Select 100s +":
   pt: "SD83: aumentar centenas do letreiro de destino final"
@@ -69002,6 +69135,7 @@ _version: 2
   pt-pt: "SD83: letreiro de destino, centenas +"
   ka: "SD83: საბოლოო გაჩერების ტაბლო, ასეულების არჩევა +"
   sr: "SD83: povećajte stotine na rolo-displeju za izbor krajnjeg odredišta"
+  zh-tw: "SD83：終點捲簾式路牌百位加一"
 
 "SD83: Rollsign Terminus Select 100s -":
   pt: "SD83: diminuir centenas do letreiro de destino final"
@@ -69012,6 +69146,7 @@ _version: 2
   pt-pt: "SD83: letreiro de destino, centenas -"
   ka: "SD83: საბოლოო გაჩერების ტაბლო, ასეულების არჩევა -"
   sr: "SD83: smanjite stotine na rolo-displeju za izbor krajnjeg odredišta"
+  zh-tw: "SD83：終點捲簾式路牌百位減一"
 
 "SD83: Rollsign Terminus Select 10s +":
   pt: "SD83: aumentar dezenas do letreiro de destino final"
@@ -69022,6 +69157,7 @@ _version: 2
   pt-pt: "SD83: letreiro de destino, dezenas +"
   ka: "SD83: საბოლოო გაჩერების ტაბლო, ათეულების არჩევა +"
   sr: "SD83: povećajte desetice na rolo-displeju za izbor krajnjeg odredišta"
+  zh-tw: "SD83：終點捲簾式路牌十位加一"
 
 "SD83: Rollsign Terminus Select 10s -":
   pt: "SD83: diminuir dezenas do letreiro de destino final"
@@ -69032,6 +69168,7 @@ _version: 2
   pt-pt: "SD83: letreiro de destino, dezenas -"
   ka: "SD83: საბოლოო გაჩერების ტაბლო, ათეულების არჩევა -"
   sr: "SD83: smanjite desetice na rolo-displeju za izbor krajnjeg odredišta"
+  zh-tw: "SD83：終點捲簾式路牌十位減一"
 
 "SD83: Rollsign Terminus Select 1s +":
   pt: "SD83: aumentar unidades do letreiro de destino final"
@@ -69042,6 +69179,7 @@ _version: 2
   pt-pt: "SD83: letreiro de destino, unidades +"
   ka: "SD83: საბოლოო გაჩერების ტაბლო, ერთეულების არჩევა +"
   sr: "SD83: povećajte jedinice na rolo-displeju za izbor krajnjeg odredišta"
+  zh-tw: "SD83：終點捲簾式路牌個位加一"
 
 "SD83: Rollsign Terminus Select 1s -":
   pt: "SD83: diminuir unidades do letreiro de destino final"
@@ -69052,6 +69190,7 @@ _version: 2
   pt-pt: "SD83: letreiro de destino, unidades -"
   ka: "SD83: საბოლოო გაჩერების ტაბლო, ერთეულების არჩევა -"
   sr: "SD83: smanjite jedinice na rolo-displeju za izbor krajnjeg odredišta"
+  zh-tw: "SD83：終點捲簾式路牌個位減一"
 
 " (outside)":
   pt: " (externo)"
@@ -69062,6 +69201,7 @@ _version: 2
   pt-pt: " (exterior)"
   ka: " (გარედან)"
   sr: " (spolja)"
+  zh-tw: "（車外）"
 "Mirror panels on the screen":
   de: "Spiegelpanels auf dem Bildschirm"
   fr: "Rétroviseurs à l'écran"
@@ -72373,7 +72513,7 @@ _version: 2
   tr: "{removed} yapay zekâ aracı yoldan kaldırıldı"
   uk: "Прибрано з дороги ШІ-транспорту: {removed}"
   vi: "Đã đưa {removed} xe AI ra khỏi đường"
-  zh-tw: "已從道路上移除 {removed} 輛 AI 車輛"
+  zh-tw: "已移除道路上的 {removed} 輛 AI 車輛"
   zh: "已从道路上移除 {removed} 辆 AI 车辆"
 "The host refuelled your bus":
   be: "Хост заправіў ваш аўтобус"
@@ -72943,7 +73083,7 @@ _version: 2
   tr: "{button}: bir eylem seçin"
   uk: "{button}: оберіть дію"
   vi: "{button}: chọn thao tác"
-  zh-tw: "{button}：選擇一個動作"
+  zh-tw: "{button}：選擇操作"
   zh: "{button}：选择一个动作"
 "Position {:.0}, {:.0}, {:.1}   tile {tx}_{ty}   heading {:.0} deg":
   be: "Пазіцыя {:.0}, {:.0}, {:.1}   тайл {tx}_{ty}   курс {:.0}°"
@@ -73243,7 +73383,7 @@ _version: 2
   tr: "{} kaldırıldı: yayasınız (Esc menüsü: Araç yerleştir veya bir otobüsün sürücü kapısında G)"
   uk: "{} прибрано: ви пішки (меню Esc: Поставити транспорт, або G біля дверей водія автобуса)"
   vi: "Đã xóa {}: bạn đang đi bộ (menu Esc: Đặt một phương tiện, hoặc G tại cửa tài xế của xe buýt)"
-  zh-tw: "{} 已移除：你現在步行（Esc 選單：放置車輛，或在巴士駕駛座車門處按 G）"
+  zh-tw: "已移除 {}：目前為步行模式（Esc 選單可放置車輛，或在巴士駕駛室門旁按 G）"
   zh: "{} 已移除：你现在步行（Esc 菜单：放置车辆，或在巴士驾驶员车门处按 G）"
 "Standing":
   be: "Вы стаіце"
@@ -73273,7 +73413,7 @@ _version: 2
   tr: "Ayakta"
   uk: "Стоячи"
   vi: "Đã đứng dậy"
-  zh-tw: "已站起"
+  zh-tw: "已起身"
   zh: "已站起"
 "{n} placed vehicle(s) removed":
   be: "Прыбрана пастаўленага транспарту: {n}"
@@ -73303,7 +73443,7 @@ _version: 2
   tr: "{n} yerleştirilmiş araç kaldırıldı"
   uk: "Прибрано розміщеного транспорту: {n}"
   vi: "Đã xóa {n} phương tiện đã đặt"
-  zh-tw: "已移除 {n} 輛放置的車輛"
+  zh-tw: "已移除 {n} 輛已放置的車輛"
   zh: "已移除 {n} 辆放置的车辆"
 "Reckless driving or blocking others":
   be: "Небяспечная язда або перашкаджанне іншым"
@@ -73543,7 +73683,7 @@ _version: 2
   tr: "yakıt dolduruldu: depoda {l:.0} l"
   uk: "заправлено: у баку {l:.0} л"
   vi: "đã đổ nhiên liệu: {l:.0} l trong bình"
-  zh-tw: "已加油：油箱內 {l:.0} l"
+  zh-tw: "加油完成：油箱內有 {l:.0} 公升燃油"
   zh: "已加油：油箱内 {l:.0} l"
 "this vehicle has no fuel pump handling (veh_tank)":
   be: "у гэтага транспарту няма апрацоўкі запраўкі (veh_tank)"
@@ -73573,7 +73713,7 @@ _version: 2
   tr: "bu araç yakıt pompasını desteklemiyor (veh_tank)"
   uk: "цей транспорт не має обробки заправки (veh_tank)"
   vi: "xe này không có xử lý bơm nhiên liệu (veh_tank)"
-  zh-tw: "此車輛不支援加油（veh_tank）"
+  zh-tw: "此車輛未實作加油功能（veh_tank）"
   zh: "此车辆不支持加油（veh_tank）"
 "washed: dirt {:.0}%":
   be: "памыта: бруд {:.0}%"
@@ -73603,7 +73743,7 @@ _version: 2
   tr: "yıkandı: kir {:.0}%"
   uk: "помито: бруд {:.0}%"
   vi: "đã rửa: độ bẩn {:.0}%"
-  zh-tw: "已清洗：髒污 {:.0}%"
+  zh-tw: "洗車完成：污垢程度 {:.0}%"
   zh: "已清洗：脏污 {:.0}%"
 "this vehicle has no bus wash handling (veh_wash)":
   be: "у гэтага транспарту няма апрацоўкі мыйкі (veh_wash)"
@@ -73633,7 +73773,7 @@ _version: 2
   tr: "bu araç otobüs yıkamayı desteklemiyor (veh_wash)"
   uk: "цей транспорт не має обробки мийки (veh_wash)"
   vi: "xe này không có xử lý rửa xe (veh_wash)"
-  zh-tw: "此車輛不支援洗車（veh_wash）"
+  zh-tw: "此車輛未實作洗車功能（veh_wash）"
   zh: "此车辆不支持洗车（veh_wash）"
 "repaired: {mins:.0} min of work":
   be: "адрамантавана: {mins:.0} хв работы"
@@ -73663,7 +73803,7 @@ _version: 2
   tr: "onarıldı: {mins:.0} dk iş"
   uk: "полагоджено: {mins:.0} хв роботи"
   vi: "đã sửa: {mins:.0} phút làm việc"
-  zh-tw: "已修理：維修用時 {mins:.0} 分鐘"
+  zh-tw: "維修完成：作業耗時 {mins:.0} 分鐘"
   zh: "已修理：维修用时 {mins:.0} 分钟"
 "repaired: {mins:.0} min of work + {travel:.0} min for the team to get here":
   be: "адрамантавана: {mins:.0} хв работы + {travel:.0} хв на дарогу брыгады"
@@ -73693,7 +73833,7 @@ _version: 2
   tr: "onarıldı: {mins:.0} dk iş + ekibin buraya gelmesi için {travel:.0} dk"
   uk: "полагоджено: {mins:.0} хв роботи + {travel:.0} хв на дорогу бригади"
   vi: "đã sửa: {mins:.0} phút làm việc + {travel:.0} phút để đội sửa đến nơi"
-  zh-tw: "已修理：維修用時 {mins:.0} 分鐘 + 維修隊趕來 {travel:.0} 分鐘"
+  zh-tw: "維修完成：作業耗時 {mins:.0} 分鐘，維修人員到場耗時 {travel:.0} 分鐘"
   zh: "已修理：维修用时 {mins:.0} 分钟 + 维修队赶来 {travel:.0} 分钟"
 "repaired":
   be: "адрамантавана"
@@ -73723,7 +73863,7 @@ _version: 2
   tr: "onarıldı"
   uk: "полагоджено"
   vi: "đã sửa"
-  zh-tw: "已修理"
+  zh-tw: "維修完成"
   zh: "已修理"
 "this vehicle has no repair handling (malfunction_reset)":
   be: "у гэтага транспарту няма апрацоўкі рамонту (malfunction_reset)"
@@ -73753,7 +73893,7 @@ _version: 2
   tr: "bu araç onarımı desteklemiyor (malfunction_reset)"
   uk: "цей транспорт не має обробки ремонту (malfunction_reset)"
   vi: "xe này không có xử lý sửa chữa (malfunction_reset)"
-  zh-tw: "此車輛不支援修理（malfunction_reset）"
+  zh-tw: "此車輛未實作維修功能（malfunction_reset）"
   zh: "此车辆不支持修理（malfunction_reset）"
 "no graphics device could be opened ({}); updating the graphics driver usually helps":
   be: "не ўдалося адкрыць ніводнай графічнай прылады ({}); звычайна дапамагае абнаўленне графічнага драйвера"
@@ -74983,7 +75123,7 @@ _version: 2
   tr: "Vites: {gear}"
   uk: "Передача {gear}"
   vi: "Số {gear}"
-  zh-tw: "檔位 {gear}"
+  zh-tw: "{gear} 檔"
   zh: "挡位 {gear}"
 "Screenshot: {path}":
   be: "Здымак экрана: {path}"
@@ -75013,7 +75153,7 @@ _version: 2
   tr: "Ekran görüntüsü: {path}"
   uk: "Знімок екрана: {path}"
   vi: "Ảnh chụp màn hình: {path}"
-  zh-tw: "截圖：{path}"
+  zh-tw: "截圖已儲存：{path}"
   zh: "截图：{path}"
 "Date: {date}":
   be: "Дата: {date}"
@@ -75193,7 +75333,7 @@ _version: 2
   tr: "yakıt dolduruldu: depoda {now:.0} l"
   uk: "заправлено: у баку {now:.0} л"
   vi: "đã đổ nhiên liệu: {now:.0} l trong bình"
-  zh-tw: "已加油：油箱內 {now:.0} l"
+  zh-tw: "加油完成：油箱內有 {now:.0} 公升燃油"
   zh: "已加油：油箱内 {now:.0} l"
 "click picks, drag moves, wheel turns (Shift: height), Delete, C copy, V variant, Backspace undo, PgUp/PgDn/F ground, [ ] brush, Ctrl+S save, Esc leave":
   be: "пстрычка выбірае, перацягванне рухае, колца паварочвае (Shift: вышыня), Delete, C капіяваць, V варыянт, Backspace адмяніць, PgUp/PgDn/F зямля, [ ] пэндзаль, Ctrl+S захаваць, Esc выйсці"
@@ -75493,7 +75633,7 @@ _version: 2
   tr: "Şimdi sürülen: {name}"
   uk: "Зараз за кермом: {name}"
   vi: "Đang lái: {name}"
-  zh-tw: "正在駕駛：{name}"
+  zh-tw: "目前駕駛：{name}"
   zh: "正在驾驶：{name}"
 "Weather: {name}":
   be: "Надвор'е: {name}"
@@ -75613,7 +75753,7 @@ _version: 2
   tr: "Sürücü: {name}"
   uk: "Водій: {name}"
   vi: "Tài xế: {name}"
-  zh-tw: "司機：{name}"
+  zh-tw: "駕駛員：{name}"
   zh: "司机：{name}"
 "Voices: volume":
   be: "Галасы: гучнасць"
@@ -89211,3 +89351,6 @@ _version: 2
   vi: "Lốp trượt, độ bám và độ gồ ghề theo mặt đường, gió tác động lên xe buýt; tắt: xe buýt chạy như trong OMSI 2"
   zh: "带侧偏角的轮胎、随路面变化的抓地力与颠簸、作用在公交车上的风；关闭时公交车按 OMSI 2 的方式行驶"
   zh-tw: "具側偏角的輪胎、隨路面變化的抓地力與顛簸、作用在公車上的風；關閉時公車依 OMSI 2 的方式行駛"
+
+"Washing...":
+  zh-tw: "正在洗車……"
