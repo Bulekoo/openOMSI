@@ -499,3 +499,29 @@ fn duplicate_tour_numbers_have_distinct_stable_selections() {
     assert!(mon.tour("missing").is_none());
     std::fs::remove_dir_all(map).unwrap();
 }
+
+#[test]
+fn comfortable_cabin_is_an_independent_opt_in_launch_flag() {
+    let d = Duty {
+        map: "maps/x/global.cfg".into(),
+        bus: "Vehicles/x.bus".into(),
+        time: "09:00".into(),
+        ..Default::default()
+    };
+    assert!(
+        !duty_args_for_root(&d, Path::new("test-omsi"))
+            .unwrap()
+            .iter()
+            .any(|a| a == "--comfortable-cabin-on-start")
+    );
+    let enabled = duty_args_for_root(
+        &Duty {
+            comfortable_cabin_on_start: Some(true),
+            ..d
+        },
+        Path::new("test-omsi"),
+    )
+    .unwrap();
+    assert!(enabled.iter().any(|a| a == "--comfortable-cabin-on-start"));
+    assert!(!enabled.iter().any(|a| a == "--autostart"));
+}

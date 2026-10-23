@@ -10,6 +10,18 @@ impl App {
         // (a search belongs to its list; `chooser_pick` has taken the kind when it goes on)
         if self.menus.list_kind.as_ref().is_some_and(|k| *k != kind) {
             self.menus.forget_search();
+            if self.menus.menu_edit_number {
+                if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
+                self.menus.menu_edit_number=false; self.menus.menu_edit=None;
+            }
+            if self.menus.menu_edit_ident {
+                if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
+                self.menus.menu_edit_ident=false; self.menus.menu_edit=None;
+            }
+            if self.menus.menu_edit_icao {
+                if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
+                self.menus.menu_edit_icao=false; self.menus.menu_edit=None;
+            }
         }
         self.menus.dropdown = None;
         self.menus.admin_list = Some(crate::game_lists::items(self, &kind));
@@ -63,6 +75,81 @@ impl App {
             self.session.metar_rx=None; self.session.metar_once=false; self.session.metar_next=0.0;
             self.service_msg=Some((omsi_ui::i18n::tr_fill("METAR source: {code}", &[("{code}", &code)]),3.0));
         }else if !code.is_empty(){self.service_msg=Some(("ICAO must be exactly 4 letters".into(),3.0));}
+        self.refresh_list();
+    }
+
+    pub(crate) fn number_edit_text(&mut self,text:&str){
+        if !self.menus.menu_edit_number{return}
+        if let Some(d)=self.menus.menu_edit.as_mut(){
+            for c in text.chars().filter(|c| !c.is_control()) {
+                d.push(c);
+            }
+        }
+        self.refresh_list();
+    }
+
+    fn number_edit_key(&mut self,code:KeyCode){
+        match code{
+            KeyCode::Escape=>{self.menus.menu_edit=None;self.menus.menu_edit_number=false;if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}},
+            KeyCode::Backspace|KeyCode::Delete=>{if let Some(d)=self.menus.menu_edit.as_mut(){d.pop();}},
+            KeyCode::Enter|KeyCode::NumpadEnter=>{self.apply_number_edit();return;},
+            _=>{}
+        }
+        self.refresh_list();
+    }
+
+    pub(crate) fn start_number_edit(&mut self){
+        self.menus.menu_edit=Some(String::new()); self.menus.menu_edit_number=true; self.menus.menu_edit_ident=false;
+        if let Some(w)=self.window.as_ref(){w.set_ime_allowed(true);}
+    }
+
+    pub(crate) fn apply_number_edit(&mut self){
+        let number=self.menus.menu_edit.take().unwrap_or_default().trim().to_string();
+        self.menus.menu_edit_number=false;
+        if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
+        if let Some(p) = self.player.as_mut()  {
+            if !number.is_empty() {
+                crate::game_lists::set_identity_to_player_vehicle(p, &number,None);
+                self.service_msg = Some((omsi_ui::i18n::tr_fill("Fleet number {n}", &[("{n}", &number)]), 3.0));
+            }
+        }
+        self.refresh_list();
+    }
+
+    fn ident_edit_key(&mut self,code:KeyCode){
+        match code{
+            KeyCode::Escape=>{self.menus.menu_edit=None;self.menus.menu_edit_ident=false;if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}},
+            KeyCode::Backspace|KeyCode::Delete=>{if let Some(d)=self.menus.menu_edit.as_mut(){d.pop();}},
+            KeyCode::Enter|KeyCode::NumpadEnter=>{self.apply_ident_edit();return;},
+            _=>{}
+        }
+        self.refresh_list();
+    }
+
+     pub(crate) fn ident_edit_text(&mut self,text:&str){
+        if !self.menus.menu_edit_ident{return}
+        if let Some(d)=self.menus.menu_edit.as_mut(){
+            for c in text.chars().filter(|c| !c.is_control()) {
+                d.push(c);
+            }
+        }
+        self.refresh_list();
+    }
+
+    pub(crate) fn start_ident_edit(&mut self){
+        self.menus.menu_edit=Some(String::new()); self.menus.menu_edit_ident=true; self.menus.menu_edit_number=false;
+        if let Some(w)=self.window.as_ref(){w.set_ime_allowed(true);}
+    }
+
+     pub(crate) fn apply_ident_edit(&mut self){
+        let ident=self.menus.menu_edit.take().unwrap_or_default().trim().to_string();
+        self.menus.menu_edit_ident=false;
+        if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
+        if let Some(p) = self.player.as_mut() {
+            crate::game_lists::set_identity_to_player_vehicle(p, "", if ident.is_empty() { None } else { Some(&ident) });
+            let ident = p.vehicle.ident();
+            self.service_msg = Some((omsi_ui::i18n::tr_fill("Plate {ident}", &[("{ident}", &ident)]), 3.0));
+        }
         self.refresh_list();
     }
 
@@ -237,6 +324,10 @@ impl App {
         self.menus.dropdown = None;
         if self.menus.menu_edit_icao { if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);} }
         self.menus.menu_edit_icao=false;
+        if self.menus.menu_edit_number { if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);} }
+        self.menus.menu_edit_number=false;
+        if self.menus.menu_edit_ident { if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);} }
+        self.menus.menu_edit_ident=false;
         self.menus.menu_edit_search = false;
         self.menus.menu_search.clear();
         self.menus.menu_edit = None;
@@ -261,6 +352,14 @@ impl App {
         self.menus.menu_top = None;
         self.menus.menu_edit = None;
         self.menus.key_capture = None;
+        if self.menus.menu_edit_number {
+            if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
+            self.menus.menu_edit_number=false; self.menus.menu_edit=None;
+        }
+        if self.menus.menu_edit_ident {
+            if let Some(w)=self.window.as_ref(){w.set_ime_allowed(false);}
+            self.menus.menu_edit_ident=false; self.menus.menu_edit=None;
+        }
         self.open_list(next);
     }
 
@@ -341,6 +440,10 @@ impl App {
                 self.search_edit_key(code);
             } else if self.menus.menu_edit_icao {
                 self.icao_edit_key(code);
+            } else if self.menus.menu_edit_number {
+                self.number_edit_key(code);
+            } else if self.menus.menu_edit_ident {
+                self.ident_edit_key(code);
             } else if matches!(self.menus.list_kind, Some(crate::game_lists::ListKind::RouteNumbers)) {
                 self.route_edit_key(code);
             } else {

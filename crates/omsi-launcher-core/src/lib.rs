@@ -2805,6 +2805,7 @@ pub struct Duty {
     pub passengers: Option<bool>,
     pub schedule: Option<bool>,
     pub autostart: Option<bool>,
+    pub comfortable_cabin_on_start: Option<bool>,
     /// Start as a pedestrian beside the bus (which is then left out): a bus is placed or
     /// taken over from the game menu later.
     #[serde(default)]
@@ -3090,6 +3091,9 @@ fn duty_args_for_root(d: &Duty, root: &Path) -> Result<Vec<String>> {
     }
     if d.autostart.unwrap_or(false) {
         a.push("--autostart".into());
+    }
+    if d.comfortable_cabin_on_start.unwrap_or(false) {
+        a.push("--comfortable-cabin-on-start".into());
     }
     if d.on_foot.unwrap_or(false) {
         a.push("--on-foot".into());

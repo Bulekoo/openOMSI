@@ -423,6 +423,7 @@ fn act(s: &mut State, a: &Value) -> anyhow::Result<Value> {
                 "passengers" => s.choice.passengers = on,
                 "schedule" => s.choice.schedule = on,
                 "autostart" => s.choice.autostart = on,
+                "comfortable_cabin_on_start" => s.choice.comfortable_cabin_on_start = on,
                 "on_foot" => s.choice.on_foot = on,
                 other => anyhow::bail!("no such switch: {other}"),
             }

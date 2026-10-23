@@ -304,9 +304,18 @@ pub(super) fn vehicle_pages(app: &App) -> Vec<Page> {
     let server = crate::input_script::on_server(&app.args);
     let mut display: Vec<(String, String)> = Vec::new();
     if has {
+        let typed_number = if app.menus.menu_edit_number {
+            app.menus.menu_edit.clone().unwrap_or_default()
+        } else { app.player.as_ref().unwrap().vehicle.number() };
+        let typed_ident = if app.menus.menu_edit_ident {
+            app.menus.menu_edit.clone().unwrap_or_default()
+        } else { app.player.as_ref().unwrap().vehicle.ident() };
+
         display.push(opens("Destination display", "Change the current destination", "dest"));
         display.push(opens("Depot file (HOF)", "Change the current depot file (used for the timetable)", "hof"));
         display.push(opens("Fleet number", "Change the vehicle's current fleet number", "number"));
+        display.push((row("Custom fleet number", if app.menus.menu_edit_number{'E'}else{'e'}, &typed_number, "Enter custom fleet number (not from the list)", None), "custom_number_edit".to_string()));
+        display.push((row("Custom plate", if app.menus.menu_edit_ident{'E'}else{'e'}, &typed_ident, "Enter custom plate (leave free for automatic)", None), "custom_ident_edit".to_string()));
     }
     if !server {
         display.push(opens("Driver", "Change the current driver profile", "driver"));

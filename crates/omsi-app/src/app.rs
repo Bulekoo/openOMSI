@@ -730,6 +730,9 @@ impl App {
                         std::time::Duration::from_millis(1500),
                     );
                 }
+                if let Some(p) = self.player.as_mut() {
+                    crate::duty_start::set_starting_cabin_temperature(&self.args, &mut p.vehicle);
+                }
                 self.world = Some(w);
             }
         }
