@@ -353,6 +353,7 @@ flags! {
     OMSI_NO_BRIDGE: Bool, Switch, Use, "off", "LAN: leave the internet alone - no rendezvous bridge, no tunnel (tests, LAN parties).";
     OMSI_NO_BUMP: Bool, Switch, Use, "off", "No bump maps.";
     OMSI_NO_BUNDLES: Bool, Switch, Frame, "off", "Record the main pass directly instead of from render bundles.";
+    OMSI_NO_CABIN_SHADOWS: Bool, Switch, Frame, "off", "Enhanced: the lamps of the player's saloon cast no shadows (A/B).";
     OMSI_NO_CLOUDS: Bool, Switch, Use, "off", "No clouds.";
     OMSI_NO_CORONAS: Bool, Switch, Frame, "off", "No light coronas.";
     OMSI_NO_CULL: Bool, Switch, Once, "off", "Draw every mesh from both sides (A/B).";

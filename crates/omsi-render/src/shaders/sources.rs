@@ -163,6 +163,7 @@ pub(crate) fn scene_shader_text(gl: bool) -> String {
 pub(crate) fn lean_scene(src: String) -> String {
     let out = src
         .replace("irr = irr * lamp_shadow_at(li, p, n, thin);", "")
+        .replace("seen_light = seen_light + share * lamp_shadow_at(li, p, n, false);", "seen_light = seen_light + share;")
         .replace("ms = sun_shadow_soft(in.world, n, thin);", "ms = 1.0;")
         .replace("let sm = sun_shadow_soft(in.world, n, thin);", "let sm = 1.0;");
     debug_assert_eq!(out.matches("sun_shadow_soft(in.world").count(), 1);

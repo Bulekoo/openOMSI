@@ -277,6 +277,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_NO_BRIDGE` | bool | off | use | lan, net | LAN: leave the internet alone - no rendezvous bridge, no tunnel (tests, LAN parties). |
 | `OMSI_NO_BUMP` | bool | off | use | scene | No bump maps. |
 | `OMSI_NO_BUNDLES` | bool | off | frame | render | Record the main pass directly instead of from render bundles. |
+| `OMSI_NO_CABIN_SHADOWS` | bool | off | frame | render | Enhanced: the lamps of the player's saloon cast no shadows (A/B). |
 | `OMSI_NO_CLOUDS` | bool | off | use | app | No clouds. |
 | `OMSI_NO_CORONAS` | bool | off | frame | render | No light coronas. |
 | `OMSI_NO_CULL` | bool | off | once | render | Draw every mesh from both sides (A/B). |
