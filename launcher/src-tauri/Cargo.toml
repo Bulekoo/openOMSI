@@ -1,7 +1,7 @@
 [package]
 name = "openomsi-launcher-app"
 version = "0.2.33"
-edition = "2021"
+edition = "2024"
 license = "AGPL-3.0-only"
 description = "openOMSI's desktop launcher: a Tauri 2 window over omsi-launcher-core"
 publish = false

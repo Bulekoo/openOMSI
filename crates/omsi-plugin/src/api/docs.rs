@@ -7,6 +7,8 @@ use super::{events, registry, ApiFn, Perm};
 /// The groups in the order of the documentation, with their headings.
 pub const GROUPS: &[(&str, &str)] = &[
     ("vehicle", "The player's bus"),
+    ("data", "Game data getters"),
+    ("hof", "The loaded HOF depot file"),
     ("duty", "Duty and timetable"),
     ("map", "The map"),
     ("traffic", "AI traffic"),

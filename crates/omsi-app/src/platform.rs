@@ -61,6 +61,13 @@ pub(crate) fn set_tilt(on: bool) {
     let _ = on;
 }
 
+/// Ask the system for the microphone now (Android's runtime permission; the other systems ask
+/// when the microphone is first opened, which the voice engine does for a moment).
+pub(crate) fn request_microphone() {
+    #[cfg(target_os = "android")]
+    crate::android::request_microphone();
+}
+
 /// A short buzz of the phone (a button that did something the eye may miss).
 pub(crate) fn buzz(ms: u32) {
     #[cfg(target_os = "android")]

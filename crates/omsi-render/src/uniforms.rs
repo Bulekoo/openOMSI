@@ -49,10 +49,12 @@ pub(crate) struct CameraUniform {
     /// The player's vehicle's velocity (m/s, world) and 1: the airstream the rain on its
     /// glass meets (see `Lighting::glass_wind`).
     pub(crate) wind: [f32; 4],
-    /// Enhanced: the street lamps' shadow maps (`LAMP_SHADOWS` tiles under the far map),
-    /// and the light indices they belong to (-1: none).
-    pub(crate) lamp_view_proj: [[[f32; 4]; 4]; 4],
-    pub(crate) lamp_shadow: [f32; 4],
+    /// Enhanced: the lamps' shadow maps (`LAMP_SHADOWS` tiles under the far map, zero for a
+    /// tile nothing is drawn in), and where the tiles lie (`LampAtlas::uniform`: a tile's
+    /// side, tiles to a row, the far map's texture height, tiles in all). A light names its
+    /// tile in its record (`LAMP_MARK`).
+    pub(crate) lamp_view_proj: [[[f32; 4]; 4]; LAMP_SHADOWS],
+    pub(crate) lamp_atlas: [f32; 4],
     /// Windy trees: xy the weather's wind (m/s, world; 0 with the setting off), zw how far
     /// the air has carried the gusts since the start (m, modulo the shaders' PATTERN_PERIOD).
     pub(crate) tree_wind: [f32; 4],
@@ -66,6 +68,9 @@ pub(crate) struct CameraUniform {
     /// Enhanced: the field each light cookie layer covers (`cookies::CookieAtlas::fields`).
     /// After the rest: the shaders that light nothing by a cookie leave it out.
     pub(crate) cookies: [[f32; 4]; COOKIE_LAYERS],
+    /// Enhanced: the lights of the player's saloon that have a shadow map, by their records in
+    /// the light buffer (-1: none), see `cabin_visibility` in enhanced/02_lamps.wgsl.
+    pub(crate) cabin_lamps: [[f32; 4]; 4],
 }
 
 /// The period the sky's cloud patterns repeat with (m): 5 x the cloud field (14 km), 8 x

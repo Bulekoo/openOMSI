@@ -702,3 +702,72 @@ fn a_remote_rear_section_keeps_its_pose_and_its_wheels_stand() {
     assert!(t.pitch > 1.0, "nose up towards the front section: {}", t.pitch);
     assert_eq!(t.odometer, rot_before, "its wheels turned on a standing bus");
 }
+
+/// The skin plan moves the vertices as the per-vertex sum of weighted bones did.
+#[test]
+fn a_skin_plan_moves_the_vertices_as_the_weighted_bones_do() {
+    use std::path::PathBuf;
+    let mut ty = coupling_test_type(None);
+    let t = Arc::get_mut(&mut ty).unwrap();
+    let mesh = |def_index: usize, skin: Vec<SkinBone>, n: usize| VehicleMesh {
+        def_index,
+        data: MeshData {
+            positions: (0..n).map(|k| Vec3::new(k as f32, 0.5 * k as f32, 1.0 - 0.2 * k as f32)).collect(),
+            normals: (0..n).map(|k| Vec3::new(0.1 * k as f32, 1.0, 0.3).normalize()).collect(),
+            ..Default::default()
+        },
+        file: PathBuf::new(),
+        materials: Vec::new(),
+        overrides: Vec::new(),
+        pivot: Mat4::IDENTITY,
+        viewpoint: 0,
+        skin,
+        keep_winding: false,
+    };
+    let bone = |def_index: Option<usize>, weights: &[(u32, f32)]| SkinBone { def_index, weights: weights.to_vec() };
+    t.meshes.push(mesh(10, Vec::new(), 1));
+    t.meshes.push(mesh(11, Vec::new(), 1));
+    t.meshes.push(mesh(12, vec![
+        bone(Some(10), &[(0, 1.0), (1, 0.5), (2, 0.25), (5, 1e-5), (9, 1.0)]),
+        bone(Some(11), &[(1, 0.5), (2, 0.25), (3, f32::NAN), (3, 0.7)]),
+        bone(None, &[(2, 0.5), (3, -1.0)]),
+        bone(Some(99), &[(4, 1.0)]),
+    ], 7));
+    let xf = |a: f32, x: f32| Mat4::from_rotation_translation(glam::Quat::from_euler(glam::EulerRot::ZXY, a, 0.3 * a, -0.2 * a), Vec3::new(x, 2.0 * x, -x));
+    let transforms = [xf(0.4, 1.0), xf(-0.7, 0.5), xf(0.2, -0.3)];
+    let rest = [xf(0.1, 0.2), xf(0.05, -0.1), xf(-0.15, 0.4)];
+    // the sum as it was made before the plan: a matrix per vertex, divided by the weight
+    let vm = &ty.meshes[2];
+    let mut sum = vec![Mat4::ZERO; 7];
+    let mut total = vec![0.0f32; 7];
+    for b in &vm.skin {
+        let m = match b.def_index {
+            None => Mat4::IDENTITY,
+            Some(d) => match ty.meshes.iter().position(|m| m.def_index == d) {
+                Some(k) => transforms[k] * rest[k].inverse(),
+                None => continue,
+            },
+        };
+        for &(v, w) in &b.weights {
+            if (v as usize) < 7 && w.is_finite() && w > 0.0 {
+                sum[v as usize] += m * w;
+                total[v as usize] += w;
+            }
+        }
+    }
+    let plan = SkinPlan::new(&ty, 2).expect("a skinned mesh");
+    let (pos, nrm) = skin_vertices(&ty, 2, &transforms, &rest, &plan).expect("skinned vertices");
+    for v in 0..7 {
+        let (p, q) = (vm.data.positions[v], vm.data.normals[v]);
+        let (want_p, want_n) = if total[v] < 1e-4 {
+            (p, q)
+        } else {
+            let m = rest[2].inverse() * (sum[v] * (1.0 / total[v]));
+            (m.transform_point3(p), m.transform_vector3(q).normalize_or_zero())
+        };
+        assert!((pos[v] - want_p).length() < 1e-4, "vertex {v}: {:?} for {:?}", pos[v], want_p);
+        assert!((nrm[v] - want_n).length() < 1e-4, "normal {v}: {:?} for {:?}", nrm[v], want_n);
+    }
+    // (vertices 4, 5 and 6: held by a missing bone, too little, by nothing - where they were)
+    assert_eq!(&pos[4..], &vm.data.positions[4..]);
+}

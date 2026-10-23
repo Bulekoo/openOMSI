@@ -266,6 +266,14 @@ impl App {
             return false;
         }
         self.input.cursor = (x, y);
+        if !self.input.buttons_held.0 {
+            self.menus.hud_resize = None;
+        }
+        if let Some((k, size0, at, w0)) = self.menus.hud_resize {
+            let grow = ((x - at[0]) + (y - at[1])) * 0.5;
+            self.settings.hud_sizes[k] = crate::ui::window_size((size0 * (w0 + grow) / w0 * 20.0).round() / 20.0);
+            return true;
+        }
         // the navigator held by the mouse follows it
         if let Some(n) = self.menus.navigator.as_mut() {
             if n.panel_move(x, y) {
@@ -412,9 +420,41 @@ impl App {
         if self.menus.game_menu.is_none() && self.editor_mouse(pressed) {
             return;
         }
+        // the MileZero card: its buttons, and a press on it goes no further
+        if pressed && self.settings.milezero {
+            let (x, y) = self.input.cursor;
+            let at = |r: Option<[f32; 4]>| r.is_some_and(|r| x >= r[0] && x < r[2] && y >= r[1] && y < r[3]);
+            let (play, request, card) = self.ui.as_ref().map_or((false, false, false), |u| (at(u.mz.play), at(u.mz.request), at(u.mz.rect)));
+            if play {
+                self.sound.milezero.want_play = !self.sound.milezero.want_play;
+                return;
+            } else if request {
+                self.sound.milezero.typing = Some(String::new());
+                return;
+            } else if card {
+                return;
+            }
+        }
+        // a trolleybus's pole in the mouse's hand: let go, or taken (see `trolley_mouse`)
+        if pressed && self.menus.game_menu.is_none() && self.trolley_mouse_click() {
+            return;
+        }
         // the city map: a click on the navigator opens it; while it is open the mouse is
         // the map's (a click outside closes it)
         let (x, y) = self.input.cursor;
+        if !pressed {
+            if let Some((k, ..)) = self.menus.hud_resize.take() {
+                crate::game_lists::remember_setting(crate::ui::SIZE_KEYS[k], &format!("{:.2}", self.settings.hud_sizes[k]));
+                return;
+            }
+        }
+        if pressed && self.menus.game_menu.is_none() {
+            if let Some((k, w0, shown)) = self.ui.as_ref().and_then(|u| u.grip_at(x, y)) {
+                self.settings.hud_sizes[k] = shown;
+                self.menus.hud_resize = Some((k, shown, [x, y], w0));
+                return;
+            }
+        }
         let vr_active = self.vr_active();
         if let Some(n) = self.menus.navigator.as_mut() {
             if n.map_open() {
@@ -430,7 +470,11 @@ impl App {
                     }
                 } else if pressed {
                     n.map_press(x, y);
-                } else if n.map_release() && self.menus.teleport_pick {
+                } else if n.map_release() {
+                    if !self.menus.teleport_pick {
+                        n.map_destination(x, y);
+                        return;
+                    }
                     // after Esc → Move the bus the map is dragged to the place as ever, and
                     // the click that lets go where it was pressed puts the bus there (the
                     // press used to put it at once, so only what the map showed could be
@@ -716,6 +760,17 @@ const HTML_OBJECT_REACH: f32 = 4.0;
 
 /// Degrees the view turns per (logical) pixel of the cursor's way while looking round:
 /// Omsi.exe's fov / 78.75 (TForm_main.Panel1MouseMove 0x82c5f8).
+impl App {
+    /// A finger dragged over the photo (physical pixels): the photo camera turns.
+    pub(crate) fn photo_look_touch(&mut self, dx: f32, dy: f32) {
+        let scale = self.window.as_ref().map(|w| w.scale_factor() as f32).unwrap_or(1.0).max(0.1);
+        let k = self.photo.as_ref().map(|ph| look_deg_per_px(ph.cam.fov_deg)).unwrap_or(0.0) * self.settings.look_sens * 1.6;
+        if let Some(ph) = self.photo.as_mut() {
+            ph.look(dx / scale * k, dy / scale * k);
+        }
+    }
+}
+
 fn look_deg_per_px(fov_deg: f32) -> f32 {
     fov_deg / 78.75
 }
@@ -755,5 +810,33 @@ mod reach_tests {
         assert!(part_in_reach(eye, DVec3::new(0.0, -12.0, 0.0), 0.0, Some(rear)));
         // (the box's centre turns with the part: heading 180, the rear is ahead)
         assert!(part_in_reach(DVec3::new(-2.0, 17.0, 1.7), DVec3::new(0.0, 12.0, 0.0), 180.0, Some(rear)));
+    }
+}
+
+impl App {
+    /// A key pressed while a MileZero song request is being typed: true when it was taken.
+    pub(crate) fn milezero_typing(&mut self, event: &winit::event::KeyEvent) -> bool {
+        use winit::keyboard::{Key, NamedKey};
+        let mz = &mut self.sound.milezero;
+        if event.state != ElementState::Pressed || mz.typing.is_none() {
+            return false;
+        }
+        match &event.logical_key {
+            Key::Named(NamedKey::Enter) => mz.submit(),
+            Key::Named(NamedKey::Escape) => mz.typing = None,
+            Key::Named(NamedKey::Backspace) => {
+                if let Some(t) = mz.typing.as_mut() {
+                    t.pop();
+                }
+            }
+            _ => {
+                if let (Some(t), Some(text)) = (mz.typing.as_mut(), event.text.as_deref()) {
+                    if t.chars().count() < 200 {
+                        t.extend(text.chars().filter(|c| !c.is_control()));
+                    }
+                }
+            }
+        }
+        true
     }
 }

@@ -64,7 +64,8 @@ export const KNOWN = {
   pax_door_request: 'Passenger: request entry / exit',
   chat_open: 'Multiplayer: write in the chat',
   chat_toggle: 'Multiplayer: show / hide the chat',
-  voice_radio: 'Multiplayer: bus radio (hold)',
+  voice_nearby: 'Multiplayer voice: nearby players (hold)',
+  voice_radio: 'Multiplayer voice: radio, whole session (hold)',
   sim_pause: 'Pause',
   open_menu: 'Open / close the main menu',
   open_menue: 'Open / close the quick menu (OMSI: Alt)',
@@ -187,7 +188,7 @@ export const PAD_ACTION_GROUPS = [
   ['Lights and indicators', ['blinker_left_set', 'blinker_right_set', 'blinker_off', 'blinker_left_toggle', 'blinker_right_toggle', 'blinker_warn_toggle', 'kw_scheinwerfer_toggle', 'kw_fernlicht_toggle', 'kw_wipermode_up']],
   ['Doors and tickets', ['doors_all', 'door_1', 'door_2', 'door_3', 'door_4', 'doors_release', 'bus_doorfront0', 'bus_doorfront1', 'bus_dooraft', 'ticket_give', 'pax_door_request']],
   ['Views', ['view_look_left', 'view_look_right', 'view_look_up', 'view_look_down', 'view_reset_direction', 'view_reset_all_directions', 'view_toggle_viewpoint', 'view_toggle_interior', 'view_set_driver', 'view_set_passenger', 'view_set_outside', 'view_interiorcam_plus', 'view_interiorcam_minus', 'view_zoom_in', 'view_zoom_out', 'view_camera_keys_toggle']],
-  ['The game', ['open_menu', 'sim_pause', 'screenshot', 'quicksave', 'voice_radio', 'toggel_ctrler', 'toggel_mouse_ctrl', 'radio_power', 'radio_next', 'radio_previous', 'radio_volume_up', 'radio_volume_down']],
+  ['The game', ['open_menu', 'sim_pause', 'screenshot', 'quicksave', 'voice_nearby', 'voice_radio', 'toggel_ctrler', 'toggel_mouse_ctrl', 'radio_power', 'radio_next', 'radio_previous', 'radio_volume_up', 'radio_volume_down']],
 ];
 
 export function padActions(bindings, devices) {

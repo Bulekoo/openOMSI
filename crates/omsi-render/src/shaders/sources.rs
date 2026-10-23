@@ -123,6 +123,7 @@ pub(crate) fn scene_shader_text(gl: bool) -> String {
         shaders::SCENE,
         include_str!("../enhanced_common.wgsl"),
         include_str!("../puddle_common.wgsl"),
+        include_str!("../beam_shadow_none.wgsl"),
         include_str!("../lamp_air.wgsl"),
         shaders::ENHANCED,
     ]
@@ -163,6 +164,7 @@ pub(crate) fn scene_shader_text(gl: bool) -> String {
 pub(crate) fn lean_scene(src: String) -> String {
     let out = src
         .replace("irr = irr * lamp_shadow_at(li, p, n, thin);", "")
+        .replace("seen_light = seen_light + share * lamp_shadow_at(li, p, n, false);", "seen_light = seen_light + share;")
         .replace("ms = sun_shadow_soft(in.world, n, thin);", "ms = 1.0;")
         .replace("let sm = sun_shadow_soft(in.world, n, thin);", "let sm = 1.0;");
     debug_assert_eq!(out.matches("sun_shadow_soft(in.world").count(), 1);
@@ -199,15 +201,24 @@ pub(crate) fn lean_rain(src: String) -> String {
     src.replace(LAMPS, "")
 }
 
+pub(crate) fn roof_as_float(src: String) -> String {
+    const DECL: &str = "var roof_map: texture_depth_2d;";
+    const LOAD: &str = "return textureLoad(roof_map, t, 0); }";
+    debug_assert_eq!((src.matches(DECL).count(), src.matches(LOAD).count()), (1, 1));
+    src.replace(DECL, "var roof_map: texture_2d<f32>;").replace(LOAD, "return textureLoad(roof_map, t, 0).x; }")
+}
+
 pub(crate) fn precip_shader_source(own: &str) -> String {
     let src = [
         include_str!("../precip_common.wgsl"),
         own,
         include_str!("../enhanced_common.wgsl"),
         FOG_LAMP_LIGHTS,
+        include_str!("../beam_shadow_none.wgsl"),
         include_str!("../lamp_air.wgsl"),
     ]
     .join("\n");
+    let src = if gl_backend() { roof_as_float(src) } else { src };
     if array_path().no_storage() {
         let src = src
             .replace("@group(0) @binding(3) var<storage, read> lights: array<PointLight>;", "fn lights_at(i: u32) -> PointLight { return PointLight(vec4<f32>(0.0), vec4<f32>(0.0), vec4<f32>(0.0), vec4<f32>(0.0)); }")
@@ -265,6 +276,7 @@ pub(crate) fn fog_lamps_shader_source() -> String {
         include_str!("../fog_lamps.wgsl"),
         include_str!("../enhanced_common.wgsl"),
         FOG_LAMP_LIGHTS,
+        if omsi_cfg::flags::OMSI_NO_BEAM_SHADOWS.is_set() { include_str!("../beam_shadow_none.wgsl") } else { include_str!("../beam_shadow.wgsl") },
         include_str!("../lamp_air.wgsl"),
     ]
     .join("\n")
@@ -289,6 +301,7 @@ pub(crate) fn corona_shader_source() -> String {
         include_str!("../corona.wgsl"),
         include_str!("../enhanced_common.wgsl"),
         FOG_LAMP_LIGHTS,
+        include_str!("../beam_shadow_none.wgsl"),
         include_str!("../lamp_air.wgsl"),
     ]
     .join("\n");

@@ -208,7 +208,7 @@ impl LanSession {
 /// Bind versioned traffic to the freshly issued connection secret. Relays unwrap and
 /// rewrap for the destination, so old sessions cannot poison a retained peer's state.
 pub(super) fn session_bound(data: &[u8]) -> bool {
-    data.first().is_some_and(|b| [sounds::MAGIC, vars::VARS_MAGIC, var_schema::MAGIC, 0xEB].contains(b))
+    data.first().is_some_and(|b| [sounds::MAGIC, voice_net::MAGIC, vars::VARS_MAGIC, var_schema::MAGIC, 0xEB].contains(b))
 }
 
 impl LanSession {

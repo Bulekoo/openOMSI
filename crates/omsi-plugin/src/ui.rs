@@ -13,6 +13,9 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+mod menu;
+pub use menu::{MenuItem, MAX_MENU_ITEMS, MAX_MENU_LABEL};
+
 /// `omsi.ui.version`: raised when something is added a plugin may want to test for.
 /// 2: images, checkboxes, sliders, text fields, tabs, charts, tables, draggable panels.
 /// 3: the navigator's board (`anchor = "navigator"`, `ui.dock`).
@@ -336,6 +339,10 @@ pub struct UiState {
     screen: [f32; 3],
     serial: u64,
     typing: Option<Typing>,
+    /// The plugins' lines in the pause menu, in the order they were first set.
+    menu: Vec<MenuItem>,
+    /// Lines chosen, for their plugins' next frame.
+    menu_picks: Vec<(u64, String)>,
     /// The navigator's board (None: the navigator shows none).
     dock: Option<Dock>,
 }
@@ -356,7 +363,7 @@ pub struct Dock {
 impl Default for UiState {
     fn default() -> Self {
         // (until the game has drawn a frame: a 1080p screen)
-        UiState { panels: Vec::new(), toasts: Vec::new(), clicks: Vec::new(), changes: Vec::new(), focus: None, shown: true, screen: [1920.0, 1080.0, 1.0], serial: 0, typing: None, dock: None }
+        UiState { panels: Vec::new(), toasts: Vec::new(), clicks: Vec::new(), changes: Vec::new(), focus: None, shown: true, screen: [1920.0, 1080.0, 1.0], serial: 0, typing: None, menu: Vec::new(), menu_picks: Vec::new(), dock: None }
     }
 }
 
@@ -422,6 +429,8 @@ impl UiState {
         if self.focus == Some(owner) {
             self.focus = None;
         }
+        self.menu.retain(|m| m.owner != owner);
+        self.menu_picks.retain(|m| m.0 != owner);
     }
 
     /// The ids of a plugin's panels.

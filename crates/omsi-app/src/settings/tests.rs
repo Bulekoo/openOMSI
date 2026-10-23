@@ -324,10 +324,29 @@ fn discord_settings_round_trip_and_default_enabled() {
 }
 
 #[test]
-fn voice_chat_round_trips_and_is_on_by_default() {
-    assert!(Settings::default().voice_chat);
-    let s = Settings { voice_chat: false, ..Default::default() };
+fn voice_chat_is_off_by_default_and_round_trips() {
+    let d = Settings::default();
+    assert!(!d.voice_enabled && !d.voice_all_off && d.voice_mode == "ptt" && d.voice_range == 75.0);
+    // an old file with the earlier switch does not turn it on
+    assert!(!Settings::from_text("voice_chat=1\n").voice_enabled);
+    let s = Settings {
+        voice_enabled: true,
+        voice_mode: "open".into(),
+        voice_mic_gain: 1.5,
+        voice_threshold_db: -50.0,
+        voice_input_device: "USB Mic".into(),
+        voice_volume: 0.8,
+        voice_volume_nearby: 1.2,
+        voice_volume_radio: 0.5,
+        voice_range: 120.0,
+        voice_talker_list: false,
+        voice_all_off: true,
+        ..Default::default()
+    };
     assert_eq!(Settings::from_text(&s.to_text()), s);
+    // wrong values are cut to what the voice chat takes
+    let w = Settings::from_text("voice_mic_gain=99\nvoice_range=1\nvoice_mode=shout\nvoice_volume=nan\nvoice_threshold_db=0\n");
+    assert_eq!((w.voice_mic_gain, w.voice_range, w.voice_mode.as_str(), w.voice_volume, w.voice_threshold_db), (4.0, 5.0, "ptt", 1.0, -10.0));
 }
 
 #[test]
@@ -369,4 +388,38 @@ fn puddles_round_trip() {
         assert_eq!(Settings::from_text(&s.to_text()).puddles, q);
     }
     assert_eq!(Settings::from_text("puddles=ultra\n").puddles, "high");
+}
+
+#[test]
+fn vehicle_smoke_setting_round_trips_through_game_and_launcher() {
+    assert_eq!(Settings::default().vehicle_smoke, "all");
+    for mode in ["all", "player", "off"] {
+        let s = Settings::from_text(&format!("vehicle_smoke={mode}\n"));
+        assert_eq!(s.vehicle_smoke, mode);
+        assert_eq!(Settings::from_text(&s.to_text()).vehicle_smoke, mode);
+        let mut launcher = omsi_launcher_lib::settings_from_text(None);
+        launcher["vehicle_smoke"] = serde_json::json!(mode);
+        let saved = omsi_launcher_lib::settings_to_text(&launcher, None);
+        assert_eq!(Settings::from_text(&saved).vehicle_smoke, mode);
+        assert_eq!(omsi_launcher_lib::settings_from_text(Some(&saved))["vehicle_smoke"], mode);
+    }
+    assert_eq!(Settings::from_text("vehicle_smoke=unknown\n").vehicle_smoke, "all");
+    assert_eq!(Settings::from_text("vehicle_smoke=PLAYER_ONLY\n").vehicle_smoke, "player");
+}
+
+
+/// The arrival announcements of the maps that keep two recordings per stop: off out of the
+/// box, and kept through the launcher's writer (the game's Gameplay page turns it on).
+#[test]
+fn arrival_announcements_are_off_at_first_and_kept() {
+    assert!(!Settings::default().auto_announce);
+    assert!(!Settings::from_text("version=4\n").auto_announce);
+    assert!(Settings::from_text("auto_announce=1\n").auto_announce);
+    let mut launcher = omsi_launcher_lib::settings_from_text(None);
+    assert_eq!(launcher["auto_announce"], false);
+    launcher["auto_announce"] = serde_json::json!(true);
+    let saved = omsi_launcher_lib::settings_to_text(&launcher, None);
+    assert!(Settings::from_text(&saved).auto_announce, "{saved}");
+    let on = Settings { auto_announce: true, ..Default::default() };
+    assert_eq!(Settings::from_text(&on.to_text()), on);
 }

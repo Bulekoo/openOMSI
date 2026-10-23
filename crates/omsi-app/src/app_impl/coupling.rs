@@ -29,8 +29,11 @@ impl App {
             self.service_msg = Some(("Nothing to couple: back up to a trailer's coupling (within 2.5 m, in line)".into(), 4.0));
             return;
         };
-        let q = self.session.placed.remove(k);
+        let mut q = self.session.placed.remove(k);
         let ty = q.vehicle.ty.clone();
+        if let Some(mut tv) = q.trolley_view.take() {
+            tv.release(r, scene);
+        }
         if let (Some(a), Some(mut ss)) = (self.sound.audio.as_ref(), q.sounds) {
             ss.stop_all(a);
         }
@@ -41,7 +44,7 @@ impl App {
         p.vehicle.attach_trailer_ex(ty.clone(), false);
         p.trailer_renders.push(w.add_vehicle_part(r, scene, &ty, None, &p.render));
         p.hand_coupled += 1;
-        self.service_msg = Some((format!("Coupled: {} {}", ty.def.manufacturer, ty.def.type_name), 3.0));
+        self.service_msg = Some((omsi_ui::i18n::tr_fill("Coupled: {vehicle}", &[("{vehicle}", &format!("{} {}", ty.def.manufacturer, ty.def.type_name))]), 3.0));
     }
 
     /// Uncouple the last part coupled by hand: it stays where it is, a vehicle of its own.

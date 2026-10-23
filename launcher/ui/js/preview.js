@@ -2,12 +2,12 @@
 // --launcher-service`), with the game's own showroom - the bus with its
 // textures and every part, under the chosen time and weather.
 //
-// One request a picture, and the drag and the wheel ride along with it, so a turn costs one
+// One request a picture (two at most in flight), and the drag and the wheel ride along with it, so a turn costs one
 // round trip. Nothing is asked while nothing moves or the window is hidden; moving
 // pictures are capped at 60 per second to leave room for the launcher's interface.
 
 import { html, useEffect, useRef, useState } from '../vendor/preact-htm.js';
-import { call, on } from './api.js';
+import { call, on, onPhone } from './api.js';
 import { t } from './i18n.js';
 import { Icon } from './icons.js';
 import { Spinner } from './ui.js';
@@ -27,7 +27,7 @@ export function BusPreview({ look, class: cls = '' }) {
   const canvas = useRef();
   const [state, setState] = useState('loading');
   // what the loop sends next: the drag and zoom gathered since the last picture
-  const r = useRef({ alive: true, force: true, dx: 0, dy: 0, zoom: 1, view: null, dragging: false, easing: false, wake: null });
+  const r = useRef({ alive: true, force: true, dx: 0, dy: 0, zoom: 1, view: null, dragging: false, easing: false, more: false, wake: null });
   const [views, setViews] = useState('outside|');
 
   const wake = (force) => {
@@ -47,54 +47,78 @@ export function BusPreview({ look, class: cls = '' }) {
       if (performance.now() - lastFrame >= 1000 / 60) res();
       else requestAnimationFrame(step);
     });
+    // Pictures come back in order: one is being drawn (decoded) while the game already makes
+    // the next, two at most in flight (asked one at a time, a phone's frame was the game's
+    // drawing, the JPEG, the trip through the web view and the decoding added up: 20 a second).
+    let inflight = 0;
+    let seq = 0;
+    let shown = 0;
+    let slotWake = null;
+    const settle = async (args, mine) => {
+      let more = false;
+      try {
+        const { head, jpeg } = await frame(args);
+        if (!st.alive) return;
+        if (jpeg && canvas.current && mine > shown) {
+          const bmp = await createImageBitmap(jpeg);
+          try {
+            const c = canvas.current;
+            if (c && st.alive && mine > shown) {
+              if (c.width !== bmp.width || c.height !== bmp.height) Object.assign(c, { width: bmp.width, height: bmp.height });
+              c.getContext('2d').drawImage(bmp, 0, 0);
+              shown = mine;
+            }
+          } finally {
+            bmp.close();
+          }
+        }
+        if (!st.alive) return;
+        setViews(`${head.view || 'outside'}|${(head.views || []).join(',')}`);
+        setState(head.failed || head.ok === false ? 'failed' : head.picture ? (head.busy ? 'switching' : 'ok') : 'loading');
+        st.easing = !!head.moving;
+        more = head.ok !== false && !head.failed && (head.busy || head.moving || !head.picture);
+        // (the sharp picture after the soft ones of a turn, once the last of them is in)
+        if (!more && args.soft && !st.dragging && mine === seq) st.force = true;
+      } catch {
+        setState('failed');
+      } finally {
+        inflight--;
+        st.more = more;
+        const slot = slotWake;
+        slotWake = null;
+        slot?.();
+        if (more || st.force) wake();
+      }
+    };
     (async () => {
       while (st.alive) {
         if (document.hidden) {
           await new Promise((res) => (st.wake = res));
           continue;
         }
+        if (inflight >= 2) {
+          await new Promise((res) => (slotWake = res));
+          continue;
+        }
         await paced();
         if (!st.alive) break;
         lastFrame = performance.now();
         const el = host.current;
-        // (full size while it turns too: a smaller picture stretched over the view is blurred)
-        const k = Math.min(window.devicePixelRatio || 1, 2);
+        // (a turning bus is drawn smaller on a phone, as lightly packed: the picture at rest
+        // after it is the sharp one; a smaller picture stretched over the view is blurred, so
+        // not by much)
+        const soft = st.dragging || st.easing;
+        const k = Math.min(window.devicePixelRatio || 1, onPhone && soft ? 1.25 : 2);
         const w = Math.round((el?.clientWidth || 640) * k);
         const h = Math.round((el?.clientHeight || 360) * k);
-        const soft = st.dragging || st.easing;
         const args = { w, h, force: st.force, dx: st.dx, dy: st.dy, zoom: st.zoom, quality: soft ? 70 : 90, view: st.view };
         st.view = null;
         st.dx = st.dy = 0;
         st.zoom = 1;
         st.force = false;
-        let more = false;
-        try {
-          const { head, jpeg } = await frame(args);
-          if (!st.alive) break;
-          if (jpeg && canvas.current) {
-            const bmp = await createImageBitmap(jpeg);
-            try {
-              if (!st.alive) break;
-              const c = canvas.current;
-              if (c) {
-                if (c.width !== bmp.width || c.height !== bmp.height) Object.assign(c, { width: bmp.width, height: bmp.height });
-                c.getContext('2d').drawImage(bmp, 0, 0);
-              }
-            } finally {
-              bmp.close();
-            }
-          }
-          if (!st.alive) break;
-          setViews(`${head.view || 'outside'}|${(head.views || []).join(',')}`);
-          setState(head.failed || head.ok === false ? 'failed' : head.picture ? (head.busy ? 'switching' : 'ok') : 'loading');
-          st.easing = !!head.moving;
-          more = head.ok !== false && !head.failed && (head.busy || head.moving || !head.picture);
-          if (!more && soft && !st.dragging) st.force = true;
-        } catch {
-          setState('failed');
-        }
-        if (!st.alive) break;
-        if (more || st.force || st.view || st.dx !== 0 || st.dy !== 0 || st.zoom !== 1) await new Promise((res) => requestAnimationFrame(res));
+        inflight++;
+        settle({ ...args, soft }, ++seq);
+        if (st.more || st.force || st.view || st.dx !== 0 || st.dy !== 0 || st.zoom !== 1 || st.dragging) await new Promise((res) => requestAnimationFrame(res));
         else await new Promise((res) => (st.wake = res));
       }
     })();

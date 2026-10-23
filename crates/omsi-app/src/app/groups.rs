@@ -6,13 +6,17 @@ use super::*;
 pub(crate) struct SoundState {
     /// The player's bus radio as internet radio.
     pub(crate) radio: radio::Radio,
+    /// The MileZero card on the navigator (settings `milezero`).
+    pub(crate) milezero: crate::milezero::Milezero,
     pub(crate) audio: Option<omsi_audio::AudioEngine>,
     /// Sounds of the world around the camera (rain, footsteps).
     pub(crate) ambience: Option<ambience::Ambience>,
     /// openOMSI's ambience from recordings (settings `ambient`, `vol_ambient`).
     pub(crate) soundscape: Option<crate::soundscape::Soundscape>,
-    /// Positional voice through GreenTeaSpeak in a session (`voice`).
-    pub(crate) voice: Option<crate::voice::Voice>,
+    /// Voice chat in a session (`voice_chat`), alive while the settings have it on.
+    pub(crate) voice: Option<crate::voice_chat::VoiceChat>,
+    /// The players whose voice this player muted (by name, kept between sessions).
+    pub(crate) voice_mutes: omsi_voice::mutes::MuteList,
     /// How far the walker's eyes are inside the player's bus, as the sound follows them
     /// (see `App::foot_sound_amount`); None when nobody walks about it.
     pub(crate) foot_in: Option<f32>,
@@ -263,6 +267,8 @@ pub(crate) struct InputState {
     pub(crate) pad_repeat: Vec<String>,
     /// A controller button held for the multiplayer bus radio (`voice_radio`).
     pub(crate) pad_voice_radio: bool,
+    /// The same for the nearby talk key (`voice_nearby`).
+    pub(crate) pad_voice_nearby: bool,
     /// The arrow keys turned the head (a glance that comes back when they are let go).
     pub(crate) arrow_glance: bool,
     /// Head tracking (Settings → head tracking), started with the first frame that wants it.
@@ -396,6 +402,10 @@ pub(crate) struct MenuState {
     /// The digits of a time being typed in the world page of the game menu (None: not typing).
     pub(crate) menu_edit: Option<String>,
     pub(crate) menu_edit_icao: bool,
+    /// The fleet number being edited in the vehicle page
+    pub(crate) menu_edit_number: bool,
+    /// The plate being edited in the vehicle page
+    pub(crate) menu_edit_ident: bool,
     /// `menu_edit` is the search of the open list being typed (see `game_lists::searchable`).
     pub(crate) menu_edit_search: bool,
     /// The search the open list is filtered by (empty: none).
@@ -442,6 +452,7 @@ pub(crate) struct MenuState {
     pub(crate) info_bar: bool,
     /// OMSI's timetable window (`view_set_schedule`, Insert).
     pub(crate) timetable: bool,
+    pub(crate) hud_resize: Option<(usize, f32, [f32; 2], f32)>,
     /// The notifications on the screen (the server's `notify`, the plugins', the update
     /// check's and the game's own), oldest first.
     pub(crate) notices: Vec<crate::ui::Notice>,

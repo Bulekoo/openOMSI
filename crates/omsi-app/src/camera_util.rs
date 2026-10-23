@@ -216,6 +216,7 @@ pub(crate) fn render_mirrors(
     lighting: &omsi_render::Lighting,
     pick: MirrorPick,
     view: Option<(Camera, f32)>,
+    on_screen: &[usize],
 ) -> usize {
     // (aimed from the eye of the view being drawn, as Omsi.exe aims them - from the
     // driver's without one)
@@ -252,9 +253,11 @@ pub(crate) fn render_mirrors(
     // beyond what a mirror shows (the far distance below)
     let px = world.settings.mirror_size().max(64) as f32;
     lighting.min_obj_size = lighting.min_obj_size.max((12.0 / px).clamp(0.03, 0.09));
-    lighting.shadows = false;
-    // Enhanced graphics draw the mirrors with the plain shading (see Renderer::render_inner),
-    // whose light is OMSI's: a night that stays a blue dusk. The window's enhanced night is
+    // (no shadow pass of their own: the window's shadow maps are looked up, see
+    // `Renderer::plan_shadow_cache`; the mirrors drawn as the Enhanced picture is show them)
+    lighting.shadows = (renderer.options.mirror_shadows || (lighting.enhanced && renderer.options.mirror_enhanced)) && lighting.shadows;
+    // Enhanced graphics draw the mirrors with the plain shading unless they are asked to show the
+    // picture's (see Renderer::render_inner), whose light is OMSI's: a night that stays a blue dusk. The window's enhanced night is
     // far darker, and the mirrors showed the street by daylight beside it. The plain light
     // is taken down with the night (the lamps keep theirs) to the enhanced picture's level.
     // (By the sun's darkness, Envir_Brightness's ramp from +6 to -6 degrees: `night` is
@@ -281,7 +284,7 @@ pub(crate) fn render_mirrors(
         MirrorPick::Only(set) => (0..cams.len()).filter(|i| set.contains(i)).collect(),
         MirrorPick::All(skip) | MirrorPick::Turn(_, skip) => (0..cams.len())
             .filter(|i| !skip.contains(i))
-            .filter(|&i| cams[i].0.fixed || view.as_ref().map(|v| mirror_in_view(cams[i].1 .0, cams[i].0.extra.unwrap_or(0.0).max(MIRROR_MIN_RADIUS), v)).unwrap_or(true))
+            .filter(|&i| cams[i].0.fixed || on_screen.contains(&i) || view.as_ref().map(|v| mirror_in_view(cams[i].1 .0, cams[i].0.extra.unwrap_or(0.0).max(MIRROR_MIN_RADIUS), v)).unwrap_or(true))
             .collect(),
     };
     if seen.is_empty() {

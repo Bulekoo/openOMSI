@@ -9,6 +9,7 @@ struct Slot {
     tex: TextureId,
     text: String,
     px: u32,
+    color: [u8; 3],
     w: u32,
     h: u32,
     cap: u32,
@@ -31,6 +32,7 @@ pub(crate) struct PerfPanel {
     scale_ms: i32,
     width: f32,
     detailed: bool,
+    size: f32,
     slots: Vec<Slot>,
 }
 
@@ -51,7 +53,7 @@ impl PerfPanel {
 pub(crate) fn raster(frames: &std::collections::VecDeque<Sample>, top: f32, rgba: &mut [u8]) {
     let (w, h) = (HISTORY, GRAPH_H as usize);
     for px in rgba.chunks_exact_mut(4) {
-        px.copy_from_slice(&[0, 0, 0, 70]);
+        px.copy_from_slice(&[0, 0, 0, 0]);
     }
     let start = w - frames.len().min(w);
     for (k, s) in frames.iter().rev().take(w).rev().enumerate() {
@@ -75,10 +77,13 @@ pub(crate) fn raster(frames: &std::collections::VecDeque<Sample>, top: f32, rgba
         let y = h - 1 - row;
         for x in 0..w {
             let i = (y * w + x) * 4;
+            if rgba[i + 3] == 0 {
+                rgba[i..i + 4].copy_from_slice(&[128, 128, 136, 120]);
+                continue;
+            }
             for c in 0..3 {
                 rgba[i + c] = ((rgba[i + c] as u16 + 255) / 2) as u8;
             }
-            rgba[i + 3] = rgba[i + 3].max(150);
         }
     }
 }
@@ -111,7 +116,7 @@ impl Ui {
             .perf
             .slots
             .get(k)
-            .filter(|s| s.px == px && s.text == text)
+            .filter(|s| s.px == px && s.color == color && s.text == text)
         {
             return Placed {
                 tex: s.tex,
@@ -155,6 +160,7 @@ impl Ui {
             tex,
             text: text.to_string(),
             px,
+            color,
             w: img.width,
             h: img.height,
             cap,
@@ -189,15 +195,20 @@ impl Ui {
             return;
         }
         let graph = self.perf_graph(r, scene, o, dt);
+        let s0 = s;
+        let size = self.shown_size(2, f.sizes[2]);
+        let s = s * size;
         let detailed = f.perf_detailed;
-        if self.perf.detailed != detailed {
+        if self.perf.detailed != detailed || self.perf.size != size {
             self.perf.detailed = detailed;
+            self.perf.size = size;
             self.perf.width = 0.0;
         }
         let px = ((if detailed { 12.0 } else { 11.0 }) * s).round() as u32;
         let lh = (px as f32 * 1.45).round();
-        let pad = if f.perf_detailed { 10.0 } else { 8.0 } * s;
-        let (bright, text) = ([240, 240, 240], [220, 220, 220]);
+        let pad = if f.perf_detailed { 14.0 } else { 11.0 } * s;
+        let rgb = |c: [u8; 4]| [c[0], c[1], c[2]];
+        let (bright, text, dim) = (rgb(self.hud.ink), rgb(self.hud.dim), rgb(self.hud.muted));
         let ro = &o.readout;
         let title = self.perf_text(r, scene, 0, &ro.title, px | BOLD, bright);
         let head = self.perf_text(r, scene, 1, &ro.head, px | BOLD, bright);
@@ -207,14 +218,14 @@ impl Ui {
             2,
             &format!("{} ms", self.perf.scale_ms),
             (10.0 * s).round() as u32,
-            [200, 200, 200],
+            dim,
         );
         let mut k = 3;
         let mut parts: [(Part, Option<(Placed, Placed)>); 8] = [(Part::Other, None); 8];
         let legend = if detailed { &ro.parts[..] } else { &[] };
         for (i, (p, name, value)) in legend.iter().enumerate().take(8) {
             let n = self.perf_text(r, scene, k, name, px, text);
-            let v = self.perf_text(r, scene, k + 1, value, px, text);
+            let v = self.perf_text(r, scene, k + 1, value, px, bright);
             parts[i] = (*p, Some((n, v)));
             k += 2;
         }
@@ -243,14 +254,15 @@ impl Ui {
         let w = self.perf.width;
         let (x0, y0) = if let Some(top) = f.perf_touch {
             let y = top.map_or(80.0 * f.scale.max(0.5) * f.ui_scale.max(1.0), |b| {
-                b + 8.0 * s
+                b + 8.0 * s0
             });
-            ((16.0 * s).round(), y.round())
+            ((16.0 * s0).round(), y.round())
         } else if f.fps.is_some() {
-            ((f.width - w - 14.0 * s).round(), (36.0 * s).round())
+            ((f.width - w - 14.0 * s0).round(), (36.0 * s0).round())
         } else {
-            ((f.width - w - 14.0 * s).round(), (10.0 * s).round())
+            ((f.width - w - 14.0 * s0).round(), (10.0 * s0).round())
         };
+        let y0 = self.below_info(x0, x0 + w, y0, s).round();
         let gh = ((if detailed { GRAPH_H as f32 } else { 30.0 }) * s).round();
         let rows = shown.div_ceil(2);
         let line_count = lines.iter().flatten().count();
@@ -259,14 +271,8 @@ impl Ui {
         } else {
             0.0
         };
-        let h = pad + lh + 4.0 * s + gh + 6.0 * s + legend_h + lh * line_count as f32 + pad;
-        self.text.rounded(
-            r,
-            scene,
-            [x0, y0, x0 + w, y0 + h],
-            8.0 * s,
-            [28, 28, 28, (220.0 * self.text.backdrop.min(1.0)) as u8],
-        );
+        let h = pad + lh + 6.0 * s + gh + 10.0 * s + legend_h + lh * line_count as f32 + pad;
+        self.hud_card(r, scene, [x0, y0, x0 + w, y0 + h], hud::RADIUS * s, self.text.backdrop, s);
         let put = |scene: &mut Scene, l: &Placed, x: f32, y: f32| {
             let (x, y) = (x.round(), (y + (lh - l.h) * 0.5).round());
             scene.overlays.push((l.tex, [x, y, x + l.cap, y + l.h]));
@@ -274,7 +280,9 @@ impl Ui {
         let mut y = y0 + pad;
         put(scene, &title, x0 + pad, y);
         put(scene, &head, x0 + w - pad - head.w, y);
-        y += lh + 4.0 * s;
+        y += lh + 6.0 * s;
+        let well = self.hud.shade(self.hud.ink, 0.06, self.text.backdrop);
+        self.text.rounded(r, scene, [x0 + pad - 4.0 * s, y - 4.0 * s, x0 + w - pad + 4.0 * s, y + gh + 4.0 * s], 8.0 * s, well);
         if let Some(tex) = graph {
             scene
                 .overlays
@@ -284,7 +292,7 @@ impl Ui {
         scene
             .overlays
             .push((scale.tex, [sx, sy, sx + scale.cap, sy + scale.h]));
-        y += gh + 6.0 * s;
+        y += gh + 10.0 * s;
         let cw = (w - pad * 2.0 - 12.0 * s) * 0.5;
         for (i, (p, placed)) in parts.iter().enumerate() {
             let Some((name, value)) = placed else {
@@ -292,9 +300,8 @@ impl Ui {
             };
             let x = x0 + pad + (i % 2) as f32 * (cw + 12.0 * s);
             let ry = y + (i / 2) as f32 * lh;
-            let sw = self.text.solid(r, scene, p.color());
             let sy = (ry + (lh - swatch) * 0.5).round();
-            scene.overlays.push((sw, [x, sy, x + swatch, sy + swatch]));
+            self.text.rounded(r, scene, [x, sy, x + swatch, sy + swatch], swatch * 0.5, p.color());
             put(scene, name, x + swatch + 6.0 * s, ry);
             put(scene, value, x + cw - value.w, ry);
         }
@@ -303,6 +310,7 @@ impl Ui {
             put(scene, l, x0 + pad, y);
             y += lh;
         }
+        self.hud_grip(r, scene, 2, [x0, y0, x0 + w, y0 + h], size, f, s);
     }
 
     fn perf_graph(

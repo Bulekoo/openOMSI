@@ -1,4 +1,4 @@
-pub(super) fn car_display(v: &omsi_sim::VehicleInstance) -> (String, String) {
+pub(crate) fn car_display(v: &omsi_sim::VehicleInstance) -> (String, String) {
     let line =
         v.ty.program
             .str_var("SetLineTo")

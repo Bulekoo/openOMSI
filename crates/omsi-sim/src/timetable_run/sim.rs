@@ -14,6 +14,8 @@ mod route;
 mod take_on;
 mod tours;
 
+pub use tours::{TourPlan, TourPlanTrip};
+
 use super::*;
 use crate::ai_traffic::TrafficSim;
 use crate::VehicleType;

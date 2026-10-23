@@ -54,10 +54,13 @@ pub fn standing_reasons(v: &omsi_sim::VehicleInstance, key: &dyn Fn(&str) -> Opt
     // brake curve still holds below 6.5 bar), so it holds until the compressor has
     // filled the tanks, whatever the parking brake lever says
     if !parking && lines.is_empty() {
-        let fba_val = v.var("bremse_p_Brzyl_FBA").or_else(|| v.var("spring_brake_pressure"));
+        // (only where a script assigns the pressures: a non-pneumatic bus whose varlist still
+        // declares them reads them as an empty system - #3030)
+        let air = |name: &str| v.script_stores(name).then(|| v.var(name)).flatten();
+        let fba_val = air("bremse_p_Brzyl_FBA").or_else(|| air("spring_brake_pressure"));
         if let Some(fba) = fba_val.filter(|p| *p < 6.0e5) {
             let tanks: Vec<f32> = (1..=4)
-                .filter_map(|i| v.var(&format!("bremse_p_Tank0{i}")).or_else(|| v.var(&format!("air_tank_{i}"))))
+                .filter_map(|i| air(&format!("bremse_p_Tank0{i}")).or_else(|| air(&format!("air_tank_{i}"))))
                 .collect();
             let low = tanks.iter().copied().fold(f32::MAX, f32::min);
             // (with the tanks full the spring brake is held by the bus's own parking brake,

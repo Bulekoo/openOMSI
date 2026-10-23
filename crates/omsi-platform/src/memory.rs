@@ -5,7 +5,7 @@
 pub fn physical_memory() -> Option<u64> {
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
-        extern "C" {
+        unsafe extern "C" {
             fn sysctlbyname(
                 name: *const std::ffi::c_char,
                 oldp: *mut std::ffi::c_void,
@@ -55,7 +55,7 @@ pub fn physical_memory() -> Option<u64> {
 pub fn release_free_memory() {
     #[cfg(target_os = "macos")]
     {
-        extern "C" {
+        unsafe extern "C" {
             fn malloc_zone_pressure_relief(zone: *mut std::ffi::c_void, goal: usize) -> usize;
         }
         let _ = std::thread::Builder::new()

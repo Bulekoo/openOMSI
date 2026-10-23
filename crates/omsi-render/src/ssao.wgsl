@@ -55,7 +55,7 @@ fn lin(d: f32) -> f32 {
 }
 
 // A 4x4 ordered pattern rather than white noise: every 4x4 block of pixels holds the same
-// sixteen sample rotations, so the 5x5 blur that follows averages them out completely.
+// sixteen sample rotations, so the 6x6 blur that follows averages them out completely.
 // White noise per pixel left a grain that stood still on the screen while the world moved
 // under it - a faint film of static in front of the eyes.
 fn hash(v: vec2<f32>) -> f32 {
@@ -242,7 +242,7 @@ fn project(v: vec3<f32>) -> vec2<f32> {
     return vec2<f32>((ndc.x + 1.0) * 0.5 * p.params.z, (1.0 - ndc.y) * 0.5 * p.params.w);
 }
 
-// --- blur: 5x5 box over the raw AO, keeps edges by depth
+// --- blur: 6x6 window over the raw AO, keeps edges by depth
 @group(0) @binding(2) var t_ao: texture_2d<f32>;
 
 const TENT = array<f32, 36>(

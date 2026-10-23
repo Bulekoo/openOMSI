@@ -134,21 +134,43 @@ impl App {
         if let Some((msg, left)) = self.service_msg.as_mut() {
             *left -= dt;
             if *left > 0.0 {
-                let kind = message_kind(msg);
+                let kind = message_kind(&omsi_ui::i18n::english(msg));
                 say(format!("message {msg}"), msg.clone(), kind);
             }
         }
         self.service_msg = self.service_msg.take().filter(|(_, l)| *l > 0.0);
         if let Some(lan) = self.net.lan.as_ref() {
-            for t in lan::hud_lines(lan).into_iter().chain(self.sound.voice.as_ref().and_then(|v| v.hud_line())) {
+            for t in lan::hud_lines(lan) {
                 say(t.clone(), t, NoticeKind::Info);
+            }
+            if let Some(v) = self.sound.voice.as_ref() {
+                for t in v.notices() {
+                    say(t.clone(), t, NoticeKind::Info);
+                }
+                // our own key: what we are transmitting on, and who is talking to us
+                let tr = |s: &str| omsi_ui::tr(s).into_owned();
+                match v.transmitting() {
+                    Some(omsi_voice::Channel::Radio) => say("voice transmit".into(), tr("Voice: you are talking on the radio"), NoticeKind::Action),
+                    Some(omsi_voice::Channel::Nearby) => say("voice transmit".into(), tr("Voice: you are talking to the players nearby"), NoticeKind::Action),
+                    None => {}
+                }
+                if self.settings.voice_talker_list {
+                    for (id, name, channel) in &v.talking {
+                        let how = match channel {
+                            omsi_voice::Channel::Radio => tr("on the radio"),
+                            omsi_voice::Channel::Nearby => tr("nearby"),
+                        };
+                        let name = if name.is_empty() { format!("#{id}") } else { name.clone() };
+                        say(format!("voice talker {id}"), format!("{name} - {how}"), NoticeKind::Info);
+                    }
+                }
             }
         }
         if let Some(h) = self.session.humans.as_ref() {
             if let Some(hint) = h.hint() {
                 say(hint.clone(), hint, NoticeKind::Action);
             } else if let Some((name, value)) = &h.request {
-                let t = format!("Passenger wants: {name}  {value:.2}");
+                let t = omsi_ui::tr("Passenger wants: {name}  {value:.2}").replace("{name}", name).replace("{value:.2}", &format!("{value:.2}"));
                 say(t.clone(), t, NoticeKind::Action);
             }
             if let Some((paid, value)) = h.paid {
@@ -156,7 +178,7 @@ impl App {
                 say(t.clone(), t, NoticeKind::Info);
             }
             if let Some(owed) = h.change_due {
-                let t = format!("Change due: {owed:.2}");
+                let t = omsi_ui::tr("Change due: {owed:.2}").replace("{owed:.2}", &format!("{owed:.2}"));
                 say(t.clone(), t, NoticeKind::Action);
             }
         }
@@ -390,9 +412,10 @@ impl App {
         plugin_focus: bool,
         notes: &[String],
         tooltip: Option<String>,
-        menu_lines: Vec<(&'static str, &'static str)>,
+        menu_lines: Vec<crate::app_impl::MenuLine>,
         menu_tabs: Option<(Vec<String>, usize)>,
     ) {
+        let menu_lines: Vec<(&str, &str)> = menu_lines.iter().map(|(id, label, _)| (*id, label.as_ref())).collect();
         // (the steering cross: before the renderer and the scene are borrowed)
         let steer_cross = self.steer_cross_point();
         self.refresh_perf_overlay();
@@ -418,8 +441,8 @@ impl App {
             ui.chat.hidden = self.net.remotes.chat.hidden;
             let mut tags = if self.settings.name_tags {
                 let voice = self.sound.voice.as_ref();
-                let speaks = |name: &str, id: u32| voice.is_some_and(|v| v.speaks(name, id));
-                let on_radio = |name: &str, id: u32| voice.is_some_and(|v| v.on_radio(name, id));
+                let speaks = |_name: &str, id: u32| voice.is_some_and(|v| v.speaks(id).is_some());
+                let on_radio = |_name: &str, id: u32| voice.is_some_and(|v| v.speaks(id) == Some(omsi_voice::Channel::Radio));
                 let rig = (self.settings.triple.enabled
                     && !self.settings.vr_requested())
                 .then(|| {
@@ -481,10 +504,34 @@ impl App {
             let menu_disabled: &[&str] = &[];
             let (menu_kind, menu_head, menu_preview) = crate::game_lists::menu_extras(self.menus.list_kind.as_ref(), self.menus.admin_list.as_deref(), chooser_sel, self.session.schedule.as_ref().or(self.session.timetable_book.as_ref()), self.clock.time);
             crate::telemetry::publish(self.player.as_ref(), self.session.duty.as_ref(), self.session.humans.as_ref(), self.paused, self.session.schedule.as_ref(), self.session.traffic.as_ref());
+            let mz_view = (self.settings.milezero && self.menus.game_menu.is_none()).then(|| {
+                let m = &self.sound.milezero;
+                let song = m.song().unwrap_or_default();
+                let (cx, cy) = self.input.cursor;
+                let over = ui.mz.rect.is_some_and(|q| cx >= q[0] && cx < q[2] && cy >= q[1] && cy < q[3]);
+                ui::MzView {
+                    title: song.title,
+                    artist: song.artist,
+                    dj: song.dj,
+                    duration: song.duration,
+                    light: self.menus.navigator.as_ref().map_or(self.settings.nav_light, |n| n.light),
+                    art: song.cover,
+                    elapsed: m.elapsed(),
+                    playing: m.is_playing(),
+                    loading: m.loading(),
+                    quality: m.quality(),
+                    typing: m.typing.clone(),
+                    status: m.request_status(),
+                    hover: over || m.typing.is_some(),
+                }
+            });
+            let mz_gap = if mz_view.is_some() { ui.mz.extent } else { 0.0 };
             let frame = ui::Frame {
                 scale,
                 ui_scale: ui::size_factor(h, scale, self.settings.ui_scale, self.settings.ui_scale_window),
                 opacity: ui::backdrop(self.settings.ui_opacity),
+                light: self.settings.nav_light,
+                sizes: self.settings.hud_sizes,
                 width: w,
                 height: h,
                 cursor: (self.input.cursor.0 - hud[0], self.input.cursor.1),
@@ -531,7 +578,13 @@ impl App {
                 chat_size: self.settings.chat_size,
                 tags,
                 notices: &self.menus.notices,
-                notice_anchor: self.menus.navigator.as_ref().and_then(|n| n.screen_rect()),
+                notice_anchor: self.menus.navigator.as_ref().and_then(|n| n.screen_rect()).map(|mut a| {
+                    // (the MileZero card stands between the navigator and the notices)
+                    if a[1] > h * 0.5 { a[1] -= mz_gap } else { a[3] += mz_gap }
+                    a
+                }),
+                milezero: mz_view.as_ref(),
+                nav_rect: self.menus.navigator.as_ref().and_then(|n| n.screen_rect()),
             };
             ui.draw_at(r, scene, &frame, dt, hud[0]);
         }

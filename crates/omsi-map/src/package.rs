@@ -183,6 +183,8 @@ pub struct Package {
     map_dir: PathBuf,
     regions: Vec<Region>,
     has_streets: bool,
+    /// Where real north lies: degrees clockwise from the map's own up (the manifest's `north`).
+    north: f32,
     lines: Vec<LineInfo>,
     /// The package carries contour lines; the manifest's `terrain_offset`; where heights are written (made on first use).
     has_contours: bool,
@@ -247,6 +249,7 @@ impl Package {
         let (mut name, mut credit) = (String::new(), String::new());
         let (mut dark, mut light) = (Palette::dark(), Palette::light());
         let mut terrain_offset = 0.0f32;
+        let mut north = 0.0f32;
         for line in text.lines() {
             let line = line.trim();
             if line.starts_with('#') {
@@ -262,6 +265,7 @@ impl Package {
                 "name" => name = v.to_string(),
                 "credit" => credit = v.to_string(),
                 "terrain_offset" => terrain_offset = v.parse().unwrap_or(0.0),
+                "north" => north = v.parse::<f32>().ok().filter(|n| n.is_finite()).unwrap_or(0.0),
                 _ => {
                     // a colour: `water = #..` for the dark map, `light_water = #..` for the light one
                     if let Some(c) = parse_color(v) {
@@ -286,6 +290,7 @@ impl Package {
             p.dir = dir.clone();
             p.map_dir = map_dir.to_path_buf();
             p.terrain_offset = terrain_offset;
+            p.north = north;
             p.load_relief();
             p.load_places();
             p.load_lines();
@@ -358,6 +363,7 @@ impl Package {
             map_dir: PathBuf::new(),
             regions: Vec::new(),
             has_streets: false,
+            north: 0.0,
             lines: Vec::new(),
             has_contours: false,
             terrain_offset: 0.0,
@@ -368,6 +374,11 @@ impl Package {
     /// The map's folder the package was opened for.
     pub fn map_dir(&self) -> &Path {
         &self.map_dir
+    }
+
+    /// Where real north lies: degrees clockwise from the map's own up (0 when the manifest does not say).
+    pub fn north(&self) -> f32 {
+        self.north
     }
 
     /// The colours of the dark map or of the light one.
@@ -504,6 +515,7 @@ impl Package {
             map_dir: PathBuf::new(),
             regions: Vec::new(),
             has_streets: false,
+            north: 0.0,
             lines: Vec::new(),
             has_contours: false,
             terrain_offset: 0.0,
@@ -636,6 +648,7 @@ mod tests {
         let p = Package::open(&dir).expect("docs/examples/openomsi-realmap is a package");
         assert_eq!(p.name, "Synthetic example");
         assert_eq!(p.chunks(), 1);
+        assert_eq!(p.north(), 12.0, "the manifest of the example says where north lies");
         let l = p.layers(None);
         assert_eq!(l.fills[FILL_WATER as usize].len(), 14);
         for class in [FILL_GREEN, FILL_BUILT, FILL_GRASS, FILL_FOREST, FILL_SPORT, FILL_FARM] {

@@ -40,7 +40,8 @@ impl VehicleInstance {
         if self.skin_rest.len() != self.animators.len() {
             self.skin_rest = rest_transforms(&self.animators, self.state.vars.len());
         }
-        skin_vertices(&self.ty, i, &self.mesh_transforms, &self.skin_rest)
+        let plan = self.skin_plans.get(&self.ty, i)?;
+        skin_vertices(&self.ty, i, &self.mesh_transforms, &self.skin_rest, plan)
     }
 
     /// Seat the drawn tyres on the hubs the physics has: a model whose suspension

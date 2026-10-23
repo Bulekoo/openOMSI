@@ -266,6 +266,22 @@ fn vs_main(in: CoronaIn) -> CoronaOut {
     return out;
 }
 
+// The sprite's picture at `uv`, interpolated between its texels with a quintic ease instead
+// of linearly. The pictures are small (light_cone.bmp is 64 x 64) and a lamp's sprite or a
+// fog cone spans hundreds of pixels: a linear blend between texels has a kink at every texel
+// line, and a steep gradient - the cone's bright axis, a glow's rim - shows them as a stair
+// of squares along its edge, in the light of a lamp or a headlight's beam. The eased blend
+// is smooth to the second order and costs the same single fetch.
+fn soft_picture(uv: vec2<f32>) -> vec4<f32> {
+    let dims = vec2<f32>(textureDimensions(t_corona));
+    let p = uv * dims - vec2<f32>(0.5);
+    let i = floor(p);
+    let f = p - i;
+    let e = f * f * f * (f * (f * 6.0 - vec2<f32>(15.0)) + vec2<f32>(10.0));
+    // (the level of detail from the true coordinates: the eased ones run slower and faster)
+    return textureSampleGrad(t_corona, s_corona, (i + e + vec2<f32>(0.5)) / dims, dpdx(uv), dpdy(uv));
+}
+
 // The sprite's light: the round texture (in its own colours), and for a star light four thin rays across it.
 fn corona_shape(in: CoronaOut) -> vec3<f32> {
     // (the sprite keeps the bitmap's own colours, modulated by the light's colour)
@@ -277,7 +293,7 @@ fn corona_shape(in: CoronaOut) -> vec3<f32> {
     // `lights_abbl`/`lights_stand` bitmaps draw. The fan below keeps the unflipped `in.uv`:
     // it maps light_cone.bmp from its own `fan_uv` and only takes `r` and `phi` from here,
     // which its geometry needs as they stand.
-    let t = textureSample(t_corona, s_corona, vec2<f32>(in.uv.x, 1.0 - in.uv.y)).rgb;
+    let t = soft_picture(vec2<f32>(in.uv.x, 1.0 - in.uv.y)).rgb;
     // the cone's fan: its apex has uv (0, 1) and a rim vertex (sin a, 1 - cos a)
     // (u = sin a, v = 1 - cos a), a being 0.05 inside
     // the inner cone and rising to 0.9 pi/2 + 0.05 at the outer edge: light_cone.bmp's
@@ -289,7 +305,7 @@ fn corona_shape(in: CoronaOut) -> vec3<f32> {
     let span = max(in.cone.y - in.cone.x, 0.0001);
     let a = 0.05 + 0.9 * 1.5708 * clamp((phi - in.cone.x) / span, 0.0, 1.0);
     let fan_uv = clamp(vec2<f32>(0.0, 1.0) + min(r, 1.0) * vec2<f32>(sin(a), -cos(a)), vec2<f32>(0.0), vec2<f32>(1.0));
-    let tb = textureSample(t_corona, s_corona, fan_uv).r;
+    let tb = soft_picture(fan_uv).r;
     if (in.beam > 0.5) {
         let inside = select(0.0, 1.0, r <= 1.0 && phi <= in.cone.y);
         return vec3<f32>(tb * inside);
@@ -299,7 +315,17 @@ fn corona_shape(in: CoronaOut) -> vec3<f32> {
 
 @fragment
 fn fs_main(in: CoronaOut) -> @location(0) vec4<f32> {
-    return vec4<f32>(in.color.rgb * corona_shape(in) * in.color.a, 1.0);
+    var shape = corona_shape(in);
+    if (in.kind < 0.5 && in.beam < 0.5) {
+        // A lamp's glare ends softly at its sprite's edge whatever its bitmap does there: a
+        // glow picture whose border is not quite black (a model's own, some a few levels
+        // off) showed the whole square of the sprite round a bright lamp - the classic
+        // picture adds the sprite as it is, and a brightness of 2 doubles the border too.
+        // (the Enhanced picture rounds the sprite off, see `fs_enhanced`)
+        let edge = max(abs(in.uv.x - 0.5), abs(in.uv.y - 0.5)) * 2.0;
+        shape = shape * (1.0 - smoothstep(0.88, 1.0, edge));
+    }
+    return vec4<f32>(in.color.rgb * shape * in.color.a, 1.0);
 }
 
 // Enhanced graphics: the corona in the pre-exposed high-range picture - the glare of a

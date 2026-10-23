@@ -147,12 +147,14 @@ struct Field<Control: View>: View {
 struct LabeledRow<Control: View>: View {
     var label: LocalizedStringKey
     var detail: String?
+    var warn: String?
     @ViewBuilder var control: Control
     @Environment(\.compactLayout) private var compact
 
-    init(_ label: LocalizedStringKey, detail: String? = nil, @ViewBuilder control: () -> Control) {
+    init(_ label: LocalizedStringKey, detail: String? = nil, warn: String? = nil, @ViewBuilder control: () -> Control) {
         self.label = label
         self.detail = detail
+        self.warn = warn
         self.control = control()
     }
 
@@ -161,7 +163,10 @@ struct LabeledRow<Control: View>: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label).font(.inter(14)).foregroundStyle(Theme.text).fixedSize(horizontal: false, vertical: true)
                 if let detail, !detail.isEmpty {
-                    Text(detail).font(.inter(12)).foregroundStyle(Theme.muted).lineLimit(3)
+                    Text(detail).font(.inter(12)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                }
+                if let warn, !warn.isEmpty {
+                    Text(warn).font(.inter(12)).foregroundStyle(Theme.warn).fixedSize(horizontal: false, vertical: true)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -190,7 +195,7 @@ struct SelectField: View {
             }
         } label: {
             HStack(spacing: 6) {
-                Text(options.first { $0.value == selection }?.label ?? (selection.isEmpty ? placeholder : selection))
+                Text(options.first { $0.value == selection }?.label ?? (selection.isEmpty ? String(localized: String.LocalizationValue(placeholder)) : selection))
                     .font(.inter(14))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
@@ -338,12 +343,14 @@ struct SettingSelect: View {
     var label: LocalizedStringKey
     var key: String
     var options: [(String, String)]
-    var detail: String? = nil
+    var help: String? = nil
+    var fallback: String? = nil
+    var heavy: ((String) -> Bool)? = nil
 
     var body: some View {
-        let current = store.setting(key)?.string ?? options.first?.0 ?? ""
-        LabeledRow(label, detail: detail) {
-            SelectField(options: options.map { (value: $0.0, label: NSLocalizedString($0.1, comment: "")) }, selection: matching(current), onChange: { v in
+        let current = matching(store.setting(key)?.string ?? fallback ?? options.first?.0 ?? "")
+        LabeledRow(label, detail: help.map { NSLocalizedString($0, comment: "") }, warn: heavy?(current) == true ? NSLocalizedString("Heavy: can cost many frames per second on most graphics cards", comment: "") : nil) {
+            SelectField(options: options.map { (value: $0.0, label: NSLocalizedString($0.1, comment: "")) }, selection: current, onChange: { v in
                 store.set(key, typed(v))
             })
         }
@@ -370,10 +377,10 @@ struct SettingToggle: View {
     var label: LocalizedStringKey
     var key: String
     var fallback = false
-    var detail: String? = nil
+    var help: String? = nil
 
     var body: some View {
-        LabeledRow(label, detail: detail) {
+        LabeledRow(label, detail: help.map { NSLocalizedString($0, comment: "") }) {
             Toggle("", isOn: Binding(get: { store.flag(key, fallback) }, set: { store.set(key, $0) }))
                 .labelsHidden()
                 .toggleStyle(.launcher)
@@ -389,11 +396,18 @@ struct SettingSlider: View {
     var range: ClosedRange<Double>
     var step: Double
     var fallback: Double
+    var round: Double? = nil
+    var zeroBelow: Double? = nil
+    var also: [String: Any] = [:]
     var format: (Double) -> String = { String(format: "%.2f", $0) }
 
     var body: some View {
-        SliderField(label: label, value: store.setting(key)?.double ?? fallback, range: range, step: step, format: format) { store.set(key, $0) }
-            .padding(.vertical, 2)
+        SliderField(label: label, value: store.setting(key)?.double ?? fallback, range: range, step: step, format: format) { v in
+            let q = round ?? step
+            let kept = v < (zeroBelow ?? -.infinity) ? 0 : ((v / q).rounded() * q * 10000).rounded() / 10000
+            if also.isEmpty { store.set(key, kept) } else { store.act("settings", ["values": also.merging([key: kept]) { $1 }]) }
+        }
+        .padding(.vertical, 2)
     }
 }
 

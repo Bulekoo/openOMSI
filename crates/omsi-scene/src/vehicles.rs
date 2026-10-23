@@ -1,6 +1,10 @@
 //! The vehicle upload: a vehicle type's meshes and materials made into render instances.
 use super::*;
 
+mod lods;
+mod night_coverage;
+use night_coverage::{load_night, night_coverage, static_diffuse};
+
 impl World {
     /// Upload a vehicle type's meshes and create render instances for one vehicle (the
     /// player's: its set is not shared and stays).
@@ -15,7 +19,7 @@ impl World {
         self.mirror_aspect.lock().clear();
         self.mirror_glass.lock().clear();
         let set = self.upload_vehicle(renderer, scene, vt, scheme, true);
-        let mut render = self.instantiate_vehicle(renderer, scene, vt, &set, None, None);
+        let mut render = self.instantiate_vehicle(renderer, scene, vt, &set, None, None, false);
         own_skinned_meshes(renderer, scene, vt, &mut render);
         render
     }
@@ -38,7 +42,7 @@ impl World {
         } else {
             None
         };
-        let mut render = self.instantiate_vehicle(renderer, scene, vt, &set, None, shared);
+        let mut render = self.instantiate_vehicle(renderer, scene, vt, &set, None, shared, false);
         own_skinned_meshes(renderer, scene, vt, &mut render);
         render
     }
@@ -148,6 +152,21 @@ impl World {
         scheme: Option<usize>,
         lead: Option<&VehicleRender>,
     ) -> VehicleRender {
+        self.add_vehicle_shared_lod(renderer, scene, vt, scheme, lead, false)
+    }
+
+    /// [`World::add_vehicle_shared`] for a vehicle whose pose the caller also gives the
+    /// instances of its lower levels of detail (`VehicleRender::far`), which are drawn in
+    /// place of the full model while it is small on the screen (the AI traffic's).
+    pub fn add_vehicle_shared_lod(
+        &self,
+        renderer: &Renderer,
+        scene: &mut Scene,
+        vt: &omsi_sim::VehicleType,
+        scheme: Option<usize>,
+        lead: Option<&VehicleRender>,
+        lod: bool,
+    ) -> VehicleRender {
         let shared = lead.and_then(|l| {
             (vt.def.script_share || vt.model.script_textures.is_empty()).then(|| l.script_textures.as_slice())
         });
@@ -165,7 +184,7 @@ impl World {
             s.users += 1;
             s.idle_since = None;
         }
-        let mut render = self.instantiate_vehicle(renderer, scene, vt, &set, Some(key), shared);
+        let mut render = self.instantiate_vehicle(renderer, scene, vt, &set, Some(key), shared, lod);
         // an articulated AI bus (timetable or random traffic, and its coupled rear section)
         // bends its own bellows too, from a mesh copy of its own (freed again in
         // `release_vehicle`) - the shared set's copy has to stay in the rest pose, since
@@ -193,7 +212,7 @@ impl World {
                 gpu.free_instances.entry(slots).or_default().push(*instance);
                 renderer.free_mesh(scene, *mesh);
             }
-            for i in render.instances {
+            for i in render.instances.into_iter().chain(render.far) {
                 renderer.remove_instance(scene, i);
                 let slots = renderer.instance_slots(scene, i);
                 gpu.free_instances.entry(slots).or_default().push(i);
@@ -536,7 +555,7 @@ impl World {
                 gpu.take_mesh_slot(renderer, scene, id)
             }
             None => {
-                let data = vt.mesh_data(i);
+                let data = crate::pane_uv::gpu_mesh(vt, i);
                 let empty = MeshData {
                     ranges: vt.meshes[i].data.ranges.clone(),
                     ..Default::default()
@@ -583,6 +602,7 @@ impl World {
         set: &VehicleSet,
         key: Option<VehicleKey>,
         shared_script: Option<&[Option<TextureId>]>,
+        lod: bool,
     ) -> VehicleRender {
         let mut gpu = self.gpu.lock();
         let blank = |gpu: &mut GpuCache, scene: &mut Scene, w: i32, h: i32| {
@@ -803,6 +823,7 @@ impl World {
                 }
             }
         }
+        let far = self.far_instances(renderer, scene, vt, set, &instances, key.is_some() && lod, &mut gpu);
         // the vehicle is drawn or left out as one object (see `set_object_culling`): its
         // sphere about the vehicle's origin, which every mesh instance shares
         let radius = set
@@ -814,12 +835,13 @@ impl World {
             .fold(0.0f32, f32::max);
         let any_distance =
             vt.model.no_distance_check || vt.model.meshes.iter().any(|m| m.no_distance_check);
-        for inst in &instances {
+        for inst in instances.iter().chain(&far) {
             renderer.set_object_culling(scene, *inst, radius, vt.model.detail_factor, any_distance);
         }
         VehicleRender {
             window_wipers: None,
             instances,
+            far,
             text_textures,
             script_textures,
             shared_script: shared_script.is_some(),
@@ -916,6 +938,7 @@ impl World {
             mesh_secs += t_mesh.elapsed().as_secs_f64();
             up.instances.push((id, mats));
         }
+        let far = self.upload_far(renderer, scene, &mut up, &mut mesh_ids, &mut mesh_keys, only.is_some() || hide.is_some());
         let VehicleUpload { held, mut materials, tex_time, instances, mut missing_tex, variants, dyn_slots, .. } = up;
         if !missing_tex.is_empty() {
             missing_tex.sort();
@@ -939,6 +962,7 @@ impl World {
         }
         VehicleSet {
             meshes: instances,
+            far,
             dyn_slots,
             variants,
             textures: held,
@@ -1047,9 +1071,10 @@ impl World {
         // picture as well, like the diffuse texture and the transparency map:
         // looked up by the model's own name, a destination display lit by its own
         // texture glowed with the model's default text over the repaint's, #895)
-        let night = ov.iter().find_map(|o| o.nightmap.clone()).and_then(|t| {
-            tex!(&subst(&t), &dirs_ref)
+        let night_map = load_night(&ov, &subst, |name| {
+            Some((tex!(name, &dirs_ref)?, self.textures.has_alpha(name, dirs_ref).unwrap_or(false)))
         });
+        let night = night_map.map(|(id, _)| id);
         // ([matl_glow]: the material is its own light - its mask rides in the light map's
         // slot, see `MaterialExtra::glow`)
         let lightmap = ov.iter().find_map(|o| o.lightmap.clone()).and_then(|(t, _)| {
@@ -1084,13 +1109,14 @@ impl World {
         if only.is_some() {
             log::info!("  {} slot {slot} '{}' diffuse={:?} emissive={:?} specular={:?}/{} tex={:?} alpha={:?} transmap={:?} night={:?} light={:?} env={:?} mask={:?} bump={:?} text={:?} script={:?} script_trans={:?} noZwrite={} noZcheck={} zbias={}", def.file, m.texture, m.diffuse, m.emissive, m.specular, m.specular_power, tex, alpha, transmap, night, lightmap, envmap, env_mask, bump, text_slot, script_slot, script_trans, ov.iter().any(|o| o.no_z_write), ov.iter().any(|o| o.no_z_check), ov.iter().map(|o| o.z_bias).find(|b| *b != 0).unwrap_or(0));
         }
+        let static_diffuse = static_diffuse(tex, freetex, rain_layer, &tex_name);
         let textured = tex.is_some() || text_slot.is_some() || script_slot.is_some() || freetex || vt.texchange(&m.texture).is_some();
         let (color, emissive, extra) = slot_extra(
             &cx,
             &ov,
             &sa,
-            textured,
-            (night, envmap, env_mask, bump),
+            (textured, static_diffuse, text_base, script_base),
+            (night, night_map.is_some_and(|(_, a)| a), envmap, env_mask, bump),
             (script_slot, script_trans, rain_layer, transmap.is_some()),
             &lm_white,
         );
@@ -1104,14 +1130,9 @@ impl World {
         // drawn as it is; shading it again by the glass's own normal (which
         // faces backwards, away from the sun) is what made mirrors look black
         let unlit = mirror_index(&tex_name).is_some();
-        // [matl_item] variant: same slot with the item's own maps / colours
-        // (Omsi.exe keeps every [matl_item] of a [matl_change] as a material of its
-        // own and shows item round(x): a door button at 2 - lit while its door is
-        // open - showed the plain dark material, and item 2's maps leaked into item
-        // 1, #352. Each item of the first [matl_change] is made of its own block:
-        // item 1 read item 2's `\S:n` mask, and an LED matrix showed the script
-        // texture at 1 instead of its boot picture, #210. Items of a later
-        // [matl_change] still merge into item 1.)
+        // Each first [matl_change] item owns its maps/colours; round(x) selects it.
+        // Sharing hid door item 2 / leaked its maps (#352), and replaced item 1's
+        // boot picture with item 2's `\S:n` (#210). Later changes still merge into item 1.
         let later_items: Vec<&MaterialDef> = {
             let mut changes = 0;
             let mut first = Vec::new();
@@ -1126,7 +1147,10 @@ impl World {
         };
         let mut item_look = |ov_item: &Vec<&MaterialDef>| -> Look {
             let mut find_tex = |t: &str| -> Option<TextureId> { tex!(t, &dirs_ref) };
-            let it_night = ov_item.iter().find_map(|o| o.nightmap.clone()).and_then(|t| find_tex(&subst(&t))).or(night);
+            let it_night_map = load_night(ov_item, &subst, |name| {
+                Some((find_tex(name)?, self.textures.has_alpha(name, dirs_ref).unwrap_or(false)))
+            }).or(night_map);
+            let it_night = it_night_map.map(|(id, _)| id);
             let it_light = ov_item.iter().find_map(|o| o.lightmap.clone()).and_then(|(t, _)| find_tex(&subst(&t))).or_else(|| glow_mask(ov_item).and_then(|t| find_tex(&subst(t)))).or(lightmap);
             // the item's own transparency map, else the plain material's
             let it_script_trans = match ov_item.iter().find_map(|o| o.transmap.clone()) {
@@ -1153,6 +1177,7 @@ impl World {
             it_extra.glow = if own_light_slot(ov_item) { it_extra.glow } else { extra.glow };
             // (an item without a night map of its own keeps the plain one, lit the same way)
             it_extra.night_switched = it_night.is_some();
+            it_extra.night_alpha = night_coverage(it_alpha, sa.cover, static_diffuse, it_night_map.is_some_and(|(_, a)| a), it_trans.is_some() || it_script_trans.is_some() || it_extra.transmap_declared || extra.transmap_declared, (text_item, script_item));
             let it_page = script_item.and_then(|s| vt.model.html_page(s));
             // (the item's `\S:n` - or a page's own dot mask - keeps it an LED panel: `MaterialExtra::led`)
             (it_extra.led, it_extra.led_sign) = ((it_script_trans.is_some() || (it_page.is_some() && it_trans.is_some())) && if ov_item.iter().any(|o| o.lightmap.is_some()) { lm_white(ov_item) } else { lm_white(&ov) }, it_page.is_some());
@@ -1212,18 +1237,10 @@ impl World {
         materials.extend(more.iter().copied());
         // [matl_freetex]: the file is only known at run time (the destination
         // roller builds its path from the map's depot and terminus strings)
-        let free: Vec<FreeTex> = free_texture_defs(&ov_all).into_iter().map(|(item_only, key, var)| FreeTex {
-            var,
-            diffuse: key.eq_ignore_ascii_case(&m.texture),
-            key: tex!(&subst(&key), &dirs_ref),
-            item_only,
-            dirs: dirs.to_vec(),
-            textures: self.textures.clone(),
-            cache: HashMap::new(),
-            current: None,
-            shared: self.vehicle_textures.clone(),
-            held: Vec::new(),
-            wants_upgrade: self.freetex_upgrades.clone(),
+        let free: Vec<FreeTex> = free_texture_defs(&ov_all).into_iter().map(|(item_only, key, var)| {
+            let diffuse = key.eq_ignore_ascii_case(&m.texture);
+            let texture = tex!(&subst(&key), &dirs_ref);
+            self.free_texture_slot(var, texture, diffuse, item_only, dirs)
         }).collect();
         let multi_light = |base: MaterialId, item: MaterialId| -> Option<MultiLight> {
             let list = ov.iter().map(|o| &o.lightmaps).find(|l| !l.is_empty())?;
@@ -1250,6 +1267,31 @@ impl World {
             dyn_slots.push(DynSlot { mesh: instances.len(), slot, text: text_slot, script: script_slot, script_trans, lit: script_slot.is_some_and(|i| vt.model.html_page_lit(i)), tex, alpha, transmap, night, lightmap, envmap, address, extra, color, emissive });
         }
         base
+    }
+
+    /// Cache state and reload ownership shared by free textures in this world.
+    fn free_texture_slot(
+        &self,
+        var: String,
+        key: Option<TextureId>,
+        diffuse: bool,
+        item_only: bool,
+        dirs: &[PathBuf],
+    ) -> FreeTex {
+        FreeTex {
+            reloads: self.freetex_reloads.clone(),
+            var,
+            diffuse,
+            key,
+            item_only,
+            dirs: dirs.to_vec(),
+            textures: self.textures.clone(),
+            cache: HashMap::new(),
+            current: None,
+            shared: self.vehicle_textures.clone(),
+            held: Vec::new(),
+            wants_upgrade: self.freetex_upgrades.clone(),
+        }
     }
 }
 
@@ -1418,8 +1460,8 @@ fn slot_extra(
     cx: &SlotCx,
     ov: &[&MaterialDef],
     a: &SlotAlpha,
-    textured: bool,
-    (night, envmap, env_mask, bump): (Option<TextureId>, Option<(TextureId, f32)>, Option<TextureId>, Option<(TextureId, f32)>),
+    (textured, static_diffuse, text_base, script_base): (bool, bool, Option<usize>, Option<usize>),
+    (night, night_has_alpha, envmap, env_mask, bump): (Option<TextureId>, bool, Option<(TextureId, f32)>, Option<TextureId>, Option<(TextureId, f32)>),
     // (the last: a plain [matl_transmap] is there - a page's dot mask)
     (script_slot, script_trans, rain_layer, has_transmap): (Option<usize>, Option<usize>, bool, bool),
     lm_white: &dyn Fn(&[&MaterialDef]) -> bool,
@@ -1435,6 +1477,14 @@ fn slot_extra(
     // by what the script draws, not by the time of day: faded in with the
     // night, a dashboard's warning lamps stayed dark in the daylight (#497).
     extra.night_switched = night.is_some();
+    extra.night_alpha = night_coverage(
+        alpha,
+        cover,
+        static_diffuse,
+        night_has_alpha,
+        extra.transmap_declared,
+        (text_base, script_base),
+    );
     // a script's screen (matrix displays, the IBIS's picture, LCDs) is the glow's and
     // FXAA's business (see `MaterialExtra::screen`), and a `\S:n` mask makes it an LED
     // panel whose lit dots are its own light (`MaterialExtra::led`). A slot that is a

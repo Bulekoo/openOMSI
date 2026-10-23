@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Default)]
 pub struct Game {
+    pub hof: Option<api::Value>,
     pub vehicle: bool,
     pub vars: HashMap<String, f32>,
     pub strings: HashMap<String, String>,
@@ -43,7 +44,7 @@ pub struct Game {
 impl Game {
     /// A bus on a duty at noon, on a map with a little traffic.
     pub fn new() -> Game {
-        let stop = |id: i64, name: &str, t: f64, x: f64| Stop { id, name: name.into(), arr: t, dep: t + 20.0, pos: Some([x, 0.0, 0.0]), stops: true };
+        let stop = |id: i64, name: &str, t: f64, x: f64| Stop { id, name: name.into(), arr: t, dep: t + 20.0, pos: Some([x, 0.0, 0.0]), stops: true, closed: false };
         let trip = Trip { name: "Spandau".into(), line: "136".into(), terminus: "Rathaus".into(), departure: 43200.0, end: 44400.0, stops: vec![stop(11, "Zoo", 43200.0, 0.0), stop(12, "Markt", 43500.0, 300.0), stop(13, "Rathaus", 44400.0, 900.0)] };
         let mut g = Game {
             vehicle: true,
@@ -71,6 +72,17 @@ impl Game {
 }
 
 impl PluginIo for Game {
+    fn hof_data(&self) -> Option<api::Value> {
+        self.vehicle.then(|| self.hof.clone()).flatten()
+    }
+    fn hof_terminus(&self, identifier: &str) -> Option<api::Value> {
+        let data = self.hof_data()?;
+        data.get("termini")?.items().iter().find(|t| t.get("identifier") == Some(&identifier.into())).cloned()
+    }
+    fn hof_busstop(&self, identifier: &str) -> Option<api::Value> {
+        let data = self.hof_data()?;
+        data.get("bus_stops")?.items().iter().find(|t| t.get("identifier") == Some(&identifier.into())).cloned()
+    }
     fn system(&mut self, name: &str) -> Option<f32> {
         match name {
             "Time" => Some(self.clock.time as f32),
@@ -330,6 +342,14 @@ impl PluginIo for Game {
     }
     fn duty_end(&mut self) -> bool {
         self.duty.take().is_some()
+    }
+    fn duty_set_closed_stops(&mut self, stops: &[String], via: &str) -> bool {
+        let Some(d) = self.duty.as_mut() else { return false };
+        for s in &mut d.current.stops {
+            s.closed = stops.iter().any(|c| c.eq_ignore_ascii_case(&s.name));
+        }
+        self.did(format!("closed {} via {via}", stops.join(",")));
+        true
     }
     fn timetable_lines(&self) -> Vec<Line> {
         vec![Line { name: "136".into(), user_allowed: true, tours: vec![Tour { number: "3".into(), today: true, trips: 4 }] }]

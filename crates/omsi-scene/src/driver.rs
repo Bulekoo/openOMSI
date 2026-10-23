@@ -298,7 +298,7 @@ pub struct DriverFigure {
     /// scratch copy of a mesh with a hand opening.
     hand_of: Vec<Vec<i8>>,
     /// Per mesh and vertex, the arm (upper arm and forearm) it belongs to (0 left, 1 right,
-    /// -1 none): the arms stay in the cab view along with the hands.
+    /// -1 none): used to fold each upper arm onto its own elbow in the cab view.
     arm_of: Vec<Vec<i8>>,
     blend: (Vec<Vec3>, Vec<Vec3>),
     /// The gear lever, when the bus's model has one near the seat, and what the hand
@@ -786,58 +786,34 @@ impl DriverFigure {
                 skin_from(m, &self.curled[k], &posed.bones, pos, nrm);
             }
 
-            // In the cab view only the hands show: every other vertex is folded onto the
-            // nearer wrist (the middle of that hand's vertices), so that the body's triangles
-            // shrink to nothing and those joining a hand close it at the wrist. (Folded onto
-            // the figure's origin, the triangles from the wrists stretched to the seat.)
-            // The arms stay as they are: what is folded is the rest, onto the nearer upper arm
-            // (the hand's own vertices when a mesh has none).
+            // Keep the hands and forearms in the cab. Collapse each upper arm onto its
+            // posed elbow so the joining triangles close there instead of stretching back
+            // towards the shoulder. Other views use the complete, freshly skinned figure.
             if mirror_only && self.show_hands_in_cab {
                 let (hand_of, arm_of) = (&self.hand_of[k], &self.arm_of[k]);
                 let count = pos.len().min(hand_of.len()).min(arm_of.len());
-                let upper_w = |i: usize, side: usize| -> f32 {
-                    let inf = &m.skin[i];
-                    (0..inf.n.max(1) as usize)
-                        .filter(|&j| inf.slot[j] as usize == UPPER_ARM_SLOT[side])
-                        .map(|j| if inf.n <= 1 { 1.0 } else { inf.weight[j] })
-                        .sum()
-                };
-                let mut up_sum = [Vec3::ZERO; 2];
-                let mut up_n = [0.0f32; 2];
-                let mut hd_sum = [Vec3::ZERO; 2];
-                let mut hd_n = [0.0f32; 2];
                 for i in 0..count {
-                    for side in 0..2 {
-                        if arm_of[i] == side as i8 && upper_w(i, side) > 0.5 {
-                            up_sum[side] += pos[i];
-                            up_n[side] += 1.0;
-                        }
-                        if hand_of[i] == side as i8 {
-                            hd_sum[side] += pos[i];
-                            hd_n[side] += 1.0;
-                        }
+                    if hand_of[i] >= 0 {
+                        continue;
                     }
-                }
-                let anchors: Vec<Vec3> = (0..2)
-                    .filter_map(|h| {
-                        if up_n[h] > 0.0 {
-                            Some(up_sum[h] / up_n[h])
-                        } else if hd_n[h] > 0.0 {
-                            Some(hd_sum[h] / hd_n[h])
-                        } else {
-                            None
+                    let inf = &m.skin[i];
+                    if arm_of[i] >= 0 {
+                        let side = arm_of[i] as usize;
+                        let upper: f32 = (0..inf.n.max(1) as usize)
+                            .filter(|&j| inf.slot[j] as usize == UPPER_ARM_SLOT[side])
+                            .map(|j| if inf.n <= 1 { 1.0 } else { inf.weight[j] })
+                            .sum();
+                        if upper > 0.5 {
+                            pos[i] = posed.elbow[side];
                         }
-                    })
-                    .collect();
-                let fold = anchors.first().copied().or_else(|| pos.first().copied()).unwrap_or(Vec3::ZERO);
-                for i in 0..count {
-                    if hand_of[i] < 0 && arm_of[i] < 0 {
+                    } else {
                         let here = pos[i];
-                        pos[i] = anchors
+                        pos[i] = posed
+                            .elbow
                             .iter()
                             .copied()
                             .min_by(|a, b| a.distance_squared(here).total_cmp(&b.distance_squared(here)))
-                            .unwrap_or(fold);
+                            .unwrap_or(here);
                     }
                 }
             }

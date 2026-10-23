@@ -332,11 +332,11 @@ impl Idle {
     /// A way of standing for the random number `r` (0 … 1), as often as people stand so.
     fn pick(r: f32) -> Idle {
         match r {
-            r if r < 0.28 => Idle::Hang,
-            r if r < 0.44 => Idle::Clasped,
-            r if r < 0.54 => Idle::Behind,
-            r if r < 0.68 => Idle::Crossed,
-            r if r < 0.78 => Idle::HandOnHip,
+            r if r < 0.34 => Idle::Hang,
+            r if r < 0.52 => Idle::Clasped,
+            r if r < 0.64 => Idle::Behind,
+            r if r < 0.74 => Idle::Crossed,
+            r if r < 0.88 => Idle::HandOnHip,
             _ => Idle::Phone,
         }
     }

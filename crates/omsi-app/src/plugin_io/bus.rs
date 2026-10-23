@@ -153,7 +153,7 @@ fn kind(c: &omsi_sim::ai_traffic::model::AiCar) -> &'static str {
     if c.is_rail() {
         return "tram";
     }
-    if c.vehicle.ty.def.mass > 0.0 && c.vehicle.ty.def.mass <= 0.3 {
+    if !c.is_bus() && omsi_sim::ai_traffic::model::is_bicycle(&c.vehicle.ty.def) {
         return "bicycle";
     }
     match c.state.veh_type {

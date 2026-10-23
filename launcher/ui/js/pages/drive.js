@@ -2,11 +2,11 @@
 // start time and date, the weather and the traffic - and started.
 
 import { html, useState, useEffect, useRef } from '../../vendor/preact-htm.js';
-import { S, useStore } from '../store.js';
+import { S, useStore, toast } from '../store.js';
 import { t, hhmm, language } from '../i18n.js';
 import { call, contentUrl } from '../api.js';
 import { Button, Dialog } from '../ui.js';
-import { choose, realTime, realDate, launcherLayout } from '../data.js';
+import { tourId, choose, realTime, realDate, launcherLayout } from '../data.js';
 import { MultiplayerDutyNotice } from './multiplayer.js';
 import { ClassicDrive } from './drive-classic.js';
 import { LayoutDrive } from './drive-layouts.js';
@@ -14,16 +14,30 @@ import { LayoutDrive } from './drive-layouts.js';
 /** HH:MM of seconds of the day (the timetables' unit). */
 export const hms = (s) => hhmm((s || 0) / 60);
 
-export function tripLength(tour) {
-  const runs = tour.trips.filter((x) => !depotRun(x)).map((x) => x.arrival - x.departure).sort((a, b) => a - b);
-  if (!runs.length) return '';
-  const m = Math.max(1, Math.round(runs[runs.length >> 1] / 60));
-  const unit = (n, u) => new Intl.NumberFormat(language(), { style: 'unit', unit: u, unitDisplay: 'short' }).format(n);
+/** An entry point's name, or its number when the map gives it none. */
+export const entryName = (e) => e.name?.trim() || `${t('Entry point')} ${e.index + 1}`;
+
+/** A length of time in seconds as the player's language writes it, short: "22 min", "1 hr 5 min"
+ *  (a narrow column breaks it between the hours and the minutes, never inside "5 min"). */
+export function duration(seconds) {
+  const m = Math.max(1, Math.round(seconds / 60));
+  const unit = (n, u) => new Intl.NumberFormat(language(), { style: 'unit', unit: u, unitDisplay: 'short' }).format(n).replace(/ /g, '\u00a0');
   if (m < 60) return unit(m, 'minute');
   return m % 60 ? `${unit(Math.floor(m / 60), 'hour')} ${unit(m % 60, 'minute')}` : unit(m / 60, 'hour');
 }
 
+/** How long a trip takes, from its departure to its arrival (#2813). The arrival of a trip
+ *  over midnight runs on past 24:00, so the difference is its length. */
+export const tripTime = (x) => duration(x.arrival - x.departure);
+
+export function tripLength(tour) {
+  const runs = tour.trips.filter((x) => !depotRun(x)).map((x) => x.arrival - x.departure).sort((a, b) => a - b);
+  return runs.length ? duration(runs[runs.length >> 1]) : '';
+}
+
 export const mapPicture = (file) => (file ? contentUrl(file.replace(/\\/g, '/').replace(/[^/]*$/, 'picture.jpg')) : '');
+
+export const TripEnds = ({ trip, stack }) => html`<span class=${'trip-ends' + (stack ? ' stacked' : '')}><span class="from">${trip.from}</span>${stack ? '' : ' → '}<span class="to">${trip.terminus}</span></span>`;
 
 /** A trip without passengers (to or from the depot): its line is empty or it says so. */
 export const depotRun = (x) => !x.line?.trim() || /betriebsfahrt|leerfahrt|dienstfahrt|not in service|out of service|hors service|zjazd do zajezdni/i.test(x.terminus || '');
@@ -57,7 +71,7 @@ export function findTours(line, now, q, showEnded, keep) {
   const endedCount = all.filter((x) => x.ended).length;
   const dep = (x) => x.tour.trips[x.at]?.departure ?? Infinity;
   const shown = all
-    .filter((x) => showEnded || !x.ended || (!q && x.tour.number === keep))
+    .filter((x) => showEnded || !x.ended || (!q && tourId(x.tour) === keep))
     .sort((a, b) => b.tour.runs - a.tour.runs || a.ended - b.ended || (q ? dep(a) - dep(b) : 0) || a.tour.number.localeCompare(b.tour.number, undefined, { numeric: true }));
   return { shown, endedCount };
 }
@@ -71,12 +85,12 @@ export function tourRoute(tour) {
 
 export function chooseLine(l) {
   const tr = findTours(l, S.choice.time * 60, '', false).shown[0]?.tour || l?.tours.find((x) => x.runs) || l?.tours[0];
-  choose({ line: l.name, tour: tr?.number ?? null, start_trip: null });
+  choose({ line: l.name, tour: tourId(tr) ?? null, start_trip: null });
 }
 
 export function chooseTour(x, trip) {
-  if (x.number === S.choice.tour && !trip) return;
-  const patch = { tour: x.number, start_trip: null };
+  if (tourId(x) === S.choice.tour && !trip) return;
+  const patch = { tour: tourId(x), start_trip: null };
   if (!x.runs && x.next_run && !realDate()) patch.date = x.next_run;
   choose(patch);
   if (trip) pickTrip(trip);
@@ -213,17 +227,62 @@ export function pickTrip(x) {
 }
 
 export const SEASONS = [['auto', 'By date'], ['spring', 'Spring'], ['summer', 'Summer'], ['autumn', 'Autumn'], ['winter', 'Winter']];
+
+/** The season the chosen date (or the season chosen instead) means. */
+export function seasonOf(c) {
+  if (c.season && c.season !== 'auto') return c.season;
+  const m = Number((c.date || '').slice(5, 7)) || 5;
+  return m === 12 || m <= 2 ? 'winter' : m <= 5 ? 'spring' : m <= 8 ? 'summer' : 'autumn';
+}
+
+/** A weather preset that makes sense in the season (no summer shower in the snow), as the
+ *  game's own launcher chose them. */
+export function weatherFits(w, season) {
+  const rain = (w.precip || '').startsWith('rain');
+  if (season === 'winter') return w.snow || (rain ? w.temp <= 10 : w.temp <= 16);
+  if (w.snow || w.temp <= 0) return false;
+  return season !== 'summer' || w.temp >= 8;
+}
+
+const precipText = (p) => {
+  const m = /^(rain|snow) (\d+)%$/.exec(p || '');
+  return m ? (m[1] === 'rain' ? t('rain {n}%', { n: m[2] }) : t('snow {n}%', { n: m[2] })) : t(p || '');
+};
+
+/** What a weather file says about itself, short: "15 °C - rain 68% - 200 m". */
+export const weatherFacts = (w) => `${Math.round(w.temp)} °C - ${precipText(w.precip)} - ${w.fog_m >= 20000 ? t('clear air') : `${Math.round(w.fog_m)} m`}`;
+
+/** The icon a weather file deserves. */
+export function weatherIcon(w) {
+  const clouds = (w.clouds || '').toLowerCase();
+  if (w.snow || (w.precip || '').startsWith('snow')) return 'snow';
+  if ((w.precip || '').startsWith('rain')) return 'rain';
+  if (w.fog_m < 1500) return 'fog';
+  if (clouds.includes('overcast')) return 'cloud';
+  if (clouds.includes('cumulus')) return 'partly';
+  return 'sun';
+}
 export const PHASES = [['early', 'Early'], ['mid', 'Mid'], ['late', 'Late']];
 
 export async function setSeason(season, phase) {
   const c = S.choice;
   if (season === 'auto') {
-    choose({ season, date: c.own_date || c.date, own_date: null });
+    const date = c.own_date || c.date;
+    choose({ season, date, own_date: null, ...unfit(c, seasonOf({ season, date })) });
     return;
   }
   const own = c.season === 'auto' ? c.date : c.own_date;
   const r = await call('season_date', { season, phase, date: c.date, map: c.map, keep: false }).catch(() => null);
-  choose({ season, phase, own_date: own, ...(r?.date ? { date: r.date } : {}) });
+  choose({ season, phase, own_date: own, ...(r?.date ? { date: r.date } : {}), ...unfit(c, season) });
+}
+
+/** A weather preset chosen that does not fit the new season goes, natural weather instead
+ *  (said once): what to choose for it. */
+function unfit(c, season) {
+  const w = (S.weather || []).find((x) => x.file === c.weather);
+  if (!w || weatherFits(w, season)) return {};
+  toast(t('{name} does not fit the season: natural weather instead', { name: w.name }));
+  return { weather: '' };
 }
 
 export function localNow() {

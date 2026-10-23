@@ -3,7 +3,7 @@
 //! The words are the session's: most come from the host (player 1) alone, and one of those
 //! from anybody else is not taken. See the app's `admin` for the administration's part.
 
-use crate::voice::VoiceServer;
+use omsi_net::VoicePolicy;
 use glam::DVec3;
 
 /// A command from another game.
@@ -12,10 +12,12 @@ pub enum Command {
     /// A passenger of ours works this switch of our bus (`passenger::may_work` says whether
     /// they may).
     Trigger(String),
-    /// A game asks the host which voice server the session talks on.
+    /// A game asks the host what the session allows of voice chat.
     VoiceAsked,
-    /// (host) the voice server the session talks on (None: none).
-    Voice(Option<VoiceServer>),
+    /// (host) what the session allows of voice chat.
+    Voice(VoicePolicy),
+    /// (host) an administrator silenced our voice chat (true) or allowed it again.
+    VoiceMuted(bool),
     /// (host) our bus put there, stopped.
     Teleport { at: DVec3, heading: f64 },
     /// (host) the host's object editor: object `id` moved, turned or deleted...
@@ -53,6 +55,10 @@ pub enum Command {
     AdminState(Vec<(String, String)>),
     /// (server) a wrong admin password.
     AdminNo,
+    /// (server) one of its hardware bans, for its admin's menu (`admin-bans`)...
+    AdminBan(omsi_admin::BanView),
+    /// ... and the end of that list: how many were listed, how many hold.
+    AdminBansEnd { found: usize, total: usize },
     /// A game we host by code showed our notice (its id).
     NotifySeen(String),
 }
@@ -70,8 +76,11 @@ impl Command {
             return Some(Command::VoiceAsked);
         }
         let host = from == HOST;
+        if let Some(m) = text.strip_prefix("voice-muted ") {
+            return host.then(|| Command::VoiceMuted(m.trim() == "1"));
+        }
         if text.starts_with("voice ") {
-            return VoiceServer::parse_command(text).filter(|_| host).map(Command::Voice);
+            return VoicePolicy::parse_command(text).filter(|_| host).map(Command::Voice);
         }
         let (verb, arg) = text.split_once(' ').unwrap_or((text, ""));
         let numbers = |s: &str| s.split_whitespace().filter_map(|x| x.parse().ok()).collect::<Vec<f64>>();
@@ -116,6 +125,11 @@ impl Command {
             }
             "admin-s" => Command::AdminState(arg.split_whitespace().filter_map(|kv| kv.split_once('=')).map(|(k, v)| (k.to_string(), v.to_string())).collect()),
             "admin-no" => Command::AdminNo,
+            "admin-b" => Command::AdminBan(crate::admin::reply::parse_ban(arg)?),
+            "admin-bend" => {
+                let mut w = arg.split_whitespace().map(|n| n.parse::<usize>().ok());
+                Command::AdminBansEnd { found: w.next().flatten()?, total: w.next().flatten()? }
+            }
             _ => return None,
         })
     }
@@ -154,6 +168,10 @@ mod tests {
         assert_eq!(Command::parse(3, "notify-seen 9"), Some(Command::NotifySeen("9".into())), "anybody's game says it saw a notice");
         assert_eq!(Command::parse(3, "trigger int_haltewunsch"), Some(Command::Trigger("int_haltewunsch".into())));
         assert_eq!(Command::parse(3, "voice?"), Some(Command::VoiceAsked));
+        assert_eq!(Command::parse(1, "voice 1 0 60"), Some(Command::Voice(VoicePolicy { enabled: true, radio: false, range: 60.0 })));
+        assert_eq!(Command::parse(4, "voice 1 0 60"), None, "only the host sets the policy");
+        assert_eq!(Command::parse(1, "voice-muted 1"), Some(Command::VoiceMuted(true)));
+        assert_eq!(Command::parse(4, "voice-muted 1"), None);
         assert_eq!(Command::parse(1, "dance"), None);
     }
 }

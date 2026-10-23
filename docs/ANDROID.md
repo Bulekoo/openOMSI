@@ -2,7 +2,7 @@
 
 openOMSI runs on Android phones and tablets (arm64, Android 8.0 or newer, a GPU with
 Vulkan 1.1; on a phone without Vulkan openOMSI tries OpenGL ES 3). It is the same game as on the computer: the same renderer, simulation, scripts,
-maps, buses and mods. Only the way it is worked is new:
+maps, buses and mods. What differs is how it is controlled:
 
 - **one app, one window**: the launcher and the game share a window. Start is pressed in the
   launcher, the game plays in its window, and ending the session (the menu's Quit, or the
@@ -24,17 +24,18 @@ maps, buses and mods. Only the way it is worked is new:
 | above the wheel | indicator left, hazard lights, indicator right; the horn beside the wheel |
 | top left | the game menu, pause, the camera (driver → outside → passenger), look straight ahead |
 | top right | the controls hidden / shown, the cab panel, the city map, the timetable, a screenshot |
-| cab panel | battery, engine start (hold), start the bus by itself, headlights, high beam, wipers, saloon lights, sell a ticket, the next seat view, the navigator, the information bar, tilt steering |
+| cab panel | battery, engine start (hold), start the bus by itself, headlights, high beam, wipers, saloon lights, sell a ticket, the next seat view, the free camera, the navigator, the information bar, tilt steering |
 
 Everything else is in the cab itself, as in OMSI: a tap works the switch under the finger (the
 IBIS, the ticket printer, the light switches), a finger dragged from a switch turns it (knobs,
 the ignition key, the sun blind), a drag elsewhere looks round, two fingers zoom. The
 navigator stands in the top middle (under the information bar when that is on): a tap opens the
-city map, a finger dragged on it puts it somewhere else, where it stays. On foot and
-with the free camera a stick at the bottom left walks (pushed to the edge: runs); on foot the
+city map, a finger dragged on it puts it somewhere else, where it stays. On foot a stick at the bottom left walks (pushed to the edge: runs); in the free camera (cab
+panel → Free camera) the stick flies, as far as it is pushed, the buttons at the bottom right
+rise, sink and set the speed, a drag looks, two fingers zoom, and "Exit free camera" goes back; on foot the
 button at the bottom right kneels, for a picture from low down, and stands up again. The game
 menu and its lists scroll with the finger and a tap picks a line (a finger put down to scroll
-no longer picks the line it lands on); on the city map the fingers are the mouse. The back key
+does not pick the line it lands on); on the city map the fingers are the mouse. The back key
 is Escape. The launcher is laid out for the phone: the text at least at the system's own
 size, the settings in one column, and a finger on a list that has reached its end scrolls
 the page on.
@@ -66,8 +67,9 @@ it lies) gets an empty `.nomedia` file, so that the gallery apps do not list the
 textures as photos - they are the game's content, deleting them leaves buses white. A gallery
 that listed them before may need a moment (or a restart of the phone) to forget them. The first start on a phone uses lighter graphics defaults (2x MSAA, no
 ambient occlusion, a 1024 shadow map, 60 fps, a 900 m object distance); everything can be
-changed on the launcher's Settings page. When the frame rate drops below 45 the 3D picture is
-drawn smaller, down to 0.6 of the screen, as on the computer.
+changed on the launcher's Settings page. When the frame rate stays below 40 because the
+graphics chip is the limit, the 3D picture is drawn smaller in steps (85 %, 70 %, 55 % of the
+screen), as on the computer.
 
 Logs: `adb logcat -s openOMSI`.
 
@@ -84,8 +86,9 @@ scripts/build-android.sh install    # ... and adb install it on the attached pho
 
 `android/env.sh` finds the SDK (`ANDROID_HOME`, else Homebrew's), the newest NDK and a JDK
 17. The script builds the game library as a shared object (`cargo rustc --lib --crate-type
-cdylib --profile android`), compiles the one Java class (`android/java`, the activity: full
-screen, storage permission, vibration) with javac and d8, and packs, aligns and signs the APK
+cdylib --profile android`), compiles the two Java classes in `android/java` (`OmsiActivity`:
+full screen, storage permission, vibration, installing updates; `LauncherBridge`: the
+launcher's web view) with javac and d8, and packs, aligns and signs the APK
 with a debug key made on the first build (`android/debug.keystore`, not in git).
 
 The touch controls can be looked at on the computer: `OMSI_TOUCH=1` shows them in the game
@@ -93,20 +96,27 @@ window, and `OMSI_INPUT` drives them with `touch down|move|up x,y[,finger]` (log
 e.g. `OMSI_TOUCH=1 OMSI_INPUT="t=8 touch down 1500,700; t=10 touch up 1500,700; t=11 shot
 touch.png"` presses the accelerator for two seconds and writes the picture with the controls
 on it. `OMSI_MOBILE=1` gives the game the phone's screen cut-outs.
+A phone-sized picture with no window on the screen: `OMSI_HIDDEN_WINDOW=1 OMSI_BACKGROUND=1
+OMSI_TOUCH=1 openomsi --size 360x800 --exit-after 12` with `OMSI_INPUT="t=7 shot phone.png"` (the
+picture is the window's, the controls on it; 360x800, 412x915, 820x1180 and 800x360 are the
+sizes to look at). The free camera: cab panel (tune button) → Free camera, then the stick and
+the buttons at the bottom; photo mode: `OMSI_INPUT="t=7 photo"` and touch the buttons.
+The bus preview's cost per picture (drawing, read-back, JPEG) is in the answer's `ms` of the
+launcher service's `frame` command: `openomsi --launcher-service`, one JSON request a line.
 
 ## Releases
 
 Every release (started by hand from main) builds the APK in GitHub Actions (`android` job of
 `.github/workflows/release.yml`) and attaches it to the beta as
-`openOMSI-<version>-android-arm64.apk`. Set the repository secret `ANDROID_KEYSTORE_B64`
+`openOMSI-<version>-android-arm64.apk` and as `openOMSI-android.apk`, so that
+`releases/latest/download/openOMSI-android.apk` is always the newest stable APK. Set the repository secret `ANDROID_KEYSTORE_B64`
 (`base64 < android/debug.keystore`) so that every release is signed with the same key and
 installs over the previous one.
 
 ## Updates
 
-(The launcher page has no update page yet: the game's old launcher, which offered updates, is
-gone. What follows is how an update is installed once it is offered.) The launcher looks for a
-newer GitHub release when it starts (Settings → General → Updates) and offers it; **Update now** downloads the APK and hands it to Android's package installer. The first
+The launcher looks for a newer GitHub release when it starts (Settings → General → Updates,
+where the update channel, Stable or Beta, is chosen too) and offers it; **Update now** downloads the APK and hands it to Android's package installer. The first
 time Android asks to allow openOMSI to install apps. Then Android asks "Do you want to update
 this app?": **Update** replaces openOMSI and starts it again, **Cancel** comes back to the
 launcher as "not updated". The APK must be signed with the same key as the installed app

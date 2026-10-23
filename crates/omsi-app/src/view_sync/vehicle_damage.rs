@@ -409,8 +409,8 @@ pub(crate) fn add_dent(renderer: &Renderer, scene: &mut Scene, render: &mut Vehi
         (*id, data)
     } else {
         let Some(&instance) = render.instances.get(dent.mesh) else { return };
-        let Some(data) = ty.mesh_data(dent.mesh) else { return };
-        let data = data.into_owned();
+        // (as the first upload had it: the glass keeps its snow's coordinates in metres)
+        let Some(data) = omsi_scene::gpu_mesh_of(ty, dent.mesh) else { return };
         if data.positions.is_empty() {
             return;
         }

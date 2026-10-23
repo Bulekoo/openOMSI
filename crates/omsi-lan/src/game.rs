@@ -172,12 +172,6 @@ pub struct RemoteVehicle {
     texture_subscription: Option<(u64, u32, u32)>,
 }
 
-impl crate::voice::RemoteBuses for LanGame {
-    fn remote_bus(&self, id: u32) -> Option<DVec3> {
-        self.remotes.get(&id).map(|r| r.vehicle().position)
-    }
-}
-
 impl RemoteVehicle {
     /// The LAN player's vehicle as it is drawn here.
     pub fn vehicle(&self) -> &omsi_sim::VehicleInstance {
@@ -347,7 +341,7 @@ pub struct LanInput<'a> {
     pub walker: Option<omsi_net::Walker>,
     /// We stand or sit in this player's bus: it is drawn from inside.
     pub inside_of: Option<u32>,
-    /// We are holding the bus radio key (map-wide GreenTeaSpeak voice).
+    /// We are holding the radio key (session-wide voice).
     pub radio_keyed: bool,
     /// Our driver figure's human file (sent as the figure the others draw at our wheel).
     pub figure: Option<PathBuf>,
@@ -409,6 +403,8 @@ use crate::gateway::{ask_server_offers, ws_came_back, ws_join_target};
 /// cannot be started is reported and the game runs on alone. A joining player waits
 /// briefly for the host's welcome, so that its map is loaded with the host's world.
 pub fn start(args: &LanConfig, host: &dyn LanHost) -> Option<LanSession> {
+    // (every hello of this process carries the machine's hardware identifier, see `bans`)
+    crate::bans::announce_local_hardware_id();
     // (every bus offered until the server joined now says otherwise, see `ServerOffers`)
     let offers_session = crate::gateway::new_offers_session();
     let world = world_info(args);
@@ -429,6 +425,10 @@ pub fn start(args: &LanConfig, host: &dyn LanHost) -> Option<LanSession> {
                 Ok(mut s) => {
                     if args.server {
                         s.tell_strangers_the_session();
+                    } else {
+                        // (a game hosting by code: this session's bans last as long as it runs;
+                        // the owner's list is the account's)
+                        crate::bans::install(crate::bans::BanStore::open(None, crate::bans::BanStore::default_owner_path()));
                     }
                     Some(s)
                 }
@@ -982,27 +982,24 @@ fn write_status(lan: &LanSession, game: &LanGame, player: Option<&omsi_sim::Vehi
 }
 
 /// "35 m ahead", "1.2 km behind", "12 m to the left" - where `pose` is seen from our bus.
-fn relative_position(me: &omsi_sim::VehicleInstance, pose: &Pose) -> String {
+fn relative_position(me: &omsi_sim::VehicleInstance, pose: &Pose) -> serde_json::Value {
     let d = DVec3::new(pose.x, pose.y, pose.z) - me.position;
     let dist = d.truncate().length();
     let h = me.heading.to_radians();
     let (fwd, right) = (d.x * h.sin() + d.y * h.cos(), d.x * h.cos() - d.y * h.sin());
-    let side = if fwd.abs() >= right.abs() {
-        if fwd >= 0.0 {
-            "ahead"
-        } else {
-            "behind"
-        }
-    } else if right >= 0.0 {
-        "to the right"
-    } else {
-        "to the left"
+    let km = dist >= 1000.0;
+    let key = match (fwd.abs() >= right.abs(), fwd >= 0.0, right >= 0.0, km) {
+        (true, true, _, true) => "{d} km ahead",
+        (true, true, _, false) => "{d} m ahead",
+        (true, false, _, true) => "{d} km behind",
+        (true, false, _, false) => "{d} m behind",
+        (false, _, true, true) => "{d} km to the right",
+        (false, _, true, false) => "{d} m to the right",
+        (false, _, false, true) => "{d} km to the left",
+        (false, _, false, false) => "{d} m to the left",
     };
-    if dist >= 1000.0 {
-        format!("{:.1} km {side}", dist / 1000.0)
-    } else {
-        format!("{dist:.0} m {side}")
-    }
+    let d = if km { format!("{:.1}", dist / 1000.0) } else { format!("{dist:.0}") };
+    serde_json::json!({ "key": key, "d": d })
 }
 
 /// The other players for the navigator and the city map (#1011, #1080); `my_id` is ours.
@@ -2175,6 +2172,7 @@ pub fn tick_send(
     // (only while driving: on foot or as a passenger the radio key does nothing)
     mine.radio_keyed = frame.radio_keyed && frame.walker.is_none() && mine.has_vehicle();
     if lan.role == Role::Host {
+        crate::bans::sync_host(lan);
         // the tours the others drive are theirs, not the timetable's
         let tours: hashbrown::HashSet<(String, String)> = lan
             .peers()
@@ -2713,9 +2711,9 @@ pub fn hud_lines(lan: &LanSession, tr: &dyn Fn(&str) -> String) -> Vec<String> {
     let mut lines = Vec::new();
     let players = lan.peer_count();
     let others = match players {
-        0 => "nobody else yet".to_string(),
-        1 => "1 other player".to_string(),
-        n => format!("{n} other players"),
+        0 => tr("nobody else yet"),
+        1 => tr("1 other player"),
+        n => tr("{n} other players").replace("{n}", &n.to_string()),
     };
     match lan.role {
         Role::Host => {
@@ -2723,23 +2721,32 @@ pub fn hud_lines(lan: &LanSession, tr: &dyn Fn(&str) -> String) -> Vec<String> {
             // (translated apart from the code, which stays as it is)
             lines.push(format!(
                 "{}   {}",
-                tr(&format!("Online: {others}")),
+                match players {
+                    0 => tr("Online: nobody else yet"),
+                    1 => tr("Online: 1 other player"),
+                    n => tr("Online: {n} other players").replace("{n}", &n.to_string()),
+                },
                 c.as_ref().map(|c| c.encode()).unwrap_or_default(),
             ));
         }
         Role::Client => {
             if let Some(why) = lan.rejected.as_ref() {
-                lines.push(format!("Online: not connected: {why} (chat /reconnect)"));
+                lines.push(tr("Online: not connected: {reason} (chat /reconnect)").replace("{reason}", &tr(why)));
             } else if lan.connected {
                 let name = lan.welcome.as_ref().map(|w| w.host_name.clone()).unwrap_or_default();
-                lines.push(format!("Online: in {name}'s game, {others}"));
+                // Substitute the name last so a player's text is never treated as a placeholder.
+                lines.push(tr("Online: in {host}'s game, {others}").replace("{others}", &others).replace("{host}", &name));
             } else {
-                lines.push("Online: connecting ...".to_string());
+                lines.push(tr("Online: connecting ..."));
             }
         }
     }
     if let Some(w) = lan.warnings.first() {
-        lines.push(format!("Online: {w}"));
+        let w = match w.strip_prefix("Host's mods could not be fetched: ") {
+            Some(e) => tr("Host's mods could not be fetched: {e}").replace("{e}", &tr(e)),
+            None => tr(w),
+        };
+        lines.push(tr("Online: {warning}").replace("{warning}", &w));
     }
     // OMSI_DEBUG_LAN: what the HUD shows, every few seconds
     if omsi_cfg::flags::OMSI_DEBUG_LAN.is_set() {

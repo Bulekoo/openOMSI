@@ -353,8 +353,11 @@ impl Renderer {
         // in each of a frame's mirrors were the costliest part of a mirror in a snowfall,
         // for a few pixels of them; see also `prepare_smoke` in `begin_frame`)
         let particles = f.exclude_texture.is_none();
+        // (the smoke a mirror is given is the window's of the frame before: the mirrors are drawn
+        // ahead of the picture, and `prepare_smoke` is not run for them)
+        let smoke = particles || self.options.mirror_particles;
         // smoke, blended over the scene
-        if particles && scene.smoke_count > 0 && !f.env.no_smoke {
+        if smoke && scene.smoke_count > 0 && !f.env.no_smoke {
             if let Some(sb) = &scene.smoke_buf {
                 pass.set_pipeline(&pp.smoke_pipeline);
                 pass.set_bind_group(1, &self.lights.smoke_bind_group, &[]);

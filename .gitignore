@@ -13,7 +13,6 @@ node_modules/
 # the Android build's signing key (made on the first build) and intermediate files
 /android/debug.keystore
 /android/build
-tools/greenteaspeak-plugin/*.zip
 
 # the desktop launcher: its build output and the schemas Tauri writes
 /launcher/src-tauri/target

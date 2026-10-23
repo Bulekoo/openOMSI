@@ -353,16 +353,22 @@ impl ScheduleSim {
         self.day_base + self.departures[i].time
     }
 
+    /// Move the calendar without rebuilding every intervening day's timetable.
+    /// A large date jump needs only the final day's mask and fleet assignment.
+    pub(super) fn shift_calendar_days(&mut self, days: i64) {
+        if days == 0 { return; }
+        self.day_base += days as f64 * DAY;
+        step_calendar(&mut self.date_clock, days);
+        let c = self.date_clock.clone();
+        self.set_day(&c);
+    }
+
     /// Past midnight on the traffic's clock: the next day's timetable.
     pub(super) fn roll_day(&mut self, day_time: f64) {
-        while day_time - self.day_base >= DAY {
-            self.day_base += DAY;
-            let mut c = self.date_clock.clone();
-            c.paused = false;
-            c.advance(DAY as f32);
-            self.date_clock = c;
-            let c = self.date_clock.clone();
-            self.set_day(&c);
+        if !day_time.is_finite() { return; }
+        let days = ((day_time - self.day_base) / DAY).floor() as i64;
+        if days > 0 {
+            self.shift_calendar_days(days);
         }
     }
 
@@ -537,4 +543,38 @@ pub(super) fn night_twins(departures: &[Departure]) -> Vec<Option<usize>> {
         }
     }
     twin
+}
+
+/// Advance just the calendar date. The time-of-day on this copy isn't used for
+/// timetable scheduling; processing intermediate days would repeatedly reload
+/// assignments and can stall the main thread on a large date jump.
+fn step_calendar(clock: &mut crate::SimClock, days: i64) {
+    if days >= 0 {
+        for _ in 0..days { clock.next_day(); }
+    } else {
+        for _ in 0..days.unsigned_abs() { clock.prev_day(); }
+    }
+}
+
+#[cfg(test)]
+mod clock_jump_tests {
+    use super::step_calendar;
+    use crate::SimClock;
+
+    #[test]
+    fn large_backward_jump_handles_leap_year() {
+        let mut clock = SimClock::default();
+        clock.set_date(2026, 10, 18);
+        step_calendar(&mut clock, -594);
+        assert_eq!(clock.date_code(), 20250303);
+    }
+
+    #[test]
+    fn days_forward_and_back_are_inverse() {
+        let mut clock = SimClock::default();
+        clock.set_date(2024, 2, 29);
+        step_calendar(&mut clock, 400);
+        step_calendar(&mut clock, -400);
+        assert_eq!(clock.date_code(), 20240229);
+    }
 }

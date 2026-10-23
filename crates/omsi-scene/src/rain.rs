@@ -138,66 +138,76 @@ impl Rain {
 /// `rain.osc` fills from `PrecipRate` - and `rain.osc` never asks what is falling, so in a
 /// snowstorm the original shows raindrops on every pane, in the cab and along the saloon.
 /// OMSI's own way out is the seasonal texture folder (`texture\WinterSnow\`), which no stock
-/// vehicle fills in, so openOMSI builds the winter picture itself: crystals settled on
-/// the glass, thickest along the rim where a pane collects them, made from the game's own
-/// `Texture\snowflake.tga` where it is there and from soft specks of its own where it is not.
-pub fn snow_on_glass(root: &std::path::Path) -> omsi_texture::Image {
-    // the same grain as the rain film it stands in for (`regen.tga`, 1024 x 1024 with
-    // drops a dozen pixels across and a mean alpha of 7 %)
+/// vehicle fills in, so openOMSI builds the winter picture itself: the snow the wiped
+/// panes of the cab wear (render `snow_layer`, at full cover) baked into a tile of a
+/// metre of glass (`pane_uv`) for every other pane - the saloon's windows, the doors, the
+/// small tilt windows - so that all the glass of a bus holds the same snow. The tile joins
+/// its own edges: the cells of its noise are a whole number to the metre and wrap.
+pub fn snow_on_glass(_root: &std::path::Path) -> omsi_texture::Image {
+    // (made once: the same picture at every reload of a vehicle or a scene)
+    static MADE: std::sync::OnceLock<omsi_texture::Image> = std::sync::OnceLock::new();
+    MADE.get_or_init(make_snow_on_glass).clone()
+}
+
+fn make_snow_on_glass() -> omsi_texture::Image {
     const SIDE: usize = 512;
-    // white where it is clear as well, so that the smaller mip levels stay white specks
-    // and do not grey towards the black of transparent texels
-    let mut rgba = [255u8, 255, 255, 0].repeat(SIDE * SIDE);
-    let flake =
-        omsi_texture::decode_file(&omsi_cfg::resolve_path(root, "Texture\\snowflake.tga")).ok();
-    let mut rng = 0x9E37_79B9_7F4A_7C15u64;
-    let mut rand = move || {
-        rng ^= rng << 13;
-        rng ^= rng >> 7;
-        rng ^= rng << 17;
-        (rng >> 40) as f32 / (1u64 << 24) as f32
+    // (the shader's hash, on the integer cell: `rain_hash` in 08_rain_glass.wgsl)
+    let hash = |x: i32, y: i32| -> [f32; 2] {
+        let mut a = (x as u32).wrapping_mul(0x9e37_79b9) ^ (y as u32).wrapping_mul(0x85eb_ca6b);
+        a = (a ^ (a >> 16)).wrapping_mul(0x7feb_352d);
+        a = (a ^ (a >> 15)).wrapping_mul(0x846c_a68b);
+        a ^= a >> 16;
+        let mut b = a ^ 0x68bc_21eb;
+        b = (b ^ (b >> 16)).wrapping_mul(0x7feb_352d);
+        b = (b ^ (b >> 15)).wrapping_mul(0x846c_a68b);
+        b ^= b >> 16;
+        [a as f32 / 4_294_967_296.0, b as f32 / 4_294_967_296.0]
     };
-    // a pane holds more snow at its rim than in the middle, where the airstream and the
-    // wipers take it away
-    let edge = |x: f32, y: f32| {
-        let d = (x - 0.5).abs().max((y - 0.5).abs()) * 2.0;
-        0.35 + 0.65 * d * d
+    let smooth = |lo: f32, hi: f32, x: f32| {
+        let t = ((x - lo) / (hi - lo)).clamp(0.0, 1.0);
+        t * t * (3.0 - 2.0 * t)
     };
-    for _ in 0..1800 {
-        let (cx, cy) = (rand() * SIDE as f32, rand() * SIDE as f32);
-        if rand() > edge(cx / SIDE as f32, cy / SIDE as f32) {
-            continue;
-        }
-        let r = 1.5 + rand() * 3.5;
-        let strength = 0.35 + 0.65 * rand();
-        let lo = |v: f32| (v - r).max(0.0) as usize;
-        let hi = |v: f32| ((v + r) as usize).min(SIDE - 1);
-        for y in lo(cy)..=hi(cy) {
-            for x in lo(cx)..=hi(cx) {
-                let (dx, dy) = (x as f32 + 0.5 - cx, y as f32 + 0.5 - cy);
-                let d = (dx * dx + dy * dy).sqrt() / r;
-                if d > 1.0 {
-                    continue;
-                }
-                // the flake's own picture where the game has one, else a soft round speck
-                let a = match &flake {
-                    Some(f) => {
-                        let u = ((dx / r * 0.5 + 0.5) * (f.width - 1) as f32) as usize;
-                        let v = ((dy / r * 0.5 + 0.5) * (f.height - 1) as f32) as usize;
-                        let p = (v * f.width as usize + u) * 4;
-                        // the stock flake is white on black; its alpha channel, or its
-                        // brightness where it has none
-                        (f.rgba[p + 3] as f32 / 255.0).max(f.rgba[p] as f32 / 255.0)
-                    }
-                    None => (1.0 - d * d).powf(1.5),
-                };
-                let a = (a * strength * 255.0) as u32;
-                let p = (y * SIDE + x) * 4;
-                rgba[p] = 255;
-                rgba[p + 1] = 255;
-                rgba[p + 2] = 255;
-                rgba[p + 3] = rgba[p + 3].max(a.min(255) as u8);
+    // smooth value noise with `n` cells to the tile, wrapping
+    let noise = |u: f32, v: f32, n: i32, shift: i32| -> f32 {
+        let (x, y) = (u * n as f32, v * n as f32);
+        let (ix, iy) = (x.floor(), y.floor());
+        let (fx, fy) = (x - ix, y - iy);
+        let (sx, sy) = (fx * fx * (3.0 - 2.0 * fx), fy * fy * (3.0 - 2.0 * fy));
+        let at = |dx: i32, dy: i32| hash((ix as i32 + dx).rem_euclid(n) + shift, (iy as i32 + dy).rem_euclid(n) + shift)[0];
+        let (a, b, c, d) = (at(0, 0), at(1, 0), at(0, 1), at(1, 1));
+        (a + (b - a) * sx) + ((c + (d - c) * sx) - (a + (b - a) * sx)) * sy
+    };
+    // cells to the tile: the shader's 1.1 cm and 2 cm crystals, 4.5 cm and 1.2 cm lumps
+    const CRYSTALS: [i32; 2] = [90, 50];
+    let mut rgba = vec![255u8; SIDE * SIDE * 4];
+    for py in 0..SIDE {
+        for px in 0..SIDE {
+            let (u, v) = ((px as f32 + 0.5) / SIDE as f32, (py as f32 + 0.5) / SIDE as f32);
+            let mut flakes = 0.0f32;
+            for (layer, n) in CRYSTALS.iter().enumerate() {
+                let (x, y) = (u * *n as f32, v * *n as f32);
+                let (cx, cy) = (x.floor() as i32, y.floor() as i32);
+                let h = hash(cx.rem_euclid(*n) + layer as i32 * 37, cy.rem_euclid(*n) + layer as i32 * 37);
+                let h2 = hash(cx.rem_euclid(*n) + layer as i32 * 37 + 91, cy.rem_euclid(*n) + layer as i32 * 37 + 13);
+                let (ox, oy) = (cx as f32 + 0.25 + 0.5 * h[0], cy as f32 + 0.25 + 0.5 * h[1]);
+                let r = 0.16 + 0.2 * h2[0];
+                // (a crystal shows once the cover passes its own threshold: all of the
+                // larger layer's and most of the fine one's, at full cover)
+                let shown = if h2[1] <= if layer == 1 { 0.85 } else { 1.15 } { 1.0 } else { 0.0 };
+                let edge = 1.0 - smooth(r * 0.55, r, ((x - ox).powi(2) + (y - oy).powi(2)).sqrt());
+                flakes = flakes.max(shown * edge * (0.6 + 0.4 * h[0]));
             }
+            let lumps = noise(u, v, 22, 0) * 0.65 + noise(u, v, 83, 7) * 0.35;
+            let c = 0.7 + 0.6 * lumps;
+            let sheet = smooth(0.5, 1.2, c) * 0.75 + smooth(1.0, 1.7, c) * 0.22;
+            let t = smooth(1.0, 1.8, c);
+            let white = [0.9 + 0.07 * t, 0.92 + 0.06 * t, 0.96 + 0.04 * t];
+            let alpha = (flakes * 0.92).max(sheet).clamp(0.0, 0.97);
+            let p = (py * SIDE + px) * 4;
+            for k in 0..3 {
+                rgba[p + k] = (white[k] * 255.0) as u8;
+            }
+            rgba[p + 3] = (alpha * 255.0) as u8;
         }
     }
     omsi_texture::Image {
@@ -228,7 +238,7 @@ mod tests {
     #[test]
     fn snow_on_glass_has_mip_levels_and_stays_white() {
         let img = super::snow_on_glass(std::path::Path::new("/nonexistent"));
-        assert!(img.rgba.chunks_exact(4).all(|p| p[..3] == [255, 255, 255]));
+        assert!(img.rgba.chunks_exact(4).all(|p| p[..3].iter().all(|c| *c >= 224)));
         let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
         descriptor.backends = wgpu::Backends::NOOP;
         descriptor.backend_options.noop = wgpu::NoopBackendOptions { enable: true };
@@ -309,31 +319,34 @@ mod tests {
         assert!(snow_cover(1, 0.5, 5.0, 900.0, 1.0) < thaw);
     }
 
+    /// The picture is a tile (a metre of any pane, `pane_uv::TILE`): a milky layer with
+    /// clear gaps, as much snow in the middle as at its edges, and its edges join: the step
+    /// across the tile's seam is no bigger than the step between any two neighbours.
     #[test]
-    fn snow_on_glass_is_mostly_clear_and_thickest_at_the_rim() {
-        // no content root here: the procedural specks
+    fn snow_on_glass_is_an_even_tile() {
         let img = super::snow_on_glass(std::path::Path::new("/nonexistent"));
         assert_eq!((img.width, img.height), (512, 512));
-        let alpha_of = |x: usize, y: usize| img.rgba[(y * 512 + x) * 4 + 3] as u32;
-        let (mut middle, mut rim, mut n_middle, mut n_rim) = (0u32, 0u32, 0u32, 0u32);
+        let alpha_of = |x: usize, y: usize| img.rgba[(y * 512 + x) * 4 + 3] as f32;
+        let (mut middle, mut rim, mut n_middle, mut n_rim) = (0f32, 0f32, 0f32, 0f32);
+        let (mut seam, mut inner) = (0f32, 0f32);
         for y in 0..512 {
+            seam += (alpha_of(0, y) - alpha_of(511, y)).abs();
             for x in 0..512 {
+                inner += (alpha_of(x, y) - alpha_of((x + 1) % 512, y)).abs() / 512.0;
                 let d = ((x as f32 - 255.5).abs()).max((y as f32 - 255.5).abs()) / 255.5;
                 if d < 0.35 {
                     middle += alpha_of(x, y);
-                    n_middle += 1;
+                    n_middle += 1.0;
                 } else if d > 0.8 {
                     rim += alpha_of(x, y);
-                    n_rim += 1;
+                    n_rim += 1.0;
                 }
             }
         }
-        let mean = img.rgba.chunks_exact(4).map(|p| p[3] as u32).sum::<u32>() / (512 * 512);
-        assert!(mean < 60, "the glass would be opaque (mean alpha {mean})");
-        let (a, b) = (rim as f32 / n_rim as f32, middle as f32 / n_middle as f32);
-        assert!(
-            a > b * 1.3,
-            "the rim should carry more snow than the middle ({a:.1} vs {b:.1})"
-        );
+        let mean = img.rgba.chunks_exact(4).map(|p| p[3] as f32).sum::<f32>() / (512.0 * 512.0);
+        assert!(mean > 40.0 && mean < 190.0, "the glass is clear or opaque (mean alpha {mean})");
+        let (a, b) = (rim / n_rim, middle / n_middle);
+        assert!(a < b * 1.3 && b < a * 1.3, "the tile is not even: rim {a:.1}, middle {b:.1}");
+        assert!(seam < inner * 2.0, "the seam shows: {seam:.0} against {inner:.0}");
     }
 }

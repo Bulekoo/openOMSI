@@ -2,8 +2,8 @@
 
 #[test]
 fn texture_unit_fallback_builds_and_draws_without_enhanced() {
-    std::env::set_var("OMSI_GPU_ARRAYS", "nostorage");
-    std::env::set_var("OMSI_GL_TEXTURE_UNITS", "1");
+    unsafe { std::env::set_var("OMSI_GPU_ARRAYS", "nostorage") };
+    unsafe { std::env::set_var("OMSI_GL_TEXTURE_UNITS", "1") };
     let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
     descriptor.backends = wgpu::Backends::NOOP;
     descriptor.backend_options.noop = wgpu::NoopBackendOptions { enable: true };

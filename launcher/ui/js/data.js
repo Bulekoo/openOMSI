@@ -11,7 +11,7 @@ export const CHOICE_DEFAULTS = {
   map: '', entry: -1, line: null, tour: null, free: false,
   time: 9 * 60, start_trip: null, date: '1989-05-30',
   season: 'auto', phase: 'mid', own_date: null,
-  weather: '', traffic: 30, passengers: true, schedule: true, autostart: false, on_foot: false,
+  weather: '', traffic: 30, passengers: true, schedule: true, autostart: false, comfortable_cabin_on_start: false, on_foot: false,
   lan_mode: 'off', lan_addr: '', lan_ws_fallback: null, version: 2,
 };
 
@@ -24,6 +24,7 @@ export async function boot() {
   if (choice.version < 2) Object.assign(choice, { entry: -1, version: 2 });
   Object.assign(choice, clockPatch(choice, b.settings));
   set({ boot: b, settings: b.settings, config: b.config, choice, favourites: b.favourites || [], ready: true, page: b.root ? 'drive' : 'setup' });
+  if (b.crash) set({ crash: b.crash });
   applyTheme();
   if (b.root) {
     loadContent();
@@ -98,9 +99,11 @@ export const weatherName = (w, list) =>
 /** A remembered map or bus that is not installed any more gives way to the first one. */
 function fixChoice() {
   const c = { ...S.choice };
+  let mapChanged = false;
   if (S.maps?.length && !S.maps.some((m) => m.file === c.map)) {
     c.map = (S.maps.find((m) => /grundorf/i.test(m.file)) || S.maps[0]).file;
     c.entry = -1;
+    mapChanged = true;
   }
   if (S.vehicles?.length && !S.vehicles.some((v) => v.file === c.bus)) {
     c.bus = S.vehicles[0].file;
@@ -108,7 +111,9 @@ function fixChoice() {
     c.number = randomFleetNumber(S.vehicles[0]);
   }
   if (S.weather && c.weather && !weatherOfItsOwn(c.weather) && !S.weather.some((w) => w.file === c.weather)) c.weather = '';
-  c.date = fitDateToMap(c.date, c.map);
+  // (a date the player picked stays even outside the map's [years]; only a map that had
+  // to give way to another one takes a date the new map allows)
+  if (mapChanged) c.date = fitDateToMap(c.date, c.map);
   Object.assign(c, allowedBus(c));
   set({ choice: c });
 }
@@ -167,7 +172,10 @@ export function mapName(file) {
 export const curMap = () => S.maps?.find((m) => m.file === S.choice?.map);
 export const curBus = () => S.vehicles?.find((v) => v.file === S.choice?.bus);
 export const curLine = () => S.lines.list?.find((l) => l.name === S.choice?.line);
-export const curTour = () => curLine()?.tours.find((x) => x.number === S.choice?.tour);
+// Old saved choices use the displayed number; new choices identify the variant.
+export const tourId = (tour) => tour?.id ?? tour?.number;
+export const resolveTour = (line, selection) => line?.tours.find((x) => tourId(x) === selection) || line?.tours.find((x) => x.number === selection && x.runs) || line?.tours.find((x) => x.number === selection);
+export const curTour = () => resolveTour(curLine(), S.choice?.tour);
 export const realTime = () => !!S.settings?.use_real_time;
 export const realDate = () => !!S.settings?.use_real_date;
 
@@ -199,6 +207,8 @@ function clockPatch(c, st) {
   }
   if (st?.use_real_date) {
     const year = st.use_real_year ? now.getFullYear() : parseInt(c.date, 10) || now.getFullYear();
+    // (the computer's date is fitted to the map's [years]; a date the player chose is kept,
+    // see `choose`)
     const d = fitDateToMap(`${String(year).padStart(4, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`, c.map);
     if (c.date !== d) patch.date = d;
   }
@@ -222,8 +232,9 @@ function randomFleetNumber(vehicle) {
 export function choose(patch) {
   const before = S.choice;
   const c = { ...before, ...patch };
-  // (a date outside the map's [years] starts on a day inside them; a date inside stays)
-  c.date = fitDateToMap(c.date, c.map);
+  // (a map's [years] only move the date when another map is chosen: a date the player
+  // picked or typed stays as it is, even outside them)
+  if (c.map !== before.map) c.date = fitDateToMap(c.date, c.map);
   if (c.bus !== before.bus && !patch.number) {
     c.number = randomFleetNumber(S.vehicles?.find((v) => v.file === c.bus));
   }
@@ -252,8 +263,8 @@ export async function loadLines() {
     set({ lines: { key, list, loading: false, error: null } });
     // a line or tour that is not there on this date gives way to the first one
     const line = list.find((l) => l.name === S.choice.line) || list.find((l) => l.user_allowed && l.tours.length) || null;
-    const tour = line?.tours.find((x) => x.number === S.choice.tour) || line?.tours.find((x) => x.runs) || line?.tours[0] || null;
-    if (line?.name !== S.choice.line || tour?.number !== S.choice.tour) choose({ line: line?.name ?? null, tour: tour?.number ?? null });
+    const tour = resolveTour(line, S.choice.tour) || line?.tours.find((x) => x.runs) || line?.tours[0] || null;
+    if (line?.name !== S.choice.line || tourId(tour) !== S.choice.tour) choose({ line: line?.name ?? null, tour: tourId(tour) ?? null });
   } catch (e) {
     if (S.lines.key === key) set({ lines: { key, list: [], loading: false, error: e.message } });
   }
@@ -269,16 +280,20 @@ async function updateHof() {
 export const dutyHof = () => (S.choice.hof_manual ? S.choice.hof : S.hof) || '';
 
 let ibisAsked = '';
-export async function loadIbis() {
+let ibisTrip = null;
+export async function loadIbis(trip = ibisTrip) {
   if (onPhone) return;
+  ibisTrip = trip;
   const c = S.choice;
   const hof = /\.(bus|ovh)/i.test(dutyHof()) ? '' : dutyHof();
-  const key = c.free || !c.line || !c.bus ? '' : `${c.bus}|${hof}|${c.line}`;
+  const base = c.free || !c.line || !c.bus ? '' : `${c.bus}|${hof}|${c.line}`;
+  const stops = trip?.stops.map((x) => x.name) || [];
+  const key = base && `${base}|${trip?.terminus || ''}|${stops.join('|')}`;
   if (key === ibisAsked) return;
+  if (!key || !ibisAsked.startsWith(`${base}|`)) set({ ibis: null });
   ibisAsked = key;
-  set({ ibis: null });
   if (!key) return;
-  const ibis = await call('ibis', { bus: c.bus, hof, line: c.line }).then((info) => ({ info }), (e) => ({ error: e.message || String(e) }));
+  const ibis = await call('ibis', { bus: c.bus, hof, line: c.line, terminus: trip?.terminus || '', stops }).then((info) => ({ info }), (e) => ({ error: e.message || String(e) }));
   if (ibisAsked !== key) return;
   if ('error' in ibis) ibisAsked = '';
   set({ ibis });
@@ -408,7 +423,7 @@ export async function duty(extra = {}) {
     hof: dutyHof() || null,
     entry: c.entry,
     line: c.free ? null : c.line,
-    tour: c.free ? null : c.tour,
+    tour: c.free ? null : curTour()?.number ?? null,
     trip: trip != null ? String(trip) : null,
     whole_tour: trip != null,
     time: hhmm(c.time),
@@ -418,6 +433,7 @@ export async function duty(extra = {}) {
     passengers: c.passengers,
     schedule: c.schedule,
     autostart: c.autostart,
+    comfortable_cabin_on_start: c.comfortable_cabin_on_start,
     on_foot: c.on_foot,
     profile: S.config?.profile || null,
     lan: c.lan_mode === 'host' ? 'host' : c.lan_mode === 'join' ? `join:${c.lan_addr.trim()}` : 'off',
@@ -441,7 +457,7 @@ export async function start(extra) {
     pollNow();
     return r;
   } catch (e) {
-    toast(e.message, 'error');
+    toast(t(e.message), 'error');
     return null;
   }
 }
@@ -466,7 +482,7 @@ export async function installMod(path) {
     toast(t('Installing {name}…', { name: path.split(/[\\/]/).pop() }));
     pollNow();
   } catch (e) {
-    toast(e.message, 'error');
+    toast(t(e.message), 'error');
   }
 }
 
@@ -477,7 +493,7 @@ export async function pollNow() {
     const p = await call('poll');
     const changed = S.poll.stamp && p.stamp !== S.poll.stamp;
     const before = S.poll.jobs || [];
-    const same = (x) => JSON.stringify([x.stamp, x.jobs, x.instances]);
+    const same = (x) => JSON.stringify([x.stamp, x.jobs, x.instances, x.ended]);
     if (same(p) !== same(S.poll) || p.started?.length) set({ poll: p });
     for (const s of p.started || []) toast(t('Installing {name}…', { name: s }));
     const finished = S.poll.stamp ? (p.jobs || []).filter((j) => !jobRunning(j) && !before.some((b) => b.id === j.id && !jobRunning(b))) : [];

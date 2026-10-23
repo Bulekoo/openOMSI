@@ -58,7 +58,7 @@ crate::app::stage_ctx!(
 /// the snow, the cabin air, the tyres' spray and the sounds of the street.
 pub(super) fn lights(cx: LightsCx, dt: f32, daylight: omsi_sim::Daylight, behind: f32) {
     // the lamps' cones in fog and falling rain or snow, and new light pictures
-    let cone = cx.weather.weather.as_ref().map(|wt| lights::ConeWeather::new(wt.fog.0, daylight.night)).unwrap_or_default();
+    let cone = cx.weather.weather.as_ref().map(|wt| lights::ConeWeather::of(wt, daylight.night)).unwrap_or_default();
     if let Some(r) = cx.gfx.renderer.as_mut() {
         lights::upload_corona_textures(r);
     }
@@ -81,8 +81,17 @@ pub(super) fn lights(cx: LightsCx, dt: f32, daylight: omsi_sim::Daylight, behind
         }
         let vehicles = steps::light_vehicles(cx.player.player.as_ref(), cx.traffic.traffic.as_ref(), &cx.net.remotes);
         let __tc = Instant::now();
-        lights::collect(w, scene, &daylight, cam.position, &vehicles, cone);
+        lights::collect(
+            w, scene, &daylight, cam.position, &vehicles, cone,
+            lights::VehicleSmoke::from_setting(&cx.common.settings.vehicle_smoke),
+            cx.player.player.is_some(),
+        );
         drop(vehicles);
+        if let Some(p) = cx.player.player.as_ref() {
+            if let Some(tv) = p.trolley_view.as_ref() {
+                tv.push_effects(scene, &p.vehicle);
+            }
+        }
         cx.perf.profile.add(crate::profile_keys::ProfKey::LightsCollect, __tc.elapsed().as_secs_f64());
         // the object editor's pick: a magenta glow over it
         if let Some(id) = cx.menus.menus.editor.as_ref().and_then(|e| e.selected) {

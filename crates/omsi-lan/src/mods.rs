@@ -176,7 +176,7 @@ pub struct ModSource {
 fn collect(args: &ModSource) -> (Manifest, Vec<PathBuf>) {
     let t0 = Instant::now();
     let (list, _) = session_files(&args.map, args.bus.as_deref(), args.weather.as_deref(), Some(&args.root));
-    // (read in parallel, and the hashes remembered by size and time: a map of thousands of
+    // (streamed by two private workers, with hashes remembered by size and time: thousands of
     // files - put on a server through a slow shared folder - is read once, not at each start)
     let entries = upload::hashed(&list);
     let by_rel: HashMap<&str, &PathBuf> = list.iter().map(|(r, p)| (r.as_str(), p)).collect();
@@ -770,8 +770,27 @@ fn hash_cache() -> HashCache {
 
 fn save_hash_cache(c: &HashCache) {
     if let Some(p) = hash_cache_path() {
-        let _ = std::fs::write(p, serde_json::to_vec(c).unwrap_or_default());
+        if let Err(e) = write_hash_cache(&p, c) {
+            log::warn!("LAN mods: could not save hash cache: {e}");
+        }
     }
+}
+
+fn write_hash_cache(path: &Path, cache: &HashCache) -> std::io::Result<()> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let bytes = serde_json::to_vec(cache)?;
+    let tmp = path.with_extension(format!("json.{}.{}.tmp", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp)?;
+    let result = (|| {
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+        drop(file);
+        // Same-directory rename replaces the old snapshot without exposing partial JSON.
+        std::fs::rename(&tmp, path)
+    })();
+    if result.is_err() { let _ = std::fs::remove_file(&tmp); }
+    result
 }
 
 /// Fetch the host's mods (a joining player, before its world is loaded): what this machine

@@ -56,7 +56,7 @@ fn main() {
     };
     let land = [[200, 226, 178, 255], [160, 205, 140, 255], [236, 232, 196, 255], [236, 234, 230, 255], [240, 230, 200, 255], [150, 200, 240, 255]];
     for class in [layers::LAND_GRASS, layers::LAND_FIELD, layers::LAND_SAND, layers::LAND_PAVED, layers::LAND_FOREST, layers::LAND_WATER] {
-        for t in l.land[class].chunks_exact(3) {
+        for t in l.land_of(class).chunks_exact(3) {
             tri(&mut img, t[0], t[1], t[2], land[class]);
         }
     }
@@ -64,13 +64,13 @@ fn main() {
     let classes = std::env::var_os("OMSI_DUMP_CLASSES").is_some();
     let paved = if classes { [[255, 235, 205, 255], [255, 205, 215, 255], [170, 200, 240, 255]] } else { [[255, 255, 255, 255], [246, 244, 240, 255], [226, 226, 230, 255]] };
     for class in [layers::PAVE_FOOT, layers::PAVE_AREA, layers::PAVE_ROAD] {
-        for t in l.paved[class].chunks_exact(3) {
+        for t in l.paved_of(class).chunks_exact(3) {
             tri(&mut img, t[0], t[1], t[2], paved[class]);
         }
     }
     let mark = [[196, 200, 208, 255], [236, 190, 70, 255]];
     for class in [layers::PAINT_WHITE, layers::PAINT_AMBER] {
-        for t in l.paint[class].chunks_exact(3) {
+        for t in l.paint_of(class).chunks_exact(3) {
             tri(&mut img, t[0], t[1], t[2], mark[class]);
         }
     }

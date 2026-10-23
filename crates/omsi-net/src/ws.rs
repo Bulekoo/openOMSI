@@ -64,6 +64,9 @@ pub struct ServerInfo {
     pub local_admin_failures: Vec<Instant>,
     /// A dedicated server's shared world now (`"world"` in `GET /status`); none elsewhere.
     pub world: Option<WorldCounts>,
+    /// The public server list's challenge (`"list_challenge"` in `GET /status`): the list
+    /// service lists the server once it finds it there. Empty: the server is not listed.
+    pub list_challenge: String,
 }
 
 /// What a dedicated server's shared world holds: the AI cars on the roads (`cars`), its
@@ -162,6 +165,15 @@ pub fn players_json(players: &[PlayerInfo]) -> String {
 
 impl ServerInfo {
     pub fn to_json(&self) -> String {
+        let mut json = self.to_json_base();
+        if !self.list_challenge.is_empty() {
+            json.pop();
+            json.push_str(&format!(",\"list_challenge\":{}}}", json_str(&self.list_challenge)));
+        }
+        json
+    }
+
+    fn to_json_base(&self) -> String {
         format!(
             "{{\"name\":{},\"motd\":{},\"map\":{},\"players\":{},\"max_players\":{},\"version\":{},\"icon\":{},\"time\":{},\"weather\":{},\"password\":{},\"protocol\":{},\"vehicles\":{},\"world\":{}}}",
             json_str(&self.name),
@@ -257,13 +269,26 @@ pub fn ws_url(target: &str) -> Option<String> {
         ("ws://", r)
     } else if t.starts_with("wss://") || t.starts_with("ws://") {
         return Some(t.to_string());
-    } else if t.ends_with(".trycloudflare.com") || t.contains(".trycloudflare.com/") {
+    } else if is_tunnel(t) {
         ("wss://", t)
     } else {
         return None;
     };
     let rest = rest.trim_end_matches('/');
     Some(if rest.ends_with("/ws") { format!("{scheme}{rest}") } else { format!("{scheme}{rest}/ws") })
+}
+
+fn is_tunnel(t: &str) -> bool {
+    let authority = t.split(['/', '?', '#', '\\']).next().unwrap_or("");
+    let host = authority.rsplit('@').next().unwrap_or("");
+    let host = match host.rsplit_once(':') {
+        Some((h, port)) if port.bytes().all(|b| b.is_ascii_digit()) => h,
+        _ => host,
+    };
+    let host = host.to_ascii_lowercase();
+    host.strip_suffix(".trycloudflare.com").is_some_and(|name| {
+        name.split('.').all(|label| !label.is_empty() && label.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
+    })
 }
 
 /// The `https://` base of a server address (for `/status` and `/icon.png`).
@@ -1068,6 +1093,13 @@ mod tests {
         assert_eq!(ws_url("abc.trycloudflare.com").as_deref(), Some("wss://abc.trycloudflare.com/ws"));
         assert_eq!(ws_url("http://10.0.0.2:27025/").as_deref(), Some("ws://10.0.0.2:27025/ws"));
         assert_eq!(ws_url("192.168.1.4:27015"), None);
+        assert_eq!(ws_url("abc.trycloudflare.com/ws").as_deref(), Some("wss://abc.trycloudflare.com/ws"));
+        assert_eq!(ws_url("abc.trycloudflare.com:443/ws").as_deref(), Some("wss://abc.trycloudflare.com:443/ws"));
+        assert_eq!(ws_url("ABC.TryCloudflare.com/ws").as_deref(), Some("wss://ABC.TryCloudflare.com/ws"));
+        assert_eq!(ws_url("me@abc.trycloudflare.com/ws").as_deref(), Some("wss://me@abc.trycloudflare.com/ws"));
+        for bogus in ["play.example.org/abc.trycloudflare.com/", "play.example.org?abc.trycloudflare.com", "play.example.org#abc.trycloudflare.com", "play.example.org:1/abc.trycloudflare.com/", "evil.example\\.trycloudflare.com/ws", "abc.trycloudflare.com@evil.example/ws", "abc.trycloudflare.com:1@evil.example/ws", "evil.example%5C.trycloudflare.com/ws", "evil example.trycloudflare.com", ".trycloudflare.com", "a..trycloudflare.com", "abc.trycloudflare.com:x/ws"] {
+            assert_eq!(ws_url(bogus), None);
+        }
         assert_eq!(http_base("https://abc.trycloudflare.com").as_deref(), Some("https://abc.trycloudflare.com"));
         assert_eq!(web_bases("192.168.1.4:27015"), ["http://192.168.1.4:27015", "http://192.168.1.4:27025", "https://192.168.1.4"]);
         assert_eq!(web_bases("play.example.org"), ["http://play.example.org:27025", "https://play.example.org", "http://play.example.org"]);

@@ -81,6 +81,14 @@ fn shade_vanilla(in: FsIn, puddle_weight: ptr<function, f32>, eye: vec3<f32>) ->
             tex.a = smoothstep(0.32, 0.68, tex.a);
         }
     }
+    // One night-map read supplies both coverage and lighting. Keep the tile map
+    // in its north-up UVs; vehicle maps use the unscrolled material UVs.
+    var night_sample = vec4<f32>(0.0);
+    if (material.extra.w > 0.5) {
+        let nuv = select(buv, vec2<f32>(in.uv.x, 1.0 - in.uv.y), material.extra.x > 0.5);
+        night_sample = sample_nightmap(nuv);
+    }
+    tex.a = night_coverage(tex.a, night_sample.a);
     let mode = material.params.x;
     // Mip-filtered alpha is the fraction of the pixel covered by leaves or fence wires.
     // Tighten the transition around the cutout edge before MSAA turns it into sample
@@ -177,7 +185,7 @@ fn shade_vanilla(in: FsIn, puddle_weight: ptr<function, f32>, eye: vec3<f32>) ->
             // ground instead, as a night map glows, its faint fringe (0.01, linear) put
             // one beige veil over cobbles and grass alike, a whole car park the colour of
             // sand where OMSI 2 shows it dark grey.
-            let nm = srgb_encode(sample_nightmap(vec2<f32>(in.uv.x, 1.0 - in.uv.y)).rgb);
+            let nm = srgb_encode(night_sample.rgb);
             v = min(v + nm * camera.sun_color.w * clamp(in.params2.y, 0.0, 1.0), vec3<f32>(1.0));
         }
         if (lm_only) {
@@ -229,12 +237,10 @@ fn shade_vanilla(in: FsIn, puddle_weight: ptr<function, f32>, eye: vec3<f32>) ->
     if (material.extra.w > 0.5 && !terrain_map) {
         // [matl_nightmap]: self-illumination that fades in with the night
         // terrain: the tile light map in tile space (north at the top row)
-        let nuv = select(buv, vec2<f32>(in.uv.x, 1.0 - in.uv.y), material.extra.x > 0.5);
-        let nm = sample_nightmap(nuv);
         // a [matl_item] night map is switched by its variable (warning lamps, displays):
         // it glows whenever that is on, by day as well; the others fade in with the night
         let night = select(camera.sun_color.w, 1.0, material.extra.w > 1.5);
-        lit = lit + nm.rgb * night * select(clamp(in.params2.y, 0.0, 1.0), 1.0, material.extra.w > 1.5);
+        lit = lit + night_sample.rgb * night * select(clamp(in.params2.y, 0.0, 1.0), 1.0, material.extra.w > 1.5);
     }
     if (material.params2.y > 0.0) {
         // [matl_envmap]: sphere map reflection, masked by the diffuse alpha like the original

@@ -11,6 +11,7 @@
 use glam::Vec2;
 use omsi_ui::paint::Align;
 use omsi_ui::{Color, Rect, Weight};
+use std::borrow::Cow;
 
 use super::{Action, Shell};
 use omsi_ui::theme::*;
@@ -22,6 +23,8 @@ const PAGE: Color = BG;
 /// ... and on the home page, where nothing but the sidebar is drawn: the paused game stays
 /// in view, dimmed.
 const HOME_VEIL: Color = Color([BG.0[0], BG.0[1], BG.0[2], 0.72]);
+/// Narrower than this (points) an open page has the screen to itself.
+const NARROW: f32 = 560.0;
 /// A list's row.
 const LIST_ROW: f32 = 40.0;
 
@@ -44,7 +47,7 @@ pub(crate) struct ListView<'a> {
 pub(crate) struct PauseView<'a> {
     pub paused: bool,
     /// The game menu's lines.
-    pub rail: &'a [(&'static str, &'static str)],
+    pub rail: &'a [crate::app_impl::MenuLine],
     /// The line the keyboard is on (the game menu's, while no list is open).
     pub rail_sel: Option<usize>,
     /// The line of the rail the open list belongs to.
@@ -103,7 +106,10 @@ pub(crate) fn draw(sh: &mut Shell, v: &PauseView) {
     let size = sh.ui.size;
     // the launcher's window: its sidebar and a page beside it - the home page with the
     // session's summary, or the list or settings window opened from the sidebar
-    let page = Rect::new(RAIL_W, 0.0, (size.x - RAIL_W).max(0.0), size.y);
+    // (on a narrow screen - a phone held upright - an open page takes the whole width, the
+    // way back at its top: beside the rail it was a strip with the switches and no names)
+    let narrow = v.list.is_some() && size.x < NARROW;
+    let page = if narrow { Rect::new(0.0, 0.0, size.x, size.y) } else { Rect::new(RAIL_W, 0.0, (size.x - RAIL_W).max(0.0), size.y) };
     sh.ui.solid(page);
     match v.list.as_ref() {
         Some(list) => {
@@ -113,7 +119,9 @@ pub(crate) fn draw(sh: &mut Shell, v: &PauseView) {
         // (the home page: the game, dimmed - the sidebar holds every action)
         None => sh.ui.p().rect(page, HOME_VEIL),
     }
-    rail(sh, v);
+    if !narrow {
+        rail(sh, v);
+    }
 }
 
 
@@ -136,7 +144,7 @@ fn rail(sh: &mut Shell, v: &PauseView) {
     let state = omsi_ui::tr(if v.paused { "Paused" } else { "Menu" }).into_owned();
     ui.text(&format!("{}  -  {state}", crate::startup::VERSION), Vec2::new(58.0, 46.0), 11.5, Weight::Medium, INK_MUTED, Align::Left);
     // the items
-    let lines: Vec<(usize, &str, &str)> = v.rail.iter().enumerate().map(|(k, l)| (k, l.0, l.1)).collect();
+    let lines: Vec<(usize, &str, &str, Option<&omsi_plugin::ui::MenuItem>)> = v.rail.iter().enumerate().map(|(k, l)| (k, l.0, l.1.as_ref(), l.2.as_ref())).collect();
     let top = 70.0;
     let foot = 12.0 + 56.0 + 10.0;
     let area = Rect::new(0.0, top, RAIL_W, (size.y - top - foot).max(42.0));
@@ -145,14 +153,22 @@ fn rail(sh: &mut Shell, v: &PauseView) {
     let mut sel_y: Option<f32> = None;
     ui.scroll_area("pause-rail", area, &mut |ui, view| {
         let mut y = view.y;
-        for &(k, id, label) in &lines {
-            // room between the groups (the everyday lines, saving, the way out), as the
-            // launcher's `nav-sep`
-            if matches!(id, "save" | "admin" | "quit") {
+        let mut last = "";
+        for &(k, id, label, line) in &lines {
+            // room between the groups (the everyday lines, the plugins', saving, the way
+            // out), as the launcher's `nav-sep`
+            if matches!(id, "save" | "admin" | "quit") || (id == "plugin" && last != "plugin") {
                 y += 10.0;
             }
+            last = id;
+            // (a plugin's line: its own icon - the plugins' one for an icon the game does not
+            // have - and a key of its own for the hover)
+            let (icon, key) = match line {
+                Some(m) => (m.icon.as_deref().and_then(|i| omsi_ui::icons::names().find(|n| *n == i.trim())).unwrap_or("extension"), format!("plugin-{}-{}", m.owner, m.id)),
+                None => (rail_icon(id), id.to_string()),
+            };
             let row = Rect::new(12.0, y, RAIL_W - 24.0, 38.0);
-            let (h, _, clicked) = ui.interact(id_of(&format!("pause-{id}")), row);
+            let (h, _, clicked) = ui.interact(id_of(&format!("pause-{key}")), row);
             if clicked {
                 picked = Some(k);
             }
@@ -162,7 +178,7 @@ fn rail(sh: &mut Shell, v: &PauseView) {
                 sel_y = Some(y - view.y);
             }
             let danger = id == "quit";
-            let t = ui.anim(id_of(&format!("pause-hl-{id}")), if h || kbd { 1.0 } else { 0.0 }, 0.06);
+            let t = ui.anim(id_of(&format!("pause-hl-{key}")), if h || kbd { 1.0 } else { 0.0 }, 0.06);
             if open {
                 ui.p().rounded(row, 6.0, SURFACE_3);
             } else if t > 0.01 {
@@ -176,10 +192,11 @@ fn rail(sh: &mut Shell, v: &PauseView) {
                 INK_2.mix(INK, t)
             };
             let icon_c = if open || (kbd && !danger) { ACCENT } else { c };
-            let translated = omsi_ui::tr(label);
+            // (a plugin's label is shown as it is: the plugin says it in the player's language)
+            let translated = if id == "plugin" { Cow::Borrowed(label) } else { omsi_ui::tr(label) };
             let (text, _) = plain(&translated);
             let (_, more) = plain(label);
-            ui.icon(rail_icon(id), Vec2::new(row.x + 19.5, row.center().y), 19.0, icon_c);
+            ui.icon(icon, Vec2::new(row.x + 19.5, row.center().y), 19.0, icon_c);
             ui.text_in(text, Rect::new(row.x + 41.0, row.y, row.w - 64.0, row.h), 14.0, Weight::Medium, c, Align::Left);
             if more {
                 ui.icon("chevron_right", Vec2::new(row.right() - 14.0, row.center().y), 16.0, c.alpha(0.5 + 0.5 * t));
@@ -209,16 +226,19 @@ fn rail(sh: &mut Shell, v: &PauseView) {
 }
 
 /// The launcher's tabs: the titles in a row, the chosen one in the text colour over an amber
-/// line, the others muted. Returns the one clicked.
-fn tabs(ui: &mut Ui, at: Vec2, titles: &[String], chosen: usize, max_w: f32) -> Option<usize> {
+/// line, the others muted. Returns the one clicked, and how many rows they took (a narrow
+/// screen has them on a second row: the last ones were cut off and could not be reached).
+fn tabs(ui: &mut Ui, at: Vec2, titles: &[String], chosen: usize, max_w: f32) -> (Option<usize>, usize) {
     let mut x = at.x;
+    let mut row = 0;
     let mut out = None;
     for (i, t) in titles.iter().enumerate() {
         let w = ui.width(&omsi_ui::tr(t), 14.0, Weight::Medium) + 4.0;
-        if x + w > at.x + max_w {
-            break;
+        if x + w > at.x + max_w && x > at.x {
+            x = at.x;
+            row += 1;
         }
-        let r = Rect::new(x, at.y, w, 38.0);
+        let r = Rect::new(x, at.y + row as f32 * 38.0, w, 38.0);
         let (h, _, clicked) = ui.interact(id_of(&format!("pause-tab-{i}")), r);
         let on = i == chosen;
         ui.text_in(t, r, 14.0, Weight::Medium, if on || h { INK } else { INK_MUTED }, Align::Center);
@@ -230,12 +250,12 @@ fn tabs(ui: &mut Ui, at: Vec2, titles: &[String], chosen: usize, max_w: f32) -> 
         }
         x += w + 22.0;
     }
-    out
+    (out, row + 1)
 }
 
 /// An open list or settings window as a launcher page right of the rail.
 fn list_page(sh: &mut Shell, v: &PauseView, list: &ListView, page: Rect) {
-    let margin = 32.0;
+    let margin = if page.w < NARROW { 14.0 } else { 32.0 };
     let w = (page.w - margin * 2.0).min(1400.0);
     let area = Rect::new(page.x + margin + ((page.w - margin * 2.0) - w).max(0.0) * 0.5, 28.0, w, page.h - 28.0 - 24.0);
     // the title, with the way back before it
@@ -258,10 +278,11 @@ fn list_page(sh: &mut Shell, v: &PauseView, list: &ListView, page: Rect) {
     let mut body = Rect::new(area.x, area.y + 70.0, area.w, (area.h - 70.0).max(40.0));
     // the pages of a settings window: the launcher's tabs
     if let Some((titles, at)) = list.tabs.as_ref().filter(|(t, _)| t.len() > 1) {
-        if let Some(tab) = tabs(&mut sh.ui, Vec2::new(body.x, body.y - 6.0), titles, *at, body.w) {
+        let (picked, rows) = tabs(&mut sh.ui, Vec2::new(body.x, body.y - 6.0), titles, *at, body.w);
+        if let Some(tab) = picked {
             sh.actions.push(Action::Side(tab));
         }
-        let below = body.y - 6.0 + 38.0 + 20.0;
+        let below = body.y - 6.0 + 38.0 * rows as f32 + 20.0;
         body = Rect::new(body.x, below, body.w, (body.bottom() - below).max(40.0));
     }
     // an open drop-down takes the mouse where it lies (the rows under it do not answer)

@@ -283,7 +283,7 @@ impl Career {
         self.penalty = worn(self.penalty, step_km);
         self.trip_penalties(|p| worn(p, step_km));
         // driving with a door open is the classic way to upset your passengers
-        if v.abs() > 1.0 && (0..8).any(|i| bus.var(&format!("door_{i}")).unwrap_or(0.0) > 0.05) {
+        if v.abs() > 1.0 && (0..8).any(|i| { let n = format!("door_{i}"); bus.pantograph_var().is_none_or(|p| !p.eq_ignore_ascii_case(&n)) && bus.var(&n).unwrap_or(0.0) > 0.05 }) {
             self.door_seconds += dt;
         }
     }
@@ -424,7 +424,7 @@ impl Career {
 
     pub fn summary(&self) -> String {
         format!(
-            "{:.2} km, {} stops ({} early, {} late), {} tickets for {:.2}, {} crashes, {} hurt, {} jolts (worst {:.1} m/s2); driving {:.0}%, comfort {:.0}%, ticket selling {:.0}%",
+            "Driven {:.2} km, {} stops ({} early, {} late), {} tickets for {:.2}, {} crashes, {} hurt, {} jolts (worst {:.1} m/s2); driving {:.0}%, comfort {:.0}%, ticket selling {:.0}%",
             self.metres / 1000.0,
             self.stops[0],
             self.stops[1],

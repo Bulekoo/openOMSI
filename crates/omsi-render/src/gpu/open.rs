@@ -528,7 +528,7 @@ impl Renderer {
         }
         let scene = scene::SceneBase::new(&device, leave_out_enhanced);
         let hdr_format = wgpu::TextureFormat::Rgba16Float;
-        let shadows = shadows::build(&device, &scene, shadow_size);
+        let shadows = shadows::build(&device, &scene, shadow_size, !leave_out_enhanced);
         let defaults = defaults::build(&device, &queue, options.anisotropy);
         let (coronas, corona_texture) = coronas::Coronas::new(&device, &queue, &scene);
         let precip = crate::passes::PrecipMap::new(&device);
@@ -638,12 +638,16 @@ impl Renderer {
             shadows: ShadowRes {
                 shadow_far_cache: std::cell::Cell::new((Mat4::IDENTITY, 0, DVec3::ZERO, Vec3::ZERO)),
                 shadow_near_cache: std::cell::Cell::new((Mat4::IDENTITY, 0, DVec3::ZERO, Vec3::ZERO)),
+                shadow_close_cache: std::cell::Cell::new((Mat4::IDENTITY, DVec3::ZERO, Vec3::ZERO)),
                 xr_shadow_cache: std::cell::Cell::new(None),
                 shadow_clear_pipeline: shadows.clear_pipeline,
                 lamp_tiles: Default::default(),
+                cabin_motion: Default::default(),
                 precip,
                 shadow_view: shadows.view,
                 shadow_view_far: shadows.view_far,
+                lamp_atlas: shadows.lamp_atlas,
+                lamp_matrices: std::cell::RefCell::new(vec![Mat4::ZERO; LAMP_SHADOWS]),
                 shadow_sampler: shadows.sampler,
                 shadow_layout: scene.shadow_layout,
                 shadow_pipelines: shadows.pipelines,

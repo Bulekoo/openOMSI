@@ -420,6 +420,10 @@ pub(crate) struct PersonView {
     /// thirty waiting people every frame took 2 ms of the frame at a bus station).
     skin_bones: Option<[glam::Affine3A; omsi_sim::human::SLOTS]>,
     pose_changed: bool,
+    /// How far a seated person is moved forward off the seat back (m, eased).
+    seat_shift: f32,
+    /// How far the pose asks the person to be moved (m): worked out when the pose changes.
+    seat_want: f32,
     /// Whether this person has ever been posed (an unposed model is the file's T-pose).
     skinned: bool,
     /// Frames since the last pose and where the person stood then (the
@@ -450,6 +454,22 @@ pub(crate) struct PersonView {
     avatar_checked: bool,
     /// The content type and clothing the meshes were made for (type key, variant).
     made_as: (usize, usize),
+}
+
+/// How far behind a seated person's anchor (the hip) the back may reach: what the seats of
+/// the stock buses leave a person of OMSI's own (the deepest of them sits 0.17 m behind
+/// it); the avatars' robes and hair are held to less.
+const CONTENT_SEAT_DEPTH: f32 = 0.18;
+const AVATAR_SEAT_DEPTH: f32 = 0.13;
+
+/// How far a seated body must move forward (m, at most 0.12) so that nothing between the
+/// hip and 0.7 m above it reaches further back than `depth`.
+fn seat_back_shift(skinned: &[Vec3], hip_z: f32, depth: f32) -> f32 {
+    let rear = skinned.iter().filter(|v| v.z > hip_z - 0.05 && v.z < hip_z + 0.70).map(|v| v.y).fold(f32::MAX, f32::min);
+    if rear == f32::MAX {
+        return 0.0;
+    }
+    (-depth - rear).clamp(0.0, 0.12)
 }
 
 impl PeopleView {
@@ -653,6 +673,13 @@ impl PeopleView {
             if go {
                 if st.pose_changed || !st.skinned {
                     let ty = st.avatar.as_ref().unwrap_or(&p.ty);
+                    // (the scan of the skin's vertices is for a new pose only)
+                    st.seat_want = match (p.facts.activity, st.skins.first()) {
+                        (omsi_sim::human::Activity::Sit, Some((pos, _))) => {
+                            seat_back_shift(pos, ty.rig.hip[1].z, if st.avatar.is_some() { AVATAR_SEAT_DEPTH } else { CONTENT_SEAT_DEPTH })
+                        }
+                        _ => 0.0,
+                    };
                     for (k, (id, _)) in st.meshes.iter().enumerate() {
                         if let (Some((pos, nrm)), Some(m)) = (st.skins.get(k), ty.meshes.get(k)) {
                             renderer.update_mesh(scene, *id, pos, nrm, &m.data.uvs);
@@ -675,6 +702,15 @@ impl PeopleView {
             // simulation put the feet that far under the seat point)
             if let (Some(a), omsi_sim::human::Activity::Sit) = (st.avatar.as_ref(), p.facts.activity) {
                 at.z += (p.ty.def.seat_height - a.def.seat_height).clamp(-0.25, 0.25) as f64;
+            }
+            // a seated person's back stays clear of the seat back: whoever sits deeper
+            // than the seats were made for (a long robe, hair, a leaning trunk) is
+            // moved forward on the seat, eased
+            let want = st.seat_want;
+            st.seat_shift += (want - st.seat_shift).clamp(-0.4 * sdt, 0.4 * sdt);
+            if st.seat_shift > 0.0 {
+                let fwd = Mat4::from_rotation_z((-heading).to_radians() as f32).transform_vector3(Vec3::new(0.0, st.seat_shift, 0.0));
+                at += (if matches!(p.place, Place::Bus(..)) { p.tilt } else { Mat4::IDENTITY }).transform_vector3(fwd).as_dvec3();
             }
             // (riders with the tilt of their floor)
             let tilt = if matches!(p.place, Place::Bus(..)) { p.tilt } else { Mat4::IDENTITY };
@@ -750,5 +786,21 @@ impl PeopleView {
         self.pose_stats.1 += n_due;
         self.pose_stats.2 += started.elapsed().as_secs_f64() * 1000.0;
         self.pose_stats.3 += upload.elapsed().as_secs_f64() * 1000.0;
+    }
+}
+
+#[cfg(test)]
+mod seat_back_tests {
+    use super::*;
+
+    #[test]
+    fn only_a_back_deeper_than_the_seat_allows_is_moved_forward() {
+        let hip = 0.9;
+        let body = |rear: f32| vec![Vec3::new(0.0, rear, hip + 0.2), Vec3::new(0.0, 0.1, hip + 0.2), Vec3::new(0.0, -2.0, 0.1)];
+        // (the point far behind lies below the window: a foot, not a back)
+        assert_eq!(seat_back_shift(&body(-0.10), hip, 0.15), 0.0);
+        assert!((seat_back_shift(&body(-0.22), hip, 0.15) - 0.07).abs() < 1e-6);
+        assert_eq!(seat_back_shift(&body(-1.0), hip, 0.15), 0.12);
+        assert_eq!(seat_back_shift(&[], hip, 0.15), 0.0);
     }
 }

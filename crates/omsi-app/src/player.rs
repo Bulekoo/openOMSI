@@ -183,6 +183,7 @@ pub(crate) struct Player {
     /// Bound to the rails (see `rail_drive`), and where on them once it is placed.
     pub(crate) rail_bound: bool,
     pub(crate) rail: Option<crate::rail_drive::RailDrive>,
+    pub(crate) rail_placed_z: f64,
     /// The driver camera chosen before the timetable or ticket desk camera took over.
     pub(crate) cam_before_special: Option<usize>,
     /// The actions a key started, by its scan code: its release lets go of the same ones,
@@ -265,6 +266,11 @@ pub(crate) struct Player {
     /// The settings' "Indicators cancel themselves" (`blinker_cancel`): off, the script's
     /// own cancelling after a turn is undone (#451).
     pub(crate) blinker_cancel: bool,
+    /// The overhead wire of the map and the trolleybus's poles drawn (see `omsi_scene::trolley_view`).
+    pub(crate) trolley_view: Option<Box<omsi_scene::trolley_view::TrolleyView>>,
+    pub(crate) trolley_sound: crate::trolley_sound::TrolleySound,
+    /// The stop announcements the game presses the IBIS on for (see `auto_announce`).
+    pub(crate) announce: crate::auto_announce::AutoAnnounce,
 }
 
 // Putting a bus into service (Shift+U, `--autostart`) is `omsi_sim::startup`: it presses

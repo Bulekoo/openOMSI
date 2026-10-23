@@ -26,6 +26,7 @@ NAMES = {
     "person": "directions_walk", "sun": "wb_sunny", "traffic": "traffic",
     "ticket": "confirmation_number", "save": "save", "history": "history", "badge": "badge", "help": "help",
     "garage": "garage", "fuel": "local_gas_station", "wash": "local_car_wash", "repair": "build", "edit": "edit",
+    "snow": "weather_snowy", "rain": "rainy", "fog": "foggy", "partly": "partly_cloudy_day",
 }
 
 paths = {}

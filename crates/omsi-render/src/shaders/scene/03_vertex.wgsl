@@ -204,7 +204,16 @@ fn scene_clip(e: u32, wp: vec4<f32>, nw: vec3<f32>) -> vec4<f32> {
         let paint = surf > 1.35 && surf < 1.5;
         let share = select(select(select(0.003, 0.004, decal), 0.0045, paint), 0.005, surf > 1.5);
         let fixed = select(select(select(0.0, 0.01, decal), 0.015, paint), 0.05, surf > 1.5);
-        let pull = min(min(share * d, 0.05) + fixed, d * 0.3);
+        // The cap on the share is for upright faces, the poles. A flat surface keeps its
+        // share all the way: pulled by the same part of the way to the eye at every vertex
+        // the road is still one plane, however long its triangles, and a marking on it keeps
+        // its place. Capped at 5 cm the pull of a triangle from the eye to the horizon
+        // stopped growing with the distance and turned the road's plane into a bowl: at
+        // 40 m from a low eye the road came in front of the lines on it, and they were
+        // gone, and back as the bus came on (#3085). (Half a metre of it, at 170 m and
+        // beyond: millimetres of height from a driver's eye.)
+        let flat = abs(safe_normal(nw).z) > 0.5;
+        let pull = min(min(share * d, select(0.05, 0.5, flat)) + fixed, d * 0.3);
         cp = wp.xyz - to / max(d, 1e-3) * pull;
     }
     // Omsi.exe draws a model mesh by mesh and subset by subset with LESSEQUAL into a 24-bit

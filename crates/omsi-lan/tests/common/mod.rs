@@ -22,7 +22,7 @@ pub struct Server {
 
 impl Server {
     pub fn new(port: u16) -> Server {
-        std::env::set_var("OMSI_NO_BRIDGE", "1");
+        unsafe { std::env::set_var("OMSI_NO_BRIDGE", "1") };
         let lan = LanSession::host(port, "server", world(), false).unwrap();
         let mut adm = ServerAdmin::default();
         adm.password = "admin secret".into();

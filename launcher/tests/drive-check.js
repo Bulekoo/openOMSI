@@ -1,5 +1,7 @@
+import { html, render } from '../ui/vendor/preact-htm.js';
+import { Tours } from '../ui/js/pages/drive-duty.js';
 import { S, set, remember } from '../ui/js/store.js';
-import { applyTheme, LAUNCHER_LAYOUTS } from '../ui/js/data.js';
+import { applyTheme, choose, curTour, duty, resolveTour, LAUNCHER_LAYOUTS } from '../ui/js/data.js';
 
 const OPTIONS = {
   Map: () => one('.page-drive .map-row'),
@@ -318,6 +320,65 @@ async function options(where) {
   return Object.keys(OPTIONS).filter((k) => !found.has(k)).map((k) => `${where}: "${k}" cannot be found`);
 }
 
+/** A date the player typed stays when a duty is chosen, even outside the map's `[years]`. */
+async function dateOutsideTheMapsYears() {
+  const out = [];
+  const maps = S.maps;
+  const choice = { ...S.choice };
+  const lines = S.lines;
+  const map = maps?.find((m) => m.file === choice.map) || maps?.[0];
+  if (!map) return ['date: no map to choose a date on'];
+  set({ maps: maps.map((m) => (m.file === map.file ? { ...m, year_span: [1986, 2000] } : m)) });
+  set({ choice: { ...choice, map: map.file, date: '1989-05-30', line: null, tour: null, start_trip: null } });
+  choose({ date: '2025-06-01' });
+  await settle(150);
+  if (S.choice.date !== '2025-06-01') out.push(`date: typing 2025-06-01 gave ${S.choice.date}`);
+  choose({ line: S.choice.line, tour: S.choice.tour, start_trip: null });
+  await settle(150);
+  if (S.choice.date !== '2025-06-01') out.push(`date: choosing a duty changed it to ${S.choice.date}`);
+  set({ maps, choice, lines });
+  return out;
+}
+
+/** Shared codes must select, highlight and launch the requested weekday variant. */
+async function duplicateTourNumbers() {
+  const out = [];
+  const saved = { choice: S.choice, lines: S.lines, settings: S.settings };
+  const base = S.lines.list?.find((l) => l.tours.length > 1);
+  if (!base) return ['duplicate tours: fixture needs two tours'];
+  const first = { ...base.tours[0], id: 'weekday-a', number: '1', runs: true };
+  const second = { ...base.tours[1], id: 'weekday-b', number: '1', runs: false, next_run: '1989-05-31' };
+  const line = { ...base, tours: [first, second] };
+  const host = document.createElement('div');
+  document.body.append(host);
+  const originalFetch = window.fetch;
+  window.fetch = (url, ...args) => String(url).endsWith('/lines.json')
+    ? Promise.resolve(new Response(JSON.stringify([{ ...line, tours: line.tours.map((x) => ({ ...x, runs: S.choice.date === second.next_run ? x.id === second.id : x.id === first.id })) }])))
+    : originalFetch(url, ...args);
+  try {
+    set({ choice: { ...S.choice, line: line.name, tour: first.id, time: 0, date: '1989-05-30', free: false, lan_mode: 'off', season: 'auto' }, lines: { ...S.lines, list: [line] }, settings: { ...S.settings, use_real_date: false } });
+    render(html`<${Tours} line=${line} />`, host);
+    await settle();
+    host.querySelectorAll('.tour-row')[1].click();
+    if (S.choice.date !== second.next_run) out.push('duplicate tours: selecting another day did not advance the date');
+    await settle();
+    if (S.choice.tour !== second.id || curTour()?.id !== second.id) out.push('duplicate tours: second variant cannot be selected');
+    if ((await duty()).tour !== '1') out.push('duplicate tours: launch must use the displayed tour code');
+    if (resolveTour(line, '1') !== first) out.push('duplicate tours: legacy selection did not prefer the active variant');
+    await settle();
+    const selected = [...host.querySelectorAll('.tour-row[aria-selected="true"]')];
+    if (selected.length !== 1) out.push(`duplicate tours: expected one selected row, got ${selected.length}`);
+    host.querySelectorAll('.tour-row')[0].click();
+    if (S.choice.tour !== first.id || curTour()?.id !== first.id) out.push('duplicate tours: cannot switch back');
+  } finally {
+    render(null, host);
+    host.remove();
+    window.fetch = originalFetch;
+    set(saved);
+  }
+  return out;
+}
+
 export async function run({ themes = ['dark', 'light'], layouts = LAUNCHER_LAYOUTS.map(([id]) => id), check = ['options', 'use'] } = {}) {
   const report = {};
   for (const theme of themes) for (const layout of layouts) {
@@ -342,5 +403,7 @@ export async function run({ themes = ['dark', 'light'], layouts = LAUNCHER_LAYOU
     }
     report[where] = [...new Set(out)];
   }
+  report['duplicate tour numbers'] = await duplicateTourNumbers();
+  report['duty date'] = await dateOutsideTheMapsYears();
   return report;
 }

@@ -1,5 +1,7 @@
 use super::*;
 
+mod freetex_reload;
+
 /// The night meter takes the street the picture shows: from 30 m over a lot lit by a
 /// grid of street lamps, looking down at it, the eye adapts to the lit lot - not, as
 /// when it sampled a "ground" 1.6 m under the camera (in the air, out of every lamp's
@@ -1455,8 +1457,10 @@ mod instance_layout;
 mod lamp_shadows;
 mod light_grid;
 mod light_maps;
+mod long_road;
 mod light;
 mod more;
+mod night_coverage;
 mod prepass_reach;
 mod transparency;
 mod vanilla_lighting;

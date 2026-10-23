@@ -2,6 +2,34 @@ include!("../../../../tools/test-support/original_root.rs");
 use super::*;
 
 #[test]
+fn multiplayer_hud_translates_client_states_and_preserves_session_details() {
+    let mut lan = LanSession::join_addr(Vec::new(), None, "Driver", Default::default()).unwrap();
+    let tr = |text: &str| match text {
+        "Online: connecting ..." => "連線中...".into(),
+        "Online: not connected: {reason} (chat /reconnect)" => "未連線：{reason}（聊天 /reconnect）".into(),
+        "Online: in {host}'s game, {others}" => "已加入 {host} 的遊戲，{others}".into(),
+        "nobody else yet" => "尚無其他玩家".into(),
+        "Online: {warning}" => "連線：{warning}".into(),
+        "Map not installed" => "尚未安裝地圖".into(),
+        _ => text.into(),
+    };
+    assert_eq!(hud_lines(&lan, &tr), ["連線中..."]);
+    lan.rejected = Some("Map not installed".into());
+    assert_eq!(hud_lines(&lan, &tr), ["未連線：尚未安裝地圖（聊天 /reconnect）"]);
+    lan.rejected = None;
+    lan.connected = true;
+    lan.welcome = Some(omsi_net::Welcome {
+        host_name: "Alice {others}".into(),
+        session: 7,
+        world: Default::default(),
+        at: Instant::now(),
+        players: 1,
+    });
+    lan.warnings.push("Map not installed".into());
+    assert_eq!(hud_lines(&lan, &tr), ["已加入 Alice {others} 的遊戲，尚無其他玩家", "連線：尚未安裝地圖"]);
+}
+
+#[test]
 fn compatible_string_tables_check_picture_paths_at_the_local_index() {
     let table = crate::sync::VarTable {
         hash: 0,
