@@ -366,6 +366,12 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 
 ### Fixes
 
+- **Destination displays light up at night in Enhanced and Enhanced+**: a script's screen is
+  never taken for a pane. The EMT Citaro's Krueger matrix (Mallorca) is blended, writes no
+  depth and draws its letters through a `\S:n` transparency map - the layout of a window - so
+  the Enhanced pictures shaded it as glass, which gives no light of its own: its light map was
+  left out and its letters stayed grey at night, where Vanilla+ lights them
+  ([#2927](https://github.com/openOMSI-org/openOMSI/issues/2927)).
 - **London's road markings and red bus lanes stay put** when the camera moves away or around
   the bus ([#2853](https://github.com/openOMSI-org/openOMSI/issues/2853)). A cut-out strip lying
   just over the driving surface its spline declares (`[heightprofile]`) is paint, as one lying
