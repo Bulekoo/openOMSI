@@ -23,10 +23,8 @@ use omsi_ui::theme::*;
 use omsi_ui::kit::{id_of, ButtonKind, Ui};
 use crate::ui::{DropdownView, MenuKind, Preview};
 
-/// The solid background behind a list or settings window.
-const PAGE: Color = BG;
-/// Keep the paused game visible behind the category home pages.
-const HOME_VEIL: Color = Color([BG.0[0], BG.0[1], BG.0[2], 0.72]);
+/// Keep the paused game visible, dimmed, behind the home page and the settings and list pages.
+const HOME_VEIL: Color = Color([BG.0[0], BG.0[1], BG.0[2], 0.85]);
 /// Compact margins for the existing settings and list pages.
 const NARROW: f32 = 560.0;
 /// A list's row.
@@ -117,7 +115,7 @@ pub(crate) fn draw(sh: &mut Shell, v: &PauseView) {
     let left = if sidebar { RAIL_W } else { 0.0 };
     let page = Rect::new(left, 0.0, (size.x - left).max(0.0), size.y);
     sh.ui.solid(page);
-    sh.ui.p().rect(page, if v.list.is_some() { PAGE } else { HOME_VEIL });
+    sh.ui.p().rect(page, HOME_VEIL);
     if let Some(list) = v.list.as_ref() {
         list_page(sh, v, list, page);
     } else {
