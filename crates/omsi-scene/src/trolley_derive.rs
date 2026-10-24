@@ -8,7 +8,7 @@
 
 use glam::DVec2;
 use omsi_trolley::WireNet;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
 /// What a spline type's profile says of it: `Some((centre, spacing, height))` for a pair of
@@ -112,7 +112,7 @@ pub fn split_t_junctions(spans: &mut Vec<(f64, Vec<[f64; 3]>)>) {
         cum.push(c);
     }
     // (span, segment, arc length of the cut, the cut point) per span; the branch ends to move
-    let mut cuts: HashMap<usize, Vec<(usize, f64, [f64; 3])>> = HashMap::new();
+    let mut cuts: BTreeMap<usize, Vec<(usize, f64, [f64; 3])>> = BTreeMap::new();
     let mut moves: Vec<(usize, u8, [f64; 3])> = Vec::new();
     for (i, (_, pts)) in spans.iter().enumerate() {
         for end in 0..2u8 {
@@ -151,7 +151,7 @@ pub fn split_t_junctions(spans: &mut Vec<(f64, Vec<[f64; 3]>)>) {
         }
     }
     // (a cut within MARGIN of another on its span is left out, and its branch stays loose)
-    let mut accepted: HashMap<usize, Vec<(usize, f64, [f64; 3])>> = HashMap::new();
+    let mut accepted: BTreeMap<usize, Vec<(usize, f64, [f64; 3])>> = BTreeMap::new();
     for (j, mut list) in cuts {
         list.sort_by(|a, b| a.1.total_cmp(&b.1));
         let mut kept: Vec<(usize, f64, [f64; 3])> = Vec::new();
@@ -191,12 +191,13 @@ pub fn split_t_junctions(spans: &mut Vec<(f64, Vec<[f64; 3]>)>) {
 pub fn derive_text(root: &Path, tiles: &[(i32, i32, PathBuf)], chrono_dirs: &[PathBuf]) -> Option<String> {
     let mut spans = wire_spans(root, tiles, chrono_dirs);
     // (a piece shorter than the joining distance would join its own two ends: the wire
-    // closes over it as it is)
+    // closes over it as it is; measured in 3-D, as `WireNet::parse` does)
     let join = omsi_trolley::JOIN;
     spans.retain(|(_, pts)| {
         let (a, b) = (pts[0], pts[pts.len() - 1]);
-        let len: f64 = pts.windows(2).map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1])).sum();
-        !((a[0] - b[0]).hypot(a[1] - b[1]) <= join && len < 2.0 * join)
+        let d = |p: &[f64; 3], q: &[f64; 3]| ((p[0] - q[0]).powi(2) + (p[1] - q[1]).powi(2) + (p[2] - q[2]).powi(2)).sqrt();
+        let len: f64 = pts.windows(2).map(|w| d(&w[0], &w[1])).sum();
+        !(d(&a, &b) <= join && len < 2.0 * join)
     });
     split_t_junctions(&mut spans);
     if spans.is_empty() {
@@ -360,5 +361,23 @@ mod tests {
         assert_eq!(spans.len(), 4);
         assert_eq!(spans[1].1[0], [50.0, 0.0, 5.0]);
         assert_eq!(spans[2].1[0], [50.0, 0.5, 8.0]);
+    }
+
+    #[test]
+    fn the_cut_spans_come_in_the_same_order_every_time() {
+        let make = || {
+            let mut v: Vec<(f64, Vec<[f64; 3]>)> = (0..6).map(|n| (0.52, (0..=20).map(|k| [k as f64 * 10.0, n as f64 * 40.0, 5.0]).collect())).collect();
+            for n in 0..6 {
+                for x in [40.0, 100.0, 160.0] {
+                    v.push((0.52, vec![[x, n as f64 * 40.0 + 0.3, 5.0], [x + 8.0, n as f64 * 40.0 + 9.0, 5.0]]));
+                }
+            }
+            split_t_junctions(&mut v);
+            v
+        };
+        let first = make();
+        for _ in 0..5 {
+            assert_eq!(make(), first);
+        }
     }
 }

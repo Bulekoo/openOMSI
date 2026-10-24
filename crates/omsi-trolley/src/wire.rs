@@ -435,6 +435,9 @@ impl WireNet {
                     .flatten()
                     .copied()
                     .filter(|i| nodes[*i].pos.distance(p) <= JOIN)
+                    // (a span's last end never takes the node of its own first end: a short or
+                    // curled piece would close on itself and collapse)
+                    .filter(|i| !(end == 1 && nodes[*i].ends.contains(&(si as u32, 0))))
                     .min();
                 let ni = found.unwrap_or_else(|| {
                     nodes.push(Node { pos: p, ends: Vec::new(), insulator: 0.0, switch: None });
@@ -1013,6 +1016,21 @@ mod tests {
         assert_eq!(n.spans.len(), 3, "the stub is dropped");
         assert_eq!(n.switches.len(), 1);
         assert!(n.spans.iter().all(|s| s.len() > 1.0));
+    }
+
+    /// A piece longer than twice the joining distance whose ends curl close together keeps its
+    /// two ends apart: they are two nodes, and the neighbours at the first end meet there.
+    #[test]
+    fn a_curled_piece_does_not_join_its_own_two_ends() {
+        let n = WireNet::parse(
+            "[trolley_section]\nid 1\nlive 1\n\
+             [trolley_span]\nsection 1\np 0 0 5.5\np 20 0 5.5\n\
+             [trolley_span]\nsection 1\np 20 0 5.5\np 22 1.5 5.5\np 22.5 4 5.5\np 21 5 5.5\np 20.6 0.8 5.5\n\
+             [trolley_span]\nsection 1\np 20.6 0.8 5.5\np 40 0 5.5\n",
+        );
+        let curl = &n.spans[1];
+        assert_ne!(curl.ends[0], curl.ends[1], "both ends in one node");
+        assert!(curl.len() > 4.0);
     }
 
     #[test]
