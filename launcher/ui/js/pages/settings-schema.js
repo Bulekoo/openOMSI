@@ -249,6 +249,9 @@ const camera = {
         { type: 'toggle', key: 'driver', label: 'Driver at the wheel (outside views)' },
         { type: 'section', title: 'Head tracking' },
         { type: 'toggle', key: 'head_tracking', label: 'Head tracking (native TrackIR / OpenTrack)' },
+        // (a Tobii eye tracker read natively, Windows only; "Automatic" takes opentrack while it sends)
+        { type: 'select', key: 'head_tracking_source', label: 'Head tracking with', options: [['auto', 'Automatic'], ['tobii', 'Tobii eye tracker'], ['opentrack', 'opentrack (UDP 4242)']], when: (s) => s.head_tracking },
+        { type: 'toggle', key: 'tobii_edges', label: "Look further at the screen's edges (Tobii)", when: (s) => s.head_tracking && s.head_tracking_source !== 'opentrack' },
         // (percent per axis: 0 switches an axis off, 100 is 1:1)
         { type: 'section', title: 'Rotation' },
         trackSlider('head_tracking_yaw_sens', 'Yaw sensitivity (left / right)'),
