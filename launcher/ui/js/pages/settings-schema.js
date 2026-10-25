@@ -436,6 +436,7 @@ const general = {
         { type: 'toggle', key: 'nav_ai', label: 'AI vehicles on the map' },
         { type: 'toggle', key: 'nav_surface', label: 'Map surface under the roads' },
         { type: 'toggle', key: 'nav_light', label: 'Light map' },
+        { type: 'toggle', key: 'nav_classic_2d', label: 'Classic 2D navigator (lightweight)' },
         { type: 'toggle', key: 'nav_3d', label: '3D buildings on the map' },
         { type: 'toggle', key: 'nav_widget', label: 'Navigator as a widget (drag it anywhere, size it at its corner)' },
         { type: 'slider', key: 'nav_size', label: 'Navigator size', min: 0.6, max: 2, step: 0.05, def: 1, format: (v) => `${Math.round(v * 100)} %` },

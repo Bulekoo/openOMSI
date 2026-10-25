@@ -274,7 +274,7 @@ impl Navigator {
 
     /// How far the view should tilt at a zoom (0 flat from above … 1 in 3D).
     fn tilt_for(&self, mpp: f64) -> f32 {
-        if !self.city.three_d.unwrap_or(self.show_3d) || self.map_data.is_none() {
+        if self.classic_2d || !self.city.three_d.unwrap_or(self.show_3d) || self.map_data.is_none() {
             return 0.0;
         }
         smoothstep(1.3, 0.45, mpp as f32)
@@ -366,7 +366,7 @@ impl Navigator {
             Some(1) => self.city.mpp = (self.city.mpp / 1.6).max(MIN_MPP),
             Some(2) => self.city.mpp = (self.city.mpp * 1.6).min(self.max_mpp()),
             Some(3) => self.city.open = false,
-            Some(4) => {
+            Some(4) if !self.classic_2d => {
                 let on = !self.city.three_d.unwrap_or(self.show_3d);
                 self.city.three_d = Some(on);
                 // (switched on far out: zoomed in to where the houses stand)
@@ -494,11 +494,21 @@ impl Navigator {
             Some(g) => g.key != key || (g.centre - centre).length() > g.radius * 0.35 || g.mpp / mpp > 1.7 || mpp / g.mpp > 1.7,
         };
         if stale && arrived.is_none() {
-            let look = GroundLook { surfaces: mpp < 0.7, trees: mpp < 0.7, dashes: mpp < 3.5, tol: 0.0 };
-            let parts = self.ground_parts(net, band.map(|b| b.0));
+            let look = if self.classic_2d {
+                GroundLook { surfaces: false, trees: false, dashes: false, tol: (mpp * 0.5).max(0.3) as f32 }
+            } else {
+                GroundLook { surfaces: mpp < 0.7, trees: mpp < 0.7, dashes: mpp < 3.5, tol: 0.0 }
+            };
+            let mut parts = self.ground_parts(net, band.map(|b| b.0));
+            if self.classic_2d {
+                parts.md = None;
+                parts.surface = None;
+                parts.contours = None;
+            }
             let pal2 = *pal;
-            let houses = mpp < 6.0;
-            let job = move || super::build::build(&parts, centre, radius, &pal2, look, mpp < 2.2, houses.then_some(omsi_mapdraw::MODEL_TRIANGLES));
+            let houses = !self.classic_2d && mpp < 6.0;
+            let paved = !self.classic_2d && mpp < 2.2;
+            let job = move || super::build::build(&parts, centre, radius, &pal2, look, paved, houses.then_some(omsi_mapdraw::MODEL_TRIANGLES));
             if self.city.ground.is_none() {
                 // (the first picture at once: nothing to show meanwhile)
                 let b = job();

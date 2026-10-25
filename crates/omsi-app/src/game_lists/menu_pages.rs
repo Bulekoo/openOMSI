@@ -16,6 +16,7 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         switch_row(app, "nav_ai", "AI vehicles on the map", "Shows/hides the other (AI) vehicles on the Minimap and the city map"),
         switch_row(app, "nav_surface", "Map surface under the roads", "Shows the map's ground, water, woods, houses and paved surfaces on the Minimap and the city map (and the map's package, when it has one)"),
         switch_row(app, "nav_light", "Light map", "The Minimap and the city map in a light look"),
+        switch_row(app, "nav_classic_2d", "Classic 2D navigator", "A lightweight top-down route map with streets and vehicles, without detailed surfaces, buildings or shadows"),
         switch_row(app, "nav_3d", "3D buildings on the map", "The houses stand in 3D with their shadows on the Minimap, and the city map tilts into 3D when zoomed in"),
         switch_row(app, "nav_widget", "Navigator as a widget", "Drag the Minimap anywhere and change its size at its bottom right corner"),
         switch_row(app, "nav_arrows", "Route arrows (as in OMSI 2)", "Shows OMSI 2's route arrows over the road"),

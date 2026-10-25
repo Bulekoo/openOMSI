@@ -79,15 +79,27 @@ impl Navigator {
         }
         if rebuild && self.panel_job.is_none() && built.is_none() {
             let anchor = f.bus.truncate();
-            let parts = self.ground_parts(net, None);
-            let look = GroundLook { surfaces: true, trees: true, dashes: true, tol: 0.0 };
+            let mut parts = self.ground_parts(net, None);
+            // The older-style navigator needs only roads and route data.
+            // Skip terrain meshes, map packages, buildings and their shadows entirely.
+            if self.classic_2d {
+                parts.md = None;
+                parts.surface = None;
+            }
+            let look = if self.classic_2d {
+                GroundLook { surfaces: false, trees: false, dashes: false, tol: 1.0 }
+            } else {
+                GroundLook { surfaces: true, trees: true, dashes: true, tol: 0.0 }
+            };
             let reach = PANEL_REACH;
+            let paved = !self.classic_2d;
+            let models = (!self.classic_2d).then_some(PANEL_MODELS);
             if self.global.is_some() {
                 let pal2 = pal;
                 let device = renderer.device.clone();
-                self.panel_job = Some(super::build::Job::start((look_key, lanes_now), move || super::build::build(&parts, anchor, reach, &pal2, look, true, Some(PANEL_MODELS)).made_on(&device)));
+                self.panel_job = Some(super::build::Job::start((look_key, lanes_now), move || super::build::build(&parts, anchor, reach, &pal2, look, paved, models).made_on(&device)));
             } else {
-                let mut b = super::build::build(&parts, anchor, reach, &pal, look, true, Some(PANEL_MODELS));
+                let mut b = super::build::build(&parts, anchor, reach, &pal, look, paved, models);
                 let [_, houses @ ..] = b.counts;
                 self.roads = Some(Roads { look: look_key, anchor, lanes_seen: lanes_now, houses, runs: std::mem::take(&mut b.runs), built_at: self.time });
                 built = Some(b);
@@ -100,10 +112,11 @@ impl Navigator {
         let hd = self.cam_heading.to_radians();
         let fwd = DVec2::new(hd.sin(), hd.cos());
         let look_at = f.bus.truncate() - anchor + fwd * self.zoom * 0.17;
-        let pitch = (if self.show_3d { PITCH } else { PITCH + 8.0 }).to_radians();
+        let pitch = (if self.classic_2d { 90.0 } else if self.show_3d { PITCH } else { PITCH + 8.0 }).to_radians();
         let back = fwd * self.zoom * pitch.cos();
         let eye = DVec3::new(look_at.x - back.x, look_at.y - back.y, self.zoom * pitch.sin());
-        let view = Mat4::look_at_rh(eye.as_vec3(), Vec3::new(look_at.x as f32, look_at.y as f32, 0.0), Vec3::Z);
+        let up = if self.classic_2d { Vec3::new(fwd.x as f32, fwd.y as f32, 0.0) } else { Vec3::Z };
+        let view = Mat4::look_at_rh(eye.as_vec3(), Vec3::new(look_at.x as f32, look_at.y as f32, 0.0), up);
         let clip_panel = [0.0, 0.0, pw, ph];
         let map_layer = Layer::world(view, FOV.to_radians(), vp, [map.x, map.y, map.right(), map.bottom()], map_radius, 1.0);
         let depth_layer = map_layer.with_depth();
@@ -231,7 +244,7 @@ impl Navigator {
             l.opacity *= opacity;
         }
         let solid_n = self.roads.as_ref().map_or(0, |r| r.houses[1] as u32);
-        let three = self.show_3d;
+        let three = self.show_3d && !self.classic_2d;
         let route_n = self.route_mesh.3;
         let mpp = map_layer.px_scale * self.zoom as f32 * 4.0;
         let seen = |part: usize, on: bool| match (&self.roads, on) {
@@ -540,7 +553,7 @@ impl Navigator {
 
     /// A key that changes with everything the ground's look depends on.
     pub(super) fn look_key(&self) -> u64 {
-        (self.light as u64) | (self.show_3d as u64) << 1 | (self.show_surface as u64) << 2 | self.surface_version << 3 | (self.map_version << 20) | (self.roads_version << 36)
+        (self.light as u64) | (self.show_3d as u64) << 1 | (self.show_surface as u64) << 2 | (self.classic_2d as u64) << 15 | self.surface_version << 3 | (self.map_version << 20) | (self.roads_version << 36)
     }
 }
 

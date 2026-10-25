@@ -406,6 +406,8 @@ pub struct Navigator {
     layers_rx: Option<std::sync::mpsc::Receiver<mapmesh::MapData>>,
     /// Houses standing in 3D (the `nav_3d` setting); flat roofs otherwise.
     pub show_3d: bool,
+    /// Simpler top-down 2D map style, independent of the 3D buildings toggle.
+    pub classic_2d: bool,
     /// The navigator is a widget: dragged anywhere and resized by its corner (`nav_widget`).
     pub widget: bool,
     /// Its size against the usual one (`nav_size`, 0.6 - 2).
@@ -600,6 +602,7 @@ impl Navigator {
             map_version: 0,
             layers_rx: None,
             show_3d: true,
+            classic_2d: false,
             widget: true,
             size: 1.0,
             resizing: None,

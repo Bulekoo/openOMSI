@@ -429,6 +429,7 @@ struct SettingsPage: View {
             SettingToggle(label: "AI vehicles on the map", key: "nav_ai", fallback: true)
             SettingToggle(label: "Map surface under the roads", key: "nav_surface", fallback: true)
             SettingToggle(label: "Light map", key: "nav_light")
+            SettingToggle(label: "Classic 2D navigator (lightweight)", key: "nav_classic_2d")
             SettingToggle(label: "3D buildings on the map", key: "nav_3d", fallback: true)
             SettingToggle(label: "Navigator as a widget (drag it anywhere, size it at its corner)", key: "nav_widget", fallback: true)
             SettingSlider(label: "Navigator size", key: "nav_size", range: 0.6 ... 2, step: 0.05, fallback: 1) { String(format: "%.0f %%", $0 * 100) }
