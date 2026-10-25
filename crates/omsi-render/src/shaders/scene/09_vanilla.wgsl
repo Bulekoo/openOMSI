@@ -341,8 +341,9 @@ fn shade_vanilla(in: FsIn, puddle_weight: ptr<function, f32>, eye: vec3<f32>) ->
     if (carriageway && snow_ok > 0.0) {
         rs = road_snow(in.world);
     }
-    // a vehicle's part: the snow its own roof has gathered, where that is kept
-    let vehicle = in.params2.w < -500.0 && road_snow_dynamic();
+    // a vehicle's part: the snow its own roof has gathered, where that is kept (another
+    // player's bus keeps the weather's)
+    let vehicle = vehicle_snow_kept(in.params2.w);
     var on_vehicle = 0.0;
     if (vehicle && snow_ok > 0.0) {
         on_vehicle = vehicle_snow(in.params2.w, in.local);

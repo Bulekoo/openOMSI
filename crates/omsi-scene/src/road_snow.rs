@@ -38,25 +38,45 @@ pub fn frame(r: &Renderer, dt: f32, weather: Option<&omsi_content::weather::Weat
     if !enabled() {
         return;
     }
+    let t0 = std::time::Instant::now();
     let mut state = STATE.lock();
     let (snow, tracks) = state.get_or_insert_with(Default::default);
     if let Some(w) = weather {
         snow.step(dt, w);
     }
-    let mut tyres = Vec::new();
-    for &(key, v) in vehicles {
-        vehicle_tyres(v, key, &mut tyres);
-    }
-    tracks.update(r, eye, net, &tyres, snow.cover, snow.fallen);
     let (cover, fallen) = (snow.cover, snow.fallen);
-    snow.roofs.step(vehicles, cover, fallen);
-    // (OMSI_ROAD_SNOW_LOG: the state every ten seconds of weather, to see why it grows or not)
+    // Outside the winter - the roads bare, nothing falling, no roof holding any and none in
+    // the weather's picture - there is nothing to do: the roofs go back to the weather's
+    // snow (see `Roofs::amount`), which shows none either, so none of them changes, and the
+    // field keeps what it had, unseen under no cover, until it snows again.
+    if cover > 0.0 || snow.falling || !snow.roofs.bare() || snow.roofs.weather.is_some_and(|w| w > 0.0) {
+        let mut tyres = std::mem::take(&mut snow.tyres);
+        tyres.clear();
+        for &(key, v) in vehicles {
+            vehicle_tyres(v, key, &mut tyres);
+        }
+        tracks.update(r, eye, net, &tyres, cover, fallen);
+        snow.tyres = tyres;
+        // (the roofs once the weather's snow is known, from the first picture: till then
+        // they show it, see `Roofs::amount`)
+        if snow.roofs.weather.is_some() {
+            snow.roofs.step(vehicles, cover, fallen);
+        }
+    } else {
+        snow.roofs.clear();
+        tracks.last.clear();
+    }
+    // (OMSI_ROAD_SNOW_LOG: the state every ten seconds of weather, to see why it grows or not,
+    // and what this costs a frame: its mean and worst time, the rut texels drawn)
     if omsi_cfg::flags::OMSI_ROAD_SNOW_LOG.is_set() {
+        let ms = t0.elapsed().as_secs_f64() * 1000.0;
+        snow.log_cost = (snow.log_cost.0 + ms, snow.log_cost.1.max(ms), snow.log_cost.2 + 1);
         snow.log_t += dt;
         if snow.log_t >= 10.0 {
             snow.log_t = 0.0;
             let (kind, rate) = weather.map(omsi_weather::conditions::precip_of).unwrap_or((-1, 0.0));
-            log::info!("road snow: cover {cover:.3}, fallen {fallen:.0}, precip kind {kind} rate {rate:.2}, temp {:?}, snow on road {:?}, field ready {}, kept tracks (tiles, bytes, handed back) {:?}", weather.map(|w| w.temp.0), weather.map(|w| w.snow_on_road), tracks.ready(), tracks.kept());
+            let (sum, worst, n) = std::mem::take(&mut snow.log_cost);
+            log::info!("road snow: cover {cover:.3}, fallen {fallen:.0}, precip kind {kind} rate {rate:.2}, temp {:?}, snow on road {:?}, field ready {}, kept tracks (tiles, bytes, handed back) {:?}, frame {:.3} ms mean, {worst:.3} ms worst of {n}, rut texels {}", weather.map(|w| w.temp.0), weather.map(|w| w.snow_on_road), tracks.ready(), tracks.kept(), sum / n.max(1) as f64, std::mem::take(&mut tracks.rut_work));
         }
     }
 }
@@ -65,24 +85,45 @@ pub fn frame(r: &Renderer, dt: f32, weather: Option<&omsi_content::weather::Weat
 /// whether it can draw it at all (`enabled`).
 pub fn light(lighting: &mut omsi_render::Lighting) {
     DRAWN.store(!lighting.classic, std::sync::atomic::Ordering::Relaxed);
-    if let (true, Some((snow, tracks))) = (enabled(), STATE.lock().as_ref()) {
+    if let (true, Some((snow, tracks))) = (enabled(), STATE.lock().as_mut()) {
+        // (the weather's own snow on everything: what a roof not kept here shows)
+        snow.roofs.weather = Some(lighting.snow.clamp(0.0, 1.0));
         snow.light(lighting, tracks);
     }
 }
 
-/// The roofs' snow on the renders `render_of` finds by the vehicles' keys.
+/// The roofs' snow on the renders `render_of` finds by the vehicles' keys: only on a
+/// vehicle whose roof has changed by a step the shader tells apart, or whose render is new
+/// (walking every part of every vehicle each frame cost the same in summer as in a storm).
 pub fn show_roofs<'a>(
     r: &Renderer,
     scene: &mut omsi_render::Scene,
     keys: impl IntoIterator<Item = u64>,
     render_of: impl Fn(u64) -> Option<(&'a crate::VehicleRender, &'a [crate::VehicleRender])>,
 ) {
-    let state = STATE.lock();
-    let Some((snow, _)) = state.as_ref() else { return };
+    let mut state = STATE.lock();
+    let Some((snow, _)) = state.as_mut() else { return };
+    let roofs = &mut snow.roofs;
+    roofs.shows = roofs.shows.wrapping_add(1);
+    let now = roofs.shows;
     for key in keys {
-        if let Some((body, trailers)) = render_of(key) {
-            show_roof(r, scene, body, trailers, snow.roofs.amount(key));
+        let Some((body, trailers)) = render_of(key) else { continue };
+        let amount = roofs.amount(key);
+        let step = amount.map(|a| (a.clamp(0.0, 1.0) * 40.0).round() as u8);
+        let parts = std::iter::once(body).chain(trailers).map(|v| v.instances.len() + v.far.len()).sum();
+        let render = (body.instances.first().copied().unwrap_or(usize::MAX), parts);
+        if let Some(s) = roofs.shown.get_mut(&key) {
+            s.2 = now;
+            if (s.0, s.1) == (render, step) {
+                continue;
+            }
         }
+        show_roof(r, scene, body, trailers, amount);
+        roofs.shown.insert(key, (render, step, now));
+    }
+    // (the vehicles gone for a while are forgotten)
+    if now % 600 == 0 {
+        roofs.shown.retain(|_, s| now.wrapping_sub(s.2) < 600);
     }
 }
 
@@ -124,10 +165,16 @@ pub struct RoadSnow {
     /// The snow fallen since the start, in thousandths of a full cover (it only grows): a
     /// tyre track remembers it and fills as more falls.
     pub fallen: f64,
+    /// Snow is falling (and settles).
+    pub falling: bool,
     started: bool,
     log_t: f32,
+    /// The frames' time since the last log (ms: sum, worst, frames).
+    log_cost: (f64, f64, u32),
     /// The snow on the roofs of the vehicles around the camera.
     pub roofs: Roofs,
+    /// The tyres of the frame (kept for the next one's).
+    tyres: Vec<Tyre>,
 }
 
 impl RoadSnow {
@@ -143,7 +190,8 @@ impl RoadSnow {
         }
         let (kind, rate) = omsi_weather::conditions::precip_of(w);
         let temp = w.temp.0;
-        if kind == 2 && rate > 0.0 && temp < 2.0 {
+        self.falling = kind == 2 && rate > 0.0 && temp < 2.0;
+        if self.falling {
             let fall = dt * rate * SETTLE_RATE;
             self.cover += fall;
             self.fallen += fall as f64 * 1000.0;
@@ -184,11 +232,13 @@ pub struct RoofSnow {
     fallen: f64,
     cover: f32,
     at: DVec3,
+    /// The step it was last seen in (see `Roofs::step`).
+    seen: u32,
 }
 
 impl RoofSnow {
     fn new(amount: f32, fallen: f64, cover: f32, at: DVec3) -> Self {
-        RoofSnow { amount: amount.clamp(0.0, 1.0), fallen, cover, at }
+        RoofSnow { amount: amount.clamp(0.0, 1.0), fallen, cover, at, seen: 0 }
     }
 
     fn step(&mut self, fallen: f64, cover: f32, at: DVec3, speed: f32) {
@@ -217,40 +267,76 @@ impl RoofSnow {
 #[derive(Default)]
 pub struct Roofs {
     map: HashMap<u64, RoofSnow>,
+    /// The steps taken (see `RoofSnow::seen`).
+    steps: u32,
+    /// What each vehicle's render was last shown with (its first instance and parts, the
+    /// shader's step of its snow) and when (`show_roofs`), and how many times it was.
+    shown: HashMap<u64, ((usize, usize), Option<u8>, u32)>,
+    shows: u32,
+    /// The weather's own snow on everything (0..1, the picture's `Lighting::snow`): what a
+    /// roof not kept here shows, and what a roof kept here starts from and holds while it
+    /// lies; None until the first picture has told it (`light`).
+    pub weather: Option<f32>,
 }
 
 impl Roofs {
     /// One step of `vehicles` (key, vehicle): one seen for the first time starts with as
     /// much as has settled on the roads (the player's bus) or a little less (the traffic,
-    /// which has been driving); one no longer there is forgotten.
+    /// which has been driving), and no less than the weather's snow it showed until then
+    /// (the roofs do not jump bare when it starts to fall on snow lying); one no longer
+    /// there is forgotten. A roof thaws with the roads' snow and the weather's, whichever
+    /// stays longer: a roof the roads' thaw has cleared while the weather still shows snow
+    /// would turn white again the moment it is no longer kept.
     pub fn step(&mut self, vehicles: &[(u64, &omsi_sim::VehicleInstance)], cover: f32, fallen: f64) {
-        let mut next = HashMap::with_capacity(vehicles.len());
-        for &(key, v) in vehicles {
-            let mut r = self.map.get(&key).copied().unwrap_or_else(|| {
-                RoofSnow::new(if key == 0 { cover } else { cover * 0.6 }, fallen, cover, v.position)
-            });
-            r.step(fallen, cover, v.position, v.physics.speed);
-            next.insert(key, r);
-        }
-        self.map = next;
+        self.step_at(vehicles.iter().map(|&(key, v)| (key, v.position, v.physics.speed)), cover, fallen);
     }
 
-    /// How much snow lies on vehicle `key`'s roof.
-    pub fn amount(&self, key: u64) -> f32 {
-        self.map.get(&key).map_or(0.0, |r| r.amount)
+    /// `step` by the vehicles' keys, places and speeds.
+    fn step_at(&mut self, vehicles: impl Iterator<Item = (u64, DVec3, f32)>, cover: f32, fallen: f64) {
+        self.steps = self.steps.wrapping_add(1);
+        let now = self.steps;
+        let weather = self.weather.unwrap_or(0.0);
+        let lying = cover.max(weather);
+        for (key, at, speed) in vehicles {
+            let r = self.map.entry(key).or_insert_with(|| {
+                RoofSnow::new(if key == 0 { lying } else { (cover * 0.6).max(weather) }, fallen, lying, at)
+            });
+            r.step(fallen, lying, at, speed);
+            r.seen = now;
+        }
+        self.map.retain(|_, r| r.seen == now);
+    }
+
+    /// How much snow lies on vehicle `key`'s roof, None for a vehicle whose roof is not
+    /// kept here (another player's bus over the LAN, every vehicle outside the winter),
+    /// which shows the weather's snow as before.
+    pub fn amount(&self, key: u64) -> Option<f32> {
+        self.map.get(&key).map(|r| r.amount)
+    }
+
+    /// No roof holds snow.
+    pub fn bare(&self) -> bool {
+        self.map.values().all(|r| r.amount <= 0.0)
+    }
+
+    /// Forget every roof (they show the weather's snow again).
+    pub fn clear(&mut self) {
+        self.map.clear();
     }
 }
 
-/// Show the roof's snow on every part of a vehicle's render (its coupled parts' too).
+/// Show the roof's snow on every part of a vehicle's render (its coupled parts' too): None
+/// gives it back the weather's snow.
 pub fn show_roof(
     r: &Renderer,
     scene: &mut omsi_render::Scene,
     body: &crate::VehicleRender,
     trailers: &[crate::VehicleRender],
-    amount: f32,
+    amount: Option<f32>,
 ) {
+    // (the far levels of detail too: a far car showed the weather's snow, its near model its own)
     for render in std::iter::once(body).chain(trailers) {
-        for &i in &render.instances {
+        for &i in render.instances.iter().chain(&render.far) {
             r.set_roof_snow(scene, i, amount);
         }
     }
@@ -262,15 +348,32 @@ const TILE_PX: usize = 256;
 /// Tiles a side of the field (it wraps around the world every `SNOW_TRACK_SIDE` metres).
 const SLOTS: usize = 8;
 const TEXEL: f64 = TILE_M / TILE_PX as f64;
-/// Tiles whose ruts are drawn in a frame at most (a jump of the camera fills the field
-/// over a few frames instead of in one long one).
-const RUTS_PER_FRAME: usize = 6;
+/// The texels near a lane the ruts look at in a frame, about (a tile is begun while some
+/// are left), each tile counting `RUT_TILE_WORK` more for its own passes and upload, and the
+/// tiles a frame draws at most: well under a millisecond. The row of tiles the camera moves
+/// into is drawn over the next eight frames (at the field's far edge, beyond TRACKS_SEEN),
+/// a jump of the camera or the lanes' growth over a second or so. (The whole row in one
+/// frame, each tile sent to the GPU cleared and again with its ruts, measured 4 to 6 ms each
+/// time the camera crossed a tile's edge - the sending, mostly.)
+const RUT_WORK_PER_FRAME: usize = 40_000;
+const RUT_TILE_WORK: usize = TILE_PX * TILE_PX / 4;
+const RUT_TILES_PER_FRAME: usize = 1;
+/// How near the camera the ruts and tracks show (m): road_snow.wgsl fades them out from 75 m
+/// and reads none beyond 90. The tiles the field takes as the camera moves lie 96 m off and
+/// more, and are drawn (a row of eight, a tile a frame) before it comes 6 m nearer.
+const TRACKS_SEEN: f64 = 90.0;
+/// The longest piece of a lane the ruts take as one (m): the tracks' wander is taken at its
+/// ends and blended between, and its box stays narrow where the lane runs on a diagonal.
+const RUT_STEP: f64 = 2.0;
 /// Frames the lane network must stay as it is before the ruts are drawn again from it.
 const LANES_STEADY: u32 = 30;
 /// Half the gauge of a lane's wheel tracks and how wide each rut is (m): between a car's
 /// and a bus's, so both drive in them.
 const RUT_HALF_GAUGE: f64 = 0.9;
 const RUT_SIGMA: f64 = 0.24;
+/// How far from a lane's line its ruts reach (m): the gauge, the most they wander and the
+/// widest bell out to where it rounds to nothing in a byte (see `rut_piece`).
+const RUT_REACH: f64 = RUT_HALF_GAUGE + 0.1 + 3.6 * 1.25 * RUT_SIGMA;
 /// Half a tyre's width (m).
 const TYRE_HALF: f64 = 0.13;
 /// Tyres farther from the camera leave no track (m).
@@ -323,6 +426,10 @@ pub struct SnowTracks {
     /// Frames since the kept tracks were last looked over, and tiles handed back so far.
     kept_frames: u32,
     restored: u32,
+    /// The rut texels looked at since the last log (OMSI_ROAD_SNOW_LOG).
+    rut_work: usize,
+    /// A tile's ruts before they are drawn again (kept between the tiles, see `draw_ruts`).
+    ruts_before: Vec<u8>,
 }
 
 /// A tile's tyre tracks, packed: the snow fallen when the newest was pressed (2 bytes), then
@@ -372,7 +479,7 @@ impl SnowTracks {
         (self.kept.len(), self.kept_bytes, self.restored)
     }
 
-    /// The field holds the tiles around the camera.
+    /// The field holds the ruts of the tiles in sight around the camera (see TRACKS_SEEN).
     pub fn ready(&self) -> bool {
         self.ready
     }
@@ -407,13 +514,9 @@ impl SnowTracks {
             }
         }
         // the tiles around the camera, each in its slot of the wrapping field
-        let cx = (eye.x / TILE_M).floor() as i64;
-        let cy = (eye.y / TILE_M).floor() as i64;
-        let half = SLOTS as i64 / 2;
-        let mut ruts_left = RUTS_PER_FRAME;
-        let mut all_drawn = true;
-        for ty in cy - half + 1..=cy + half {
-            for tx in cx - half + 1..=cx + half {
+        let (xs, ys) = field_tiles(eye.truncate());
+        for ty in ys {
+            for tx in xs.clone() {
                 let s = &mut self.slots[slot_of(tx, ty)];
                 if s.tile != Some((tx, ty)) {
                     // the tile let go keeps its tracks, the one taken gets its own back
@@ -435,18 +538,40 @@ impl SnowTracks {
                     }
                     s.ruts_done = false;
                     s.drawn = false;
-                    s.touch(0, 0, TILE_PX, TILE_PX);
                 }
-                if !s.ruts_done && ruts_left > 0 {
-                    ruts_left -= 1;
-                    draw_ruts(s, (tx, ty), net, fallen);
-                    s.ruts_done = true;
-                    s.drawn = true;
-                    s.touch(0, 0, TILE_PX, TILE_PX);
-                }
-                all_drawn &= s.drawn;
             }
         }
+        // the ruts, as far as the frame's share goes: of the tiles not drawn since they were
+        // taken first, the nearest first, then of those the lanes' growth asks for again; a
+        // tile goes to the GPU once its ruts are in (a whole tile at a time cost far more to
+        // send than to draw), one drawn again only where they changed
+        let off = |t: Option<(i64, i64)>| t.map_or(0.0, |t| tile_off(t, eye.truncate()));
+        let mut order: Vec<(bool, f64, usize)> =
+            self.slots.iter().enumerate().filter(|(_, s)| !s.ruts_done).map(|(i, s)| (s.drawn, off(s.tile), i)).collect();
+        order.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)));
+        let (mut work, mut tiles) = (RUT_WORK_PER_FRAME, RUT_TILES_PER_FRAME);
+        for &(was_drawn, _, i) in &order {
+            if work == 0 || tiles == 0 {
+                break;
+            }
+            let s = &mut self.slots[i];
+            let tile = s.tile.expect("a slot of the field holds a tile");
+            let (done, changed) = draw_ruts(s, tile, net, fallen, &mut self.ruts_before);
+            work = work.saturating_sub(done + RUT_TILE_WORK);
+            tiles -= 1;
+            self.rut_work += done;
+            s.ruts_done = true;
+            s.drawn = true;
+            if changed || !was_drawn {
+                s.touch(0, 0, TILE_PX, TILE_PX);
+            }
+        }
+        // (a tile taken whose ruts wait for a later frame shows on the GPU what its slot held
+        // before: where the camera moves, 96 m off and more, beyond the ruts' sight (see
+        // TRACKS_SEEN). After a jump of the camera the field shows nothing until the tiles
+        // in sight are drawn, the nearest first - half a second - rather than sending all
+        // of them cleared at once.)
+        let in_sight = self.slots.iter().all(|s| s.drawn || off(s.tile) >= TRACKS_SEEN);
         // the tyres' tracks, from where each touched the road last frame
         let mut now = HashMap::with_capacity(tyres.len());
         if cover > 0.02 {
@@ -485,11 +610,11 @@ impl SnowTracks {
             let Some((_, y0, _, y1)) = s.dirty.take() else { continue };
             r.set_snow_track_rows(i as u32, y0 as u32, &s.px[y0 * TILE_PX * 4..y1 * TILE_PX * 4]);
         }
-        if all_drawn && !self.ready {
+        if in_sight && !self.ready {
             let rutted = self.slots.iter().filter(|s| s.px.chunks_exact(4).any(|p| p[0] > 64)).count();
             log::info!("road snow: track field ready around ({:.0}, {:.0}), {lanes} lanes, ruts on {rutted} of {} tiles", eye.x, eye.y, self.slots.len());
         }
-        self.ready = all_drawn || self.ready;
+        self.ready = in_sight;
     }
 
     /// A tyre's track from `a` to `b` (world), stamped with the snow fallen when it was
@@ -533,6 +658,20 @@ impl SnowTracks {
     }
 }
 
+/// The world tiles the field holds around `eye` (x, y in tiles): eight a side, four ahead
+/// of the camera's own and three behind it.
+fn field_tiles(eye: DVec2) -> (std::ops::RangeInclusive<i64>, std::ops::RangeInclusive<i64>) {
+    let (cx, cy) = ((eye.x / TILE_M).floor() as i64, (eye.y / TILE_M).floor() as i64);
+    let half = SLOTS as i64 / 2;
+    (cx - half + 1..=cx + half, cy - half + 1..=cy + half)
+}
+
+/// How far world tile (x, y) is from `eye` (m, 0 for the tile it stands in).
+fn tile_off((x, y): (i64, i64), eye: DVec2) -> f64 {
+    let lo = DVec2::new(x as f64, y as f64) * TILE_M;
+    (lo - eye).max(eye - lo - DVec2::splat(TILE_M)).max(DVec2::ZERO).length()
+}
+
 /// The slot of the wrapping field that holds world tile (x, y).
 fn slot_of(tx: i64, ty: i64) -> usize {
     ty.rem_euclid(SLOTS as i64) as usize * SLOTS + tx.rem_euclid(SLOTS as i64) as usize
@@ -545,13 +684,24 @@ fn slot_of(tx: i64, ty: i64) -> usize {
 /// texel keeps the moment a tyre last pressed it (`b`, `a`). Where none has yet, it takes
 /// a moment as long ago as the lane's traffic makes likely - a busy street's ruts are
 /// fresh, a quiet lane's half filled already.
-fn draw_ruts(s: &mut Slot, (tx, ty): (i64, i64), net: Option<&Network>, fallen: f64) {
+///
+/// Gives back the texels it looked at (the frame's share of the work, see
+/// `RUT_WORK_PER_FRAME`) and whether the tile's ruts changed (`before`: room for the ruts
+/// it had).
+fn draw_ruts(s: &mut Slot, (tx, ty): (i64, i64), net: Option<&Network>, fallen: f64, before: &mut Vec<u8>) -> (usize, bool) {
     // (drawn again - the network has grown - a rut keeps the moment it had: its filling
     // goes on where it was)
-    let had: Vec<bool> = s.px.chunks_exact(4).map(|p| p[0] > 0).collect();
+    before.clear();
+    before.extend(s.px.chunks_exact(4).map(|p| p[0]));
     for p in s.px.chunks_exact_mut(4) {
         p[0] = 0;
     }
+    let work = draw_lanes(s, (tx, ty), net, fallen, before);
+    (work, s.px.chunks_exact(4).zip(before.iter()).any(|(p, b)| p[0] != *b))
+}
+
+/// The ruts of `net`'s street lanes into the tile's cleared `r` (`before`: the ruts it had).
+fn draw_lanes(s: &mut Slot, (tx, ty): (i64, i64), net: Option<&Network>, fallen: f64, before: &[u8]) -> usize {
     let x0 = tx as f64 * TILE_M;
     let y0 = ty as f64 * TILE_M;
     // (OMSI_ROAD_SNOW_GRID: a line every 4 m along both axes instead of the ruts, and a
@@ -564,10 +714,10 @@ fn draw_ruts(s: &mut Slot, (tx, ty): (i64, i64), net: Option<&Network>, fallen: 
                 s.px[(py * TILE_PX + px) * 4] = if v { 255 } else { 0 };
             }
         }
-        return;
+        return TILE_PX * TILE_PX;
     }
-    let Some(net) = net else { return };
-    let reach = RUT_HALF_GAUGE + 3.0 * RUT_SIGMA;
+    let Some(net) = net else { return 0 };
+    let reach = RUT_REACH;
     // the lanes of the network's cells the tile (and the ruts' reach) touches
     let (c0x, c0y) = (((x0 - reach) / GRID_CELL).floor() as i32, ((y0 - reach) / GRID_CELL).floor() as i32);
     let (c1x, c1y) = (((x0 + TILE_M + reach) / GRID_CELL).floor() as i32, ((y0 + TILE_M + reach) / GRID_CELL).floor() as i32);
@@ -581,6 +731,7 @@ fn draw_ruts(s: &mut Slot, (tx, ty): (i64, i64), net: Option<&Network>, fallen: 
     }
     lanes.sort_unstable();
     lanes.dedup();
+    let mut work = 0;
     for li in lanes {
         let lane = &net.lanes[li];
         // (every street lane: a bus lane or a terminus loop the random traffic keeps out
@@ -596,6 +747,7 @@ fn draw_ruts(s: &mut Slot, (tx, ty): (i64, i64), net: Option<&Network>, fallen: 
         // buses still use it) a third filled)
         let since = 280.0 / (1.0 + 3.0 * lane.density.max(0.0) as f64);
         let then = (fallen - since).rem_euclid(65536.0) as u16;
+        let point = |k: usize| lane.points.get(k).map(|p| p.truncate());
         for (k, w) in lane.points.windows(2).enumerate() {
             let (a, b) = (w[0].truncate(), w[1].truncate());
             let (d0, d1) = (
@@ -607,47 +759,169 @@ fn draw_ruts(s: &mut Slot, (tx, ty): (i64, i64), net: Option<&Network>, fallen: 
             if hi.x < x0 || hi.y < y0 || lo.x > x0 + TILE_M || lo.y > y0 + TILE_M {
                 continue;
             }
-            let ab = b - a;
-            let len2 = ab.length_squared();
-            if len2 < 1e-6 {
+            let near = (k.checked_sub(1).and_then(point), point(k + 2));
+            work += rut_segment(s, (x0, y0), (a, b), near, (d0, d1), seed, then, before);
+        }
+    }
+    work
+}
+
+/// The ruts along one segment `a`-`b` of a lane (`near`: the points before and after it,
+/// `d0`, `d1`: how far down the lane its ends are), in pieces of at most RUT_STEP with the
+/// tracks' shape taken at each one's ends; gives back the texels it looked at.
+///
+/// Each end reaches past itself as far as the bend there needs, up to the bisector of its
+/// angle (a mitre): on the outside of a bend the two segments' ruts part like a fan, and a
+/// texel in the gap belonged to neither (a fixed overlap left a row of snow specks in the
+/// outer rut of a curve, one at every point); on its inside the next segment's rut already
+/// turns away, and a rut drawn on straight there grew a wedge into the lane's middle.
+#[allow(clippy::too_many_arguments)]
+fn rut_segment(s: &mut Slot, origin: (f64, f64), (a, b): (DVec2, DVec2), (prev, next): (Option<DVec2>, Option<DVec2>), (d0, d1): (f64, f64), seed: f64, then: u16, before: &[u8]) -> usize {
+    let len = (b - a).length();
+    if len < 1e-3 {
+        return 0;
+    }
+    let dir = (b - a) / len;
+    let slack = 0.02 * len;
+    // (how far past an end its bend needs - the gap's half angle's tangent at the reach, at
+    // most a metre - and the bisector there; a lane's own end as little as a piece did before)
+    let bend = |d: Option<DVec2>| {
+        d.map_or((slack, None), |d| {
+            let cos = d.dot(dir).clamp(-1.0, 1.0);
+            let past = (RUT_REACH * ((1.0 - cos) / (1.0 + cos).max(1e-6)).sqrt()).min(1.0) + slack;
+            (past, (d + dir).try_normalize())
+        })
+    };
+    let (back, start) = bend(prev.and_then(|p| (a - p).try_normalize()));
+    let (ahead, end) = bend(next.and_then(|n| (n - b).try_normalize()));
+    let steps = (len / RUT_STEP).ceil().max(1.0) as usize;
+    let piece_len = len / steps as f64;
+    let mut work = 0;
+    let mut f0 = 0.0;
+    let mut shape0 = rut_shape(d0, seed);
+    for j in 1..=steps {
+        let f1 = j as f64 / steps as f64;
+        let shape1 = rut_shape(d0 + (d1 - d0) * f1, seed);
+        let ends = Ends {
+            lo: if j == 1 { -back / piece_len } else { -0.02 },
+            hi: if j == steps { 1.0 + ahead / piece_len } else { 1.02 },
+            start: start.filter(|_| j == 1).map(|m| (a, m)),
+            end: end.filter(|_| j == steps).map(|m| (b, m)),
+            slack,
+        };
+        work += rut_piece(s, origin, (a + (b - a) * f0, a + (b - a) * f1), (shape0, shape1), ends, then, before);
+        (f0, shape0) = (f1, shape1);
+    }
+    work
+}
+
+/// How far along a piece its ruts reach: `t` from `lo` to `hi` (0 at its start, 1 at its
+/// end), and past a point where the lane bends only up to the bisector there, give or take
+/// `slack` m (`start`, `end`: the point and the bisector's normal, along the lane).
+#[derive(Clone, Copy)]
+struct Ends {
+    lo: f64,
+    hi: f64,
+    start: Option<(DVec2, DVec2)>,
+    end: Option<(DVec2, DVec2)>,
+    slack: f64,
+}
+
+/// The wheel tracks' shape `along` m down a lane: they do not run on a rail but wander a
+/// hand's breadth off its line, widen and narrow, and are worn deeper in places
+/// (wander, width, depth).
+fn rut_shape(along: f64, seed: f64) -> [f64; 3] {
+    [
+        (along / 9.0 + seed).sin() * 0.07 + (along / 3.7 + seed * 2.3).sin() * 0.03,
+        RUT_SIGMA * (1.0 + 0.25 * (along / 6.3 + seed * 0.7).sin()),
+        0.75 + 0.25 * (along / 4.1 + seed * 1.9).sin(),
+    ]
+}
+
+/// The ruts along one short piece `a`-`b` of a lane over the tile at `x0`, `y0` (world), with
+/// the tracks' shape at its two ends, as far as `ends` says; gives back the texels it looked
+/// at (`before`: the tile's ruts before they were cleared).
+#[allow(clippy::too_many_arguments)]
+fn rut_piece(s: &mut Slot, (x0, y0): (f64, f64), (a, b): (DVec2, DVec2), (s0, s1): ([f64; 3], [f64; 3]), ends: Ends, then: u16, before: &[u8]) -> usize {
+    let reach = RUT_REACH;
+    let ab = b - a;
+    let len2 = ab.length_squared();
+    if len2 < 1e-6 {
+        return 0;
+    }
+    let (t_lo, t_hi) = (ends.lo, ends.hi);
+    let (ea, eb) = (a + ab * t_lo, a + ab * t_hi);
+    let lo = ea.min(eb) - DVec2::splat(reach);
+    let hi = ea.max(eb) + DVec2::splat(reach);
+    if hi.x < x0 || hi.y < y0 || lo.x > x0 + TILE_M || lo.y > y0 + TILE_M {
+        return 0;
+    }
+    let py0 = (((lo.y - y0) / TEXEL).floor().max(0.0)) as usize;
+    let py1 = (((hi.y - y0) / TEXEL).ceil() as usize).min(TILE_PX);
+    let n = DVec2::new(-ab.y, ab.x) / len2.sqrt();
+    let mut work = 0;
+    for py in py0..py1 {
+        // (of the row, only the texels within reach across the piece and along it: on a
+        // diagonal its box held three times as many)
+        let y = y0 + (py as f64 + 0.5) * TEXEL;
+        let (mut xlo, mut xhi) = (lo.x, hi.x);
+        let mut clip = |k: f64, c: f64, from: f64, to: f64| {
+            if k.abs() < 1e-12 {
+                if c < from || c > to {
+                    xhi = f64::MIN;
+                }
+            } else {
+                let (u, v) = ((from - c) / k, (to - c) / k);
+                xlo = xlo.max(u.min(v));
+                xhi = xhi.min(u.max(v));
+            }
+        };
+        clip(n.x, n.y * (y - a.y) - n.x * a.x, -reach, reach);
+        clip(ab.x / len2, (ab.y * (y - a.y) - ab.x * a.x) / len2, t_lo, t_hi);
+        if xhi < xlo {
+            continue;
+        }
+        let px0 = ((xlo - x0) / TEXEL - 0.5).ceil().max(0.0) as usize;
+        let px1 = (((xhi - x0) / TEXEL - 0.5).floor() + 1.0).clamp(0.0, TILE_PX as f64) as usize;
+        work += px1.saturating_sub(px0);
+        for px in px0..px1 {
+            let p = DVec2::new(x0 + (px as f64 + 0.5) * TEXEL, y0 + (py as f64 + 0.5) * TEXEL);
+            let t = (p - a).dot(ab) / len2;
+            // (each piece of the lane up to its ends: the next piece goes on from there)
+            if !(t_lo..=t_hi).contains(&t) {
                 continue;
             }
-            let px0 = (((lo.x - x0) / TEXEL).floor().max(0.0)) as usize;
-            let py0 = (((lo.y - y0) / TEXEL).floor().max(0.0)) as usize;
-            let px1 = (((hi.x - x0) / TEXEL).ceil() as usize).min(TILE_PX);
-            let py1 = (((hi.y - y0) / TEXEL).ceil() as usize).min(TILE_PX);
-            for py in py0..py1 {
-                for px in px0..px1 {
-                    let p = DVec2::new(x0 + (px as f64 + 0.5) * TEXEL, y0 + (py as f64 + 0.5) * TEXEL);
-                    let t = (p - a).dot(ab) / len2;
-                    // (each piece of the lane up to its ends: the next piece goes on from there)
-                    if !(-0.02..=1.02).contains(&t) {
-                        continue;
-                    }
-                    let across = (p - (a + ab * t)).length();
-                    // The wheels do not run on a rail: the tracks wander a hand's breadth
-                    // and widen and narrow along the road, and are worn deeper in places.
-                    let along = d0 + (d1 - d0) * t.clamp(0.0, 1.0);
-                    let wander = (along / 9.0 + seed).sin() * 0.07 + (along / 3.7 + seed * 2.3).sin() * 0.03;
-                    let width = RUT_SIGMA * (1.0 + 0.25 * (along / 6.3 + seed * 0.7).sin());
-                    let depth = 0.75 + 0.25 * (along / 4.1 + seed * 1.9).sin();
-                    let off = (across - RUT_HALF_GAUGE - wander) / width;
-                    let rut = (-0.5 * off * off).exp() * depth;
-                    let v = (rut * 255.0).round() as u8;
-                    let o = (py * TILE_PX + px) * 4;
-                    if v > s.px[o] {
-                        s.px[o] = v;
-                        // (a texel a tyre has pressed keeps its own moment, as one
-                        // that was a rut before)
-                        if s.px[o + 1] == 0 && !had[py * TILE_PX + px] {
-                            s.px[o + 2] = (then >> 8) as u8;
-                            s.px[o + 3] = then as u8;
-                        }
-                    }
+            // (past a bend's point only as far as its bisector)
+            let cut = |e: Option<(DVec2, DVec2)>, sign: f64| e.is_some_and(|(q, m)| (p - q).dot(m) * sign > ends.slack);
+            if (t < 0.0 && cut(ends.start, -1.0)) || (t > 1.0 && cut(ends.end, 1.0)) {
+                continue;
+            }
+            let across = (p - (a + ab * t)).length();
+            if across > reach {
+                continue;
+            }
+            let k = t.clamp(0.0, 1.0);
+            let [wander, width, depth] = std::array::from_fn(|n| s0[n] + (s1[n] - s0[n]) * k);
+            let off = (across - RUT_HALF_GAUGE - wander) / width;
+            // (farther out the bell rounds to nothing in a byte)
+            if off.abs() > 3.6 {
+                continue;
+            }
+            let rut = (-0.5 * off * off).exp() * depth;
+            let v = (rut * 255.0).round() as u8;
+            let o = (py * TILE_PX + px) * 4;
+            if v > s.px[o] {
+                s.px[o] = v;
+                // (a texel a tyre has pressed keeps its own moment, as one
+                // that was a rut before)
+                if s.px[o + 1] == 0 && before[py * TILE_PX + px] == 0 {
+                    s.px[o + 2] = (then >> 8) as u8;
+                    s.px[o + 3] = then as u8;
                 }
             }
         }
     }
+    work
 }
 
 #[cfg(test)]
@@ -677,6 +951,160 @@ mod tests {
         // a tile without a track keeps nothing, and the moments wrap
         assert!(keep_tracks(&vec![0u8; TILE_PX * TILE_PX * 4]).is_none());
         assert!((kept_since(&packed, 65536.0 + 1100.0 + 5.0) - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_ruts_drawn_in_short_pieces_are_the_ruts_of_every_texel() {
+        // a long lane piece across the tile, on a diagonal: drawn in RUT_STEP pieces with the
+        // tracks' shape blended between their ends, against the shape taken at each texel
+        let (a, b) = (DVec2::new(1.0, 2.0), DVec2::new(30.5, 21.0));
+        let (d0, d1, seed) = (40.0, 40.0 + (b - a).length(), 3.1);
+        let mut s = Slot { px: vec![0u8; TILE_PX * TILE_PX * 4], ..Default::default() };
+        let before = vec![0u8; TILE_PX * TILE_PX];
+        let work = rut_segment(&mut s, (0.0, 0.0), (a, b), (None, None), (d0, d1), seed, 0, &before);
+        // (the whole piece's box, as it was looked at before: far more than the pieces')
+        let reach = RUT_REACH;
+        let whole = ((b.x - a.x + 2.0 * reach) / TEXEL) * ((b.y - a.y + 2.0 * reach) / TEXEL);
+        assert!((work as f64) < whole * 0.4, "{work} of {whole}");
+        let (ab, mut worst, mut ruts) = (b - a, 0i32, 0);
+        for py in 0..TILE_PX {
+            for px in 0..TILE_PX {
+                let p = DVec2::new((px as f64 + 0.5) * TEXEL, (py as f64 + 0.5) * TEXEL);
+                let t = (p - a).dot(ab) / ab.length_squared();
+                let mut want = 0u8;
+                if (0.0..=1.0).contains(&t) {
+                    let [wander, width, depth] = rut_shape(d0 + (d1 - d0) * t, seed);
+                    let off = ((p - (a + ab * t)).length() - RUT_HALF_GAUGE - wander) / width;
+                    want = ((-0.5 * off * off).exp() * depth * 255.0).round() as u8;
+                }
+                let got = s.px[(py * TILE_PX + px) * 4];
+                if (0.0..=1.0).contains(&t) {
+                    worst = worst.max((got as i32 - want as i32).abs());
+                }
+                ruts += (got > 128) as usize;
+            }
+        }
+        assert!(worst <= 2, "{worst}");
+        assert!(ruts > 1000, "{ruts}");
+    }
+
+    /// A lane on an arc of `radius` m in chords of `chord` m, its ruts drawn: the texels of
+    /// the outer rut's line left in snow, how many there are, and the most rut on the inner
+    /// flank (between the inner rut's line and the lane's middle) and in the middle.
+    fn arc_ruts(radius: f64, chord: f64) -> (usize, usize, u8, u8) {
+        let c = DVec2::new(16.0, 16.0);
+        let step = chord / radius;
+        let angles: Vec<f64> = (0..).map(|i| 0.3 + i as f64 * step).take_while(|t| *t < 2.9).collect();
+        let points: Vec<DVec2> = angles.iter().map(|&t| c + DVec2::new(t.cos(), t.sin()) * radius).collect();
+        let mut s = Slot { px: vec![0u8; TILE_PX * TILE_PX * 4], ..Default::default() };
+        let before = vec![0u8; TILE_PX * TILE_PX];
+        for k in 0..points.len() - 1 {
+            let near = (k.checked_sub(1).map(|i| points[i]), points.get(k + 2).copied());
+            let d = (k as f64 * chord, (k + 1) as f64 * chord);
+            rut_segment(&mut s, (0.0, 0.0), (points[k], points[k + 1]), near, d, 0.0, 0, &before);
+        }
+        // (each texel by its distance to the nearest chord, on the bend's outside or inside;
+        // the ruts wander 10 cm off their line)
+        let (mut holes, mut outer, mut flank, mut middle) = (0, 0, 0u8, 0u8);
+        for py in 0..TILE_PX {
+            for px in 0..TILE_PX {
+                let p = DVec2::new((px as f64 + 0.5) * TEXEL, (py as f64 + 0.5) * TEXEL);
+                let angle = (p - c).y.atan2((p - c).x);
+                if angle < angles[0] + step || angle > angles[angles.len() - 1] - step {
+                    continue;
+                }
+                let (dist, out) = points
+                    .windows(2)
+                    .map(|w| {
+                        let ab = w[1] - w[0];
+                        let q = w[0] + ab * ((p - w[0]).dot(ab) / ab.length_squared()).clamp(0.0, 1.0);
+                        ((p - q).length(), (p - q).dot(q - c) > 0.0)
+                    })
+                    .min_by(|x, y| x.0.total_cmp(&y.0))
+                    .unwrap();
+                let got = s.px[(py * TILE_PX + px) * 4];
+                if out && (0.82..=0.9).contains(&dist) {
+                    outer += 1;
+                    holes += (got == 0) as usize;
+                }
+                if !out && (0.35..=0.45).contains(&dist) {
+                    flank = flank.max(got);
+                }
+                if dist < 0.1 {
+                    middle = middle.max(got);
+                }
+            }
+        }
+        (holes, outer, flank, middle)
+    }
+
+    #[test]
+    fn the_ruts_of_a_curve_have_no_gaps_outside_and_no_wedges_inside() {
+        // spline lanes in 3 m chords of a 12 m bend (14 degrees at each point), a turning
+        // path's in 2 m chords of 4.5 m (25 degrees): the outer rut's line has no texel left
+        // in snow where two chords meet, and the inner rut grows no wedge toward the middle
+        for (radius, chord) in [(12.0, 3.0), (4.5, 2.0)] {
+            let (holes, outer, flank, middle) = arc_ruts(radius, chord);
+            eprintln!("r {radius} chord {chord}: holes {holes} of {outer}, flank {flank}, middle {middle}");
+            assert!(outer > 30, "{outer}");
+            assert_eq!(holes, 0, "r {radius}");
+            assert!(flank < 90, "r {radius}: {flank}");
+            assert!(middle < 40, "r {radius}: {middle}");
+        }
+    }
+
+    #[test]
+    fn a_roof_not_kept_shows_the_weathers_snow() {
+        let mut roofs = Roofs::default();
+        // (another player's bus over the LAN, or no step yet: the weather's snow, not none)
+        assert_eq!(roofs.amount(7), None);
+        assert!(roofs.bare());
+        roofs.step_at([(0, DVec3::ZERO, 0.0), (7, DVec3::X, 0.0)].into_iter(), 0.5, 0.0);
+        assert_eq!(roofs.amount(0), Some(0.5));
+        assert_eq!(roofs.amount(7), Some(0.3));
+        assert!(!roofs.bare());
+        // one gone is forgotten, and all of them outside the winter
+        roofs.step_at([(0, DVec3::ZERO, 0.0)].into_iter(), 0.5, 0.0);
+        assert_eq!(roofs.amount(7), None);
+        roofs.clear();
+        assert_eq!(roofs.amount(0), None);
+        // snow starting to fall on snow lying: a roof starts from the white the weather's
+        // snow showed on it, not bare, and keeps it while it lies after the roads thawed
+        roofs.weather = Some(1.0);
+        roofs.step_at([(5, DVec3::ZERO, 0.0)].into_iter(), 0.0, 0.0);
+        assert_eq!(roofs.amount(5), Some(1.0));
+        roofs.step_at([(5, DVec3::ZERO, 0.0)].into_iter(), 0.0, 0.0);
+        assert_eq!(roofs.amount(5), Some(1.0));
+    }
+
+    #[test]
+    fn the_tiles_the_field_takes_lie_beyond_the_ruts_sight() {
+        // the camera going every way across the tiles' edges, a third of a metre a frame (70
+        // km/h): each tile the field takes lies 96 m off or more, beyond TRACKS_SEEN by the
+        // 6 m the row it is in takes to be drawn, and those in sight are all still held
+        for k in 0..72 {
+            let dir = DVec2::from_angle(k as f64 * 5.0_f64.to_radians());
+            let mut eye = DVec2::new(1000.3, -2000.7);
+            let mut held: std::collections::HashSet<(i64, i64)> = std::collections::HashSet::new();
+            for step in 0..2000 {
+                let (xs, ys) = field_tiles(eye);
+                let now: std::collections::HashSet<(i64, i64)> = ys.flat_map(|y| xs.clone().map(move |x| (x, y))).collect();
+                if step > 0 {
+                    for &t in now.difference(&held) {
+                        assert!(tile_off(t, eye) >= 95.6, "dir {k}: tile {t:?} taken {:.2} m off", tile_off(t, eye));
+                    }
+                }
+                let seen = |t: (i64, i64)| tile_off(t, eye) < TRACKS_SEEN;
+                let (bx, by) = ((eye.x / TILE_M).floor() as i64, (eye.y / TILE_M).floor() as i64);
+                for y in by - 4..=by + 4 {
+                    for x in bx - 4..=bx + 4 {
+                        assert!(!seen((x, y)) || now.contains(&(x, y)), "dir {k}: tile ({x}, {y}) in sight and not held");
+                    }
+                }
+                held = now;
+                eye += dir * 0.33;
+            }
+        }
     }
 
     #[test]
@@ -723,6 +1151,7 @@ mod tests {
         let mut r = RoadSnow::default();
         r.step(0.0, &w);
         assert_eq!(r.cover, 0.0);
+        assert!(r.falling);
         for _ in 0..300 {
             r.step(1.0, &w);
         }
@@ -736,6 +1165,7 @@ mod tests {
             r.step(1.0, &w);
         }
         assert_eq!(r.cover, 0.0);
+        assert!(!r.falling);
         assert!((r.fallen - 500.0).abs() < 10.0);
     }
 }

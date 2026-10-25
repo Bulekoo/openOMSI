@@ -47,8 +47,13 @@ fn snow_track_texel(p: vec2<i32>) -> vec2<f32> {
 
 // The rut (x) and the fresh track (y) at a point of the render frame, blended between the
 // four texels around it (each decoded first: the fill time does not blend).
+//
+// Faded out from 75 m off and not read beyond 90: the tiles the field takes as the camera
+// moves lie 96 m off and more, and hold what they held before until their ruts are drawn
+// a few frames later (see `SnowTracks::update`) - and a rut that far is a pixel or two.
 fn snow_track_at(world: vec2<f32>) -> vec2<f32> {
-    if (snow_track.place.w < 0.5) {
+    let fade = 1.0 - smoothstep(75.0, 90.0, distance(world, camera.cam_pos.xy));
+    if (snow_track.place.w < 0.5 || fade <= 0.0) {
         return vec2<f32>(0.0);
     }
     let q = (world + snow_track.place.xy) * (f32(TRACK_TEXELS) / snow_track.place.z) - 0.5;
@@ -59,22 +64,33 @@ fn snow_track_at(world: vec2<f32>) -> vec2<f32> {
     let a10 = snow_track_texel(i + vec2<i32>(1, 0));
     let a01 = snow_track_texel(i + vec2<i32>(0, 1));
     let a11 = snow_track_texel(i + vec2<i32>(1, 1));
-    return mix(mix(a00, a10, f.x), mix(a01, a11, f.x), f.y);
+    return mix(mix(a00, a10, f.x), mix(a01, a11, f.x), f.y) * fade;
 }
 
-// The snow on a vehicle's part (`code`: its instance's surface code, below -500, whose ten
-// thousands carry how much snow its roof has gathered, 0..40, see lib.rs `roof_snow`),
+// Whether a part's surface code carries its roof's own snow (`vehicle_snow`) rather than
+// leaving it to the weather's (a roof the roads' snow does not keep: another player's bus).
+fn vehicle_snow_kept(code: f32) -> bool {
+    return code < -10000.0 && road_snow_dynamic();
+}
+
+// The snow on a vehicle's part (`code`: its instance's surface code, whose ten thousands
+// carry how much snow its roof has gathered, 1..41 for 0..1, see upload.rs `roof_code`),
 // at `local`, the point in the part's own mesh: patches at first, a closed layer as it
 // goes on, laid out on the vehicle so that they ride with it.
 fn vehicle_snow(code: f32, local: vec3<f32>) -> f32 {
-    let amount = floor(-code / 10000.0) / 40.0;
+    let amount = (floor(-code / 10000.0) - 1.0) / 40.0;
+    let level = amount * 1.3 - 0.12;
+    // (bare, or closed over whatever the patches: no noise to sample)
     if (amount <= 0.0) {
         return 0.0;
+    }
+    if (level >= 1.08) {
+        return 1.0;
     }
     let p = local.xy;
     let p2 = vec2<f32>(p.x * 0.8 - p.y * 0.6, p.x * 0.6 + p.y * 0.8);
     let patches = vnoise_f(p, 0.9, vec2<f32>(4.3, 1.9)) * 0.65 + vnoise_f(p2, 3.1, vec2<f32>(8.1, 6.7)) * 0.35;
-    return smoothstep(patches - 0.3, patches + 0.08, amount * 1.3 - 0.12);
+    return smoothstep(patches - 0.3, patches + 0.08, level);
 }
 
 // Whether the roads' snow is the built-up kind (`state.x` at or above 0) rather than the
@@ -96,10 +112,16 @@ fn road_snow(world: vec3<f32>) -> vec3<f32> {
     // the grain of the asphalt, which close up as it goes on falling.
     // (three octaves, the finer ones turned against the coarse: a single lattice's cells
     // showed as square blots where the cover's edge ran through them)
+    // (once the cover has closed - its level over the patches' highest - every pixel of the
+    // road paid for three octaves of noise that changed nothing)
     let m2 = vec2<f32>(m.x * 0.8 - m.y * 0.6, m.x * 0.6 + m.y * 0.8);
-    let m3 = vec2<f32>(m.x * 0.28 + m.y * 0.96, m.y * 0.28 - m.x * 0.96);
-    let patches = vnoise_f(m, 0.45, vec2<f32>(3.1, 7.7)) * 0.55 + vnoise_f(m2, 1.3, vec2<f32>(11.3, 2.9)) * 0.3 + vnoise_f(m3, 3.7, vec2<f32>(5.9, 13.1)) * 0.15;
-    var cover = smoothstep(patches - 0.35, patches + 0.1, base * 1.35 - 0.15);
+    let level = base * 1.35 - 0.15;
+    var cover = 1.0;
+    if (level < 1.1) {
+        let m3 = vec2<f32>(m.x * 0.28 + m.y * 0.96, m.y * 0.28 - m.x * 0.96);
+        let patches = vnoise_f(m, 0.45, vec2<f32>(3.1, 7.7)) * 0.55 + vnoise_f(m2, 1.3, vec2<f32>(11.3, 2.9)) * 0.3 + vnoise_f(m3, 3.7, vec2<f32>(5.9, 13.1)) * 0.15;
+        cover = smoothstep(patches - 0.35, patches + 0.1, level);
+    }
     let tracks = snow_track_at(world.xy);
     // The ruts: the wheels of the traffic keep two strips of each lane down to slush, the
     // more of it the more snow there is to churn; with a mere dusting they show the asphalt.
@@ -110,8 +132,10 @@ fn road_snow(world: vec3<f32>) -> vec3<f32> {
     // texels' blend (a soft ramp over a whole texel read as a blur), and the pressed snow
     // grainy - the tread's blocks, as fine as the eye can still tell apart.
     let edge = smoothstep(0.2, 0.75, tracks.y);
-    let grain = 0.75 + 0.25 * vnoise_f(m2, 14.0, vec2<f32>(1.7, 9.3));
-    let track = edge * grain;
+    var track = 0.0;
+    if (edge > 0.0) {
+        track = edge * (0.75 + 0.25 * vnoise_f(m2, 14.0, vec2<f32>(1.7, 9.3)));
+    }
     cover = cover * (1.0 - track * 0.6);
     return vec3<f32>(cover, max(slush, track * 0.5 * base), track);
 }

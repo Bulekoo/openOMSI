@@ -228,7 +228,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_ROAD_PHOTO_SIDE` | num | 0 | use | app | With OMSI_ROAD_PHOTO: metres to either side of the carriageway. |
 | `OMSI_ROAD_PHOTO_SLANT` | num | - | use | app | With OMSI_ROAD_PHOTO: from a driver's eye this far back instead of from above. |
 | `OMSI_ROAD_SNOW_GRID` | bool | off | use | scene | With the roads' snow: a 4 m grid in the track field instead of the lanes' ruts (to see it lie on the world). |
-| `OMSI_ROAD_SNOW_LOG` | bool | off | use | scene | With the roads' snow: log its cover, the snow fallen and the weather every ten seconds. |
+| `OMSI_ROAD_SNOW_LOG` | bool | off | use | scene | With the roads' snow: log its cover, the snow fallen, the weather and what it costs a frame (mean, worst, rut texels drawn) every ten seconds. |
 | `OMSI_SCENE_DIGEST` | bool | off | use | app | Log a hash of the renderer's scene (its instances in order, their places, materials and parameters) before each offscreen picture: two runs whose renderers saw the same calls log the same digests. |
 | `OMSI_SEED` | num | random | use | app | Seed of the scripts' random numbers (repeat a session). |
 | `OMSI_SKIP_OBJECT` | text | - | use | scene | Leave out the objects whose file name contains this text. |

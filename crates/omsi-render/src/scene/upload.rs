@@ -62,8 +62,9 @@ impl Renderer {
     pub(crate) fn roof_code(i: &Instance, ro: DVec3) -> Option<f32> {
         let roof = i.roof.filter(|_| !i.blob && !i.surface)?;
         let z = (i.origin - ro).z as f32 + i.transform.transform_point3(Vec3::new(0.0, 0.0, roof)).z;
-        // (the snow on the roof, 0..40, in the code's ten thousands: road_snow.wgsl)
-        let snow = (i.roof_snow.clamp(0.0, 1.0) * 40.0).round();
+        // (the snow on the roof in the code's ten thousands: 1..41 for 0..1 where the roads'
+        // built-up snow keeps it, 0 for the weather's snow - road_snow.wgsl)
+        let snow = i.roof_snow.map_or(0.0, |s| 1.0 + (s.clamp(0.0, 1.0) * 40.0).round());
         Some(-(5000.0 + z.clamp(-4000.0, 4000.0) + 10000.0 * snow))
     }
 
