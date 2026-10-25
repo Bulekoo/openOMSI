@@ -8,6 +8,10 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 
 ### New
 
+- **A flashlight (Alt+F)**: a hand lamp held beside the eye that shines where the view looks, a
+  warm white cone reaching 50 m with a soft edge, in the Vanilla and the Enhanced pictures, in
+  every view, by night in the dark or by day inside a dim cab. `flashlight` in keyboard.cfg's
+  `[game]` (or a controller button) switches it as well.
 - **Choose where openOMSI keeps its data** (Setup › `.openomsi` folder): settings, profiles,
   logs and caches can live in another folder, on another disk. A game and its launcher find the
   folder through a pointer file beside the program (beside the `.app` on a Mac, so an update of
