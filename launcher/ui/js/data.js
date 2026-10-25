@@ -58,11 +58,22 @@ export function fitWindow() {
   if (inTauri) call('fit_zoom', { size: Number(launcherSize()) || 1 }).catch(() => {});
 }
 
+export function resolvedTheme(pick = remembered('theme', 'dark')) {
+  return pick === 'light' || (pick === 'system' && matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+}
+
 export function applyTheme() {
-  const pick = localStorage.getItem('theme') || 'dark';
-  const light = pick === 'light' || (pick === 'system' && matchMedia('(prefers-color-scheme: light)').matches);
-  document.documentElement.dataset.theme = light ? 'light' : 'dark';
+  const resolved = resolvedTheme();
+  document.documentElement.dataset.theme = resolved;
   document.documentElement.dataset.layout = launcherLayout();
+  if (S.ready && S.settings && S.settings.ui_theme !== resolved) {
+    const previous = S.settings.ui_theme;
+    return saveSettings({ ui_theme: resolved }).then((saved) => {
+      if (saved === false) set({ settings: { ...S.settings, ui_theme: previous } });
+      return saved;
+    });
+  }
+  return Promise.resolve();
 }
 
 export async function loadContent() {
