@@ -454,6 +454,11 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 
 ### Fixes
 
+- **The launcher's bus preview is no longer misted over**: the bus is made for it (the
+  showroom and `--export-glb`) on a mild day (22 °C) instead of at 0 °C, the temperature a
+  vehicle starts at without a weather. The
+  Kajosoft Citaro, Citaro Facelift and 628 fog every window up in their {init} below 10 °C,
+  so the preview always showed them misted; in the game the map's weather still decides.
 - **Köln's houses on Engeldorfer Straße are back**: a binary `.x` string ended by a WORD
   token, as PAD-Labs' exporter writes it, no longer swallows the `}` after it. Read as the
   documented DWORD, the house's material never closed, the model failed to load and its 25
