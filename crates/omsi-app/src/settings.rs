@@ -28,6 +28,8 @@ pub struct Settings {
     /// as designed (`ui::backdrop`). `navigator_opacity` in older files: it was the
     /// navigator's alone.
     pub ui_opacity: f32,
+    /// The shared palette for all game UI: `dark` (default) or `light`.
+    pub ui_theme: String,
     /// Which corner the navigator sits in: `bottom-left` (default), `bottom-right`,
     /// `top-left` or `top-right`.
     pub navigator_corner: String,
@@ -517,6 +519,9 @@ impl Settings {
             [0.0, 0.0, size.0 as f32, size.1 as f32]
         }
     }
+    pub fn is_light_theme(&self) -> bool {
+        self.ui_theme == "light"
+    }
     pub(crate) fn phone() -> Self {
         Self { msaa: 2, anisotropy: 4, ssao: false, shadow_size: 1024, mirror_size: 128, max_fps: 60, max_obj_dist: 900.0, pax_density: 0.7, navigator_corner: "top-center".into(), ..Self::desktop() }
     }
@@ -607,11 +612,8 @@ impl Settings {
         let mut s = Settings::default();
         let mut version = 0u32;
         let mut graphics: Option<String> = None;
-        for line in text.lines() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
-                continue;
-            }
+        let mut theme = (false, None);
+        for line in text.lines().map(str::trim).filter(|line| !line.is_empty() && !line.starts_with('#') && !line.starts_with(';')) {
             let Some((k, v)) = line.split_once('=') else { continue };
             let (k, v) = (k.trim().to_ascii_lowercase(), v.trim());
             let b = |v: &str| matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "on" | "yes");
@@ -625,6 +627,7 @@ impl Settings {
                 "shadow_blobs" => s.shadow_blobs = b(v),
                 "navigator" => s.navigator = b(v),
                 "ui_opacity" | "navigator_opacity" => s.ui_opacity = v.parse::<f32>().ok().filter(|x| x.is_finite()).map(|x| x.clamp(0.2, 1.0)).unwrap_or(s.ui_opacity),
+                "ui_theme" => { theme.0 = true; s.ui_theme = if v.eq_ignore_ascii_case("light") { "light" } else { "dark" }.into(); }
                 "navigator_corner" => s.navigator_corner = v.to_ascii_lowercase(),
                 "boarding" => s.boarding = v.to_ascii_lowercase(),
                 "standing_chance" => s.standing_chance = v.trim_end_matches('%').parse::<f32>().ok().filter(|x| x.is_finite()).map(|x| (x / 100.0).clamp(0.0, 1.0)).unwrap_or(s.standing_chance),
@@ -722,7 +725,7 @@ impl Settings {
                 "units" => s.units = crate::units::Units::from_setting(v).setting().into(),
                 "pax_voices" => s.pax_voices = match v.to_ascii_lowercase().as_str() { "tickets" => "tickets".into(), "off" | "0" | "none" => "off".into(), _ => "all".into() },
                 "nav_arrows" => s.nav_arrows = b(v),
-                "nav_ai" => s.nav_ai = b(v), "nav_surface" => s.nav_surface = b(v), "nav_light" => s.nav_light = b(v), "nav_3d" => s.nav_3d = b(v), "nav_widget" => s.nav_widget = b(v), "milezero" => s.milezero = b(v), "nav_size" => s.nav_size = v.parse::<f32>().ok().filter(|x| x.is_finite()).map(|x| x.clamp(0.6, 2.0)).unwrap_or(1.0),
+                "nav_ai" => s.nav_ai = b(v), "nav_surface" => s.nav_surface = b(v), "nav_light" => { let light = b(v); s.nav_light = light; theme.1 = Some(light); }, "nav_3d" => s.nav_3d = b(v), "nav_widget" => s.nav_widget = b(v), "milezero" => s.milezero = b(v), "nav_size" => s.nav_size = v.parse::<f32>().ok().filter(|x| x.is_finite()).map(|x| x.clamp(0.6, 2.0)).unwrap_or(1.0),
                 "get_up" => s.get_up = b(v),
                 "trip_summary" => s.trip_summary = b(v),
                 "sim_thread" => s.sim_thread = b(v),
@@ -900,6 +903,7 @@ impl Settings {
                 _ => {}
             }
         }
+        if !theme.0 && theme.1 == Some(true) { s.ui_theme = "light".into(); }
         s.settle_after_reading(graphics, version);
         s
     }
@@ -943,6 +947,7 @@ impl Settings {
             "# openOMSI settings\nversion={}\nmsaa={}\nanisotropy={}\nssao={}\nshadows={}\nshadow_size={}\nshadow_blobs={}\nnavigator={}\nui_opacity={}\nnavigator_corner={}\nboarding={}\ndetail_textures={}\nexact_fare={}\nenhanced={}\ngraphics={}\nvr={}\nvr_scale={}\nfullscreen={}\nvsync={}\nvolume={}\ndrive_keys={}\npost_aa={}\nrender_scale={}\nlanguage={}\ntexture_compression={}\nvideo_memory={}\nauto_clutch={}\nmomentary_gears={}\nmin_obj_size={}\nmax_obj_dist={}\nmax_fps={}\nchat={}\ntooltips={}\nname_tags={}\nshow_fps={}\nclouds={}\npax_density={}\nvol_ai={}\nvol_scenery={}\nmirror_size={}\nmirror_hud={}\nmirror_refresh={}\ndoppler={}\ndriver={}\ndriverview_smooth={}\n",
             SETTINGS_VERSION, self.msaa, self.anisotropy, self.ssao as u8, self.shadows as u8, self.shadow_size, self.shadow_blobs as u8, self.navigator as u8, self.ui_opacity, self.navigator_corner, self.boarding, self.detail_textures as u8, self.exact_fare as u8, self.enhanced as u8, self.graphics, self.vr as u8, self.vr_scale, self.fullscreen as u8, self.vsync as u8, self.volume, self.drive_keys, self.post_aa, self.render_scale_text(), self.language, self.texture_compression as u8, self.video_memory, self.auto_clutch as u8, self.momentary_gears as u8, self.min_obj_size, if self.max_obj_dist < 0.0 { "auto".to_string() } else { self.max_obj_dist.to_string() }, self.max_fps, self.chat as u8, self.tooltips as u8, self.name_tags as u8, self.show_fps as u8, self.clouds as u8, self.pax_density, self.vol_ai, self.vol_scenery, self.mirror_size, self.mirror_hud, self.mirror_refresh, self.doppler as u8, self.driver as u8, self.driverview_smooth as u8
         );
+        text.push_str(&format!("ui_theme={}\n", self.ui_theme));
         text.push_str(&format!(
             "vr_head_smoothing_ms={}\nvr_mirror_rate={}\nvr_desktop_mirror={}\nled_glow={}\nled_mips={}\nnight_brightness={}\nui_scale={}\nui_scale_window={}\nchat_size={}\nnotes={}\nff_road_vib={}\nff_engine_vib={}\nff_fade={}\nrealistic_road_physics={}\n",
             self.vr_head_smoothing_ms, self.vr_mirror_rate, self.vr_desktop_mirror as u8, self.led_glow, self.led_mips, self.night_brightness, self.ui_scale, self.ui_scale_window as u8, self.chat_size, self.notes as u8, self.ff_road_vib, self.ff_engine_vib, self.ff_fade, self.realistic_road_physics as u8,

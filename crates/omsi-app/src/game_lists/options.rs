@@ -387,7 +387,6 @@ pub(super) fn toggle_now(app: &App, id: &str) -> Option<bool> {
         "navigator" => if app.vr_active() { app.vr_nav_profile().enabled } else { app.menus.navigator.as_ref().is_some_and(|n| n.enabled) },
         "nav_ai" => app.menus.navigator.as_ref().map_or(s.nav_ai, |n| n.show_ai),
         "nav_surface" => app.menus.navigator.as_ref().map_or(s.nav_surface, |n| n.show_surface),
-        "nav_light" => app.menus.navigator.as_ref().map_or(s.nav_light, |n| n.light),
         "nav_3d" => app.menus.navigator.as_ref().map_or(s.nav_3d, |n| n.show_3d),
         "nav_widget" => app.menus.navigator.as_ref().map_or(s.nav_widget, |n| n.widget),
         "milezero" => s.milezero,
@@ -505,13 +504,6 @@ pub(super) fn toggle_set(app: &mut App, id: &str, on: bool) -> Option<(&'static 
             }
             app.settings.nav_surface = on;
             Some(("nav_surface", bit))
-        }
-        "nav_light" => {
-            if let Some(n) = app.menus.navigator.as_mut() {
-                n.light = on;
-            }
-            app.settings.nav_light = on;
-            Some(("nav_light", bit))
         }
         "nav_3d" => {
             if let Some(n) = app.menus.navigator.as_mut() {

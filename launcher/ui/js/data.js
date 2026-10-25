@@ -1,7 +1,7 @@
 // Loading the content and keeping the duty: what the pages share.
 
 import { call, on, onPhone, inTauri } from './api.js';
-import { S, set, toast, remembered } from './store.js';
+import { S, set, toast, remembered, remember } from './store.js';
 import { setLanguage, t, hhmm } from './i18n.js';
 
 /** The duty as the launcher remembers it (`launcher-duty.json`, shared with the game's own
@@ -390,8 +390,11 @@ export function reloadSettings() {
     const now = await call('settings_get').catch(() => null);
     if (!now || mine !== settingsSeq) return;
     const before = S.settings?.language;
+    const gameTheme = now.ui_theme === 'light' ? 'light' : 'dark';
+    if (resolvedTheme() !== gameTheme) remember('theme', gameTheme);
     set({ settings: now });
     if (now.language !== before) await applyLanguage();
+    await applyTheme();
   });
   return settingsSaved;
 }
