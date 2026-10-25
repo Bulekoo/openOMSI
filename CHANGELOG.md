@@ -8,6 +8,30 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 
 ### New
 
+- **Enhanced has options of its own, and the quality presets cross the modes.** Enhanced+ is no
+  longer a mode: it is Enhanced with *Real-Time Ray Tracing* switched on (`ray_tracing=1`; a
+  `graphics=enhanced_plus` file reads as that, and `--enhanced-plus` still asks for it for a run).
+  Graphics has *Light has shadows* (`light_shadows`: Off, Street lamps and vehicles, Every light),
+  *Cloud shadows and light shafts* (`cloud_shadows`), *Glow of lights* (`light_glow`),
+  *Real-Time Reflections* (the puddles' setting, now with the wet roads' and the water's) and
+  *Reflective objects reflect* (the reflection maps), next to the street light and the mirrors. The
+  presets are Low, Medium, High, Extra, Max and Ultra, and each sets the mode too: Low is Vanilla,
+  Medium Vanilla+ (what the game starts with), High to Max Enhanced with more switched on at each
+  step, Ultra Enhanced with ray tracing and everything on. The launcher, the game's options, the
+  Apple app and the quality optimiser follow it; every new text is translated into all the
+  languages.
+- **The clouds' shadow lies over the land** (Enhanced): the sun is no longer one number for the
+  whole picture. A field of nine kilometres, worked out from the very heaps the sky shows and kept
+  in the sky table's texture, makes patches of sun and shade on the ground that the wind moves, and
+  the air scatters the sun's shafts through the gaps of a broken sky as far as seven kilometres.
+- **Lights shine and cast shadows in every direction** (Enhanced, *Light has shadows: Every
+  light*): a spot that is no headlamp gets a map along its own axis, the two strongest lamps that
+  shine every way a cube map of six tiles (fifty-six lamp tiles now), and a lamp in the dark has a
+  glare round it that falls as the cube of the distance and a halo in the night air (*Glow of
+  lights*).
+- **Wet roads and water mirror the street** (Enhanced): the sheen of a wet road and still water
+  trace what stands round them in screen space at their Fresnel share, not only the pools - the
+  lit windows and lamps of a street stream down a wet road at night.
 - **A flashlight (Alt+F)**: a hand lamp held beside the eye that shines where the view looks, a
   warm white cone reaching 50 m with a soft edge, in the Vanilla and the Enhanced pictures, in
   every view, by night in the dark or by day inside a dim cab. `flashlight` in keyboard.cfg's
