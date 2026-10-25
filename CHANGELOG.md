@@ -496,6 +496,10 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 
 ### Fixes
 
+- **The navigator's map and the city map draw the whole ground again** (#3266, #3301): the cap on
+  the map's geometry that came in with the out-of-memory fix (#3249) cut the ground off on large
+  maps, so the in-game map showed street names over an empty background. The cap is gone from the
+  panel and the city map; #3249 is open again for another fix.
 - **The launcher's bus preview shows what the repaint chooses**: the showroom gives the bus
   its paint scheme as the game does, so the scheme's `[setvar]`s are set again after the
   scripts every frame (#3183). Set once when the bus was made, a script that writes them
