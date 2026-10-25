@@ -66,6 +66,27 @@ fn the_games_options_survive_a_save() {
 }
 
 #[test]
+fn launcher_settings_bridge_unifies_ui_theme_with_legacy_nav_light() {
+    assert_eq!(settings_from_text(None)["ui_theme"], json!("dark"));
+    assert_eq!(settings_from_text(Some("ui_theme=light\n"))["ui_theme"], json!("light"));
+    assert_eq!(settings_from_text(Some("ui_theme=dark\n"))["ui_theme"], json!("dark"));
+    assert_eq!(settings_from_text(Some("ui_theme=blue\n"))["ui_theme"], json!("dark"));
+    assert_eq!(settings_from_text(Some("nav_light=1\n"))["ui_theme"], json!("light"));
+    assert_eq!(settings_from_text(Some("ui_theme=dark\nnav_light=1\n"))["ui_theme"], json!("dark"));
+
+    let saved = settings_to_text(&json!({ "ui_theme": "light", "nav_light": true }), None);
+    assert!(saved.lines().any(|line| line == "ui_theme=light"), "{saved}");
+    assert!(!saved.lines().any(|line| line.starts_with("nav_light=")), "{saved}");
+
+    let rewritten = settings_to_text(&json!({ "ui_theme": "light", "nav_light": true }), Some("nav_light=1\n"));
+    assert!(rewritten.lines().any(|line| line == "ui_theme=light"), "{rewritten}");
+    assert!(!rewritten.lines().any(|line| line.starts_with("nav_light=")), "{rewritten}");
+
+    let invalid = settings_to_text(&json!({ "ui_theme": "blue" }), None);
+    assert!(invalid.lines().any(|line| line == "ui_theme=dark"), "{invalid}");
+}
+
+#[test]
 fn dsc_files_give_name_and_description() {
     let d = super::parse_dsc("\r\n[friendlyname]\r\nMAN\r\nNL202 - EN92\r\nBeige\r\n\r\n[description]\r\nAlthough the BVG did not purchase\r\n\r\n-Technical specifications-\r\n[end]\r\n");
     assert_eq!(d.name, vec!["MAN", "NL202 - EN92", "Beige"]);
