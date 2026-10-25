@@ -388,6 +388,10 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
 
 ### Fixes
 
+- **Köln's houses on Engeldorfer Straße are back**: a binary `.x` string ended by a WORD
+  token, as PAD-Labs' exporter writes it, no longer swallows the `}` after it. Read as the
+  documented DWORD, the house's material never closed, the model failed to load and its 25
+  binary houses were missing since 0.3.38.
 - **Destination displays light up at night in Enhanced and Enhanced+**: a script's screen is
   never taken for a pane. The EMT Citaro's Krueger matrix (Mallorca) is blended, writes no
   depth and draws its letters through a `\S:n` transparency map - the layout of a window - so
