@@ -75,6 +75,14 @@ pub(crate) struct CameraUniform {
     /// up, as AMD advises for it: its textures as detailed as the window's size wants, not
     /// the smaller picture's (letters, gauges and signs came out soft); 0 otherwise.
     pub(crate) lod: [f32; 4],
+    /// The classic picture's headlight, Omsi.exe's one Direct3D spot light (the player's
+    /// `[spotlight]`, see the scene shader's `classic_spot`): [0] xyz where its light leaves
+    /// from (render-origin relative), w its declared range (0: none); [1] xyz its direction,
+    /// w the cosine of half its outer cone; [2] rgb its colour, w the cosine of half its inner
+    /// cone; [3] x how far behind [0] along the vehicle's axis the spotlight itself lies.
+    /// (Every shader's copy of this struct carries it, read or not - see the test
+    /// `shaders_validate_and_match_the_uniforms`.)
+    pub(crate) spot: [[f32; 4]; 4],
 }
 
 /// The period the sky's cloud patterns repeat with (m): 5 x the cloud field (14 km), 8 x
@@ -138,6 +146,13 @@ pub(crate) struct EnhancedUniform {
     pub(crate) flash2: [f32; 4],
     /// x a number the channel's shape is drawn from
     pub(crate) flash3: [f32; 4],
+    /// The clouds' shadow field (`cloud_field`): xy where its middle is in cloud space,
+    /// z one over its width, w 1 when there is one
+    pub(crate) cloud_f1: [f32; 4],
+    /// xy what takes a world point to cloud space (the render origin and the drift), z the
+    /// height of the plane the field is taken on, w the share of the sun the main pass has
+    /// already taken off for the clouds over the camera
+    pub(crate) cloud_f2: [f32; 4],
 }
 
 #[repr(C)]

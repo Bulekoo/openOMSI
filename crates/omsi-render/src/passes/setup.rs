@@ -135,8 +135,10 @@ impl Renderer {
             cam_rel,
             view_proj: projection.is_none().then(|| camera.view_proj(aspect, ro)),
             vehicle: lighting.inside.as_ref().map(|b| (b, lighting.inside_rotation)),
+            // (the cube maps' tiles are there only if the atlas was made with them)
+            level: self.options.light_shadows.min(if self.shadows.lamp_atlas.has_cubes() { 2 } else { 1 }),
         };
-        let (grid, lamp_shadows) = self.prepare_lights(scene, &eye, enhanced_frame, lighting.lamp_shadows && with_overlays && projection.is_none() && self.shadows.shadow_pipelines.len() > 6);
+        let (grid, lamp_shadows) = self.prepare_lights(scene, &eye, enhanced_frame, lighting.lamp_shadows && self.options.light_shadows > 0 && with_overlays && projection.is_none() && self.shadows.shadow_pipelines.len() > 6);
         self.prepare_coronas(scene, lighting.night, lighting.inside.as_ref().filter(|v| point_in_vehicle_box(camera.position, v)));
         // (the mirrors draw no smoke, see `encode_main_late`)
         if exclude_texture.is_none() {
@@ -426,6 +428,7 @@ impl Renderer {
                 std::array::from_fn(|r| std::array::from_fn(|c| at[r * 4 + c]))
             },
             lod: [self.fsr_mip_bias(f), 0.0, 0.0, 0.0],
+            spot: classic_spot(scene, ro),
         };
         self.queue
             .write_buffer(&self.camera_buf, 0, bytemuck::bytes_of(&cu));
@@ -479,4 +482,24 @@ impl Renderer {
             && self.prepare_enhanced(lighting, cam_rel, ro, f.dt);
         (vp_mat, cu, probe_redraw)
     }
+}
+
+/// The camera uniform's `spot`: the player's `[spotlight]`, the one classic spot of kind 1
+/// (the scene gives the player's alone, as Omsi.exe lights the road by it alone, 0x708acc);
+/// none while it is off or in a frame without a player's vehicle.
+fn classic_spot(scene: &Scene, ro: DVec3) -> [[f32; 4]; 4] {
+    let spot = scene.lights.iter().find_map(|l| {
+        let [range, setback, kind] = l.d3d_spot?;
+        (kind > 0.5 && l.mode == crate::LightMode::Vanilla && l.intensity > 0.0).then_some((l, range, setback))
+    });
+    let Some((l, range, setback)) = spot else { return [[0.0; 4]; 4] };
+    let at = (l.position - ro).as_vec3();
+    let d = l.direction.normalize_or_zero();
+    let c = l.color;
+    [
+        [at.x, at.y, at.z, range],
+        [d.x, d.y, d.z, l.cone[1]],
+        [c[0] * l.intensity, c[1] * l.intensity, c[2] * l.intensity, l.cone[0]],
+        [setback, 0.0, 0.0, 0.0],
+    ]
 }

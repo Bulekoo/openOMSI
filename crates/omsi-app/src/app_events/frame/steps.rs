@@ -7,6 +7,7 @@
 use super::*;
 use crate::view_sync::people::PeopleView;
 use crate::view_sync::traffic::TrafficView;
+use omsi_sim::people::model::SaleEvent;
 
 /// The vehicles the AI traffic must see besides its own: the other LAN players' buses, the
 /// player's own and the ones the player placed - and, unless the game is paused, the
@@ -309,6 +310,27 @@ pub(crate) fn humans_after_step(
             }
         }
     }
+    for (bus, event) in h.take_money_events() {
+        let trigger = match event {
+            SaleEvent::PassengerGaveMoney => "ev_ticketsale_givemoney",
+        };
+
+        match bus {
+            None => {
+                if let Some(p) = player.as_deref_mut() {
+                    p.vehicle.host.fired_triggers.push(trigger.into());
+                }
+            }
+            Some(id) => {
+                if let Some(c) = traffic
+                    .as_deref_mut()
+                    .and_then(|t| t.cars.iter_mut().find(|c| c.id == id))
+                {
+                    c.vehicle.host.fired_triggers.push(trigger.into());
+                }
+            }
+        }
+    }
     if let Some(t) = traffic {
         let (alighting, waiting) = h.stop_wishes();
         t.set_stop_wishes(alighting, waiting);
@@ -494,6 +516,7 @@ pub(crate) fn picture_lighting(
         Some(w) => weather_lighting(daylight, w, cloud_drift, wetness, snow_cover, settings.shadows, sky),
         None => lights::lighting_from(daylight, 50000.0),
     };
+    lighting.lamp_shadows &= settings.lamp_shadows;
     lighting.wetness = omsi_cfg::flags::OMSI_WETNESS.parse()
         .unwrap_or(wetness);
     dress_lighting(&mut lighting, world, inside, settings);

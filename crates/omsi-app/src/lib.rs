@@ -235,6 +235,8 @@ pub fn run() -> Result<()> {
     view_sync::install_sim_decoder();
     startup::install_scene_settings();
     omsi_cfg::migrate_legacy_data_dir();
+    #[cfg(not(any(test, target_os = "android", target_os = "ios")))]
+    omsi_cfg::user_data::initialize_for(&std::env::current_exe()?)?;
     omsi_launcher_lib::adopt_own_inputs();
     #[cfg(target_os = "macos")]
     restart_with_allocator_settings();
@@ -757,6 +759,7 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             view_fov: None,
             head_idle_hold: Default::default(),
             ego: false,
+            flashlight: false,
             in_cab: false,
             look: (0.0, 0.0),
             look_smooth: (0.0, 0.0),

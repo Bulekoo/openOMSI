@@ -18,6 +18,7 @@ pub mod optimise;
 mod hof_sync;
 mod file_dialog;
 pub mod i18n;
+pub mod user_data;
 
 pub use file_dialog::{pick_file, pick_folder, pick_hofs, pick_mod};
 pub use hof_sync::{add_shared_hofs, share_map_hofs, MapHofOffer};
@@ -48,7 +49,7 @@ pub fn data_dir() -> PathBuf {
     // (made once: asked for dozens of times a second - the launcher's frames, its polls - and
     // made each time, two system calls for a folder that was there)
     static MADE: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
-    let d = home().join(".openomsi");
+    let d = omsi_cfg::user_data::data_dir();
     let mut made = MADE.lock().unwrap_or_else(|e| e.into_inner());
     if made.as_ref() != Some(&d) && std::fs::create_dir_all(&d).is_ok() {
         *made = Some(d.clone());
@@ -68,11 +69,13 @@ fn is_omsi_root(p: &Path) -> bool {
 
 /// Where the game binary is: the configured path, next to the launcher, or the
 /// development build in the source tree.
-fn find_game(configured: &str) -> Option<PathBuf> {
+pub fn find_game(configured: &str) -> Option<PathBuf> {
     let mut cands: Vec<PathBuf> = Vec::new();
     // the game that came with this launcher first: a path remembered from an older
     // installation (`target/release/omsi` of the days before the rename) kept starting an
-    // old build after every update - the new pause menu "was not there" on macOS
+    // old build after every update - the new pause menu "was not there" on macOS; a second
+    // install, or a test build unpacked elsewhere, sharing `launcher.json` must not start
+    // (and move the data folder to) the other one's game either
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             cands.push(dir.join(if cfg!(windows) { "openomsi.exe" } else { "openomsi" }));
@@ -142,6 +145,23 @@ fn find_root(configured: &str) -> Option<PathBuf> {
 
 pub fn load_config() -> Config {
     let mut c: Config = std::fs::read_to_string(config_path()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    if let Some(game) = find_game(&c.game) {
+        static INITIALIZED: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+        let mut initialized = INITIALIZED.lock().unwrap_or_else(|e| e.into_inner());
+        if initialized.as_ref() != Some(&game) {
+            let previous = data_dir();
+            match omsi_cfg::user_data::initialize_for(&game) {
+                Ok(dir) => {
+                    *initialized = Some(game);
+                    if dir != previous {
+                        c = std::fs::read_to_string(dir.join("launcher.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(c);
+                    }
+                }
+                Err(e) => log_to_file(&format!("Could not initialize .openomsi-config: {e}")),
+            }
+        }
+    }
     if let Some(r) = find_root(&c.root) {
         c.root = r.to_string_lossy().to_string();
     }
@@ -2038,50 +2058,59 @@ pub fn graphics_mode(v: &str) -> &'static str {
     }
 }
 
-/// The Graphics settings' quality presets - Low, Medium, High and Ultra - for the graphics
-/// mode chosen (`graphics_mode`), shared by the launcher and the game's options. A preset
-/// tunes that mode and keeps it: it never switches Enhanced or ray tracing on or off.
-/// Vanilla's leave out what OMSI 2 does not draw; High is the defaults of Vanilla+; the
-/// enhanced modes take fewer MSAA samples and a smaller render scale below High, and
-/// Enhanced+ smaller shadow maps and mirrors too. The texture memory is left as it is.
-pub fn graphics_presets_for(mode: &str) -> [(&'static str, Value); 4] {
-    let mode = graphics_mode(mode);
-    let classic = mode == "vanilla";
-    let traced = mode == "enhanced_plus";
-    let enhanced = traced || mode == "enhanced";
-    // per level: Low, Medium, High, Ultra
-    let (msaa, scale) = match mode {
-        "enhanced" => ([1, 1, 2, 4], ["0.67", "0.85", "auto", "auto"]),
-        "enhanced_plus" => ([1, 1, 1, 2], ["0.5", "0.67", "0.85", "auto"]),
-        _ => ([1, 2, 4, 4], ["0.75", "auto", "auto", "auto"]),
-    };
-    let shadow = if traced { [1024, 1024, 2048, 2048] } else { [1024, 1024, 2048, 4096] };
-    let mirror = if traced { [128, 128, 256, 512] } else { [128, 256, 256, 512] };
-    let refresh = if traced { ["eco", "eco", "eco", "full"] } else { ["eco", "eco", "full", "full"] };
-    let anisotropy = [2, 4, 8, 8];
-    let view = ["600", "900", "auto", "2000"];
-    let obj_size = [0.03, 0.02, 0.013, 0.005];
-    let obj_dist = ["500", "750", "auto", "1500"];
-    let rain = ["low", "medium", "high", "high"];
+/// The graphics mode a settings page's `v` draws with, ray tracing counted as a mode of its own:
+/// `vanilla`, `vanilla_plus`, `enhanced`, or `enhanced_plus` for Enhanced with Real-Time Ray
+/// Tracing on (what the code that tunes for the traced picture asks).
+pub fn effective_mode(v: &Value) -> &'static str {
+    let g = graphics_mode(v.get("graphics").and_then(|x| x.as_str()).unwrap_or("vanilla_plus"));
+    if g == "enhanced" && v.get("ray_tracing").and_then(|x| x.as_bool()).unwrap_or(false) { "enhanced_plus" } else { g }
+}
+
+/// The Graphics settings' quality presets: Low, Medium, High, Extra, Max and Ultra, shared by the
+/// launcher and the game's options. A preset sets the graphics mode as well - Low is Vanilla (as
+/// OMSI 2 draws), Medium Vanilla+ (the defaults), High and above Enhanced - and, in Enhanced, how
+/// much of its light is switched on: High the street lamps' shadows, Extra the clouds' shadow, the
+/// glow of lights, the street light and the reflections in full, Max every light's shadows and the
+/// mirrors drawn as the picture, Ultra Real-Time Ray Tracing on top of all of it. Each is a step up in cost and the
+/// light's own shadows (cached tiles, a handful of passes) are far from the dearest of them. The
+/// texture memory is left as it is.
+pub fn graphics_presets() -> [(&'static str, Value); 6] {
+    // per level: Low, Medium, High, Extra, Max, Ultra
+    let graphics = ["vanilla", "vanilla_plus", "enhanced", "enhanced", "enhanced", "enhanced"];
+    let msaa = [1, 4, 2, 4, 4, 4];
+    let scale = ["0.75", "auto", "auto", "auto", "auto", "auto"];
+    let anisotropy = [2, 8, 8, 8, 16, 16];
+    let shadow = [1024, 2048, 2048, 2048, 4096, 4096];
+    let mirror = [128, 256, 256, 512, 512, 512];
+    let refresh = ["eco", "full", "full", "full", "full", "full"];
+    let view = ["600", "auto", "auto", "auto", "2000", "2000"];
+    let obj_size = [0.03, 0.013, 0.013, 0.01, 0.005, 0.005];
+    let obj_dist = ["500", "auto", "auto", "auto", "1500", "1500"];
+    let rain = ["low", "high", "high", "high", "high", "high"];
+    let light_shadows = ["off", "street", "street", "street", "all", "all"];
+    let street_light = ["off", "off", "off", "auto", "on", "on"];
+    let puddles = ["off", "high", "low", "high", "high", "high"];
+    let mirror_quality = ["standard", "standard", "standard", "standard", "enhanced", "enhanced"];
     std::array::from_fn(|i| {
         let low = i == 0;
-        let mut preset = json!({
-            "graphics": mode, "msaa": msaa[i], "anisotropy": anisotropy[i], "shadow_size": shadow[i],
-            "clouds": !(enhanced && low), "rain_quality": rain[i], "windy_trees": !low,
+        let preset = json!({
+            "graphics": graphics[i], "ray_tracing": i == 5, "msaa": msaa[i], "anisotropy": anisotropy[i],
+            "shadow_size": shadow[i], "clouds": true, "rain_quality": rain[i], "windy_trees": !low,
             "view_distance": view[i], "min_obj_size": obj_size[i], "max_obj_dist": obj_dist[i],
-            "mirror_size": mirror[i], "mirror_refresh": refresh[i], "render_scale": scale[i],
+            "mirror_size": mirror[i], "mirror_refresh": refresh[i], "mirror_quality": mirror_quality[i], "render_scale": scale[i],
+            "detail_textures": !low, "ssao": !low, "shadows": !low, "reflections": 1.0,
+            "light_shadows": light_shadows[i], "cloud_shadows": i >= 3, "light_glow": i >= 3,
+            "street_light": street_light[i], "puddles": puddles[i],
         });
-        if !classic {
-            preset["detail_textures"] = json!(!low);
+        let mut preset = preset;
+        // (Low is Vanilla, which draws none of these: it leaves them as they are, so that going back
+        // to Vanilla+ does not find them off)
+        if low {
+            for k in ["ssao", "shadows", "detail_textures"] {
+                preset.as_object_mut().map(|o| o.remove(k));
+            }
         }
-        if !classic && !traced {
-            preset["ssao"] = json!(i >= 2);
-            preset["shadows"] = json!(!low);
-        }
-        if !traced {
-            preset["reflections"] = json!(1.0);
-        }
-        (["Low", "Medium", "High", "Ultra"][i], preset)
+        (["Low", "Medium", "High", "Extra", "Max", "Ultra"][i], preset)
     })
 }
 
@@ -2102,6 +2131,15 @@ pub fn puddles(x: &str) -> &'static str {
 /// The enhanced clouds' quality: `low`, else `high` (as the game's `settings::cloud_quality`).
 fn cloud_quality(x: &str) -> &'static str {
     if x.trim().eq_ignore_ascii_case("low") { "low" } else { "high" }
+}
+
+/// Which lights cast shadows: `off` or `all`, else `street` (as the game's `settings::light_shadows`).
+fn light_shadows(x: &str) -> &'static str {
+    match x.trim().to_ascii_lowercase().as_str() {
+        "off" | "0" | "none" | "false" => "off",
+        "all" | "2" | "every" | "max" => "all",
+        _ => "street",
+    }
 }
 
 /// The street-scale light: `on` or `off`, else `auto` (as the game's `settings::street_light`).
@@ -2169,6 +2207,24 @@ pub fn head_tracking_value(key: &str, v: Option<f64>) -> f64 {
     v.filter(|x| x.is_finite() && (0.0..=1.0).contains(x)).map(|x| (x * 20.0).round() / 20.0).unwrap_or(default)
 }
 
+fn ui_theme_from_text(text: &str) -> &'static str {
+    let (mut theme, mut legacy_nav_light) = (None, None);
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with('#') || line.starts_with(';') {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else { continue };
+        let (key, value) = (setting_key(key), value.trim());
+        match key.as_str() {
+            "ui_theme" => theme = Some(if value.eq_ignore_ascii_case("light") { "light" } else { "dark" }),
+            "nav_light" => legacy_nav_light = Some(matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "on" | "yes")),
+            _ => {}
+        }
+    }
+    theme.unwrap_or(if legacy_nav_light == Some(true) { "light" } else { "dark" })
+}
+
 /// The page's view of a `settings.cfg` text (None: no file yet, the game's defaults).
 pub fn settings_from_text(text: Option<&str>) -> Value {
     settings_from_text_on(text, cfg!(any(target_os = "android", target_os = "ios")))
@@ -2180,6 +2236,10 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
     v["fsr_quality"] = json!("quality");
     v["fsr_sharpness"] = json!(0.8);
     v["street_light"] = json!("off");
+    v["ray_tracing"] = json!(false);
+    v["light_shadows"] = json!("street");
+    v["cloud_shadows"] = json!(false);
+    v["light_glow"] = json!(false);
     v["pause_quick_actions"] = json!("default");
     v["ui_theme"] = json!("dark");
     v["puddles"] = json!("high"); // (apart: the literal above is at the json! macro's recursion limit)
@@ -2268,7 +2328,7 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
         v[k] = d;
     }
     // openOMSI's own: what passengers say, OMSI's route arrows, getting up from the seat
-    for (k, d) in [("pax_voices", json!("all")), ("nav_arrows", json!(false)), ("nav_ai", json!(true)), ("nav_surface", json!(true)), ("nav_light", json!(false)), ("nav_3d", json!(true)), ("nav_widget", json!(true)), ("nav_size", json!(1.0)), ("get_up", json!(false)), ("time_speed", json!("1")), ("time_sync", json!(false)), ("metar_sync", json!(false)), ("metar_station", json!("")), ("machine_translation", json!(false)), ("shadow_casters", json!("all")), ("shadow_blobs", json!(true)), ("reflections", json!(1.0)), ("mouse_sens", json!(1.0)), ("graphics_api", json!("auto")), ("ctrl_off", json!("")), ("steering_linear", json!(false)), ("old_steering", json!(false)), ("red_steer_spd", json!(false)), ("ff_invert", json!(false)), ("ff_enabled", json!(true)), ("brake_hold", json!(true)), ("auto_clutch", json!(true)), ("momentary_gears", json!(false)), ("auto_shift", json!(false)), ("wheel_range", json!(900.0)), ("wheel_lock", json!(0.0)), ("fov", json!(0.0)), ("camera_collision", json!(true)), ("right_stick_look", json!(true)), ("steer_look", json!(false)), ("pedal_throttle", json!(1.0)), ("pedal_brake", json!(1.0)), ("seat_x", json!(0.0)), ("seat_y", json!(0.0)), ("seat_z", json!(0.0)), ("seat_pitch_deg", json!(0.0)), ("head_tracking", json!(false)), ("head_tracking_yaw_sens", json!(100.0)), ("head_tracking_pitch_sens", json!(100.0)), ("head_tracking_roll_sens", json!(100.0)), ("head_tracking_x_sens", json!(100.0)), ("head_tracking_y_sens", json!(100.0)), ("head_tracking_z_sens", json!(100.0)), ("head_tracking_invert_yaw", json!(false)), ("head_tracking_invert_pitch", json!(false)), ("head_tracking_invert_roll", json!(false)), ("head_tracking_invert_x", json!(false)), ("head_tracking_invert_y", json!(false)), ("head_tracking_invert_z", json!(false)), ("led_glow", json!(6)), ("led_mips", json!(1.3)), ("night_brightness", json!(0.0)), ("ui_scale", json!(1.0)), ("ui_scale_window", json!(true)), ("chat_size", json!(1.0)), ("notes", json!(true)), ("mouse_steering", json!(false)), ("mouse_right_off", json!(false)), ("mouse_smooth", json!(true)), ("mouse_hold", json!(true)), ("mouse_pedals", json!(true)), ("key_pedal_speed", json!(1.0)), ("blinker_cancel", json!(true)), ("ff_road_vib", json!(1.0)), ("ff_engine_vib", json!(1.0)), ("ff_fade", json!(0.28))] {
+    for (k, d) in [("pax_voices", json!("all")), ("nav_arrows", json!(false)), ("nav_ai", json!(true)), ("nav_surface", json!(true)), ("nav_light", json!(false)), ("nav_3d", json!(true)), ("nav_classic_2d", json!(false)), ("nav_widget", json!(true)), ("nav_size", json!(1.0)), ("get_up", json!(false)), ("time_speed", json!("1")), ("time_sync", json!(false)), ("metar_sync", json!(false)), ("metar_station", json!("")), ("machine_translation", json!(false)), ("shadow_casters", json!("all")), ("shadow_blobs", json!(true)), ("reflections", json!(1.0)), ("mouse_sens", json!(1.0)), ("graphics_api", json!("auto")), ("ctrl_off", json!("")), ("steering_linear", json!(false)), ("old_steering", json!(false)), ("red_steer_spd", json!(false)), ("ff_invert", json!(false)), ("ff_enabled", json!(true)), ("brake_hold", json!(true)), ("auto_clutch", json!(true)), ("momentary_gears", json!(false)), ("auto_shift", json!(false)), ("wheel_range", json!(900.0)), ("wheel_lock", json!(0.0)), ("fov", json!(0.0)), ("camera_collision", json!(true)), ("right_stick_look", json!(true)), ("steer_look", json!(false)), ("pedal_throttle", json!(1.0)), ("pedal_brake", json!(1.0)), ("seat_x", json!(0.0)), ("seat_y", json!(0.0)), ("seat_z", json!(0.0)), ("seat_pitch_deg", json!(0.0)), ("head_tracking", json!(false)), ("head_tracking_yaw_sens", json!(100.0)), ("head_tracking_pitch_sens", json!(100.0)), ("head_tracking_roll_sens", json!(100.0)), ("head_tracking_x_sens", json!(100.0)), ("head_tracking_y_sens", json!(100.0)), ("head_tracking_z_sens", json!(100.0)), ("head_tracking_invert_yaw", json!(false)), ("head_tracking_invert_pitch", json!(false)), ("head_tracking_invert_roll", json!(false)), ("head_tracking_invert_x", json!(false)), ("head_tracking_invert_y", json!(false)), ("head_tracking_invert_z", json!(false)), ("led_glow", json!(6)), ("led_mips", json!(1.3)), ("night_brightness", json!(0.0)), ("ui_scale", json!(1.0)), ("ui_scale_window", json!(true)), ("chat_size", json!(1.0)), ("notes", json!(true)), ("mouse_steering", json!(false)), ("mouse_right_off", json!(false)), ("mouse_smooth", json!(true)), ("mouse_hold", json!(true)), ("mouse_pedals", json!(true)), ("key_pedal_speed", json!(1.0)), ("blinker_cancel", json!(true)), ("ff_road_vib", json!(1.0)), ("ff_engine_vib", json!(1.0)), ("ff_fade", json!(0.28))] {
         v[k] = d;
     }
     v["steer_look_angle"] = json!(30.0);
@@ -2292,10 +2352,9 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
         v[k] = d;
     }
     let Some(t) = text else { return v };
+    v["ui_theme"] = json!(ui_theme_from_text(t));
     let mut version = 0;
     let mut graphics: Option<&str> = None;
-    let mut ui_theme_seen = false;
-    let mut legacy_nav_light = None;
     for line in t.lines() {
         let line = line.trim();
         if line.starts_with('#') || line.starts_with(';') {
@@ -2306,10 +2365,6 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
         let b = |x: &str| matches!(x.to_ascii_lowercase().as_str(), "1" | "true" | "on" | "yes");
         match k.as_str() {
             "pause_quick_actions" => v[&k] = json!(val),
-            "ui_theme" => {
-                ui_theme_seen = true;
-                v[&k] = json!(if val.eq_ignore_ascii_case("light") { "light" } else { "dark" });
-            }
             "anisotropy" => v[&k] = json!(val.parse::<i64>().unwrap_or(8).clamp(1, 16)),
             "msaa" | "shadow_size" => v[&k] = json!(val.parse::<i64>().unwrap_or(0)),
             "ui_opacity" | "volume" | "vol_ai" | "vol_scenery" | "vol_ambient" | "min_obj_size" | "radio_speaker" | "radio_hiss" | "radio_dropouts" => v[&k] = json!(val.parse::<f64>().unwrap_or(0.0)),
@@ -2329,6 +2384,9 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
             "mirror_quality" => v[&k] = json!(mirror_quality(val)),
             "cloud_quality" => v[&k] = json!(cloud_quality(val)),
             "street_light" => v[&k] = json!(street_light(val)),
+            "ray_tracing" | "rt" => v["ray_tracing"] = json!(b(val)),
+            "light_shadows" => v[&k] = json!(light_shadows(val)),
+            "cloud_shadows" | "light_glow" => v[&k] = json!(b(val)),
             "rain_quality" => v[&k] = json!(rain_quality(val)),
             "vehicle_smoke" => v[&k] = json!(vehicle_smoke(val)),
             "puddles" => v[&k] = json!(puddles(val)),
@@ -2342,7 +2400,7 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
             "gpu_texture_compression" => v[&k] = json!(!matches!(val.trim().to_ascii_lowercase().as_str(), "0" | "off" | "no" | "false" | "disabled")),
             "max_fps" => v[&k] = json!(val.parse::<f64>().map(|x| x as i64).unwrap_or(0)),
             "max_obj_dist" => v[&k] = if val.eq_ignore_ascii_case("auto") { json!("auto") } else { json!(val.parse::<f64>().map(|m| (m.round() as i64).to_string()).unwrap_or_else(|_| "auto".into())) },
-            "ssao" | "shadows" | "shadow_blobs" | "navigator" | "enhanced" | "triple_screen" | "triple_span" | "triple_hud_center" | "vr" | "vr_desktop_mirror" | "fullscreen" | "vsync" | "exact_fare" | "detail_textures" | "texture_compression" | "chat" | "tooltips" | "name_tags" | "show_fps" | "clouds" | "doppler" | "driver" | "use_real_time" | "use_real_date" | "use_real_year" | "collision_vehicles" | "collision_objects" | "collision_pedestrians" | "head_movement" | "driverview_smooth" | "hands_in_cab" | "alt_view" | "precision_zoom" => v[&k] = json!(b(val)),
+            "ssao" | "shadows" | "shadow_blobs" | "lamp_shadows" | "navigator" | "enhanced" | "triple_screen" | "triple_span" | "triple_hud_center" | "vr" | "vr_desktop_mirror" | "fullscreen" | "vsync" | "exact_fare" | "detail_textures" | "texture_compression" | "chat" | "tooltips" | "name_tags" | "show_fps" | "clouds" | "doppler" | "driver" | "use_real_time" | "use_real_date" | "use_real_year" | "collision_vehicles" | "collision_objects" | "collision_pedestrians" | "head_movement" | "driverview_smooth" | "hands_in_cab" | "alt_view" | "precision_zoom" => v[&k] = json!(b(val)),
             "maintenance" | "ai_unsched_factor" | "ai_max_scheduled" | "standing_chance" => v[&k] = json!(val.trim_end_matches('%').parse::<f64>().map(|x| x.max(0.0) as i64).unwrap_or(0)),
             // (-1: no parked cars at all, #864)
             "ai_max_parked" => v[&k] = json!(val.parse::<f64>().map(|x| x.max(-1.0) as i64).unwrap_or(0)),
@@ -2411,11 +2469,8 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
             "head_tracking_yaw_sens" | "head_tracking_pitch_sens" | "head_tracking_roll_sens" | "head_tracking_x_sens" | "head_tracking_y_sens" | "head_tracking_z_sens" => v[&k] = json!(val.parse::<f64>().ok().filter(|x| x.is_finite()).map(|x| x.clamp(0.0, 100.0)).unwrap_or(100.0)),
             "full_tank" | "trip_summary" => v[&k] = json!(b(val)),
             "nav_arrows" | "nav_ai" | "nav_surface" | "nav_3d" | "nav_widget" | "get_up" | "time_sync" | "metar_sync" | "ui_scale_window" | "notes" | "machine_translation" | "update_check" | "update_auto" | "update_notify" | "presence" | "steering_linear" | "old_steering" | "red_steer_spd" | "ff_invert" | "ff_enabled" | "brake_hold" | "auto_clutch" | "momentary_gears" | "auto_shift" | "mouse_steering" | "mouse_right_off" | "mouse_smooth" | "mouse_hold" | "mouse_pedals" | "blinker_cancel" => v[&k] = json!(b(val)),
-            "nav_light" => {
-                let light = b(val);
-                v[&k] = json!(light);
-                legacy_nav_light = Some(light);
-            }
+            "nav_light" => v[&k] = json!(b(val)),
+            "nav_classic_2d" => v[&k] = json!(b(val)),
             "info_bar" => v[&k] = json!(b(val)),
             "info_size" | "timetable_size" | "perf_size" => v[&k] = json!(val.parse::<f64>().ok().filter(|x| x.is_finite()).unwrap_or(1.0).clamp(0.6, 2.0)),
             "perf_overlay" => v[&k] = json!(perf_overlay_mode(val)),
@@ -2446,14 +2501,18 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
             _ => {}
         }
     }
-    if !ui_theme_seen && legacy_nav_light == Some(true) {
-        v["ui_theme"] = json!("light");
-    }
     // a file without `graphics` (older builds) says only `enhanced`; its vanilla renderer is
     // what is now Vanilla+
     let g = graphics.unwrap_or(if v["enhanced"] == json!(true) { "enhanced" } else { "vanilla_plus" });
+    // (a file of the days of Enhanced+ names it as a mode: it is Enhanced with ray tracing on)
+    let g = if g == "enhanced_plus" {
+        v["ray_tracing"] = json!(true);
+        "enhanced"
+    } else {
+        g
+    };
     v["graphics"] = json!(g);
-    v["enhanced"] = json!(g == "enhanced" || g == "enhanced_plus");
+    v["enhanced"] = json!(g == "enhanced");
     // before version 2 the launcher wrote its old default `boarding=pay` for everybody
     // (passengers then waited at the cash desk for the driver): the game reads that as auto
     if version < 2 && v["boarding"] == "pay" {
@@ -2538,8 +2597,8 @@ pub fn save_settings(v: &Value) -> Result<()> {
 
 /// The settings a graphics profile holds: what the Graphics tab shows, except the machine's
 /// own (fullscreen, graphics API).
-pub const GRAPHICS_PROFILE_KEYS: [&str; 36] = [
-    "graphics", "msaa", "render_scale", "upscaler", "fsr_quality", "fsr_sharpness", "anisotropy", "shadow_size", "ssao", "shadows", "shadow_casters", "detail_textures", "night_brightness", "led_glow", "led_mips", "shadow_blobs", "reflections", "clouds", "cloud_quality", "street_light", "rain_quality", "vehicle_smoke", "puddles", "windy_trees",
+pub const GRAPHICS_PROFILE_KEYS: [&str; 41] = [
+    "graphics", "msaa", "render_scale", "upscaler", "fsr_quality", "fsr_sharpness", "anisotropy", "shadow_size", "ssao", "shadows", "shadow_casters", "detail_textures", "night_brightness", "led_glow", "led_mips", "shadow_blobs", "lamp_shadows", "reflections", "clouds", "cloud_quality", "street_light", "rain_quality", "vehicle_smoke", "puddles", "windy_trees", "ray_tracing", "light_shadows", "cloud_shadows", "light_glow",
     "vsync", "max_fps", "view_distance", "max_obj_dist", "min_obj_size", "mirror_size", "mirror_refresh", "mirror_quality", "mirror_hud_every_frame", "video_memory", "texture_compression", "gpu_texture_compression",
 ];
 
@@ -2618,7 +2677,7 @@ pub fn settings_to_text(v: &Value, old: Option<&str>) -> String {
         b("detail_textures", true),
         b("exact_fare", true),
         matches!(graphics_mode(v.get("graphics").and_then(|x| x.as_str()).unwrap_or("vanilla_plus")), "enhanced" | "enhanced_plus") as u8,
-        graphics_mode(v.get("graphics").and_then(|x| x.as_str()).unwrap_or("vanilla_plus")),
+        match graphics_mode(v.get("graphics").and_then(|x| x.as_str()).unwrap_or("vanilla_plus")) { "enhanced_plus" => "enhanced", g => g },
         b("fullscreen", false),
         b("vsync", true),
         f("volume", 0.6),
@@ -2681,14 +2740,14 @@ pub fn settings_to_text(v: &Value, old: Option<&str>) -> String {
         b("precision_zoom", false),
     );
     let text = format!(
-        "{text}pax_voices={}\nnav_arrows={}\nnav_ai={}\nnav_surface={}\nnav_3d={}\nnav_widget={}\nnav_size={}\nget_up={}\ntime_speed={}\nmachine_translation={}\nshadow_casters={}\nshadow_blobs={}\nctrl_deadzone={}\nupdate_check={}\nupdate_auto={}\nupdate_notify={}\npresence={}\nreflections={}\nmouse_sens={}\nmouse_pedal_strength={}\ngraphics_api={}\nctrl_off={}\nsteering_linear={}\nold_steering={}\nred_steer_spd={}\nff_invert={}\nwheel_range={}\nwheel_lock={}\nfov={}\ncamera_collision={}\npedal_throttle={}\npedal_brake={}\nseat_x={}\nseat_y={}\nseat_z={}\nseat_pitch_deg={}\nsteer_look={}\nhead_tracking={}\nhead_tracking_yaw_sens={}\nhead_tracking_pitch_sens={}\nhead_tracking_roll_sens={}\nhead_tracking_x_sens={}\nhead_tracking_y_sens={}\nhead_tracking_z_sens={}\nhead_tracking_invert_yaw={}\nhead_tracking_invert_pitch={}\nhead_tracking_invert_roll={}\nhead_tracking_invert_x={}\nhead_tracking_invert_y={}\nhead_tracking_invert_z={}\nff_enabled={}\nbrake_hold={}\nauto_clutch={}\nmomentary_gears={}\nauto_shift={}\nled_glow={}\nled_mips={}\nnight_brightness={}\nui_scale={}\nui_scale_window={}\nchat_size={}\nnotes={}\nmouse_steering={}\nmouse_right_off={}\nmouse_smooth={}\nmouse_hold={}\nblinker_cancel={}\nff_road_vib={}\nff_engine_vib={}\nff_fade={}\n",
+        "{text}pax_voices={}\nnav_arrows={}\nnav_ai={}\nnav_surface={}\nnav_3d={}\nnav_classic_2d={}\nnav_widget={}\nnav_size={}\nget_up={}\ntime_speed={}\nmachine_translation={}\nshadow_casters={}\nshadow_blobs={}\nlamp_shadows={}\nctrl_deadzone={}\nupdate_check={}\nupdate_auto={}\nupdate_notify={}\npresence={}\nreflections={}\nmouse_sens={}\nmouse_pedal_strength={}\ngraphics_api={}\nctrl_off={}\nsteering_linear={}\nold_steering={}\nred_steer_spd={}\nff_invert={}\nwheel_range={}\nwheel_lock={}\nfov={}\ncamera_collision={}\npedal_throttle={}\npedal_brake={}\nseat_x={}\nseat_y={}\nseat_z={}\nseat_pitch_deg={}\nsteer_look={}\nhead_tracking={}\nhead_tracking_yaw_sens={}\nhead_tracking_pitch_sens={}\nhead_tracking_roll_sens={}\nhead_tracking_x_sens={}\nhead_tracking_y_sens={}\nhead_tracking_z_sens={}\nhead_tracking_invert_yaw={}\nhead_tracking_invert_pitch={}\nhead_tracking_invert_roll={}\nhead_tracking_invert_x={}\nhead_tracking_invert_y={}\nhead_tracking_invert_z={}\nff_enabled={}\nbrake_hold={}\nauto_clutch={}\nmomentary_gears={}\nauto_shift={}\nled_glow={}\nled_mips={}\nnight_brightness={}\nui_scale={}\nui_scale_window={}\nchat_size={}\nnotes={}\nmouse_steering={}\nmouse_right_off={}\nmouse_smooth={}\nmouse_hold={}\nblinker_cancel={}\nff_road_vib={}\nff_engine_vib={}\nff_fade={}\n",
         match v.get("pax_voices").and_then(|x| x.as_str()).unwrap_or("all") {
             "tickets" => "tickets",
             "off" => "off",
             _ => "all",
         },
         b("nav_arrows", false),
-        b("nav_ai", true), b("nav_surface", true), b("nav_3d", true), b("nav_widget", true), f("nav_size", 1.0).clamp(0.6, 2.0),
+        b("nav_ai", true), b("nav_surface", true), b("nav_3d", true), b("nav_classic_2d", false), b("nav_widget", true), f("nav_size", 1.0).clamp(0.6, 2.0),
         b("get_up", false),
         match v.get("time_speed") {
             Some(Value::String(x)) => x.trim().parse::<f64>().map(|x| x.clamp(1.0, 30.0)).unwrap_or(1.0),
@@ -2698,6 +2757,7 @@ pub fn settings_to_text(v: &Value, old: Option<&str>) -> String {
         b("machine_translation", false),
         if v.get("shadow_casters").and_then(|x| x.as_str()) == Some("omsi") { "omsi" } else { "all" },
         b("shadow_blobs", true),
+        b("lamp_shadows", true),
         f("ctrl_deadzone", 0.0).clamp(0.0, 0.3),
         b("update_check", true),
         b("update_auto", false),
@@ -2804,6 +2864,7 @@ pub fn settings_to_text(v: &Value, old: Option<&str>) -> String {
     text.push_str(&format!("gpu_texture_compression={}\n", b("gpu_texture_compression", true)));
     text.push_str(&format!("cloud_quality={}\n", cloud_quality(v.get("cloud_quality").and_then(|x| x.as_str()).unwrap_or("high"))));
     text.push_str(&format!("street_light={}\n", street_light(v.get("street_light").and_then(|x| x.as_str()).unwrap_or("off"))));
+    text.push_str(&format!("ray_tracing={}\nlight_shadows={}\ncloud_shadows={}\nlight_glow={}\n", b("ray_tracing", false) | (graphics_mode(v.get("graphics").and_then(|x| x.as_str()).unwrap_or("vanilla_plus")) == "enhanced_plus") as u8, light_shadows(v.get("light_shadows").and_then(|x| x.as_str()).unwrap_or("street")), b("cloud_shadows", false), b("light_glow", false)));
     text.push_str(&format!("rain_quality={}\n", rain_quality(v.get("rain_quality").and_then(|x| x.as_str()).unwrap_or("high"))));
     text.push_str(&format!("vehicle_smoke={}\n", vehicle_smoke(v.get("vehicle_smoke").and_then(|x| x.as_str()).unwrap_or("all"))));
     text.push_str(&format!("puddles={}\n", puddles(v.get("puddles").and_then(|x| x.as_str()).unwrap_or("high"))));

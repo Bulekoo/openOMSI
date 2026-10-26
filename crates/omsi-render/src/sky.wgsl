@@ -31,7 +31,7 @@ struct Camera {
     // Enhanced: the lamps' shadow maps (the tiles under the far map; zero where nothing is
     // drawn) and where the tiles lie: x a tile's side, y tiles to a row, z the far map's
     // texture height, w the number of tiles (`LampAtlas::uniform`)
-    lamp_view_proj: array<mat4x4<f32>, 44>,
+    lamp_view_proj: array<mat4x4<f32>, 56>,
     lamp_atlas: vec4<f32>,
     tree_wind: vec4<f32>,
     inside2_a: vec4<f32>,
@@ -41,6 +41,8 @@ struct Camera {
     cabin_lamps: array<vec4<f32>, 4>,
     // x: the textures' mip bias (FSR 1: negative, see `CameraUniform::lod`)
     lod: vec4<f32>,
+    // (the classic picture's headlight, `CameraUniform::spot`: unread here)
+    spot: array<vec4<f32>, 4>,
 };
 
 // A hash of a lattice point, from its integer bits.

@@ -12,6 +12,7 @@
 //! own, eased as theirs are; the camera eases into each new view instead of cutting.
 
 mod door_requests;
+mod ground;
 
 use crate::humans::{AvatarCmd, BusId, Humans};
 use crate::App;
@@ -51,6 +52,12 @@ const MAX_WALK_GRADIENT: f64 = 1.191_753_6;
 /// The gradient is taken between points this far either side (m), so that a kerb's edge
 /// reads as a step and not as a wall.
 const GRADIENT_HALF_SPAN: f64 = 0.25;
+/// How far (m) a people's path may be above or below the walker's feet and still lead
+/// them: a staircase's step, not the street under a bridge.
+const PATH_REACH: f64 = 1.0;
+/// How near (m) the step must be to the place a people's path crosses a collision box for
+/// the box to be no wall there: the gate, not the fence.
+const GATE_REACH: f64 = 1.5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FootCam {
@@ -1221,50 +1228,27 @@ pub(crate) fn tick(cx: &mut OnFootCx, dt: f32) {
             let z = f.pos.z;
             let probe = Obb { center: next, half: DVec2::splat(3.0), heading: 0.0, z0: z - 1.0, z1: z + 2.5, velocity: DVec2::ZERO, mass: 0.0, pole: None, id: -1 };
             let walls = w.data.peek().lists.collision.obstacles_near(&probe);
-            let mut boxes: Vec<Obb> = walls.into_iter().filter(|o| o.z0 < z + 1.6 + f.lift && o.z1 > z + 0.45 + f.lift).collect();
+            // The ways the map gives the passengers are the walker's too (a gate in a fence, a
+            // doorway, a staircase, a ramp): a wall a people's path goes through is no wall
+            // there, and the path's height is the floor where the ground says otherwise.
+            let net = cx.traffic.traffic.as_ref().map(|t| &t.net);
+            // (only at the crossing next to the step: a long fence with a gate at its far end
+            // stays a wall along the rest of its length)
+            let mut boxes: Vec<Obb> = walls
+                .into_iter()
+                .filter(|o| o.z0 < z + 1.6 + f.lift && o.z1 > z + 0.45 + f.lift)
+                .filter(|o| {
+                    let (s, c) = o.heading.sin_cos();
+                    !net.is_some_and(|n| n.path_through_box(o.center, o.half + DVec2::splat(RADIUS), DVec2::new(c, -s), DVec2::new(s, c), z + f.lift, PATH_REACH, next, GATE_REACH))
+                })
+                .collect();
             boxes.extend(vehicle_boxes(next, 20.0, cx.player.player.as_ref(), cx.player.placed, cx.traffic.traffic.as_ref(), cx.net));
             for _ in 0..2 {
                 for o in &boxes {
                     next = push_out(next, o, RADIUS);
                 }
             }
-            // Steep ground (a bank, a wall's face the ground finds) is climbed no more than a
-            // step above where the walker last stood on walkable ground: out of the bus under
-            // a covered terminus the walker went up the bank beside it onto the deck, a few
-            // centimetres a frame, each a step of its own. Stepping out of a bus starts the
-            // limit afresh from the ground stepped onto.
-            let footing = *f.footing.get_or_insert(z);
-            let ground = w.walk_height_reach(next.x, next.y, z + f.lift, 1.0);
-            let gradient_at = |g: f64| ground_gradient(|x, y| w.walk_height_reach(x, y, g, 0.5), next, g);
-            // (the gradient is only needed for ground above a step over the footing)
-            let blocked = ground.is_some_and(|g| g > footing + STEP && too_steep_to_climb(g, gradient_at(g), footing));
-            match ground {
-                Some(g) if blocked || g - (z + f.lift) > STEP => {
-                    // too high a step: stay (and lose the speed into it)
-                    next = f.pos.truncate();
-                    f.vel *= 0.3;
-                }
-                Some(g) => {
-                    let feet = z + f.lift;
-                    if gradient_at(g) <= MAX_WALK_GRADIENT {
-                        f.footing = Some(g);
-                    }
-                    if g >= feet - 0.02 || f.grounded() && feet - g < 0.4 {
-                        // on the ground (down a kerb the feet follow it)
-                        f.pos.z = g;
-                        if f.vz <= 0.0 {
-                            f.lift = 0.0;
-                        } else {
-                            f.lift = (feet - g).max(0.0);
-                        }
-                    } else {
-                        // stepped off something high: falling
-                        f.pos.z = g;
-                        f.lift = feet - g;
-                    }
-                }
-                None => {}
-            }
+            ground::settle_on_ground(&mut f, w, net, z, &mut next);
         }
         f.pos.x = next.x;
         f.pos.y = next.y;
