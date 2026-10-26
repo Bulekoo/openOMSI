@@ -676,6 +676,7 @@ function WheelCard({ d, live, ff, change, paused }) {
         <div class="section-title">${t('For every wheel')}</div>
         <${SettingRow} row=${settingRow('wheel_range')} />
         <${SettingRow} row=${settingRow('wheel_lock')} />
+        <${SettingRow} row=${settingRow('cab_wheel_rotation')} />
         ${ff && html`<${SettingRow} row=${settingRow('ff_enabled')} />`}
       </div>
     </${Card}>

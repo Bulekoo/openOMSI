@@ -36,6 +36,12 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   warm white cone reaching 50 m with a soft edge, in the Vanilla and the Enhanced pictures, in
   every view, by night in the dark or by day inside a dim cab. `flashlight` in keyboard.cfg's
   `[game]` (or a controller button) switches it as well.
+- **The cab's steering wheel turns as far as yours** (*Cab wheel rotation*, in the launcher's
+  Settings › Driving › Game controllers and in the game's Options; `cab_wheel_rotation`): the
+  wheel model in the cab turns the set degrees lock to lock, 180° to 1800°, so a 900° or 1080°
+  wheel on the desk and the one in the bus move alike. *Automatic* (0, the default) keeps the
+  bus's own animation, as before. A bus that turns its wheel from a script of its own keeps its
+  own rotation.
 - **A modern engine for HTML screens (opt-in)**: a page that puts
   `<meta name="omsi-engine" content="modern">` in its head runs on a second engine with flexbox,
   `position` with `z-index`, borders, `calc()` and custom properties, attribute selectors,

@@ -343,6 +343,26 @@ fn the_wheels_tremble_settings_round_trip() {
 }
 
 #[test]
+fn the_cab_wheel_rotation_round_trips() {
+    // 0: the bus's own animation, as before the setting
+    let mut settings = settings_from_text(None);
+    assert_eq!(settings["cab_wheel_rotation"], json!(0));
+    assert!(settings_to_text(&settings, None).lines().any(|l| l == "cab_wheel_rotation=0"));
+    settings["cab_wheel_rotation"] = json!(1080);
+    let saved = settings_to_text(&settings, None);
+    assert!(saved.lines().any(|l| l == "cab_wheel_rotation=1080"), "{saved}");
+    assert_eq!(settings_from_text(Some(&saved))["cab_wheel_rotation"], json!(1080));
+    // below the slider's first step is Automatic; past a wheel's rotation is its most
+    for (line, kept) in [("40", 0), ("120", 180), ("900.4", 900), ("5000", 1800), ("-90", 0), ("x", 0)] {
+        assert_eq!(settings_from_text(Some(&format!("cab_wheel_rotation={line}\n")))["cab_wheel_rotation"], json!(kept), "{line}");
+    }
+    settings["cab_wheel_rotation"] = json!(60);
+    assert!(settings_to_text(&settings, None).lines().any(|l| l == "cab_wheel_rotation=0"));
+    settings["cab_wheel_rotation"] = json!(3600);
+    assert!(settings_to_text(&settings, None).lines().any(|l| l == "cab_wheel_rotation=1800"));
+}
+
+#[test]
 fn settings_keep_what_the_page_does_not_manage() {
     // the user's file: a key of a newer game, a hand-written one, and the game's other
     // spellings of keys the page writes

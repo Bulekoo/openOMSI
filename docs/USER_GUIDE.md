@@ -459,8 +459,12 @@ it as well, up to twice, unless `ui_scale_window` is off; `notes` off hides the 
 top left corner; *Options* in the game menu changes it in quarters while driving, Left
 and Right), `steering_linear`, `old_steering` and `red_steer_spd` (the steering switches above),
 `ff_invert` (force feedback the other way round), `wheel_range` (the wheel's own rotation,
-lock to lock, 900° by default) and `wheel_lock` (how far it is turned for the bus's full
-lock; 0 = the whole wheel, as OMSI), `fov` (degrees for the views from the bus; 0 = the bus's
+lock to lock, 900° by default), `wheel_lock` (how far it is turned for the bus's full
+lock; 0 = the whole wheel, as OMSI) and `cab_wheel_rotation` (how far the steering wheel model
+in the cab turns, lock to lock: 180 to 1800 degrees in steps of 30, so it can match
+`wheel_range`; 0, the default, is the bus's own animation - *Automatic* in the launcher and
+the game's Options; a bus that turns its wheel from a script of its own keeps its own
+rotation), `fov` (degrees for the views from the bus; 0 = the bus's
 own cameras), `head_idle` (0..1, 0 by default: how far the view sways on its own - a head at
 rest breathes and shifts its weight, and 0 of it is exactly as OMSI; most of it is seen while
 the bus waits at a stop) and `head_idle_pace` (0.5..2: how fast that sway moves, 1 being the

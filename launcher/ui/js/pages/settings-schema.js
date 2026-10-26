@@ -193,6 +193,8 @@ const driving = {
         // about two and a half turns)
         { type: 'slider', key: 'wheel_range', label: 'Wheel rotation', min: 180, max: 1800, step: 30, def: 900, format: deg, store: round },
         { type: 'slider', key: 'wheel_lock', label: 'Full lock at', min: 0, max: 1800, step: 30, def: 0, format: (v) => (v < 45 ? t('OMSI') : deg(v)), store: (v) => (v < 45 ? 0 : Math.round(v)) },
+        // how far the cab's own steering wheel model turns (0: as the bus's animation)
+        { type: 'slider', key: 'cab_wheel_rotation', label: 'Cab wheel rotation', min: 0, max: 1800, step: 30, def: 0, format: (v) => (v < 90 ? t('Automatic') : deg(v)), store: (v) => (v < 90 ? 0 : Math.round(v)), help: "How far the steering wheel in the cab turns, lock to lock. Automatic = as the bus's own model; set it to your wheel's rotation so both turn alike. Some mod buses animate their wheel from a script of their own and keep their own rotation." },
         { type: 'slider', key: 'pedal_throttle', label: 'Throttle pedal strength', min: 0.5, max: 2, step: 0.05, def: 1, format: pedal, store: r2 },
         { type: 'slider', key: 'pedal_brake', label: 'Brake pedal strength', min: 0.5, max: 2, step: 0.05, def: 1, format: pedal, store: r2 },
         { type: 'toggle', key: 'momentary_gears', label: 'H-pattern shifter: return to neutral when the gear is released' },
@@ -214,7 +216,7 @@ const driving = {
         { type: 'slider', key: 'ff_road_vib', label: 'Road texture vibration', min: 0, max: 4, step: 0.05, def: 1, format: vibration, store: (v) => Math.round(v * 20) / 20 },
         { type: 'slider', key: 'ff_engine_vib', label: 'Engine vibration', help: 'The running engine buzzes in the wheel, felt even at a standstill', min: 0, max: 4, step: 0.05, def: 1, format: vibration, store: (v) => Math.round(v * 20) / 20 },
         { type: 'slider', key: 'ff_fade', label: 'Vibration fade-out', min: 0, max: 1.5, step: 0.05, def: 0.28, format: (v) => (v < 0.01 ? t('Off') : `${Math.round(v * 1000)} ms`), store: r2 },
-        { type: 'button', label: 'Reset wheel settings', icon: 'refresh', patch: () => ({ wheel_range: 900, wheel_lock: 0, ff_invert: false, ff_enabled: true, ff_road_vib: 1, ff_engine_vib: 1, ff_fade: 0.28 }) },
+        { type: 'button', label: 'Reset wheel settings', icon: 'refresh', patch: () => ({ wheel_range: 900, wheel_lock: 0, cab_wheel_rotation: 0, ff_invert: false, ff_enabled: true, ff_road_vib: 1, ff_engine_vib: 1, ff_fade: 0.28 }) },
       ],
     },
   ],

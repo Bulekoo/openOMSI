@@ -521,3 +521,20 @@ fn lamp_shadows_on_by_default_and_round_trip_through_the_launcher() {
     assert!(!game.lamp_shadows);
     assert_eq!(Settings::from_text(&game.to_text()), game);
 }
+
+/// The cab wheel's rotation: the bus's own (0) at first and in a file from before it; under 90
+/// Automatic, else rounded within 180..=1800, as the launcher reads it; kept through both
+/// writers.
+#[test]
+fn cab_wheel_rotation_defaults_to_the_bus_and_is_clamped() {
+    assert_eq!(Settings::default().cab_wheel_rotation, 0);
+    assert_eq!(Settings::from_text("version=4\nwheel_range=1080\n").cab_wheel_rotation, 0);
+    for (text, want) in [("1080", 1080), ("0", 0), ("89", 0), ("-540", 0), ("nan", 0), ("bogus", 0), ("90", 180), ("120", 180), ("180", 180), ("900.4", 900), ("1800", 1800), ("5000", 1800)] {
+        assert_eq!(Settings::from_text(&format!("cab_wheel_rotation={text}\n")).cab_wheel_rotation, want, "{text}");
+    }
+    let s = Settings { cab_wheel_rotation: 1080, ..Default::default() };
+    assert_eq!(Settings::from_text(&s.to_text()), s);
+    let mut ui = omsi_launcher_lib::settings_from_text(None);
+    ui["cab_wheel_rotation"] = serde_json::json!(1080);
+    assert_eq!(Settings::from_text(&omsi_launcher_lib::settings_to_text(&ui, None)).cab_wheel_rotation, 1080);
+}

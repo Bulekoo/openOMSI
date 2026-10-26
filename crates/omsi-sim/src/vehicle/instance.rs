@@ -258,6 +258,7 @@ impl VehicleInstance {
             pitch: 0.0,
             bank: 0.0,
             animators,
+            cab_wheel_rotation: 0,
             mesh_transforms: vec![Mat4::IDENTITY; n],
             mesh_props: vec![MeshProps::default(); n],
             physics,

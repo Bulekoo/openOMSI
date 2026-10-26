@@ -21,6 +21,8 @@ use engine_vars::Ev;
 pub use pax_vars::PaxVars;
 mod reload;
 pub use damage::{BrokenGlass, DynamicImpact, VehicleDent};
+mod cab_wheel;
+pub use cab_wheel::{cab_wheel_scale, is_cab_wheel_anim, CAB_WHEEL_MIN_FACTOR};
 mod car_run;
 mod contact;
 mod coupling;
@@ -118,6 +120,9 @@ pub struct VehicleInstance {
     seat: (f32, f32, Vec3),
     pub bank: f32,
     pub animators: Vec<MeshAnimator>,
+    /// The cab wheel's rotation lock to lock the steering wheel's animations are scaled to
+    /// (degrees; 0 = the model's own, see `set_cab_wheel_rotation`).
+    cab_wheel_rotation: u32,
     /// Current mesh-space transforms, parallel to `ty.meshes`.
     pub mesh_transforms: Vec<Mat4>,
     pub mesh_props: Vec<MeshProps>,
