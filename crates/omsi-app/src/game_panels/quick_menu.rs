@@ -7,11 +7,10 @@
 //! breakdown call and the input devices' tile are left out. The statistics tile shows the last
 //! trip's summary again, or the personnel file when there is none.
 
-use super::{card, el, note};
-use omsi_plugin::ui::{Anchor, Element, Kind, Panel, Rgba, RowAlign};
+use super::{card, el, note, theme, theme_color};
+use omsi_plugin::ui::{Anchor, Element, Kind, Panel, RowAlign};
 use omsi_ui::tr;
 
-const ACCENT: Rgba = Rgba([232, 160, 48, 255]);
 const COLUMNS: usize = 6;
 
 fn tile(id: &str, label: &str, icon: &str) -> Element {
@@ -38,20 +37,21 @@ pub(crate) struct QuickMenu;
 
 impl QuickMenu {
     pub(crate) fn panel(&self, app: &crate::App) -> Panel {
-        self.panel_of(app.settings.nav_arrows)
+        self.panel_of(app.settings.nav_arrows, app.settings.is_light_theme())
     }
 
     /// The menu with the route arrows on (their tile lit) or off.
-    pub(crate) fn panel_of(&self, arrows: bool) -> Panel {
+    pub(crate) fn panel_of(&self, arrows: bool, light: bool) -> Panel {
+        let accent = theme_color(theme(light).ACCENT);
         let mut children: Vec<Element> = TILES
             .chunks(COLUMNS)
             .map(|line| {
-                let tiles = line.iter().map(|(id, label, icon)| Element { grow: true, color: (*id == "arrows" && arrows).then_some(ACCENT), ..tile(id, label, icon) }).collect();
+                let tiles = line.iter().map(|(id, label, icon)| Element { grow: true, color: (*id == "arrows" && arrows).then_some(accent), ..tile(id, label, icon) }).collect();
                 el(None, Kind::Row { children: tiles, gap: 6.0, align: RowAlign::Start })
             })
             .collect();
-        children.push(note(&tr("Alt or Esc closes the menu; the game goes on.")));
-        Panel { padding: 10.0, gap: 6.0, ..card(Anchor::BottomRight, 32.0, 32.0, 560.0, 150, children) }
+        children.push(note(&tr("Alt or Esc closes the menu; the game goes on."), light));
+        Panel { padding: 10.0, gap: 6.0, ..card(Anchor::BottomRight, 32.0, 32.0, 560.0, 150, light, children) }
     }
 }
 
@@ -106,6 +106,19 @@ mod tests {
         }
         let ids: std::collections::HashSet<_> = TILES.iter().map(|t| t.0).collect();
         assert_eq!(ids.len(), 12);
+    }
+
+    #[test]
+    fn game_panels_follow_the_light_theme_setting() {
+        let args = <crate::cli::Args as clap::Parser>::parse_from(["openomsi"]);
+        let mut app = crate::assemble_app(args, Default::default());
+        app.settings.ui_theme = "light".into();
+        toggle(&mut app);
+        app.frame_game_panels(0.0, [0.0, 0.0, 1280.0, 720.0], false);
+
+        let panel = app.menus.game_panels.ui.panels().iter().find(|p| p.id == "quick").unwrap();
+        let background = panel.panel.background.unwrap();
+        assert!(background.0[0] > 230 && background.0[1] > 230 && background.0[2] > 230, "{background:?}");
     }
 
     #[test]
