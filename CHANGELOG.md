@@ -1247,6 +1247,9 @@ Additional security hardening and verification for mods, maps and online session
 - **Text textures** written with 255 as the full colour flag are no longer yellow.
 - **.x models**: texture coordinates and normals from DeclData (houses and trees drawn in one flat colour) and binary .x files (25 PAD-Labs houses were missing).
 
+### Fixes
+- **Train cars that run their own scripts take the paint's variables and the cables' signals.** A tram's second car, whose script is its own (the Konstal 105Na), started with the script's defaults and never got the paint's `[setvar]`s, so its destination boards, number plates and roof parts were missing in every livery but the plainest ([#3343](https://github.com/openOMSI-org/openOMSI/issues/3343)). It now wears the paint of the car in front, also when the paint is changed later. The cars' `[control_cable_*]` plugs now carry what a car's script writes down the train, car by car (a coupler or bogie without a script of its own passes it on), so the second car is powered, lit and braked with the first instead of waiting for its own start ([#3342](https://github.com/openOMSI-org/openOMSI/issues/3342)). Each car also measures the wire above its own pantograph (`GetHeightAbovePoint`), not the leading car's ([#3341](https://github.com/openOMSI-org/openOMSI/issues/3341)).
+
 ## 0.2.42 - 2026-10-12
 
 ### New

@@ -298,6 +298,7 @@ impl VehicleInstance {
             props_plan: PropsPlan::default(),
             pax_vars: std::sync::OnceLock::new(),
             engine_ids: std::sync::OnceLock::new(),
+            cable_bus: Vec::new(),
             program_ids: std::sync::OnceLock::new(),
             trolley,
             rail_env: None,
@@ -432,6 +433,12 @@ impl VehicleInstance {
         if let Some(i) = scheme {
             for (var, v) in self.ty.paint_schemes[i].set_vars.clone() {
                 self.set_var(&var, v);
+            }
+        }
+        // the cars that run their scripts themselves wear it too
+        for part in &mut self.trailers {
+            if let Some(run) = part.run.as_deref_mut() {
+                run.apply_paint(&part.ty, scheme);
             }
         }
     }

@@ -248,6 +248,8 @@ pub struct VehicleInstance {
     pax_vars: std::sync::OnceLock<PaxVars>,
     /// The engine's own variables (see `engine_vars`), the same way.
     engine_ids: std::sync::OnceLock<engine_vars::EngineVarIds>,
+    /// What the control cables carry to the next car this frame (see `car_run`).
+    cable_bus: car_run::CableBus,
     /// The program's own variables the engine uses every frame (see `program_ids`).
     program_ids: std::sync::OnceLock<program_ids::ProgramIds>,
     /// A trolleybus's poles and traction (see `trolley`); None for every other vehicle.
