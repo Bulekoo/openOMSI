@@ -25,7 +25,8 @@ export async function boot() {
   Object.assign(choice, clockPatch(choice, b.settings));
   set({ boot: b, settings: b.settings, config: b.config, choice, favourites: b.favourites || [], ready: true, page: b.root ? 'drive' : 'setup' });
   if (b.crash) set({ crash: b.crash });
-  applyTheme();
+  reconcileTheme(b.settings);
+  await applyTheme();
   if (b.root) {
     loadContent();
     readAhead();
@@ -60,6 +61,13 @@ export function fitWindow() {
 
 export function resolvedTheme(pick = remembered('theme', 'dark')) {
   return pick === 'light' || (pick === 'system' && matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+}
+
+// 啟動與重新載入皆以遊戲儲存值為準，避免舊的啟動器偏好覆寫它。
+// System 僅在目前解析值與儲存值一致時保留；不同時採用明確的 Light／Dark。
+function reconcileTheme(settings) {
+  const gameTheme = settings.ui_theme === 'light' ? 'light' : 'dark';
+  if (remembered('theme') !== 'system' || resolvedTheme() !== gameTheme) remember('theme', gameTheme);
 }
 
 export function applyTheme() {
@@ -390,8 +398,7 @@ export function reloadSettings() {
     const now = await call('settings_get').catch(() => null);
     if (!now || mine !== settingsSeq) return;
     const before = S.settings?.language;
-    const gameTheme = now.ui_theme === 'light' ? 'light' : 'dark';
-    if (resolvedTheme() !== gameTheme) remember('theme', gameTheme);
+    reconcileTheme(now);
     set({ settings: now });
     if (now.language !== before) await applyLanguage();
     await applyTheme();
