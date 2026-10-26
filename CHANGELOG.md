@@ -36,13 +36,12 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   warm white cone reaching 50 m with a soft edge, in the Vanilla and the Enhanced pictures, in
   every view, by night in the dark or by day inside a dim cab. `flashlight` in keyboard.cfg's
   `[game]` (or a controller button) switches it as well.
-- **Choose where openOMSI keeps its data** (Setup › `.openomsi` folder): settings, profiles,
-  logs and caches can live in another folder, on another disk. A game and its launcher find the
-  folder through a pointer file beside the program (beside the `.app` on a Mac, so an update of
-  the bundle keeps it); a first start, or an installation that cannot be written, uses `~/.openomsi`
-  as before. Moving copies the folder first, in the background (leaving the page does not stop it),
-  and switches only when the copy is whole; a copy that fails leaves the old folder as it was. The
-  default `~/.openomsi` is kept after a move, because other copies of openOMSI may still use it.
+- **The cab's steering wheel turns as far as yours** (*Cab wheel rotation*, in the launcher's
+  Settings › Driving › Game controllers and in the game's Options; `cab_wheel_rotation`): the
+  wheel model in the cab turns the set degrees lock to lock, 180° to 1800°, so a 900° or 1080°
+  wheel on the desk and the one in the bus move alike. *Automatic* (0, the default) keeps the
+  bus's own animation, as before. A bus that turns its wheel from a script of its own keeps its
+  own rotation.
 - **A modern engine for HTML screens (opt-in)**: a page that puts
   `<meta name="omsi-engine" content="modern">` in its head runs on a second engine with flexbox,
   `position` with `z-index`, borders, `calc()` and custom properties, attribute selectors,
@@ -173,6 +172,22 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   `OMSI_NO_BEAM_SHADOWS=1` draws the old picture. `OMSI_DEBUG_PAD=1` logs every game
   controller button event (the ones the assignment menu waits for), for a report that a
   pad's buttons cannot be assigned.
+
+**Controls**
+
+- **Force feedback can be tuned per wheel**: under *Fine tuning*, next to *Steering force* and
+  *Vibration*, a wheel has its own *Self-centring* (0-200 %: how strongly the moving bus turns
+  it back to straight; it never pulls at a standstill), *Damping* (0-300 %: a released wheel
+  settles at the centre instead of swinging past it), *Parking resistance* (0-200 %: how heavy
+  it is while the bus stands or crawls), *Minimum force* (0-20 %: lifts the smallest forces
+  past the dead centre of belt and gear wheels; 0 on direct drive) and *Smoothing* (0-50 ms:
+  softens grainy steps on strong wheels at low frame rates), with **Reset tuning** to go back.
+  They are on the launcher's Game controllers page and in the device's *Force feedback* tab of
+  the game's controller menu, where a change applies at once, and are kept in `gamectrler.cfg`
+  under `[openOMSI.FFTuning]`, which OMSI 2 ignores. The defaults keep today's feel, and a wheel
+  left at them is saved without the section
+  ([#2103](https://github.com/openOMSI-org/openOMSI/issues/2103),
+  [#3289](https://github.com/openOMSI-org/openOMSI/issues/3289)).
 
 **On foot**
 
@@ -495,6 +510,26 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   --kmh 50 [--realistic]` compares the two models; `OMSI_REALISTIC_ROAD=1` turns it on for one run.
 
 ### Fixes
+
+- **The launcher starts as it did in 0.3.41.** 0.3.42 made the launcher write a pointer file beside its
+  program and copy data folders at start, and some antivirus programs and browsers took that for
+  harmful behaviour and blocked the download or the program. That change (the data folder choice
+  in Setup, #3243) is taken out again, so the launcher keeps its data in `~/.openomsi` as before;
+  it can return later in a form that leaves the program folder alone. Players who were blocked
+  can update to this version.
+- **A game whose graphics device is gone starts again by itself instead of sitting on the loading
+  screen** (#3232): when the driver stops answering without saying so, every graphics resource
+  becomes invalid and hundreds of errors a second follow while nothing is drawn. That rate is now
+  taken for a lost device, and the game restarts on its last situation with lighter graphics, as
+  it already did when the driver reported the loss.
+- **The restart after a lost graphics device is lighter** (#3323, #3328): the Enhanced extras (ray
+  tracing, every-light and lamp shadows, cloud shadows, the glow of lights) are switched off at the
+  first restart, and Enhanced itself gives way to Vanilla+ at the second.
+- **The navigator's map no longer ends with an error report when the graphics device is lost**: its
+  background builder stops quietly and the restart goes on.
+- **The log says where the game is stuck**: a part of a frame that has run for ten seconds is named
+  in `game.log` (and again every thirty seconds), so a report of a game that stays at a part of
+  the loading screen shows what it was doing (#3326).
 
 - **The navigator's map and the city map draw the whole ground again** (#3266, #3301): the cap on
   the map's geometry that came in with the out-of-memory fix (#3249) cut the ground off on large
@@ -1211,6 +1246,9 @@ Additional security hardening and verification for mods, maps and online session
 - **Buses no longer sink into a street** with a road face buried under drawn ground (Ahlheim & Laurenzbach).
 - **Text textures** written with 255 as the full colour flag are no longer yellow.
 - **.x models**: texture coordinates and normals from DeclData (houses and trees drawn in one flat colour) and binary .x files (25 PAD-Labs houses were missing).
+
+### Fixes
+- **Train cars that run their own scripts take the paint's variables and the cables' signals.** A tram's second car, whose script is its own (the Konstal 105Na), started with the script's defaults and never got the paint's `[setvar]`s, so its destination boards, number plates and roof parts were missing in every livery but the plainest ([#3343](https://github.com/openOMSI-org/openOMSI/issues/3343)). It now wears the paint of the car in front, also when the paint is changed later. The cars' `[control_cable_*]` plugs now carry what a car's script writes down the train, car by car (a coupler or bogie without a script of its own passes it on), so the second car is powered, lit and braked with the first instead of waiting for its own start ([#3342](https://github.com/openOMSI-org/openOMSI/issues/3342)). Each car also measures the wire above its own pantograph (`GetHeightAbovePoint`), not the leading car's ([#3341](https://github.com/openOMSI-org/openOMSI/issues/3341)).
 
 ## 0.2.42 - 2026-10-12
 

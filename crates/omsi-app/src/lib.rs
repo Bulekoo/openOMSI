@@ -104,6 +104,7 @@ use omsi_scene::threads;
 use omsi_scene::tiles;
 mod traffic;
 mod view_sync;
+mod watchdog;
 mod ui;
 
 // the game itself, split by what each part does
@@ -235,8 +236,6 @@ pub fn run() -> Result<()> {
     view_sync::install_sim_decoder();
     startup::install_scene_settings();
     omsi_cfg::migrate_legacy_data_dir();
-    #[cfg(not(any(test, target_os = "android", target_os = "ios")))]
-    omsi_cfg::user_data::initialize_for(&std::env::current_exe()?)?;
     omsi_launcher_lib::adopt_own_inputs();
     #[cfg(target_os = "macos")]
     restart_with_allocator_settings();

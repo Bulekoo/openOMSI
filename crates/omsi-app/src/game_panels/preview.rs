@@ -97,7 +97,10 @@ fn summary() -> crate::journey::TripSummary {
 #[test]
 #[ignore]
 fn preview() {
-    picture("game-panels-quick.png", &[(quick_menu::QuickMenu.panel_of(true, false), Some("repair"))]);
+    let state = quick_menu::TileState { off: vec!["map"], lit: vec!["arrows", "duty"] };
+    picture("game-panels-quick.png", &[(quick_menu::QuickMenu { focus: 7, ..Default::default() }.panel_of(&state, false), Some("refuel"))]);
+    let page2 = quick_menu::QuickMenu { page: 1, focus: 2, ..Default::default() };
+    picture("game-panels-quick-2.png", &[(page2.panel_of(&quick_menu::TileState { off: vec!["skipstop", "endduty", "players", "admin", "tobus"], lit: vec![] }, false), None)]);
     picture("game-panels-trip.png", &[(trip_summary::TripPanel::new(summary()).panel(false), Some("save"))]);
     let form = dest_form::DestForm { route: "137".into(), lines: ["Sonderfahrt".into(), "Betriebshof".into()], ..Default::default() };
     picture("game-panels-dest.png", &[(form.panel(false), Some("select"))]);

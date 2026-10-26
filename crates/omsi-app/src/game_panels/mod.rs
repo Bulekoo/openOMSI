@@ -164,6 +164,16 @@ impl crate::App {
             }
         }
         let light = self.settings.is_light_theme();
+        // (the quick menu's tile under the mouse is the one chosen, its name shown)
+        let gp = &mut self.menus.game_panels;
+        if gp.quick.is_some() && gp.ui.focused() {
+            let (x, y) = self.input.cursor;
+            if let Some(el) = gp.draw.press_at(&gp.ui, x, y).filter(|p| p.panel == "quick").and_then(|p| p.element) {
+                if let Some(q) = gp.quick.as_mut() {
+                    q.hover(&el, (x, y));
+                }
+            }
+        }
         let panels: Vec<(&str, Option<Panel>)> = vec![
             ("view", self.menus.game_panels.view.as_ref().map(|v| v.panel(self, light))),
             ("trip", self.menus.game_panels.trip.as_ref().map(|t| t.panel(light))),
@@ -293,7 +303,7 @@ impl crate::App {
         if code == KeyCode::Escape {
             return self.close_game_panel();
         }
-        false
+        quick_menu::key(self, code)
     }
 
     /// Esc: the panel on top closes (the quick menu, the question, the form, the summary,

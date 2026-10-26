@@ -246,6 +246,7 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         switch_row(app, "ff_invert", "Invert force feedback by default", "For wheels without a saved direction"),
         slider_row(app, "wheel_range", "Wheel rotation", "The steering wheel's own rotation, lock to lock", &|v| format!("{v:.0}°")),
         slider_row(app, "wheel_lock", "Full lock at", "How far the wheel turns for the vehicle's full lock", &|v| if v < 45.0 { "OMSI".to_string() } else { format!("{v:.0}°") }),
+        slider_row(app, "cab_wheel_rotation", "Cab wheel rotation", "How far the steering wheel in the cab turns, lock to lock; 0 = as the bus's own model (Automatic). Set it to your wheel's rotation so both turn alike.", &|v| if v < 90.0 { omsi_ui::tr("Automatic").into_owned() } else { format!("{v:.0}°") }),
         slider_row(app, "pedal_t", "Throttle pedal strength", "Adjust how strongly pedal input affects the throttle", &|v| format!("x{v}")),
         slider_row(app, "pedal_b", "Brake pedal strength", "Adjust how strongly pedal input affects the brake", &|v| format!("x{v}")),
         switch_row(app, "blinker_cancel", "Indicators cancel themselves", "The bus's script turns the indicator off after a turn; off: it stays on until you turn it off"),
