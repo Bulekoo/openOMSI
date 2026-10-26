@@ -99,3 +99,33 @@ fn a_stack_wraps_its_texts_and_grows_down() {
         l.h
     );
 }
+
+/// The icon-only tiles added on main must use the selected palette too, while
+/// keeping the white icon on an explicitly lit tile and disabling its hit target.
+#[test]
+fn square_tiles_follow_the_palette_without_losing_lit_or_disabled_states() {
+    let fonts = Fonts::new();
+    let mut p = panel(r#"{ width = 280, children = {} }"#);
+    let tile = |id: &str, icon: &str, focus, off, color| omsi_plugin::ui::Element {
+        id: Some(id.into()), color, grow: false, clickable: false,
+        kind: Kind::Tile { text: String::new(), icon: icon.into(), focus, off },
+    };
+    p.children = vec![
+        tile("plain", "add", true, false, None),
+        tile("lit", "navigation", false, false, Some(Rgba([138, 72, 26, 255]))),
+        tile("off", "map", false, true, None),
+    ];
+    for light in [false, true] {
+        let laid = layout_with_theme(&p, &fonts, 1.0, light);
+        assert!(laid.hits.iter().any(|h| h.element.as_deref() == Some("plain")));
+        assert!(!laid.hits.iter().any(|h| h.element.as_deref() == Some("off")));
+        let icons: Vec<_> = laid.items.iter().filter_map(|i| match i {
+            Item::Icon { color, .. } => Some(*color), _ => None,
+        }).collect();
+        assert_eq!(icons.len(), 3);
+        assert_eq!(icons[1], INK, "a lit tile keeps its white icon");
+        assert_eq!(icons[0].0[0] < 0.2, light, "the ordinary icon follows the theme");
+        let accent = ThemeColors::new(light).accent;
+        assert!(laid.items.iter().any(|i| matches!(i, Item::Rounded { color, .. } if *color == accent)));
+    }
+}
