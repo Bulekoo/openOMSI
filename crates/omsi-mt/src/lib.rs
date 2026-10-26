@@ -55,7 +55,8 @@ fn set_status(s: impl Into<String>) {
 }
 
 fn data_dir() -> Option<PathBuf> {
-    omsi_cfg::user_data::base_dir()
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
+    Some(PathBuf::from(home).join(".openomsi"))
 }
 
 fn model_dir() -> Option<PathBuf> {

@@ -113,9 +113,11 @@ fn input_key(duty: &PlayerDuty) -> u64 {
 }
 
 fn cache_dir() -> Result<PathBuf> {
-    let dir = omsi_cfg::user_data::base_dir()
-        .ok_or_else(|| anyhow!("cannot locate the openOMSI user data folder"))?
-        .join("cache/schedules");
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow!("cannot locate the openOMSI user data folder"))?;
+    let dir = home.join(".openomsi").join("cache").join("schedules");
     // (the bus is handed the sheet by its full path, outside the content folders)
     omsi_texture::trust_generated_dir(&dir);
     Ok(dir)

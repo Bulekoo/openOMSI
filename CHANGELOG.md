@@ -36,13 +36,6 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   warm white cone reaching 50 m with a soft edge, in the Vanilla and the Enhanced pictures, in
   every view, by night in the dark or by day inside a dim cab. `flashlight` in keyboard.cfg's
   `[game]` (or a controller button) switches it as well.
-- **Choose where openOMSI keeps its data** (Setup › `.openomsi` folder): settings, profiles,
-  logs and caches can live in another folder, on another disk. A game and its launcher find the
-  folder through a pointer file beside the program (beside the `.app` on a Mac, so an update of
-  the bundle keeps it); a first start, or an installation that cannot be written, uses `~/.openomsi`
-  as before. Moving copies the folder first, in the background (leaving the page does not stop it),
-  and switches only when the copy is whole; a copy that fails leaves the old folder as it was. The
-  default `~/.openomsi` is kept after a move, because other copies of openOMSI may still use it.
 - **A modern engine for HTML screens (opt-in)**: a page that puts
   `<meta name="omsi-engine" content="modern">` in its head runs on a second engine with flexbox,
   `position` with `z-index`, borders, `calc()` and custom properties, attribute selectors,
@@ -495,6 +488,13 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   --kmh 50 [--realistic]` compares the two models; `OMSI_REALISTIC_ROAD=1` turns it on for one run.
 
 ### Fixes
+
+- **The launcher starts as it did in 0.3.41.** 0.3.42 made the launcher write a pointer file beside its
+  program and copy data folders at start, and some antivirus programs and browsers took that for
+  harmful behaviour and blocked the download or the program. That change (the data folder choice
+  in Setup, #3243) is taken out again, so the launcher keeps its data in `~/.openomsi` as before;
+  it can return later in a form that leaves the program folder alone. Players who were blocked
+  can update to this version.
 
 - **The navigator's map and the city map draw the whole ground again** (#3266, #3301): the cap on
   the map's geometry that came in with the out-of-memory fix (#3249) cut the ground off on large

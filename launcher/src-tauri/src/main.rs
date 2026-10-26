@@ -11,7 +11,6 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod commands;
-mod data_folder;
 mod discord;
 mod protocol;
 mod service;
@@ -35,9 +34,7 @@ fn fresh_webview_profile(app: &tauri::App) -> Option<std::path::PathBuf> {
         return None;
     }
     let temp = std::env::temp_dir().join("openOMSI-webview");
-    let Ok(dir) = app.path().app_local_data_dir() else {
-        return Some(temp);
-    };
+    let Ok(dir) = app.path().app_local_data_dir() else { return Some(temp) };
     if std::fs::create_dir_all(&dir).is_err() {
         omsi_launcher_lib::log_to_file(&format!("webview: {} cannot be made, the profile goes to {}", dir.display(), temp.display()));
         return Some(temp);
@@ -74,10 +71,6 @@ fn remember_screen(window: &tauri::Window) {
 }
 
 fn main() {
-    // Restore folder grants before migration, logging, or bootstrap can read user data.
-    if let Err(e) = data_folder::restore_access() {
-        eprintln!("data folder access could not be restored: {e}");
-    }
     // A panic ends the launcher with code 101, and on Windows it has no console to say why:
     // the start guard only saw "ended on an error before its first frames" (#2574). Its
     // message and place go into launcher.log, which the support package carries.
@@ -95,9 +88,6 @@ fn main() {
         default_hook(info);
     }));
     omsi_cfg::migrate_legacy_data_dir();
-    if let Ok(exe) = std::env::current_exe() {
-        let _ = omsi_cfg::user_data::initialize_for(&exe);
-    }
     omsi_launcher_lib::adopt_own_inputs();
     let args: Vec<String> = std::env::args().collect();
     // (the terminal commands of the old launcher binary work here too)
@@ -158,10 +148,7 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if matches!(
-                event,
-                tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. } | tauri::WindowEvent::Focused(true)
-            ) {
+            if matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. } | tauri::WindowEvent::Focused(true)) {
                 remember_screen(window);
             }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

@@ -38,7 +38,6 @@ pub mod profile_keys;
 pub mod vfs;
 pub mod install_search;
 pub mod copied_install;
-pub mod user_data;
 mod walk;
 use walk::{pop_within, resolve_existing};
 pub use install_search::find_original_install;
@@ -1076,7 +1075,8 @@ pub fn content_dir() -> Option<PathBuf> {
     if !is_programs_folder(&cand) && (cand.exists() || std::fs::create_dir_all(&cand).is_ok()) && is_writable(&cand) {
         Some(cand)
     } else {
-        let fallback = user_data::base_dir()?.join("content");
+        let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
+        let fallback = PathBuf::from(home).join(".openomsi").join("content");
         let _ = ensure_content_layout(&fallback);
         Some(fallback)
     }
@@ -1095,7 +1095,8 @@ pub fn own_input(name: &str) -> Option<PathBuf> {
     if crate::flags::OMSI_CONTENT.os().is_some() {
         return content_dir().map(|c| c.join("Inputs").join(name));
     }
-    Some(user_data::base_dir()?.join("Inputs").join(name))
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
+    Some(PathBuf::from(home).join(".openomsi").join("Inputs").join(name))
 }
 
 pub fn input_in_use(name: &str) -> Option<PathBuf> {
@@ -1106,7 +1107,7 @@ pub fn adopt_own_inputs(previous_program: Option<&Path>) {
     if crate::flags::OMSI_CONTENT.os().is_some() {
         return;
     }
-    let home = user_data::base_dir().map(|d| d.join("content"));
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(|h| PathBuf::from(h).join(".openomsi").join("content"));
     let here = std::env::current_exe().ok().and_then(|e| content_folder_of_program(&e));
     for name in OWN_INPUTS {
         let Some(own) = own_input(name).filter(|p| !p.exists()) else { continue };
