@@ -495,6 +495,19 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   in Setup, #3243) is taken out again, so the launcher keeps its data in `~/.openomsi` as before;
   it can return later in a form that leaves the program folder alone. Players who were blocked
   can update to this version.
+- **A game whose graphics device is gone starts again by itself instead of sitting on the loading
+  screen** (#3232): when the driver stops answering without saying so, every graphics resource
+  becomes invalid and hundreds of errors a second follow while nothing is drawn. That rate is now
+  taken for a lost device, and the game restarts on its last situation with lighter graphics, as
+  it already did when the driver reported the loss.
+- **The restart after a lost graphics device is lighter** (#3323, #3328): the Enhanced extras (ray
+  tracing, every-light and lamp shadows, cloud shadows, the glow of lights) are switched off at the
+  first restart, and Enhanced itself gives way to Vanilla+ at the second.
+- **The navigator's map no longer ends with an error report when the graphics device is lost**: its
+  background builder stops quietly and the restart goes on.
+- **The log says where the game is stuck**: a part of a frame that has run for ten seconds is named
+  in `game.log` (and again every thirty seconds), so a report of a game that stays at a part of
+  the loading screen shows what it was doing (#3326).
 
 - **The navigator's map and the city map draw the whole ground again** (#3266, #3301): the cap on
   the map's geometry that came in with the out-of-memory fix (#3249) cut the ground off on large

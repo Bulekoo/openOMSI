@@ -150,7 +150,12 @@ impl<T> Job<T> {
         std::thread::Builder::new()
             .name("navigator ground".into())
             .spawn(move || {
-                let _ = tx.send(f());
+                // (a graphics device lost under the build makes its vertex buffer invalid and
+                // wgpu panics: no result then - `poll` says the worker is gone - and no report
+                // of the end of the game, which the restart after the loss is already taking)
+                if let Some(built) = omsi_cfg::panic_guard::catch(f) {
+                    let _ = tx.send(built);
+                }
             })
             .ok();
         Job { meta, rx }

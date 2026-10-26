@@ -10,6 +10,10 @@ pub(crate) struct ErrorFlags {
     pub device_lost: Arc<std::sync::Mutex<Option<String>>>,
 }
 
+/// Errors about invalid GPU resources within five seconds that mean the device is gone: a frame
+/// with one bad texture makes one or two (60 a second); a dead device makes hundreds a second.
+const INVALID_FLOOD: u64 = 1500;
+
 pub(crate) fn install(device: &wgpu::Device, format: wgpu::TextureFormat, options: &RenderOptions) -> ErrorFlags {
     let msaa = options.msaa;
     // A GPU error while multisampling is on is logged and switches multisampling off
@@ -39,20 +43,42 @@ pub(crate) fn install(device: &wgpu::Device, format: wgpu::TextureFormat, option
         let rt_on = options.ray_tracing;
         let oom = out_of_memory.clone();
         let count = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let lost = device_lost.clone();
+        let flood: Arc<std::sync::Mutex<(std::time::Instant, u64)>> = Arc::new(std::sync::Mutex::new((std::time::Instant::now(), 0)));
         device.on_uncaptured_error(Arc::new(move |e: wgpu::Error| {
             if matches!(e, wgpu::Error::OutOfMemory { .. }) {
                 oom.store(true, std::sync::atomic::Ordering::Relaxed);
             }
             let n = count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let text = gpu_error_text(&e);
+            // A resource that could not be made (the card ran out of memory, a driver reset
+            // that never reached the lost-device callback) makes every use of it an error:
+            // hundreds a second, a picture of nothing, the loading screen for good (#3232).
+            // That rate is a device lost, whatever the driver called it.
+            if text.contains("is invalid") {
+                let mut w = flood.lock().unwrap_or_else(|p| p.into_inner());
+                let now = std::time::Instant::now();
+                if now.duration_since(w.0) > std::time::Duration::from_secs(5) {
+                    *w = (now, 0);
+                }
+                w.1 += 1;
+                if w.1 >= INVALID_FLOOD {
+                    let mut l = lost.lock().unwrap_or_else(|p| p.into_inner());
+                    if l.is_none() {
+                        log::error!("the graphics device is taken for lost: {} errors about invalid GPU resources in {:.1} s (the first of them: {text})", w.1, now.duration_since(w.0).as_secs_f32());
+                        *l = Some(format!("Unknown: {} errors about invalid GPU resources in a few seconds", w.1));
+                    }
+                }
+            }
             if rt_on {
                 // (the ray tracing goes first: the likelier cause, and the dearer feature)
                 if !rt_flag.swap(true, std::sync::atomic::Ordering::Relaxed) {
-                    log::error!("GPU error with ray tracing (Enhanced+ draws as Enhanced from now on): {}", gpu_error_text(&e));
+                    log::error!("GPU error with ray tracing (Enhanced+ draws as Enhanced from now on): {text}");
                 }
             } else if msaa > 1 && !flag.swap(true, std::sync::atomic::Ordering::Relaxed) {
-                log::error!("GPU error with {msaa}x MSAA (drawing without it from now on): {}", gpu_error_text(&e));
+                log::error!("GPU error with {msaa}x MSAA (drawing without it from now on): {text}");
             } else if n < 20 || n % 1000 == 0 {
-                log::error!("GPU error #{} (the game goes on): {}", n + 1, gpu_error_text(&e));
+                log::error!("GPU error #{} (the game goes on): {text}", n + 1);
             }
         }));
     }

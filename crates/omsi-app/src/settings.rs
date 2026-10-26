@@ -1080,7 +1080,20 @@ impl Settings {
         self.ssao = false;
         self.shadow_size = self.shadow_size.min(2048);
         self.mirror_size = self.mirror_size.min(256);
+        // (the Enhanced extras are what the driver gave up on in the reports of 0.3.42: they
+        // go at once, the mode itself after a second loss)
+        self.ray_tracing_on = false;
+        self.cloud_shadows = false;
+        self.light_glow = false;
+        self.lamp_shadows = false;
+        if self.light_shadows == "all" {
+            self.light_shadows = "street".into();
+        }
         if n >= 2 {
+            if graphics_mode(&self.graphics) == "enhanced" {
+                self.graphics = "vanilla_plus".into();
+            }
+            self.light_shadows = "off".into();
             self.shadows = false;
             self.shadow_size = 1024;
             self.render_scale = if self.render_scale > 0.0 { self.render_scale.min(0.75) } else { 0.75 };
