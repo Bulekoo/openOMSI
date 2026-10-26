@@ -296,6 +296,8 @@ impl Renderer {
         };
         let ground_bound = self.ground_should_bind();
         self.ground_bound.set(ground_bound);
+        let snow_field = self.lights.snow_track.borrow();
+        scene.snow_track_seen = self.lights.snow_track_made.get();
         let mut entries = vec![
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -360,7 +362,7 @@ impl Renderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 20,
-                    resource: self.lights.snow_track.as_entire_binding(),
+                    resource: snow_field.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 21,
@@ -445,7 +447,8 @@ impl Renderer {
             let cap = (bytes.len() as u64 * 3 / 2).max(1 << 16).div_ceil(4) * 4;
             scene.draw_buf = Some(GpuArray::new(&self.device, "draw list", cap, 4, true));
             self.rebuild_camera_bind_group(scene);
-        } else if scene.camera_bind_group.is_none() || scene.shadow_bind_group.is_none() {
+        } else if scene.camera_bind_group.is_none() || scene.shadow_bind_group.is_none() || scene.snow_track_seen != self.lights.snow_track_made.get() {
+            // (made again too when the snow track field has been made in place of its token)
             self.rebuild_camera_bind_group(scene);
         }
         if let Some(b) = &scene.draw_buf {

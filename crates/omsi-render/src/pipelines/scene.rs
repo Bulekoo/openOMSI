@@ -66,8 +66,10 @@ impl SceneBase {
         let lm_uniform = uniform_buffer(device, "light map atlas place", 16);
         let snow_track = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("snow track field"),
-            // (16 MB where the device draws the roads' snow, a token where it does not)
-            size: if road_snow_supported() { SNOW_TRACK_TEXELS as u64 * SNOW_TRACK_TEXELS as u64 * 4 } else { 16 },
+            // (a token until the roads' snow first sends it ruts or tracks: the 16 MB field is
+            // made then, see `set_snow_track_rows` - not in a session without snow, nor where
+            // the device does not draw it)
+            size: SNOW_TRACK_TOKEN,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

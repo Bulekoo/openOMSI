@@ -182,6 +182,9 @@ pub fn road_snow_supported() -> bool {
 /// `OMSI_GL_TEXTURE_UNITS`) and reads its arrays as `path` has them: not on OpenGL, whose
 /// sixteen texture units the scene's groups fill already and where the field might have no
 /// storage buffer to live in, nor where the fragment stage has no storage buffers at all.
+/// The snow track field's buffer before the roads' snow first needs it (bytes).
+pub(crate) const SNOW_TRACK_TOKEN: u64 = 16;
+
 pub(crate) fn road_snow_supported_on(gl: bool, gl_units: bool, path: ArrayPath) -> bool {
     !gl && !gl_units && path != ArrayPath::NoStorage
 }
@@ -809,7 +812,19 @@ impl Renderer {
             return;
         }
         let offset = ((tile * SNOW_TRACK_TILE + row) * SNOW_TRACK_TILE * 4) as u64;
-        self.queue.write_buffer(&self.lights.snow_track, offset, &rgba[..rows as usize * row_bytes]);
+        // (the field made the first time the roads' snow has something for it: a session
+        // without snow keeps the token, 16 MB of the card less)
+        let full = SNOW_TRACK_TEXELS as u64 * SNOW_TRACK_TEXELS as u64 * 4;
+        if self.lights.snow_track.borrow().size() < full {
+            *self.lights.snow_track.borrow_mut() = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("snow track field"),
+                size: full,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            self.lights.snow_track_made.set(self.lights.snow_track_made.get() + 1);
+        }
+        self.queue.write_buffer(&self.lights.snow_track.borrow(), offset, &rgba[..rows as usize * row_bytes]);
     }
 
     /// Where the light map atlas lies: its south-west corner (world x, y) and its side (m).
@@ -977,8 +992,11 @@ pub(crate) struct LightRes {
     pub(crate) lm_atlas_view: wgpu::TextureView,
     pub(crate) lm_uniform: wgpu::Buffer,
     pub(crate) lm_place: std::cell::Cell<(f64, f64, f64)>,
-    /// The snow track field around the camera (road_snow.wgsl) and its place and state.
-    pub(crate) snow_track: wgpu::Buffer,
+    /// The snow track field around the camera (road_snow.wgsl) and its place and state: a
+    /// token until the roads' snow first sends it rows, the field from then on, and how many
+    /// times it was made (a scene's camera bind group is made again when it changes).
+    pub(crate) snow_track: std::cell::RefCell<wgpu::Buffer>,
+    pub(crate) snow_track_made: std::cell::Cell<u32>,
     pub(crate) snow_track_uniform: wgpu::Buffer,
 }
 

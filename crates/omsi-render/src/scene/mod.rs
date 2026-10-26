@@ -234,6 +234,8 @@ pub struct Scene {
     /// The frame's draw list (see `Batch`), shared by the shadow, prepass and main passes.
     pub(crate) draw_buf: Option<GpuArray>,
     pub(crate) camera_bind_group: Option<wgpu::BindGroup>,
+    /// Which snow track field `camera_bind_group` binds (see `LightRes::snow_track_made`).
+    pub(crate) snow_track_seen: u32,
     /// The same with slot 8 not the ground albedo picture, for the pass that draws into it
     /// (a texture is not read and drawn into at once).
     pub(crate) ground_camera_bind_group: Option<wgpu::BindGroup>,

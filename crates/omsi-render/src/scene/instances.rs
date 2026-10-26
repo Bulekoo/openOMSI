@@ -24,6 +24,7 @@ impl Renderer {
             corona_buf: None,
             corona_count: 0,
             corona_sent: Vec::new(),
+            snow_track_seen: 0,
             smoke: Vec::new(),
             smoke_buf: None,
             smoke_count: 0,
