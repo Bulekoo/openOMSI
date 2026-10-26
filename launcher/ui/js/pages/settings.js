@@ -166,7 +166,7 @@ function SliderRow({ row }) {
   };
   const value = shown ?? (isNaN(stored) ? row.def : stored);
   return html`<div class="setting-row full">
-    <${Slider} label=${row.label} value=${value} min=${row.min} max=${row.max} step=${row.step} format=${row.format} onChange=${onChange} />
+    <${Slider} label=${row.label} help=${row.help} value=${value} min=${row.min} max=${row.max} step=${row.step} format=${row.format} onChange=${onChange} />
   </div>`;
 }
 

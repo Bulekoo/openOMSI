@@ -167,6 +167,22 @@ promoted to stable releases (see [docs/VERSIONING.md](docs/VERSIONING.md)); the 
   controller button event (the ones the assignment menu waits for), for a report that a
   pad's buttons cannot be assigned.
 
+**Controls**
+
+- **Force feedback can be tuned per wheel**: under *Fine tuning*, next to *Steering force* and
+  *Vibration*, a wheel has its own *Self-centring* (0-200 %: how strongly the moving bus turns
+  it back to straight; it never pulls at a standstill), *Damping* (0-300 %: a released wheel
+  settles at the centre instead of swinging past it), *Parking resistance* (0-200 %: how heavy
+  it is while the bus stands or crawls), *Minimum force* (0-20 %: lifts the smallest forces
+  past the dead centre of belt and gear wheels; 0 on direct drive) and *Smoothing* (0-50 ms:
+  softens grainy steps on strong wheels at low frame rates), with **Reset tuning** to go back.
+  They are on the launcher's Game controllers page and in the device's *Force feedback* tab of
+  the game's controller menu, where a change applies at once, and are kept in `gamectrler.cfg`
+  under `[openOMSI.FFTuning]`, which OMSI 2 ignores. The defaults keep today's feel, and a wheel
+  left at them is saved without the section
+  ([#2103](https://github.com/openOMSI-org/openOMSI/issues/2103),
+  [#3289](https://github.com/openOMSI-org/openOMSI/issues/3289)).
+
 **On foot**
 
 - Walking is paced like a person's: 1.4 m/s walking and 3.8 m/s running, reached over about a

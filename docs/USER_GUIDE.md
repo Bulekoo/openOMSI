@@ -361,10 +361,25 @@ The menu on the left groups the pages: **Play** (Drive, Multiplayer, Running gam
   a community controller mapping also makes a gamepad (a Logitech G29) is listed once, and
   *Use this device* switches any device off (it is then neither read nor listed as
   steering); **Remove this device** (after a confirmation) takes one out of the list. Select a
-  device to adjust *Steering force* (centering and resistance) and *Vibration* separately.
-  Changes are saved by themselves, for that device, in `~/.openomsi/Inputs/gamectrler.cfg`;
-  restart a running game to use the new values. *Force feedback and vibration* in Settings →
-  Driving is the global on/off switch.
+  device to adjust *Steering force* (centering and resistance) and *Vibration* separately,
+  and under *Fine tuning* how the wheel behaves on its own: *Self-centring* (0-200 %: how
+  strongly the moving bus turns the wheel back to straight after a turn; it never pulls while
+  the bus is stopped), *Damping* (0-300 %: how much the wheel resists fast movement, so a
+  released wheel settles at the centre instead of swinging past it - raise it if the wheel
+  oscillates), *Parking resistance* (0-200 %: how heavy the wheel is to turn while the bus
+  stands or crawls; it eases as the bus rolls), *Minimum force* (0-20 %: lifts the smallest
+  forces above the point where the wheel starts to feel them, for belt and gear wheels with a
+  dead centre; leave it at 0 on direct drive) and *Smoothing* (0-50 ms: softens sudden steps
+  in the steering force that feel grainy on strong wheels at low frame rates; more adds a
+  little delay). At their defaults (100 %, 100 %, 100 %, 0 %, 0 ms) the wheel feels as it
+  always did, and **Reset tuning** puts them back. The same rows are in the game: Controls →
+  *Game controllers* → the device → *Force feedback*, where a change applies at once.
+  Changes are saved by themselves, for that device, in `~/.openomsi/Inputs/gamectrler.cfg` -
+  the tuning in a section of its own, `[openOMSI.FFTuning]`, which OMSI 2 ignores, so the file
+  still works there (a wheel left at the defaults is saved without it). A running game takes
+  the launcher's changes the next time you drive, or at once with **Reload saved
+  controllers** in its controller menu. *Force feedback and vibration* in Settings → Driving
+  is the global on/off switch.
 * **Setup** - where the original installation and the game program are, and where the
   content folder (mods) and the settings and logs are. The OMSI 2 folder may be given as a
   path with quotes, as `Omsi.exe` itself or as a folder inside it; unpacked into the OMSI 2

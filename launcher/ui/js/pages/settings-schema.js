@@ -206,13 +206,13 @@ const driving = {
         { type: 'slider', key: 'pad_deadzone', label: 'Stick dead zone', min: 0, max: 0.4, step: 0.01, def: 0.08, format: (v) => `${(v * 100).toFixed(0)} %`, store: r2 },
         { type: 'toggle', key: 'pad_steer_linear', label: 'Stick steers like a wheel (a wheel seen as a gamepad)' },
         { type: 'section', title: 'Force feedback' },
-        { type: 'toggle', key: 'ff_enabled', label: 'Force feedback and vibration' },
+        { type: 'toggle', key: 'ff_enabled', label: 'Force feedback and vibration', help: "Off: the game sends the wheel no forces; any resistance left comes from the wheel's own driver software (for example the centre spring in Logitech G HUB)" },
         { type: 'toggle', key: 'ff_invert', label: 'Invert force feedback by default' },
         { type: 'note', text: 'Wheels with a saved direction use their own setting under Controls → Game controllers.' },
         // what the wheel feels all the time: the road's grain, the engine's buzz, and how
         // long a jolt eases away
         { type: 'slider', key: 'ff_road_vib', label: 'Road texture vibration', min: 0, max: 4, step: 0.05, def: 1, format: vibration, store: (v) => Math.round(v * 20) / 20 },
-        { type: 'slider', key: 'ff_engine_vib', label: 'Engine vibration', min: 0, max: 4, step: 0.05, def: 1, format: vibration, store: (v) => Math.round(v * 20) / 20 },
+        { type: 'slider', key: 'ff_engine_vib', label: 'Engine vibration', help: 'The running engine buzzes in the wheel, felt even at a standstill', min: 0, max: 4, step: 0.05, def: 1, format: vibration, store: (v) => Math.round(v * 20) / 20 },
         { type: 'slider', key: 'ff_fade', label: 'Vibration fade-out', min: 0, max: 1.5, step: 0.05, def: 0.28, format: (v) => (v < 0.01 ? t('Off') : `${Math.round(v * 1000)} ms`), store: r2 },
         { type: 'button', label: 'Reset wheel settings', icon: 'refresh', patch: () => ({ wheel_range: 900, wheel_lock: 0, ff_invert: false, ff_enabled: true, ff_road_vib: 1, ff_engine_vib: 1, ff_fade: 0.28 }) },
       ],
