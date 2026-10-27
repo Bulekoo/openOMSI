@@ -321,7 +321,7 @@ impl Offscreen<'_> {
                 nav.schedule = omsi_cfg::flags::OMSI_NAV_SCHEDULE.is_set();
                 nav.show_ai = settings.nav_ai;
                 nav.show_surface = settings.nav_surface;
-                nav.light = settings.nav_light;
+                nav.light = settings.is_light_theme();
                 nav.show_3d = settings.nav_3d;
                 nav.classic_2d = settings.nav_classic_2d;
                 nav.widget = settings.nav_widget;

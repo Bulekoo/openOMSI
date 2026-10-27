@@ -15,7 +15,6 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         switch_row(app, "navigator", "Navigator", "Enables/Disables the Minimap"),
         switch_row(app, "nav_ai", "AI vehicles on the map", "Shows/hides the other (AI) vehicles on the Minimap and the city map"),
         switch_row(app, "nav_surface", "Map surface under the roads", "Shows the map's ground, water, woods, houses and paved surfaces on the Minimap and the city map (and the map's package, when it has one)"),
-        switch_row(app, "nav_light", "Light map", "The Minimap and the city map in a light look"),
         switch_row(app, "nav_classic_2d", "Classic 2D navigator", "A lightweight top-down route map with streets and vehicles, without detailed surfaces, buildings or shadows"),
         switch_row(app, "nav_3d", "3D buildings on the map", "The houses stand in 3D with their shadows on the Minimap, and the city map tilts into 3D when zoomed in"),
         switch_row(app, "nav_widget", "Navigator as a widget", "Drag the Minimap anywhere and change its size at its bottom right corner"),
@@ -261,6 +260,7 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         .collect();
     let interface: Vec<(String, String)> = vec![
         pick("language", "Language", "The language of the game's interface"),
+        pick("ui_theme", "Interface theme", "The colours used by the game's interface, map and pause menu"),
         pick("units", "Units", "Speeds, distances and temperatures in the game's own texts"),
         switch_row(app, "machine_translation", "Translate the remaining texts automatically (offline, downloads 620 MB once)", "Translates texts nobody has translated, on this machine"),
         slider_row(app, "ui_scale", "Game interface size", "The size of the texts, the menu, the timetable and the navigator", &pct),
@@ -668,6 +668,15 @@ mod pause_weather_tests {
     #[test]
     fn pause_weather_wind_has_traditional_chinese_translation() {
         assert_eq!(crate::_rust_i18n_try_translate("zh-tw", "Wind").map(|value| value.into_owned()), Some("風".to_string()));
+    }
+
+    #[test]
+    fn interface_theme_settings_have_traditional_chinese_translations() {
+        assert_eq!(crate::_rust_i18n_try_translate("zh-tw", "Interface theme").map(|value| value.into_owned()), Some("介面主題".to_string()));
+        assert_eq!(
+            crate::_rust_i18n_try_translate("zh-tw", "The colours used by the game's interface, map and pause menu").map(|value| value.into_owned()),
+            Some("遊戲介面、地圖及暫停選單所使用的色彩".to_string())
+        );
     }
 }
 
