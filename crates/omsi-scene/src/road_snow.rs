@@ -10,7 +10,7 @@
 //! near the camera press tracks into it, which the snow falling after them fills again.
 //!
 //! The game's frame drives it through `frame`, `light` and `show_roofs` on one state kept
-//! here, as `terrain_paint::SNOW_WEATHER` keeps the season's snow: the window and the
+//! here, as `lights::CORONA_TEXTURES` keeps the coronas' pictures: the window and the
 //! offscreen pictures both take it, and the app (the glue) only hands over its vehicles.
 
 use std::collections::HashMap;
@@ -36,6 +36,7 @@ pub fn vehicles<'a>(player: Option<&'a omsi_sim::VehicleInstance>, traffic: Opti
 /// of `net`, the tyres of `vehicles`) and the roofs of `vehicles`.
 pub fn frame(r: &Renderer, dt: f32, weather: Option<&omsi_content::weather::Weather>, eye: DVec3, net: Option<&Network>, vehicles: &[(u64, &omsi_sim::VehicleInstance)]) {
     if !enabled() {
+        switched_off(&mut STATE.lock());
         return;
     }
     let t0 = std::time::Instant::now();
@@ -82,8 +83,9 @@ pub fn frame(r: &Renderer, dt: f32, weather: Option<&omsi_content::weather::Weat
 }
 
 /// What the picture draws the roads' snow with (nothing before the first `frame`), and
-/// whether it can draw it at all (`enabled`).
-pub fn light(lighting: &mut omsi_render::Lighting) {
+/// whether it can draw it at all (`enabled`): `on`, the player's setting (`choose`).
+pub fn light(lighting: &mut omsi_render::Lighting, on: bool) {
+    choose(on);
     DRAWN.store(!lighting.classic, std::sync::atomic::Ordering::Relaxed);
     if let (true, Some((snow, tracks))) = (enabled(), STATE.lock().as_mut()) {
         // (the weather's own snow on everything: what a roof not kept here shows)
@@ -101,6 +103,11 @@ pub fn show_roofs<'a>(
     keys: impl IntoIterator<Item = u64>,
     render_of: impl Fn(u64) -> Option<(&'a crate::VehicleRender, &'a [crate::VehicleRender])>,
 ) {
+    // (switched off, the shader takes no roof's own snow: nothing to show, nor a cache to
+    // keep - `frame` lets the state go)
+    if !enabled() {
+        return;
+    }
     let mut state = STATE.lock();
     let Some((snow, _)) = state.as_mut() else { return };
     let roofs = &mut snow.roofs;
@@ -127,18 +134,54 @@ pub fn show_roofs<'a>(
     }
 }
 
-/// Built-up snow on the roads instead of the weather's on/off "snow on road"
-/// (`OMSI_ROAD_SNOW`: `off` for the old way, a number for the cover to start with), where the
-/// picture can draw it: not in the classic Vanilla picture, which shows snow as OMSI 2 does,
-/// only through the season's WinterSnowfall textures (`light` learns the picture's kind; the
-/// season's textures follow within a second, see the app's `follow_date`).
+/// Built-up snow on the roads instead of the weather's on/off "snow on road", where the
+/// player has it on (the `road_snow` setting, see `choose`; a set `OMSI_ROAD_SNOW` decides
+/// instead: `off` for the old way, a number for the cover to start with) and the picture can
+/// draw it: not in the classic Vanilla picture, which shows snow as OMSI 2 does, only through
+/// the season's WinterSnowfall textures (`light` learns the picture's kind and the setting;
+/// the season's textures follow within a second, see the app's `follow_date`).
 pub fn enabled() -> bool {
     DRAWN.load(std::sync::atomic::Ordering::Relaxed) && switched_on() && omsi_render::road_snow_supported()
 }
 
-/// `OMSI_ROAD_SNOW` is not `off`.
+/// The season's folder for a weather with snow lying: with snow on the road the snowy roads
+/// of WinterSnowfall, unless the roads' snow is built up here instead (`enabled`).
+pub fn snow_folder(snow_on_road: bool) -> &'static str {
+    if snow_on_road && !enabled() { "WinterSnowfall" } else { "WinterSnow" }
+}
+
+/// The player's `road_snow` setting, unless `OMSI_ROAD_SNOW` is set.
 fn switched_on() -> bool {
-    !matches!(omsi_cfg::flags::OMSI_ROAD_SNOW.var(), Some("off") | Some("0ff") | Some("false"))
+    switched_on_by(omsi_cfg::flags::OMSI_ROAD_SNOW.var(), CHOSEN.load(std::sync::atomic::Ordering::Relaxed))
+}
+
+/// `switched_on` by the flag's value (`flag`) and the setting (`chosen`): a set flag decides
+/// both ways (`off` off, a cover to start with on), as `OMSI_WINDY_TREES` does for its setting.
+fn switched_on_by(flag: Option<&str>, chosen: bool) -> bool {
+    match flag.map(str::trim) {
+        Some("off" | "0ff" | "false") => false,
+        Some(_) => true,
+        None => chosen,
+    }
+}
+
+/// The player's `road_snow` setting (see `choose`).
+static CHOSEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+/// The player's `road_snow` setting: told before the world opens, so that its season
+/// textures are chosen by it (`enabled`), and by every picture (`light`), so that a switch in
+/// the Settings or a loaded graphics profile takes at the next frame.
+pub fn choose(on: bool) {
+    CHOSEN.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Switched off (the setting, or a picture that cannot draw it): the roads' snow and its
+/// field are let go, so that switched on again it starts from the weather as at the start,
+/// and the tracks kept of the tiles let go take no memory meanwhile.
+fn switched_off(state: &mut Option<(RoadSnow, SnowTracks)>) {
+    if state.as_ref().is_some_and(|(snow, _)| snow.started) {
+        *state = None;
+    }
 }
 
 /// The picture draws the roads' built-up snow (not the classic Vanilla one, see `enabled`).
@@ -1141,6 +1184,76 @@ mod tests {
         // the thaw takes the rest with the roads' snow
         r.step(350.0, 0.0, DVec3::new(x, 0.0, 0.0), 0.0);
         assert_eq!(r.amount, 0.0);
+    }
+
+    #[test]
+    fn the_setting_and_the_flag_switch_the_built_up_snow() {
+        // (no flag: the player's setting decides)
+        assert!(switched_on_by(None, true));
+        assert!(!switched_on_by(None, false));
+        // (a set flag decides both ways: off is off whatever the setting, a cover to start
+        // with - the renders' A/B - is on even with the setting off)
+        for off in ["off", "0ff", "false", " off "] {
+            assert!(!switched_on_by(Some(off), true) && !switched_on_by(Some(off), false), "{off}");
+        }
+        assert!(switched_on_by(Some("0.5"), false) && switched_on_by(Some("on"), false));
+    }
+
+    #[test]
+    fn switched_off_it_starts_again_from_the_weather() {
+        let mut w = omsi_content::weather::Weather::default();
+        w.temp.0 = -3.0;
+        w.precip = vec![2.0, 255.0];
+        let mut snow = RoadSnow::default();
+        for _ in 0..60 {
+            snow.step(1.0, &w);
+        }
+        snow.roofs.weather = Some(0.0);
+        snow.roofs.step_at([(1, DVec3::ZERO, 0.0)].into_iter(), snow.cover, snow.fallen);
+        assert!(snow.cover > 0.0 && snow.roofs.amount(1).is_some());
+        let mut state = Some((snow, SnowTracks::default()));
+        switched_off(&mut state);
+        assert!(state.is_none(), "the snow built up and its roofs are let go");
+        // (switched on again, `frame` starts a state that takes the weather's snow on road
+        // as the roads' cover, and keeps no roof yet)
+        let mut again = RoadSnow::default();
+        w.snow_on_road = true;
+        again.step(0.0, &w);
+        assert_eq!(again.cover, 1.0);
+        assert_eq!(again.roofs.amount(1), None);
+        // (a state that never started has nothing to let go)
+        let mut fresh = Some((RoadSnow::default(), SnowTracks::default()));
+        switched_off(&mut fresh);
+        assert!(fresh.is_some());
+    }
+
+    /// The fallback: with the setting off the picture draws no built-up cover and the snowy
+    /// roads come from the season's WinterSnowfall textures again, as before; on again (where
+    /// the device draws it), the picture takes the cover and the roads the plain WinterSnow.
+    #[test]
+    fn switched_off_the_roads_take_the_weathers_snow_again() {
+        // (a set flag decides instead of the setting)
+        if omsi_cfg::flags::OMSI_ROAD_SNOW.var().is_some() {
+            return;
+        }
+        let mut snow = RoadSnow::default();
+        snow.started = true;
+        snow.cover = 0.5;
+        *STATE.lock() = Some((snow, SnowTracks::default()));
+        let mut off = omsi_render::Lighting::default();
+        light(&mut off, false);
+        assert!(!enabled());
+        assert_eq!(off.road_snow, None);
+        assert_eq!(snow_folder(true), "WinterSnowfall");
+        assert_eq!(snow_folder(false), "WinterSnow");
+        let mut on = omsi_render::Lighting::default();
+        light(&mut on, true);
+        if omsi_render::road_snow_supported() {
+            assert!(enabled());
+            assert_eq!(on.road_snow, Some(0.5));
+            assert_eq!(snow_folder(true), "WinterSnow");
+        }
+        *STATE.lock() = None;
     }
 
     #[test]

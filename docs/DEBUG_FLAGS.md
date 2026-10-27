@@ -351,7 +351,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_REALISTIC_ROAD` | bool | off | use | sim | The setting "Realistic road physics" on for this run (A/B against the OMSI 2 model: slip-angle tyres, surfaces, road roughness, wind). |
 | `OMSI_REPAIR_BODY_DEPTH` | bool | off | use | scene | The old guess for [matl_alpha] 2 vehicle bodies (A/B). |
 | `OMSI_ROAD_CUT` | bool | off | once | geometry | Take the ground away under every road surface (Omsi.exe does not). |
-| `OMSI_ROAD_SNOW` | text | on | use | scene | Snow on the roads builds up while it snows and thaws again, with ruts and tyre tracks: off for the weather's on/off snow on road, a number 0..1 for the cover to start with. |
+| `OMSI_ROAD_SNOW` | text | settings | use | scene | Built-up snow on the roads and roofs, whatever the road_snow setting says: off for the weather's on/off snow on road, a number 0..1 for the cover to start with. |
 | `OMSI_RT_REFL_HALF` | bool | off | use | render | Trace reflections at half size. |
 | `OMSI_SERIAL_PIPELINES` | bool | off | use | render | Compile the renderer's pipelines one after the other on one thread, as before (A/B). |
 | `OMSI_SHADOW_FAR_EVERY_FRAME` | bool | off | frame | render | Redraw the far shadow map every frame. |

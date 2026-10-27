@@ -721,6 +721,7 @@ impl SessionSettings {
     pub(crate) fn for_session(settings: &crate::settings::Settings, args: &crate::Args) -> SessionSettings {
         let plus = args.enhanced_plus || omsi_cfg::flags::OMSI_ENHANCED_PLUS.is_set();
         let enhanced = settings.enhanced || args.enhanced || plus || omsi_cfg::flags::OMSI_ENHANCED.is_set();
+        omsi_scene::road_snow::choose(settings.road_snow);
         SessionSettings {
             enhanced_plus: plus,
             enhanced,

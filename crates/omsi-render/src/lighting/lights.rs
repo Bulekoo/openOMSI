@@ -168,6 +168,8 @@ pub const LM_TILE_PX: u32 = 256;
 pub const SNOW_TRACK_TEXELS: u32 = 2048;
 pub const SNOW_TRACK_TILE: u32 = 256;
 pub const SNOW_TRACK_SIDE: f64 = 256.0;
+/// The snow track field's buffer before the roads' snow first needs it (bytes).
+pub(crate) const SNOW_TRACK_TOKEN: u64 = 16;
 
 /// Whether this device draws the roads' built-up snow (road_snow.wgsl) - the one gate for
 /// all of it: the camera group's layout and bind group (the field, binding 20), the scene
@@ -182,9 +184,6 @@ pub fn road_snow_supported() -> bool {
 /// `OMSI_GL_TEXTURE_UNITS`) and reads its arrays as `path` has them: not on OpenGL, whose
 /// sixteen texture units the scene's groups fill already and where the field might have no
 /// storage buffer to live in, nor where the fragment stage has no storage buffers at all.
-/// The snow track field's buffer before the roads' snow first needs it (bytes).
-pub(crate) const SNOW_TRACK_TOKEN: u64 = 16;
-
 pub(crate) fn road_snow_supported_on(gl: bool, gl_units: bool, path: ArrayPath) -> bool {
     !gl && !gl_units && path != ArrayPath::NoStorage
 }
